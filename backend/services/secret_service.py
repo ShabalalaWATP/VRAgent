@@ -100,6 +100,41 @@ SECRET_PATTERNS: List[Tuple[str, str, str, str]] = [
     # DigitalOcean
     (r'dop_v1_[a-f0-9]{64}', 'DigitalOcean PAT', 'high', 'DigitalOcean Personal Access Token found'),
     (r'doo_v1_[a-f0-9]{64}', 'DigitalOcean OAuth Token', 'high', 'DigitalOcean OAuth Token found'),
+    
+    # Cloudflare
+    (r'(?i)cloudflare[_\-]?(?:api[_\-]?key|token)[\s]*[=:]\s*["\']?([A-Za-z0-9_-]{37,})["\']?', 'Cloudflare API Token', 'high', 'Cloudflare API Token found'),
+    
+    # OpenAI
+    (r'sk-[A-Za-z0-9]{48}', 'OpenAI API Key', 'critical', 'OpenAI API Key found - can incur significant costs'),
+    (r'sk-proj-[A-Za-z0-9_-]{48,}', 'OpenAI Project API Key', 'critical', 'OpenAI Project API Key found'),
+    
+    # Anthropic
+    (r'sk-ant-[A-Za-z0-9_-]{40,}', 'Anthropic API Key', 'critical', 'Anthropic API Key found'),
+    
+    # Hugging Face
+    (r'hf_[A-Za-z0-9]{34}', 'Hugging Face Token', 'high', 'Hugging Face API Token found'),
+    
+    # Vercel
+    (r'(?i)vercel[_\-]?(?:token|api[_\-]?key)[\s]*[=:]\s*["\']?([A-Za-z0-9]{24})["\']?', 'Vercel Token', 'high', 'Vercel API Token found'),
+    
+    # Supabase
+    (r'sbp_[A-Za-z0-9]{40}', 'Supabase Token', 'high', 'Supabase Service Role Token found'),
+    (r'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', 'JWT Token', 'high', 'JWT Token found (possibly Supabase anon key)'),
+    
+    # Firebase
+    (r'(?i)firebase[_\-]?(?:api[_\-]?key|token)[\s]*[=:]\s*["\']?([A-Za-z0-9_-]{39})["\']?', 'Firebase API Key', 'medium', 'Firebase API Key found'),
+    
+    # Datadog
+    (r'(?i)dd[_\-]?(?:api[_\-]?key|app[_\-]?key)[\s]*[=:]\s*["\']?([a-f0-9]{32})["\']?', 'Datadog API Key', 'high', 'Datadog API Key found'),
+    
+    # Sentry
+    (r'(?i)sentry[_\-]?(?:dsn|auth[_\-]?token)[\s]*[=:]\s*["\']?([^\s"\']+)["\']?', 'Sentry DSN/Token', 'medium', 'Sentry DSN or Auth Token found'),
+    
+    # SSH Keys  
+    (r'ssh-(?:rsa|dss|ed25519|ecdsa)\s+[A-Za-z0-9+/=]{100,}', 'SSH Public Key', 'low', 'SSH Public Key found (verify no private key nearby)'),
+    
+    # Generic high entropy strings (potential secrets)
+    (r'(?i)(?:secret|token|key|password|credential)[_\-]?(?:key|value|data)?[\s]*[=:]\s*["\']([A-Za-z0-9+/=_-]{32,})["\']', 'Generic Secret', 'medium', 'Potential secret or credential found'),
 ]
 
 # Files and patterns to ignore

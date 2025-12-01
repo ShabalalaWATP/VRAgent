@@ -1,5 +1,6 @@
 from rq import Queue
 from redis import Redis
+from typing import Literal, Optional
 
 from backend.core.config import settings
 from backend.core.database import SessionLocal
@@ -22,10 +23,19 @@ def enqueue_scan(project_id: int, scan_run_id: int):
     return scan_queue.enqueue(perform_scan, project_id, scan_run_id)
 
 
-def enqueue_exploitability(report_id: int):
-    """Enqueue an exploitability analysis job for background processing."""
-    logger.info(f"Enqueueing exploitability analysis for report {report_id}")
-    return exploit_queue.enqueue(perform_exploitability, report_id)
+def enqueue_exploitability(report_id: int, mode: str = "auto"):
+    """
+    Enqueue an exploitability analysis job for background processing.
+    
+    Args:
+        report_id: ID of the report to analyze
+        mode: Analysis mode - "full", "summary", or "auto" (default)
+              - full: Individual LLM analysis per finding (slow, detailed)
+              - summary: Single executive summary + templates (fast, recommended for large codebases)
+              - auto: Automatically selects based on finding count
+    """
+    logger.info(f"Enqueueing exploitability analysis for report {report_id} (mode: {mode})")
+    return exploit_queue.enqueue(perform_exploitability, report_id, mode)
 
 
 def perform_scan(project_id: int, scan_run_id: int) -> int:
@@ -70,12 +80,13 @@ def perform_scan(project_id: int, scan_run_id: int) -> int:
         db.close()
 
 
-def perform_exploitability(report_id: int) -> int:
+def perform_exploitability(report_id: int, mode: str = "auto") -> int:
     """
     Execute exploitability analysis for a report.
     
     Args:
         report_id: ID of the report to analyze
+        mode: Analysis mode - "full", "summary", or "auto"
         
     Returns:
         ID of the analyzed report
@@ -83,7 +94,7 @@ def perform_exploitability(report_id: int) -> int:
     Raises:
         ReportNotFoundError: If report doesn't exist
     """
-    logger.info(f"Starting exploitability analysis for report {report_id}")
+    logger.info(f"Starting exploitability analysis for report {report_id} (mode: {mode})")
     db = SessionLocal()
     
     try:
@@ -96,7 +107,7 @@ def perform_exploitability(report_id: int) -> int:
         # Use existing event loop or create new for async tasks
         db.expire_all()
         import asyncio
-        asyncio.run(generate_exploit_scenarios(db, report))
+        asyncio.run(generate_exploit_scenarios(db, report, mode=mode))
         
         logger.info(f"Exploitability analysis completed for report {report_id}")
         return report_id

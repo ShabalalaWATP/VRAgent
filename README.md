@@ -4,32 +4,89 @@ An end-to-end platform for automated security vulnerability scanning of code pro
 
 ## 🎯 Features
 
+### Code Analysis
 - **Multiple Code Sources**: Upload zip archives, folders, or clone directly from GitHub, GitLab, Bitbucket, or Azure DevOps
-- **Multi-Language Support**: Scans Python, JavaScript/TypeScript, Java, Go, Ruby, Rust, PHP, and Kotlin projects
-- **Dependency Vulnerability Detection**: Parses manifests for 7 ecosystems against OSV database:
+- **Multi-Language Support**: Comprehensive security scanning for Python, JavaScript/TypeScript, Java, Go, Ruby, Rust, PHP, C/C++, and Kotlin projects
+
+### Security Scanners
+
+VRAgent integrates **7 specialized security scanners** for comprehensive vulnerability detection:
+
+| Scanner | Languages | What It Detects |
+|---------|-----------|-----------------|
+| **Semgrep** | 30+ languages | 30+ rulesets: OWASP Top 10, CWE Top 25, language & framework-specific |
+| **ESLint Security** | JavaScript/TypeScript | XSS, eval injection, prototype pollution, regex DoS, logic errors |
+| **Bandit** | Python | SQL injection, shell injection, hardcoded passwords, weak crypto (medium+ confidence) |
+| **gosec** | Go | SQL injection, command injection, file path traversal, crypto issues |
+| **SpotBugs + FindSecBugs** | Java/Kotlin | SQL injection, XXE, LDAP injection, weak crypto, Spring security |
+| **clang-tidy** | C/C++ | Buffer overflows, format strings, insecure functions, memory safety |
+| **Secret Scanner** | All files | 50+ secret types: AWS, GCP, Azure, OpenAI, Anthropic, Hugging Face, and more |
+
+### Dependency Security
+- **7 Ecosystem Support**: Parses manifests for comprehensive dependency analysis:
   - **Python**: `requirements.txt`, `Pipfile`, `pyproject.toml` (PyPI)
-  - **JavaScript/Node**: `package.json` (npm)
+  - **JavaScript/Node**: `package.json`, `package-lock.json` (npm)
   - **Java/Kotlin**: `pom.xml`, `build.gradle`, `build.gradle.kts` (Maven)
-  - **Go**: `go.mod` (Go)
+  - **Go**: `go.mod`, `go.sum` (Go)
   - **Ruby**: `Gemfile`, `Gemfile.lock` (RubyGems)
   - **Rust**: `Cargo.toml`, `Cargo.lock` (crates.io)
   - **PHP**: `composer.json`, `composer.lock` (Packagist)
-- **EPSS Vulnerability Prioritization**: Integrates EPSS scores to prioritize vulnerabilities by likelihood of exploitation
-- **Secret Detection**: Scans for hardcoded API keys, tokens, passwords, and credentials
-- **Semgrep Security Analysis**: Deep static analysis with 2000+ security rules (optional)
-- **ESLint Security Analysis**: Runs ESLint with security plugins for JavaScript/TypeScript projects
-- **Static Code Analysis**: Pattern-based detection of common security issues (eval, exec, shell injection, etc.)
-- **AI-Powered Analysis**: Uses Google Gemini for code embeddings and exploitability narratives
-- **Interactive Codebase Map**: Visual tree view of analyzed files with per-file vulnerability counts
-- **Expandable Code Snippets**: View vulnerable code directly in findings with syntax highlighting
-- **Sortable Findings Table**: Sort vulnerabilities by severity, type, file, or line number
-- **Report Management**: Delete reports, view detailed findings, and manage scan history
-- **Report Generation**: Export reports in Markdown, PDF, or DOCX formats
-- **SBOM Export**: Generate Software Bill of Materials in CycloneDX 1.5 and SPDX 2.3 formats
-- **Real-time Progress**: WebSocket-based live scan progress updates via Redis pub/sub
+- **CVE Database Lookup**: Queries OSV.dev for known vulnerabilities (aggregates CVE, GHSA, and ecosystem advisories)
+- **NVD Enrichment**: Full CVSS vectors, CWE mappings, and reference links from NIST
+- **EPSS Prioritization**: Score vulnerabilities by real-world exploitation probability
+
+### AI-Powered Analysis
+- **Google Gemini Integration**: AI-powered code analysis and exploitability narratives
+- **Dual AI Summaries**: 
+  - Application overview explaining what the code does
+  - Security analysis summarizing risk posture and top concerns
+- **Smart Caching**: AI summaries are generated once and cached in the database - subsequent exports are instant
+- **Exploit Scenario Generation**: AI-generated attack narratives with:
+  - **Smart Grouping**: Findings grouped by vulnerability category (injection, XSS, crypto, etc.) to avoid repetition
+  - Step-by-step attack descriptions
+  - Preconditions for exploitation
+  - Potential impact assessment
+  - Proof-of-concept outlines
+  - Recommended mitigations
+  - **30+ Built-in Templates**: Pre-defined exploit templates for common vulnerability types
+
+### Risk Scoring
+- **Intelligent 0-100 Scale**: Risk scores use a weighted formula with diminishing returns:
+  - Critical findings contribute up to 40 points
+  - High findings contribute up to 30 points
+  - Medium findings contribute up to 20 points  
+  - Low findings contribute up to 10 points
+- **Minimum Thresholds**: Any critical finding guarantees at least 50/100; any high finding guarantees at least 25/100
+- **Realistic Scores**: A project with 28 critical and 52 high vulnerabilities scores ~88/100, not just an average
+
+### User Interface
+- **Modern Glassmorphism UI**: React-based frontend with Material UI, dark/light mode
+- **Real-time Progress**: WebSocket-based live scan progress with phase indicators
+- **Interactive Findings Table**: Sort by severity, type, file, or line number
+- **Expandable Code Snippets**: View vulnerable code with syntax highlighting
+- **Interactive Codebase Map**: Visual tree view with per-file vulnerability counts
+- **Improved Exploitability Display**: Clean card-based layout with colored sections for attack narrative, impact, PoC, and mitigations
+
+### Reports & Exports
+- **Multiple Export Formats**: Generate professional reports in:
+  - **Markdown**: Well-structured with tables, links, and severity breakdown
+  - **PDF**: Formatted report with title page, tables, and page breaks
+  - **DOCX**: Word document with proper headings and styling
+- **AI Content in Exports**: All exports include:
+  - AI-generated application overview
+  - AI security analysis
+  - Exploit scenarios with PoC outlines
+  - CVSS ratings and EPSS scores
+  - CWE and CVE links
+- **SBOM Generation**: Software Bill of Materials in:
+  - CycloneDX 1.5 format
+  - SPDX 2.3 format
+
+### Integration & Automation
 - **Webhook Notifications**: Send scan results to Slack, Teams, Discord, or custom endpoints
-- **Background Processing**: Long-running scans run asynchronously via Redis Queue
-- **Modern Glassmorphism UI**: React-based frontend with Material UI, dark/light mode, and animated components
+- **Background Processing**: Asynchronous scans via Redis Queue
+- **REST API**: Full API for programmatic access
+- **Project Management**: Create, view, and delete projects with history
 
 ## 🏗️ Architecture
 
@@ -52,11 +109,11 @@ The easiest way to run VRAgent is with Docker Compose:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/vragent.git
-cd vragent
+git clone https://github.com/ShabalalaWATP/VRAgent.git
+cd VRAgent
 
 # Copy environment template
-cp .env.sample .env
+cp .env.example .env
 # Edit .env with your settings (optional: add GEMINI_API_KEY for AI features)
 
 # Start all services
@@ -75,11 +132,11 @@ The application will be available at:
 
 | Service | Port | Description |
 |---------|------|-------------|
-| `frontend` | 3000 | React application (nginx) |
-| `backend` | 8000 | FastAPI REST API |
-| `worker` | - | Background job processor |
-| `db` | 5432 | PostgreSQL with pgvector |
-| `redis` | 6379 | Redis for job queuing & WebSocket pub/sub |
+| `frontend` | 3000 | React application (nginx) - healthcheck enabled |
+| `backend` | 8000 | FastAPI REST API - healthcheck enabled |
+| `worker` | - | Background job processor - healthcheck enabled |
+| `db` | 5432 | PostgreSQL with pgvector - healthcheck enabled |
+| `redis` | 6379 | Redis for job queuing & WebSocket pub/sub - healthcheck enabled |
 
 ## 🪟 Complete Windows 11 Setup Guide (Beginner-Friendly)
 
@@ -155,13 +212,12 @@ Now let's download the VRAgent code to your computer.
 
 3. **Download (clone) VRAgent**
    ```powershell
-   git clone https://github.com/your-org/vragent.git
+   git clone https://github.com/ShabalalaWATP/VRAgent.git
    ```
-   > 📝 Replace `your-org` with the actual GitHub username/organization
 
 4. **Enter the project folder**
    ```powershell
-   cd vragent
+   cd VRAgent
    ```
 
 5. **Verify you're in the right place**
@@ -300,11 +356,18 @@ You have two options:
 1. After uploading code, click **"Start New Scan"**
 2. Watch the real-time progress bar as VRAgent:
    - Extracts and parses your code
-   - Detects hardcoded secrets
-   - Runs static analysis (ESLint, Semgrep)
-   - Parses dependencies
-   - Looks up known CVEs
-   - Calculates risk scores
+   - Detects hardcoded secrets (40+ secret types)
+   - Runs static analysis scanners based on detected languages:
+     - ESLint for JavaScript/TypeScript
+     - Semgrep for all supported languages
+     - Bandit for Python
+     - gosec for Go
+     - SpotBugs for Java/Kotlin
+     - clang-tidy for C/C++
+   - Parses dependencies from manifest files
+   - Looks up known CVEs in OSV database
+   - Enriches findings with NVD data and EPSS scores
+   - Generates AI summaries and exploitability analysis
 3. When complete, you'll see the scan report
 
 #### Viewing Results
@@ -312,10 +375,15 @@ You have two options:
 1. Click on a report to see details
 2. Use the **tabs** to switch between:
    - **Findings**: Table of all vulnerabilities (click headers to sort)
-   - **Codebase Map**: Visual tree of analyzed files
-   - **Exploitability**: AI-generated attack scenarios (if enabled)
+   - **Codebase Map**: Visual tree of analyzed files with vulnerability counts
+   - **Exploitability**: AI-generated attack scenarios with step-by-step narratives, impact analysis, PoC outlines, and mitigations
 3. Click **"View Code"** on any finding to see the vulnerable code
-4. Export reports as Markdown, PDF, or Word documents
+4. Export reports as **Markdown**, **PDF**, or **Word** documents with:
+   - AI-generated application overview and security analysis
+   - Severity breakdown with priority ratings
+   - Detailed findings tables with CVE/CWE links
+   - CVSS scores and EPSS exploitation probabilities
+5. Generate **SBOM** exports in CycloneDX or SPDX format
 
 ---
 
@@ -396,9 +464,311 @@ docker-compose down -v
 
 # Remove the project folder
 cd ..
-Remove-Item -Recurse -Force vragent
+Remove-Item -Recurse -Force VRAgent
 
 # (Optional) Uninstall Docker Desktop from Windows Settings > Apps
+```
+
+---
+
+## 🐧 Complete Linux Setup Guide (Ubuntu/Debian - Beginner-Friendly)
+
+This section walks you through setting up VRAgent on Ubuntu 22.04+ or Debian 12+ from scratch. Follow each step carefully.
+
+**Docker is the recommended approach** because it handles all dependencies (PostgreSQL, Redis, pgvector) automatically!
+
+---
+
+### Step 1: Update Your System
+
+First, let's make sure your system is up to date.
+
+1. **Open a terminal**
+   - Press `Ctrl + Alt + T` or search for "Terminal" in your applications
+
+2. **Update package lists and upgrade existing packages**
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
+   > 💡 Enter your password when prompted. You won't see characters as you type - this is normal!
+
+---
+
+### Step 2: Install Docker
+
+Docker runs the application in isolated containers. We'll install Docker Engine (the command-line version).
+
+1. **Install prerequisites**
+   ```bash
+   sudo apt install -y ca-certificates curl gnupg
+   ```
+
+2. **Add Docker's official GPG key**
+   ```bash
+   sudo install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+   sudo chmod a+r /etc/apt/keyrings/docker.gpg
+   ```
+   > 📝 **For Debian**: Replace `ubuntu` with `debian` in the URL above
+
+3. **Add the Docker repository**
+   ```bash
+   echo \
+     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+     sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   ```
+   > 📝 **For Debian**: Replace `ubuntu` with `debian` in the URL above
+
+4. **Install Docker Engine**
+   ```bash
+   sudo apt update
+   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+   ```
+
+5. **Add your user to the docker group** (so you don't need `sudo` for docker commands)
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+
+6. **Apply the group change**
+   ```bash
+   newgrp docker
+   ```
+   > ⚠️ Alternatively, log out and log back in for this to take effect permanently
+
+7. **Verify Docker is working**
+   ```bash
+   docker run hello-world
+   ```
+   You should see "Hello from Docker!" message
+
+---
+
+### Step 3: Install Git
+
+Git is used to download VRAgent's source code.
+
+1. **Install Git**
+   ```bash
+   sudo apt install -y git
+   ```
+
+2. **Verify installation**
+   ```bash
+   git --version
+   ```
+   You should see something like `git version 2.40.1`
+
+---
+
+### Step 4: Download VRAgent
+
+Now let's download VRAgent to your computer.
+
+1. **Navigate to your home directory** (or wherever you want to store projects)
+   ```bash
+   cd ~
+   ```
+
+2. **Clone the repository**
+   ```bash
+   git clone https://github.com/ShabalalaWATP/VRAgent.git
+   ```
+
+3. **Enter the project directory**
+   ```bash
+   cd VRAgent
+   ```
+
+4. **Verify you're in the right place**
+   ```bash
+   ls
+   ```
+   You should see: `docker-compose.yml`, `README.md`, `backend/`, `frontend/`, etc.
+
+---
+
+### Step 5: Create the Configuration File
+
+VRAgent needs a `.env` file for settings.
+
+1. **Create the .env file**
+   ```bash
+   cat > .env << 'EOF'
+   # Database connection (Docker handles this)
+   DATABASE_URL=postgresql://postgres:postgres@db:5432/vragent
+   REDIS_URL=redis://redis:6379/0
+
+   # Optional: Add your Gemini API key for AI features
+   # Get one free at: https://makersuite.google.com/app/apikey
+   # GEMINI_API_KEY=your_key_here
+   EOF
+   ```
+
+2. **Verify the file was created**
+   ```bash
+   cat .env
+   ```
+
+#### (Optional) Get a Free Gemini API Key for AI Features
+
+The AI features (codebase summary, exploit analysis) are optional but recommended:
+
+1. Go to https://makersuite.google.com/app/apikey
+2. Sign in with your Google account
+3. Click **"Create API key"**
+4. Copy the key
+5. Edit the `.env` file:
+   ```bash
+   nano .env
+   ```
+6. Uncomment the `GEMINI_API_KEY` line and paste your key
+7. Press `Ctrl + O` to save, then `Ctrl + X` to exit
+
+---
+
+### Step 6: Start VRAgent
+
+Now let's start all the services!
+
+1. **Start all services**
+   ```bash
+   docker compose up -d
+   ```
+   
+   **What you'll see:**
+   - First time: Docker downloads images (5-10 minutes depending on internet)
+   - Progress bars for each layer being downloaded
+   - "Container vragent-xxx Started" messages
+
+2. **Wait for services to be healthy** (about 30-60 seconds)
+   ```bash
+   docker compose ps
+   ```
+   
+   You should see all services with "Up" or "Up (healthy)" status:
+   ```
+   NAME               STATUS              PORTS
+   vragent-backend    Up (healthy)        0.0.0.0:8000->8000/tcp
+   vragent-db         Up (healthy)        0.0.0.0:5432->5432/tcp
+   vragent-frontend   Up                  0.0.0.0:3000->80/tcp
+   vragent-redis      Up (healthy)        0.0.0.0:6379->6379/tcp
+   vragent-worker     Up
+   ```
+
+3. **Initialize the database**
+   ```bash
+   docker compose exec backend alembic upgrade head
+   ```
+   You should see: "INFO  [alembic.runtime.migration] Running upgrade..."
+
+---
+
+### Step 7: Open VRAgent in Your Browser
+
+🎉 **You're done with setup!**
+
+Open your web browser and go to:
+
+| What | URL |
+|------|-----|
+| **VRAgent App** | http://localhost:3000 |
+| **API Documentation** | http://localhost:8000/docs |
+
+---
+
+### Common Linux Commands
+
+Here are commands you'll use frequently:
+
+```bash
+# Start VRAgent (if stopped)
+docker compose up -d
+
+# Stop VRAgent
+docker compose down
+
+# View logs (all services)
+docker compose logs
+
+# View logs for a specific service (with live follow)
+docker compose logs -f backend
+docker compose logs -f worker
+
+# Restart everything (after code changes)
+docker compose down && docker compose up -d --build
+
+# Check service status
+docker compose ps
+
+# Complete reset (deletes all data!)
+docker compose down -v
+docker compose up -d
+docker compose exec backend alembic upgrade head
+
+# Check disk space used by Docker
+docker system df
+
+# Clean up unused Docker resources
+docker system prune -a
+```
+
+---
+
+### Linux Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| **"permission denied" for docker** | Run `sudo usermod -aG docker $USER` then log out and back in |
+| **"Cannot connect to Docker daemon"** | Run `sudo systemctl start docker` |
+| **Port 3000 already in use** | Find what's using it: `sudo lsof -i :3000` and kill it, or change port in `docker-compose.yml` |
+| **"No space left on device"** | Run `docker system prune -a` to clean up unused images |
+| **Containers keep restarting** | Check logs: `docker compose logs backend` |
+| **Database connection refused** | Wait 30 seconds for PostgreSQL to initialize |
+| **Slow first startup** | Normal - Docker needs to download ~2GB of images |
+| **"docker compose" not found** | You have old Docker. Try `docker-compose` (with hyphen) or reinstall Docker |
+
+---
+
+### Updating VRAgent on Linux
+
+When new versions are released:
+
+```bash
+# Navigate to project directory
+cd ~/VRAgent
+
+# Pull latest code
+git pull
+
+# Rebuild and restart
+docker compose down
+docker compose up -d --build
+
+# Run any new database migrations
+docker compose exec backend alembic upgrade head
+```
+
+---
+
+### Uninstalling VRAgent on Linux
+
+To completely remove VRAgent:
+
+```bash
+# Navigate to project directory
+cd ~/VRAgent
+
+# Stop and remove all containers and data
+docker compose down -v
+
+# Remove the project folder
+cd ~
+rm -rf VRAgent
+
+# (Optional) Remove Docker images to free disk space
+docker image prune -a
 ```
 
 ## 🛠️ Local Development Setup
@@ -427,7 +797,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Create environment file
-cp .env.sample .env
+cp .env.example .env
 # Edit .env with your database and Redis URLs
 
 # Set PYTHONPATH (Windows)
@@ -466,7 +836,7 @@ cd frontend
 npm install
 
 # Create environment file (optional)
-cp .env.sample .env
+cp .env.example .env
 # Edit .env if your backend is not on localhost:8000
 
 # Start development server
@@ -484,6 +854,7 @@ The frontend will be available at http://localhost:5173
 | `GET` | `/projects` | List all projects |
 | `POST` | `/projects` | Create a new project |
 | `GET` | `/projects/{id}` | Get project details |
+| `DELETE` | `/projects/{id}` | Delete a project and all associated data |
 | `POST` | `/projects/{id}/upload` | Upload code archive |
 | `POST` | `/projects/{id}/clone` | Clone a Git repository |
 | `POST` | `/projects/{id}/scan` | Trigger a scan |
@@ -498,6 +869,7 @@ The frontend will be available at http://localhost:5173
 | `GET` | `/reports/{id}/findings` | List report findings |
 | `GET` | `/reports/{id}/findings/{fid}/snippet` | Get code snippet for finding |
 | `GET` | `/reports/{id}/codebase` | Get codebase structure tree |
+| `GET` | `/reports/{id}/codebase/summary` | Get AI-generated codebase summaries |
 | `GET` | `/reports/{id}/export/markdown` | Export as Markdown |
 | `GET` | `/reports/{id}/export/pdf` | Export as PDF |
 | `GET` | `/reports/{id}/export/docx` | Export as DOCX |
@@ -557,7 +929,7 @@ pytest tests/test_services/test_codebase_service.py::TestUnpackZipToTemp
 ```
 VRAgent/
 ├── docker-compose.yml       # Full stack orchestration
-├── .env.sample              # Environment template
+├── .env.example             # Environment template
 ├── README.md
 │
 ├── backend/
@@ -583,19 +955,26 @@ VRAgent/
 │   │   └── exploitability.py
 │   │
 │   ├── services/
+│   │   ├── bandit_service.py     # Python security scanning (Bandit)
+│   │   ├── clangtidy_service.py  # C/C++ security scanning (clang-tidy)
 │   │   ├── codebase_service.py   # Code extraction & parsing
 │   │   ├── cve_service.py        # OSV vulnerability lookup
 │   │   ├── dependency_service.py # Multi-language dependency parsing
 │   │   ├── embedding_service.py  # Gemini embeddings
 │   │   ├── epss_service.py       # EPSS vulnerability scoring
-│   │   ├── eslint_service.py     # ESLint security scanning
-│   │   ├── exploit_service.py    # AI exploitability
-│   │   ├── export_service.py     # Report generation
+│   │   ├── eslint_service.py     # JavaScript/TypeScript scanning (ESLint)
+│   │   ├── exploit_service.py    # AI exploitability analysis
+│   │   ├── export_service.py     # Report generation (MD/PDF/DOCX)
 │   │   ├── git_service.py        # Repository cloning
+│   │   ├── gosec_service.py      # Go security scanning (gosec)
+│   │   ├── nvd_service.py        # NVD CVE enrichment
 │   │   ├── report_service.py     # Report creation
+│   │   ├── sbom_service.py       # SBOM generation (CycloneDX/SPDX)
 │   │   ├── scan_service.py       # Scan orchestration
 │   │   ├── secret_service.py     # Secret detection
-│   │   └── semgrep_service.py    # Semgrep static analysis
+│   │   ├── semgrep_service.py    # Multi-language SAST (Semgrep)
+│   │   ├── spotbugs_service.py   # Java/Kotlin scanning (SpotBugs)
+│   │   └── webhook_service.py    # Webhook notifications
 │   │
 │   ├── tasks/
 │   │   └── jobs.py          # Background job definitions
@@ -636,9 +1015,23 @@ VRAgent/
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | Required |
 | `REDIS_URL` | Redis connection string | Required |
-| `GEMINI_API_KEY` | Google Gemini API key | Optional |
-| `GEMINI_MODEL_ID` | Gemini model to use | `gemini-pro` |
+| `GEMINI_API_KEY` | Google Gemini API key for AI features | Optional |
+| `GEMINI_MODEL_ID` | Gemini model to use | `gemini-2.0-flash` |
+| `NVD_API_KEY` | NIST NVD API key (50 vs 5 req/30s) | Optional |
 | `ENVIRONMENT` | `development`, `test`, or `production` | `development` |
+
+### NVD API Key (Recommended)
+
+VRAgent enriches CVEs with detailed information from the NIST National Vulnerability Database. While no API key is required, getting a free key increases your rate limit from 5 to 50 requests per 30 seconds.
+
+1. Request a free API key at: https://nvd.nist.gov/developers/request-an-api-key
+2. Add to your `.env` file: `NVD_API_KEY=your-key-here`
+
+The NVD enrichment adds:
+- Full CVSS v3/v4 vector strings and breakdowns
+- CWE weakness classifications
+- Reference links to advisories and patches
+- Detailed vulnerability descriptions
 
 ### LLM Cost Optimization
 
@@ -696,49 +1089,91 @@ CREATE EXTENSION IF NOT EXISTS vector;
   | Python | `requirements.txt`, `Pipfile`, `pyproject.toml` | PyPI |
   | JavaScript | `package.json` | npm |
   | Java/Kotlin | `pom.xml`, `build.gradle`, `build.gradle.kts` | Maven |
-  | Go | `go.mod` | Go |
+  | Go | `go.mod`, `go.sum` | Go |
   | Ruby | `Gemfile`, `Gemfile.lock` | RubyGems |
   | Rust | `Cargo.toml`, `Cargo.lock` | crates.io |
   | PHP | `composer.json`, `composer.lock` | Packagist |
 
-- **CVE Database Lookup**: Queries OSV.dev for known vulnerabilities in dependencies
-- **EPSS Prioritization**: Uses FIRST's EPSS API to score vulnerabilities by exploitation probability
+- **Smart Deduplication**: When both manifest and lock files exist, lock file versions are preferred for precision
+- **CVE Database Lookup**: Queries OSV.dev for known vulnerabilities in dependencies (aggregates CVE, GHSA, and ecosystem-specific advisories)
+- **NVD Enrichment**: Enhances CVE data with detailed information from NIST's National Vulnerability Database including full CVSS vectors, CWE mappings, and reference links
+- **EPSS Prioritization**: Uses FIRST's EPSS API to score vulnerabilities by exploitation probability (chance of being exploited in next 30 days)
+
+### Vulnerability Lookup Efficiency
+
+VRAgent uses optimized batch APIs and caching to minimize API calls:
+
+| Data Source | Method | Rate Limit Handling |
+|-------------|--------|---------------------|
+| **OSV.dev** | Batch API (100 deps/request) | 5 concurrent batches |
+| **EPSS** | Batch API (100 CVEs/request) | Single request for all |
+| **NVD** | Concurrent requests + caching | 3 concurrent (with key) or rate-limited |
+
+- **24-hour caching** for NVD and EPSS responses reduces repeat lookups
+- **Lock file preference** ensures precise version matching for vulnerability detection
+- **Automatic deduplication** prevents redundant database queries
 
 ### Secret Detection
 
-Scans for over 40 types of secrets including:
-- AWS, Azure, GCP credentials
-- GitHub, GitLab tokens
-- Slack, Discord webhooks
-- Stripe, Twilio API keys
-- Private keys and certificates
-- Database connection strings
-- JWT secrets
+Scans for over 50 types of secrets including:
+- **Cloud providers**: AWS, Azure, GCP, DigitalOcean, Heroku, Cloudflare, Vercel
+- **AI/ML platforms**: OpenAI, Anthropic, Hugging Face
+- **Code hosting**: GitHub (PAT, OAuth, fine-grained), GitLab
+- **Communication**: Slack tokens & webhooks, Discord
+- **Payments**: Stripe (live/test keys), Twilio
+- **Backend services**: Supabase, Firebase, Datadog, Sentry
+- **Package registries**: NPM, PyPI tokens
+- **Infrastructure**: Private keys (RSA, DSA, EC, PGP), SSH keys
+- **Databases**: MongoDB, MySQL, PostgreSQL, Redis connection strings
+- **Authentication**: JWT secrets, bearer tokens, generic API keys
 
-### Static Analysis
+### Static Analysis Scanners
 
-- **Semgrep Integration**: Deep semantic analysis with 2000+ security rules covering OWASP Top 10 and CWE Top 25
-- **Code Pattern Matching**: Detects dangerous patterns like `eval()`, `exec()`, shell injection
-- **ESLint Security Plugins**: Runs `eslint-plugin-security` for JavaScript/TypeScript projects
+VRAgent runs **7 specialized security scanners** automatically based on the languages detected in your project:
 
-### Semgrep (Optional but Recommended)
-
-For enhanced static analysis, install Semgrep:
-
-```bash
-# Using pip
-pip install semgrep
-
-# Using Homebrew (macOS)
-brew install semgrep
-```
-
-When installed, VRAgent automatically runs Semgrep's security audit providing:
-- AST-aware semantic code analysis (not just regex)
-- 2000+ community-maintained security rules
-- OWASP Top 10 and CWE coverage
+#### Semgrep (Multi-Language SAST)
+Deep semantic analysis with 30+ security rulesets:
+- AST-aware analysis (not just regex)
+- **Core rulesets**: `p/security-audit`, `p/owasp-top-ten`, `p/cwe-top-25`, `p/secrets`
+- **Language-specific**: `p/python`, `p/javascript`, `p/typescript`, `p/java`, `p/go`, `p/c`, `p/php`, `p/ruby`, `p/rust`
+- **Framework-specific**: `p/django`, `p/flask`, `p/react`, `p/nodejs`, `p/express`, `p/spring`
+- **Vulnerability-specific**: `p/sql-injection`, `p/xss`, `p/command-injection`, `p/jwt`, `p/crypto`, `p/deserialization`
 - Taint tracking for data flow analysis
-- Support for 30+ programming languages
+
+#### ESLint Security (JavaScript/TypeScript)
+Security-focused linting for JS/TS projects:
+- Uses `@eslint/js`, `typescript-eslint`, `eslint-plugin-security`
+- Detects XSS, eval injection, prototype pollution, regex DoS
+- **Additional checks**: Logic errors (`eqeqeq`), prototype manipulation, unsafe patterns
+- Runs automatically when `.js`, `.ts`, `.jsx`, `.tsx` files detected
+
+#### Bandit (Python)
+Python-specific security scanner:
+- Detects SQL injection, shell injection, hardcoded passwords
+- Weak cryptographic usage (MD5, DES, weak random)
+- **Confidence filtering**: Only reports medium+ confidence findings to reduce false positives
+- **Smart exclusions**: Automatically skips test directories, `.tox`, `.eggs`, `__pycache__`
+- Runs automatically when `.py` files detected
+
+#### gosec (Go)
+Go security scanner:
+- SQL injection, command injection, path traversal
+- Crypto issues, file permissions, tainted data
+- Runs automatically when `.go` files detected
+
+#### SpotBugs + FindSecBugs (Java/Kotlin)
+Enterprise Java security scanner:
+- SQL injection, XXE, LDAP injection, XSS
+- Weak cryptography, insecure deserialization
+- Spring Security issues, CSRF vulnerabilities
+- Runs automatically when `.java` or `.kt` files detected (compiles with Maven/Gradle)
+
+#### clang-tidy (C/C++)
+C/C++ security analyzer:
+- Buffer overflows, format string vulnerabilities
+- Use of insecure functions (`strcpy`, `sprintf`, etc.)
+- Memory safety issues, null pointer dereferences
+- Runs automatically when `.c`, `.cpp`, `.h`, `.hpp` files detected
 
 ### Infrastructure Security
 
@@ -771,3 +1206,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [pgvector](https://github.com/pgvector/pgvector) - Vector similarity for PostgreSQL
 - [OSV](https://osv.dev/) - Open Source Vulnerability database
 - [Google Gemini](https://ai.google.dev/) - AI embeddings and analysis
+- [Semgrep](https://semgrep.dev/) - Multi-language SAST engine
+- [Bandit](https://bandit.readthedocs.io/) - Python security linter
+- [gosec](https://securego.io/) - Go security checker
+- [SpotBugs](https://spotbugs.github.io/) - Java static analysis
+- [ESLint](https://eslint.org/) - JavaScript/TypeScript linting

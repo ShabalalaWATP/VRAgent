@@ -49,6 +49,49 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
     return project
 
 
+@router.delete("/{project_id}")
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    """Delete a project and all associated data (reports, findings, code chunks, etc.)."""
+    from backend import models
+    
+    project = project_service.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Get all scan runs for this project
+    scan_runs = db.query(models.ScanRun).filter(models.ScanRun.project_id == project_id).all()
+    scan_run_ids = [sr.id for sr in scan_runs]
+    
+    # Delete exploit scenarios for reports in this project
+    reports = db.query(models.Report).filter(models.Report.project_id == project_id).all()
+    for report in reports:
+        db.query(models.ExploitScenario).filter(
+            models.ExploitScenario.report_id == report.id
+        ).delete()
+    
+    # Delete findings for all scan runs
+    if scan_run_ids:
+        db.query(models.Finding).filter(
+            models.Finding.scan_run_id.in_(scan_run_ids)
+        ).delete(synchronize_session=False)
+    
+    # Delete reports
+    db.query(models.Report).filter(models.Report.project_id == project_id).delete()
+    
+    # Delete scan runs
+    db.query(models.ScanRun).filter(models.ScanRun.project_id == project_id).delete()
+    
+    # Delete code chunks
+    db.query(models.CodeChunk).filter(models.CodeChunk.project_id == project_id).delete()
+    
+    # Delete the project itself
+    db.delete(project)
+    db.commit()
+    
+    logger.info(f"Deleted project {project_id} and all associated data")
+    return {"status": "deleted", "project_id": project_id}
+
+
 @router.post("/{project_id}/upload", response_model=UploadResponse)
 async def upload_project_code(
     project_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)

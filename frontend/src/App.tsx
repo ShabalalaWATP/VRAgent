@@ -8,12 +8,31 @@ import {
   Box,
   Tooltip,
   useTheme,
+  alpha,
+  keyframes,
+  Chip,
 } from "@mui/material";
 import { Routes, Route, Link } from "react-router-dom";
 import { useThemeMode } from "./theme/ThemeProvider";
 import ProjectListPage from "./pages/ProjectListPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
 import ReportDetailPage from "./pages/ReportDetailPage";
+
+// Animations
+const pulse = keyframes`
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+`;
+
+const shimmer = keyframes`
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+`;
+
+const float = keyframes`
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+`;
 
 // Icons as inline SVG for simplicity
 const DarkModeIcon = () => (
@@ -29,8 +48,14 @@ const LightModeIcon = () => (
 );
 
 const ShieldIcon = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" />
+  </svg>
+);
+
+const GitHubIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
   </svg>
 );
 
@@ -41,8 +66,18 @@ function App() {
   return (
     <>
       <CssBaseline />
-      <AppBar position="sticky" elevation={0}>
-        <Toolbar sx={{ px: { xs: 2, sm: 3 } }}>
+      <AppBar 
+        position="sticky" 
+        elevation={0}
+        sx={{
+          background: mode === "dark" 
+            ? `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.95)} 0%, ${alpha(theme.palette.background.default, 0.98)} 100%)`
+            : `linear-gradient(135deg, ${alpha("#ffffff", 0.95)} 0%, ${alpha("#f8fafc", 0.98)} 100%)`,
+          backdropFilter: "blur(20px)",
+          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        }}
+      >
+        <Toolbar sx={{ px: { xs: 2, sm: 4 }, py: 2, minHeight: { xs: 90, sm: 110 } }}>
           <Link
             to="/"
             style={{
@@ -52,66 +87,115 @@ function App() {
               textDecoration: "none",
             }}
           >
+            {/* Logo Image */}
             <Box
+              component="img"
+              src="/images/logo.jpg"
+              alt="VRAgent Logo"
               sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 40,
-                height: 40,
-                borderRadius: 2,
-                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-                mr: 1.5,
+                width: { xs: 64, sm: 80 },
+                height: { xs: 64, sm: 80 },
+                borderRadius: 3,
+                objectFit: "cover",
+                boxShadow: `0 4px 20px ${alpha(theme.palette.primary.main, 0.4)}`,
+                mr: 2.5,
+                animation: `${float} 3s ease-in-out infinite`,
               }}
-            >
-              <ShieldIcon />
-            </Box>
+            />
+
+            {/* Title and Subtitle */}
             <Box>
-              <Typography
-                variant="h6"
-                component="span"
-                sx={{
-                  fontWeight: 700,
-                  background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.secondary.light} 100%)`,
-                  backgroundClip: "text",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                VRAgent
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Typography
+                  variant="h4"
+                  component="span"
+                  sx={{
+                    fontWeight: 800,
+                    fontSize: { xs: "1.5rem", sm: "1.85rem" },
+                    background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 50%, ${theme.palette.primary.light} 100%)`,
+                    backgroundSize: "200% auto",
+                    backgroundClip: "text",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    letterSpacing: "-0.03em",
+                    animation: `${shimmer} 4s linear infinite`,
+                  }}
+                >
+                  VRAgent
+                </Typography>
+                <Chip
+                  label="BETA"
+                  size="small"
+                  sx={{
+                    height: 20,
+                    fontSize: "0.6rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.05em",
+                    bgcolor: alpha(theme.palette.warning.main, 0.15),
+                    color: theme.palette.warning.main,
+                    border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`,
+                    animation: `${pulse} 2s ease-in-out infinite`,
+                  }}
+                />
+              </Box>
               <Typography
                 variant="caption"
                 component="div"
                 sx={{
                   color: "text.secondary",
-                  fontSize: "0.7rem",
-                  letterSpacing: "0.05em",
-                  mt: -0.5,
+                  fontSize: { xs: "0.65rem", sm: "0.75rem" },
+                  fontWeight: 500,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  mt: 0.25,
                 }}
               >
-                VULNERABILITY RESEARCH
+                Security Vulnerability Scanner
               </Typography>
             </Box>
           </Link>
 
           <Box sx={{ flexGrow: 1 }} />
 
-          <Tooltip title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
-            <IconButton
-              onClick={toggleTheme}
-              sx={{
-                color: "text.primary",
-                bgcolor: mode === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-                "&:hover": {
-                  bgcolor: mode === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
-                },
-              }}
-            >
-              {mode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
-            </IconButton>
-          </Tooltip>
+          {/* Action Buttons */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Tooltip title="View on GitHub">
+              <IconButton
+                component="a"
+                href="https://github.com/ShabalalaWATP/VRAgent"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  color: "text.secondary",
+                  bgcolor: alpha(theme.palette.divider, 0.1),
+                  "&:hover": {
+                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                    color: "text.primary",
+                  },
+                }}
+              >
+                <GitHubIcon />
+              </IconButton>
+            </Tooltip>
+            
+            <Tooltip title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+              <IconButton
+                onClick={toggleTheme}
+                sx={{
+                  color: "text.secondary",
+                  bgcolor: alpha(theme.palette.divider, 0.1),
+                  transition: "all 0.3s ease",
+                  "&:hover": {
+                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                    color: theme.palette.primary.main,
+                    transform: "rotate(180deg)",
+                  },
+                }}
+              >
+                {mode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Toolbar>
       </AppBar>
 

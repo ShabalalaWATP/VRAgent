@@ -27,6 +27,10 @@ reportlab==4.0.4
 python-docx==0.8.11
 markdown==3.4.4
 
+# Security scanning
+semgrep>=1.50.0
+bandit>=1.7.0
+
 # Testing
 pytest==7.4.0
 pytest-asyncio==0.21.1

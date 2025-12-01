@@ -159,7 +159,7 @@ class ExploitScenario(Base):
 
     id = Column(Integer, primary_key=True)
     report_id = Column(Integer, ForeignKey("reports.id"), index=True)
-    finding_id = Column(Integer, ForeignKey("findings.id"), nullable=False)
+    finding_id = Column(Integer, ForeignKey("findings.id"), nullable=True)  # Null for executive summaries
     severity = Column(String, nullable=True)
     title = Column(String, nullable=False)
     narrative = Column(Text, nullable=True)

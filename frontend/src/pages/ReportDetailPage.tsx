@@ -35,7 +35,7 @@ import {
   keyframes,
 } from "@mui/material";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, CodebaseFile, CodebaseFolder, CodebaseNode, ExploitScenario, Finding } from "../api/client";
+import { api, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, ExploitScenario, Finding } from "../api/client";
 
 // Animations
 const fadeIn = keyframes`
@@ -858,6 +858,13 @@ export default function ReportDetailPage() {
     refetchInterval: pollExploit ? 3000 : false,
   });
 
+  const summaryQuery = useQuery({
+    queryKey: ["codebase-summary", id],
+    queryFn: () => api.getCodebaseSummary(id),
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
   const startExploitMutation = useMutation({
     mutationFn: () => api.startExploitability(id),
     onSuccess: () => {
@@ -1095,46 +1102,98 @@ export default function ReportDetailPage() {
       <Box sx={{ mb: 3 }}>
         <Paper
           sx={{
-            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.9)} 0%, ${alpha(theme.palette.background.paper, 0.7)} 100%)`,
+            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.95)} 0%, ${alpha(theme.palette.background.paper, 0.85)} 100%)`,
             backdropFilter: "blur(20px)",
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            borderRadius: 2,
+            border: `1px solid ${alpha(theme.palette.divider, 0.15)}`,
+            borderRadius: 3,
+            boxShadow: `0 4px 20px ${alpha(theme.palette.common.black, 0.1)}`,
           }}
         >
           <Tabs
             value={activeTab}
             onChange={(_, newValue) => setActiveTab(newValue)}
+            centered
             sx={{
+              minHeight: 80,
               "& .MuiTabs-indicator": {
-                height: 3,
-                borderRadius: "3px 3px 0 0",
+                height: 4,
+                borderRadius: "4px 4px 0 0",
                 background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+              },
+              "& .MuiTabs-flexContainer": {
+                gap: 2,
               },
               "& .MuiTab-root": {
                 textTransform: "none",
-                fontWeight: 600,
-                minHeight: 56,
+                fontWeight: 700,
+                fontSize: "1.25rem",
+                minHeight: 80,
+                px: 5,
+                py: 2,
+                borderRadius: "12px 12px 0 0",
                 transition: "all 0.3s ease",
+                color: alpha(theme.palette.text.primary, 0.6),
+                "&:hover": {
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  color: theme.palette.text.primary,
+                },
                 "&.Mui-selected": {
                   color: theme.palette.primary.main,
+                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                },
+                "& .MuiTab-iconWrapper": {
+                  fontSize: "1.5rem",
+                  marginRight: 1.5,
                 },
               },
             }}
           >
             <Tab
-              icon={<BugIcon />}
+              icon={<Box sx={{ display: "flex", transform: "scale(1.4)" }}><BugIcon /></Box>}
               iconPosition="start"
-              label={`Findings (${findingsQuery.data?.length || 0})`}
+              label={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <span>Findings</span>
+                  <Chip 
+                    size="small" 
+                    label={findingsQuery.data?.length || 0}
+                    sx={{ 
+                      fontWeight: 700, 
+                      fontSize: "0.85rem",
+                      height: 26,
+                      bgcolor: findingsQuery.data?.length ? alpha(theme.palette.error.main, 0.15) : alpha(theme.palette.success.main, 0.15),
+                      color: findingsQuery.data?.length ? theme.palette.error.main : theme.palette.success.main,
+                    }} 
+                  />
+                </Box>
+              }
             />
             <Tab
-              icon={<MapIcon />}
+              icon={<Box sx={{ display: "flex", transform: "scale(1.4)" }}><MapIcon /></Box>}
               iconPosition="start"
               label="Codebase Map"
             />
             <Tab
-              icon={<AnalysisIcon />}
+              icon={<Box sx={{ display: "flex", transform: "scale(1.4)" }}><AnalysisIcon /></Box>}
               iconPosition="start"
-              label={`Exploitability${exploitQuery.data?.length ? ` (${exploitQuery.data.length})` : ""}`}
+              label={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <span>Exploitability</span>
+                  {exploitQuery.data?.length ? (
+                    <Chip 
+                      size="small" 
+                      label={exploitQuery.data.length}
+                      sx={{ 
+                        fontWeight: 700, 
+                        fontSize: "0.85rem",
+                        height: 26,
+                        bgcolor: alpha(theme.palette.warning.main, 0.15),
+                        color: theme.palette.warning.main,
+                      }} 
+                    />
+                  ) : null}
+                </Box>
+              }
             />
           </Tabs>
         </Paper>
@@ -1143,6 +1202,335 @@ export default function ReportDetailPage() {
       {/* Tab Panel: Findings */}
       {activeTab === 0 && (
         <Box sx={{ mb: 4 }}>
+          {/* AI Analysis Section */}
+          <Stack spacing={3} sx={{ mb: 4 }}>
+            {/* What Does This App Do - App Summary */}
+            <Card
+              sx={{
+                background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.info.main, 0.05)} 100%)`,
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+                borderRadius: 3,
+                overflow: "hidden",
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 2,
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill={theme.palette.primary.main}>
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+                    </svg>
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" fontWeight={700} color="primary.main">
+                      What Does This App Do?
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      AI-powered analysis of the codebase structure and purpose
+                    </Typography>
+                  </Box>
+                </Box>
+                
+                {summaryQuery.isLoading && (
+                  <Box>
+                    <Skeleton variant="text" width="90%" height={24} />
+                    <Skeleton variant="text" width="85%" height={24} />
+                    <Skeleton variant="text" width="80%" height={24} />
+                    <Skeleton variant="rectangular" height={100} sx={{ mt: 2, borderRadius: 2 }} />
+                  </Box>
+                )}
+                
+                {summaryQuery.data?.has_app_summary && summaryQuery.data.app_summary && (
+                  <Box
+                    sx={{
+                      lineHeight: 1.7,
+                      color: "text.secondary",
+                      fontSize: "0.875rem",
+                      "& .section-header": {
+                        color: "text.primary",
+                        fontWeight: 700,
+                        fontSize: "0.95rem",
+                        mt: 2.5,
+                        mb: 1,
+                        display: "block",
+                        borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                        pb: 0.5,
+                      },
+                      "& .section-header:first-of-type": {
+                        mt: 0,
+                      },
+                      "& strong": {
+                        color: "text.primary",
+                        fontWeight: 600,
+                      },
+                      "& ul, & ol": {
+                        m: 0,
+                        pl: 2.5,
+                        "& li": {
+                          mb: 0.5,
+                        },
+                      },
+                      "& p": {
+                        m: 0,
+                        mb: 1,
+                      },
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: (() => {
+                        let html = summaryQuery.data.app_summary
+                          .replace(/^#+\s*/gm, "")
+                          .trim();
+                        
+                        // Convert section headers (bold text on its own line)
+                        html = html.replace(/^\*\*([^*]+)\*\*$/gm, '<span class="section-header">$1</span>');
+                        
+                        // Convert remaining inline bold
+                        html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+                        
+                        // Convert bullet points to proper list
+                        html = html.replace(/((?:^[•\-\*]\s+.+$\n?)+)/gm, (match) => {
+                          const items = match.trim().split("\n")
+                            .map(line => line.replace(/^[•\-\*]\s+/, "").trim())
+                            .filter(Boolean)
+                            .map(item => `<li>${item}</li>`)
+                            .join("");
+                          return `<ul>${items}</ul>`;
+                        });
+                        
+                        // Convert numbered lists
+                        html = html.replace(/((?:^\d+\.\s+.+$\n?)+)/gm, (match) => {
+                          const items = match.trim().split("\n")
+                            .map(line => line.replace(/^\d+\.\s+/, "").trim())
+                            .filter(Boolean)
+                            .map(item => `<li>${item}</li>`)
+                            .join("");
+                          return `<ol>${items}</ol>`;
+                        });
+                        
+                        // Wrap remaining paragraphs
+                        html = html.replace(/\n\n+/g, "</p><p>");
+                        if (!html.startsWith("<")) html = "<p>" + html;
+                        if (!html.endsWith(">")) html = html + "</p>";
+                        
+                        // Clean up empty paragraphs
+                        html = html.replace(/<p>\s*<\/p>/g, "");
+                        html = html.replace(/<p>\s*(<(?:ul|ol|span))/g, "$1");
+                        html = html.replace(/(<\/(?:ul|ol|span)>)\s*<\/p>/g, "$1");
+                        
+                        return html;
+                      })()
+                    }}
+                  />
+                )}
+                
+                {!summaryQuery.isLoading && !summaryQuery.data?.has_app_summary && (
+                  <Box sx={{ textAlign: "center", py: 3 }}>
+                    <Typography color="text.secondary" sx={{ mb: 1 }}>
+                      AI analysis not available
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Configure Gemini API key to enable AI-powered summaries
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* App Security Report */}
+            <Card
+              sx={{
+                background: `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.05)} 0%, ${alpha(theme.palette.warning.main, 0.05)} 100%)`,
+                border: `1px solid ${alpha(theme.palette.error.main, 0.15)}`,
+                borderRadius: 3,
+                overflow: "hidden",
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 2,
+                      bgcolor: alpha(theme.palette.error.main, 0.1),
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill={theme.palette.error.main}>
+                      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+                    </svg>
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" fontWeight={700} color="error.main">
+                      App Security Report
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Attack vectors, exploitation strategies, and potential impact
+                    </Typography>
+                  </Box>
+                  {summaryQuery.data?.statistics && (
+                    <Box sx={{ ml: "auto", display: "flex", gap: 1 }}>
+                      {summaryQuery.data.statistics.findings_by_severity.critical > 0 && (
+                        <Chip
+                          size="small"
+                          label={`${summaryQuery.data.statistics.findings_by_severity.critical} Critical`}
+                          sx={{ bgcolor: alpha(theme.palette.error.main, 0.15), color: theme.palette.error.main, fontWeight: 600 }}
+                        />
+                      )}
+                      {summaryQuery.data.statistics.findings_by_severity.high > 0 && (
+                        <Chip
+                          size="small"
+                          label={`${summaryQuery.data.statistics.findings_by_severity.high} High`}
+                          sx={{ bgcolor: alpha("#f97316", 0.15), color: "#f97316", fontWeight: 600 }}
+                        />
+                      )}
+                    </Box>
+                  )}
+                </Box>
+                
+                {summaryQuery.isLoading && (
+                  <Box>
+                    <Skeleton variant="text" width="90%" height={24} />
+                    <Skeleton variant="text" width="85%" height={24} />
+                    <Skeleton variant="rectangular" height={150} sx={{ mt: 2, borderRadius: 2 }} />
+                  </Box>
+                )}
+                
+                {summaryQuery.data?.has_security_summary && summaryQuery.data.security_summary && (
+                  <Box
+                    sx={{
+                      lineHeight: 1.7,
+                      color: "text.secondary",
+                      fontSize: "0.875rem",
+                      "& .section-header": {
+                        color: "error.main",
+                        fontWeight: 700,
+                        fontSize: "0.95rem",
+                        mt: 2.5,
+                        mb: 1,
+                        display: "block",
+                        borderBottom: `1px solid ${alpha(theme.palette.error.main, 0.3)}`,
+                        pb: 0.5,
+                      },
+                      "& .section-header:first-of-type": {
+                        mt: 0,
+                      },
+                      "& .risk-label": {
+                        display: "inline-block",
+                        px: 1,
+                        py: 0.25,
+                        borderRadius: 1,
+                        fontWeight: 700,
+                        fontSize: "0.8rem",
+                        bgcolor: alpha(theme.palette.error.main, 0.15),
+                        color: theme.palette.error.main,
+                      },
+                      "& strong": {
+                        color: "text.primary",
+                        fontWeight: 600,
+                      },
+                      "& ul, & ol": {
+                        m: 0,
+                        pl: 2.5,
+                        "& li": {
+                          mb: 0.75,
+                        },
+                      },
+                      "& ol": {
+                        "& li": {
+                          pl: 0.5,
+                        },
+                      },
+                      "& p": {
+                        m: 0,
+                        mb: 1,
+                      },
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: (() => {
+                        let html = summaryQuery.data.security_summary
+                          .replace(/^#+\s*/gm, "")
+                          .trim();
+                        
+                        // Convert section headers (bold text on its own line)
+                        html = html.replace(/^\*\*([^*]+)\*\*$/gm, '<span class="section-header">$1</span>');
+                        
+                        // Highlight risk level labels
+                        html = html.replace(/RISK LEVEL:\s*(CRITICAL|HIGH|MEDIUM|LOW)/gi, 
+                          '<span class="risk-label">$1 RISK</span>');
+                        
+                        // Convert remaining inline bold
+                        html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+                        
+                        // Convert bullet points to proper list
+                        html = html.replace(/((?:^[•\-\*]\s+.+$\n?)+)/gm, (match) => {
+                          const items = match.trim().split("\n")
+                            .map(line => line.replace(/^[•\-\*]\s+/, "").trim())
+                            .filter(Boolean)
+                            .map(item => `<li>${item}</li>`)
+                            .join("");
+                          return `<ul>${items}</ul>`;
+                        });
+                        
+                        // Convert numbered lists
+                        html = html.replace(/((?:^\d+\.\s+.+$\n?)+)/gm, (match) => {
+                          const items = match.trim().split("\n")
+                            .map(line => line.replace(/^\d+\.\s+/, "").trim())
+                            .filter(Boolean)
+                            .map(item => `<li>${item}</li>`)
+                            .join("");
+                          return `<ol>${items}</ol>`;
+                        });
+                        
+                        // Wrap remaining paragraphs
+                        html = html.replace(/\n\n+/g, "</p><p>");
+                        if (!html.startsWith("<")) html = "<p>" + html;
+                        if (!html.endsWith(">")) html = html + "</p>";
+                        
+                        // Clean up empty paragraphs
+                        html = html.replace(/<p>\s*<\/p>/g, "");
+                        html = html.replace(/<p>\s*(<(?:ul|ol|span))/g, "$1");
+                        html = html.replace(/(<\/(?:ul|ol|span)>)\s*<\/p>/g, "$1");
+                        
+                        return html;
+                      })()
+                    }}
+                  />
+                )}
+                
+                {!summaryQuery.isLoading && !summaryQuery.data?.has_security_summary && findingsQuery.data && findingsQuery.data.length > 0 && (
+                  <Box sx={{ textAlign: "center", py: 3 }}>
+                    <Typography color="text.secondary" sx={{ mb: 1 }}>
+                      Security analysis not available
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Configure Gemini API key to enable AI-powered security insights
+                    </Typography>
+                  </Box>
+                )}
+                
+                {!summaryQuery.isLoading && findingsQuery.data && findingsQuery.data.length === 0 && (
+                  <Box sx={{ textAlign: "center", py: 3 }}>
+                    <Typography color="success.main" fontWeight={500}>
+                      ✅ No security issues detected in this scan
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Stack>
+
           {findingsQuery.isLoading && (
             <Paper sx={{ p: 3 }}>
               <Skeleton variant="rectangular" height={200} />
@@ -1360,7 +1748,16 @@ export default function ReportDetailPage() {
                 const config = getSeverityConfig(scenario.severity || "info", theme);
                 return (
                   <Grid item xs={12} key={scenario.id}>
-                    <Card sx={{ borderLeft: `4px solid ${config.color}` }}>
+                    <Card 
+                      sx={{ 
+                        borderLeft: `4px solid ${config.color}`,
+                        ...(scenario.title === "Exploit Development Summary" && {
+                          background: `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.08)} 0%, ${alpha(theme.palette.warning.main, 0.05)} 100%)`,
+                          border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
+                          borderLeft: `4px solid ${theme.palette.error.main}`,
+                        })
+                      }}
+                    >
                       <CardContent>
                         <Stack direction="row" spacing={2} alignItems="flex-start" sx={{ mb: 2 }}>
                           <Chip
@@ -1368,24 +1765,81 @@ export default function ReportDetailPage() {
                             size="small"
                             sx={{ bgcolor: config.bg, color: config.color, fontWeight: 600 }}
                           />
-                          <Typography variant="h6" fontWeight={600}>
+                          <Typography 
+                            variant="h6" 
+                            fontWeight={700}
+                            sx={scenario.title === "Exploit Development Summary" ? { color: "error.main" } : {}}
+                          >
                             {scenario.title}
                           </Typography>
                         </Stack>
 
                         <Grid container spacing={3}>
-                          <Grid item xs={12} md={6}>
+                          <Grid item xs={12} md={scenario.title === "Exploit Development Summary" ? 12 : 6}>
                             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                              Attack Narrative
+                              {scenario.title === "Exploit Development Summary" ? "Exploitation Overview" : "Attack Narrative"}
                             </Typography>
-                            <Typography variant="body2">{scenario.narrative}</Typography>
+                            <Box
+                              sx={{
+                                fontSize: "0.875rem",
+                                color: "text.secondary",
+                                lineHeight: 1.7,
+                                "& .section-header": {
+                                  color: "text.primary",
+                                  fontWeight: 700,
+                                  fontSize: "0.9rem",
+                                  display: "block",
+                                  mt: 2,
+                                  mb: 0.5,
+                                },
+                                "& .section-header:first-of-type": { mt: 0 },
+                                "& strong": { color: "text.primary", fontWeight: 600 },
+                                "& ul, & ol": { m: 0, pl: 2.5, "& li": { mb: 0.5 } },
+                                "& p": { m: 0, mb: 1 },
+                              }}
+                              dangerouslySetInnerHTML={{
+                                __html: (() => {
+                                  let html = scenario.narrative || "";
+                                  // Section headers
+                                  html = html.replace(/^\*\*([^*]+)\*\*$/gm, '<span class="section-header">$1</span>');
+                                  // Inline bold
+                                  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+                                  // Bullets
+                                  html = html.replace(/((?:^[•\-\*]\s+.+$\n?)+)/gm, (match) => {
+                                    const items = match.trim().split("\n")
+                                      .map(line => line.replace(/^[•\-\*]\s+/, "").trim())
+                                      .filter(Boolean)
+                                      .map(item => `<li>${item}</li>`).join("");
+                                    return `<ul>${items}</ul>`;
+                                  });
+                                  // Numbers
+                                  html = html.replace(/((?:^\d+\.\s+.+$\n?)+)/gm, (match) => {
+                                    const items = match.trim().split("\n")
+                                      .map(line => line.replace(/^\d+\.\s+/, "").trim())
+                                      .filter(Boolean)
+                                      .map(item => `<li>${item}</li>`).join("");
+                                    return `<ol>${items}</ol>`;
+                                  });
+                                  // Paragraphs
+                                  html = html.replace(/\n\n+/g, "</p><p>");
+                                  if (!html.startsWith("<")) html = "<p>" + html;
+                                  if (!html.endsWith(">")) html = html + "</p>";
+                                  html = html.replace(/<p>\s*<\/p>/g, "");
+                                  html = html.replace(/<p>\s*(<(?:ul|ol|span))/g, "$1");
+                                  html = html.replace(/(<\/(?:ul|ol|span)>)\s*<\/p>/g, "$1");
+                                  return html;
+                                })()
+                              }}
+                            />
                           </Grid>
-                          <Grid item xs={12} md={6}>
-                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                              Impact
-                            </Typography>
-                            <Typography variant="body2">{scenario.impact}</Typography>
-                          </Grid>
+                          {scenario.title !== "Exploit Development Summary" && (
+                            <Grid item xs={12} md={6}>
+                              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                Impact
+                              </Typography>
+                              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{scenario.impact}</Typography>
+                            </Grid>
+                          )}
                           <Grid item xs={12} md={6}>
                             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                               Proof of Concept Outline
@@ -1399,14 +1853,16 @@ export default function ReportDetailPage() {
                               </Typography>
                             </Paper>
                           </Grid>
-                          <Grid item xs={12} md={6}>
-                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                              Mitigation
-                            </Typography>
-                            <Alert severity="info" sx={{ bgcolor: alpha(theme.palette.success.main, 0.1) }}>
-                              {scenario.mitigation_notes}
-                            </Alert>
-                          </Grid>
+                          {scenario.title !== "Exploit Development Summary" && (
+                            <Grid item xs={12} md={6}>
+                              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                Mitigation
+                              </Typography>
+                              <Alert severity="info" sx={{ bgcolor: alpha(theme.palette.success.main, 0.1) }}>
+                                {scenario.mitigation_notes}
+                              </Alert>
+                            </Grid>
+                          )}
                         </Grid>
                       </CardContent>
                     </Card>

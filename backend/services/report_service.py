@@ -1,3 +1,4 @@
+import math
 from collections import Counter
 from typing import Dict, List
 
@@ -7,11 +8,39 @@ from backend import models
 
 
 def calculate_risk(findings: List[models.Finding]) -> float:
-    weights = {"critical": 10, "high": 7, "medium": 4, "low": 1}
-    total = 0
+    """Calculate risk score on a 0-100 scale based on severity distribution.
+    
+    Formula accounts for:
+    - Severity weights (critical=40, high=25, medium=10, low=2)
+    - Diminishing returns for many findings of same severity
+    - Caps at 100
+    """
+    if not findings:
+        return 0.0
+    
+    # Count by severity
+    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     for f in findings:
-        total += weights.get(f.severity.lower(), 1) if f.severity else 1
-    return round(total / max(len(findings), 1), 2)
+        sev = (f.severity.lower() if f.severity else "info")
+        if sev in severity_counts:
+            severity_counts[sev] += 1
+    
+    # Base impact scores with diminishing returns (sqrt to prevent linear scaling)
+    critical_score = min(40, 40 * (1 - math.exp(-severity_counts["critical"] * 0.3)))  # Caps around 40
+    high_score = min(30, 30 * (1 - math.exp(-severity_counts["high"] * 0.1)))  # Caps around 30  
+    medium_score = min(20, 20 * (1 - math.exp(-severity_counts["medium"] * 0.15)))  # Caps around 20
+    low_score = min(10, 10 * (1 - math.exp(-severity_counts["low"] * 0.2)))  # Caps around 10
+    
+    # Any critical = minimum 50 score
+    base_score = critical_score + high_score + medium_score + low_score
+    
+    # If any criticals exist, ensure minimum 50
+    if severity_counts["critical"] > 0:
+        base_score = max(base_score, 50)
+    elif severity_counts["high"] > 0:
+        base_score = max(base_score, 25)
+    
+    return round(min(100, base_score), 1)
 
 
 def build_report_summary(findings: List[models.Finding]) -> Dict:

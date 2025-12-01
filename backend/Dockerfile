@@ -7,18 +7,49 @@ WORKDIR /app
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    NODE_PATH=/usr/lib/node_modules \
+    GOPATH=/go \
+    PATH="/go/bin:/usr/local/go/bin:$PATH" \
+    SPOTBUGS_HOME=/opt/spotbugs
 
-# Install system dependencies including git for cloning repos
-# and Node.js for ESLint security scanning
+# Install system dependencies including git for cloning repos,
+# Node.js for ESLint, Go for Gosec, clang-tidy for C/C++, and build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    g++ \
     libpq-dev \
     git \
     curl \
+    wget \
+    unzip \
+    default-jdk-headless \
+    clang-tidy \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Go (for gosec)
+RUN wget -q https://go.dev/dl/go1.21.5.linux-amd64.tar.gz \
+    && tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz \
+    && rm go1.21.5.linux-amd64.tar.gz
+
+# Install Gosec (Go security scanner)
+RUN go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+# Install SpotBugs with Find Security Bugs plugin (for Java security scanning)
+RUN mkdir -p /opt/spotbugs/plugin \
+    && wget -q -O /tmp/spotbugs.zip https://github.com/spotbugs/spotbugs/releases/download/4.8.3/spotbugs-4.8.3.zip \
+    && unzip -q /tmp/spotbugs.zip -d /opt \
+    && mv /opt/spotbugs-4.8.3/* /opt/spotbugs/ \
+    && rm -rf /opt/spotbugs-4.8.3 /tmp/spotbugs.zip \
+    && wget -q -O /opt/spotbugs/plugin/findsecbugs-plugin.jar \
+       https://repo1.maven.org/maven2/com/h3xstream/findsecbugs/findsecbugs-plugin/1.12.0/findsecbugs-plugin-1.12.0.jar \
+    && chmod +x /opt/spotbugs/bin/spotbugs \
+    && ln -s /opt/spotbugs/bin/spotbugs /usr/local/bin/spotbugs
+
+# Install ESLint and security plugins globally for scanning
+RUN npm install -g eslint eslint-plugin-security @eslint/js
 
 # Copy requirements first for better caching
 COPY requirements.txt .

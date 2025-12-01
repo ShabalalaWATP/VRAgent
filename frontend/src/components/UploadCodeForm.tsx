@@ -65,8 +65,9 @@ type Props = {
 export default function UploadCodeForm({ projectId, onUploaded }: Props) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[] | null>(null);
-  const [uploadMode, setUploadMode] = useState<"zip" | "folder">("zip");
+  const [uploadMode, setUploadMode] = useState<"zip" | "folder">("folder");
   const [processingStatus, setProcessingStatus] = useState<string>("");
+  const [uploadSuccess, setUploadSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const theme = useTheme();
@@ -78,6 +79,7 @@ export default function UploadCodeForm({ projectId, onUploaded }: Props) {
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       setSelectedFiles(null);
       setProcessingStatus("");
+      setUploadSuccess(true);
       onUploaded?.();
     },
   });
@@ -202,13 +204,13 @@ export default function UploadCodeForm({ projectId, onUploaded }: Props) {
           }}
         >
           <Tab 
-            value="zip" 
-            label="📦 ZIP File" 
+            value="folder" 
+            label="📁 Folder" 
             sx={{ borderRadius: 1.5 }}
           />
           <Tab 
-            value="folder" 
-            label="📁 Folder" 
+            value="zip" 
+            label="📦 ZIP File" 
             sx={{ borderRadius: 1.5 }}
           />
         </Tabs>
@@ -395,9 +397,20 @@ export default function UploadCodeForm({ projectId, onUploaded }: Props) {
               <CheckIcon />
             </Box>
             <Typography variant="subtitle2" fontWeight={600}>
-              {selectedFiles.length === 1 
-                ? selectedFiles[0].name
-                : `${selectedFiles.length} files selected`}
+              {(() => {
+                // For folder uploads, extract the folder name from the first file's path
+                const firstFile = selectedFiles[0] as any;
+                if (firstFile.webkitRelativePath) {
+                  const folderName = firstFile.webkitRelativePath.split('/')[0];
+                  return `📁 ${folderName} (${selectedFiles.length} files)`;
+                }
+                // For single zip file
+                if (selectedFiles.length === 1) {
+                  return `📦 ${selectedFiles[0].name}`;
+                }
+                // For multiple files
+                return `${selectedFiles.length} files selected`;
+              })()}
             </Typography>
           </Stack>
           <Typography variant="caption" color="text.secondary">
@@ -475,6 +488,42 @@ export default function UploadCodeForm({ projectId, onUploaded }: Props) {
         >
           <Typography variant="body2" color="error">
             {(uploadMutation.error as Error).message}
+          </Typography>
+        </Box>
+      )}
+
+      {/* Success Message */}
+      {uploadSuccess && (
+        <Box
+          sx={{
+            mt: 3,
+            p: 3,
+            borderRadius: 2,
+            background: `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.15)} 0%, ${alpha(theme.palette.success.light, 0.1)} 100%)`,
+            border: `1px solid ${alpha(theme.palette.success.main, 0.4)}`,
+            textAlign: "center",
+          }}
+        >
+          <Box
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              background: alpha(theme.palette.success.main, 0.2),
+              color: theme.palette.success.main,
+              mb: 1,
+            }}
+          >
+            <CheckIcon />
+          </Box>
+          <Typography variant="h6" fontWeight={600} color="success.main" sx={{ mb: 0.5 }}>
+            ✅ Upload Successful!
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Your code has been uploaded. You can now start a scan to analyze it.
           </Typography>
         </Box>
       )}

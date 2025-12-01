@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     gemini_model_id: str = Field("gemini-pro", validation_alias="GEMINI_MODEL_ID")
     environment: str = Field("development", validation_alias="ENVIRONMENT")
     
+    # NVD API key (optional - increases rate limits from 5/30s to 50/30s)
+    # Get one at: https://nvd.nist.gov/developers/request-an-api-key
+    nvd_api_key: str = Field("", validation_alias="NVD_API_KEY")
+    
     # File upload settings
     max_upload_size: int = Field(100 * 1024 * 1024, validation_alias="MAX_UPLOAD_SIZE")  # 100MB default
     

@@ -10,6 +10,8 @@ from backend.core.exceptions import ScanError
 from backend.core.logging import get_logger
 from backend.services import cve_service, dependency_service, report_service
 from backend.services import secret_service, eslint_service, epss_service, semgrep_service
+from backend.services import nvd_service, bandit_service, gosec_service
+from backend.services import spotbugs_service, clangtidy_service
 from backend.services.codebase_service import (
     create_code_chunks,
     iter_source_files,
@@ -241,6 +243,126 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
             logger.info("Semgrep not installed, skipping deep static analysis")
         _broadcast_progress(scan_run.id, "semgrep", 65, "Static analysis complete")
 
+        # Phase 6b: Bandit Python security scan (if Python files exist)
+        _broadcast_progress(scan_run.id, "bandit", 66, "Running Bandit Python security scan")
+        logger.debug("Running Bandit Python security scan")
+        if bandit_service.is_bandit_available():
+            bandit_findings = bandit_service.run_security_audit(source_root)
+            for bandit_finding in bandit_findings:
+                # Make path relative to source root
+                try:
+                    rel_path = str(Path(bandit_finding.file_path).relative_to(source_root))
+                except ValueError:
+                    rel_path = bandit_finding.file_path
+                
+                findings.append(
+                    models.Finding(
+                        type="bandit",
+                        severity=bandit_finding.severity,
+                        file_path=rel_path,
+                        start_line=bandit_finding.line_number,
+                        end_line=bandit_finding.line_range[1] if bandit_finding.line_range and len(bandit_finding.line_range) > 1 else bandit_finding.line_number,
+                        summary=f"[{bandit_finding.test_id}] {bandit_finding.message}",
+                        details={
+                            "test_id": bandit_finding.test_id,
+                            "test_name": bandit_finding.test_name,
+                            "confidence": bandit_finding.confidence,
+                            "cwe": bandit_finding.cwe,
+                            "code_snippet": bandit_finding.code[:500] if bandit_finding.code else None,
+                            "more_info": bandit_finding.more_info,
+                        },
+                    )
+                )
+            logger.info(f"Found {len(bandit_findings)} Bandit Python security issues")
+        else:
+            logger.info("Bandit not installed, skipping Python security analysis")
+
+        # Phase 6c: gosec Go security scan (if Go files exist)
+        _broadcast_progress(scan_run.id, "gosec", 67, "Running gosec Go security scan")
+        logger.debug("Running gosec Go security scan")
+        if gosec_service.is_gosec_available():
+            gosec_findings = gosec_service.run_security_audit(source_root)
+            for gosec_finding in gosec_findings:
+                # Make path relative to source root
+                try:
+                    rel_path = str(Path(gosec_finding.file_path).relative_to(source_root))
+                except ValueError:
+                    rel_path = gosec_finding.file_path
+                
+                findings.append(
+                    models.Finding(
+                        type="gosec",
+                        severity=gosec_finding.severity,
+                        file_path=rel_path,
+                        start_line=gosec_finding.line,
+                        end_line=gosec_finding.line,
+                        summary=f"[{gosec_finding.rule_id}] {gosec_finding.details}",
+                        details={
+                            "rule_id": gosec_finding.rule_id,
+                            "cwe": gosec_finding.cwe,
+                            "confidence": gosec_finding.confidence,
+                            "code_snippet": gosec_finding.code[:500] if gosec_finding.code else None,
+                        },
+                    )
+                )
+            logger.info(f"Found {len(gosec_findings)} gosec Go security issues")
+        else:
+            logger.info("gosec not installed, skipping Go security analysis")
+
+        # Phase 6d: SpotBugs Java security scan (if Java files exist)
+        _broadcast_progress(scan_run.id, "spotbugs", 68, "Running SpotBugs Java security scan")
+        logger.debug("Running SpotBugs Java security scan")
+        if spotbugs_service.is_spotbugs_available():
+            spotbugs_findings = spotbugs_service.run_security_audit(source_root)
+            for sb_finding in spotbugs_findings:
+                findings.append(
+                    models.Finding(
+                        type="spotbugs",
+                        severity=sb_finding.severity,
+                        file_path=sb_finding.file_path,
+                        start_line=sb_finding.line,
+                        end_line=sb_finding.line,
+                        summary=f"[{sb_finding.bug_type}] {sb_finding.message}",
+                        details={
+                            "bug_type": sb_finding.bug_type,
+                            "category": sb_finding.category,
+                            "priority": sb_finding.priority,
+                            "class_name": sb_finding.class_name,
+                            "method_name": sb_finding.method_name,
+                            "cwe": sb_finding.cwe,
+                        },
+                    )
+                )
+            logger.info(f"Found {len(spotbugs_findings)} SpotBugs Java security issues")
+        else:
+            logger.info("SpotBugs not installed, skipping Java security analysis")
+
+        # Phase 6e: clang-tidy C/C++ security scan
+        _broadcast_progress(scan_run.id, "clangtidy", 69, "Running clang-tidy C/C++ security scan")
+        logger.debug("Running clang-tidy C/C++ security scan")
+        if clangtidy_service.is_clangtidy_available():
+            clangtidy_findings = clangtidy_service.run_security_audit(source_root)
+            for ct_finding in clangtidy_findings:
+                findings.append(
+                    models.Finding(
+                        type="clangtidy",
+                        severity=ct_finding.severity,
+                        file_path=ct_finding.file_path,
+                        start_line=ct_finding.line,
+                        end_line=ct_finding.line,
+                        summary=f"[{ct_finding.check_name}] {ct_finding.message}",
+                        details={
+                            "check_name": ct_finding.check_name,
+                            "column": ct_finding.column,
+                            "cwe": ct_finding.cwe,
+                            "code_snippet": ct_finding.code_snippet,
+                        },
+                    )
+                )
+            logger.info(f"Found {len(clangtidy_findings)} clang-tidy C/C++ security issues")
+        else:
+            logger.info("clang-tidy not installed, skipping C/C++ security analysis")
+
         # Phase 7: Parse dependencies (65-75%)
         _broadcast_progress(scan_run.id, "dependencies", 68, "Parsing dependencies")
         logger.debug("Parsing dependencies")
@@ -268,6 +390,17 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
         ]
         enriched_vulns = asyncio.run(epss_service.enrich_vulnerabilities_with_epss(vuln_dicts))
         
+        # Phase 9b: NVD enrichment (optional - enriches CVE details)
+        # Only enrich if we have CVEs (not GHSA or other IDs)
+        cve_vulns = [v for v in enriched_vulns if v.get("external_id", "").startswith("CVE-")]
+        if cve_vulns:
+            _broadcast_progress(scan_run.id, "nvd", 89, f"Enriching {len(cve_vulns)} CVEs from NVD")
+            logger.debug(f"Enriching {len(cve_vulns)} CVEs from NVD")
+            try:
+                enriched_vulns = asyncio.run(nvd_service.enrich_vulnerabilities_with_nvd(enriched_vulns))
+            except Exception as e:
+                logger.warning(f"NVD enrichment failed (non-fatal): {e}")
+        
         # Create a mapping for quick lookup
         epss_data = {v["id"]: v for v in enriched_vulns}
 
@@ -275,16 +408,34 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
 
         # Create findings for dependency vulnerabilities
         for vuln in vulns:
-            # Get EPSS data if available
+            # Get EPSS and NVD data if available
             vuln_epss = epss_data.get(vuln.id, {})
             epss_score = vuln_epss.get("epss_score")
             epss_percentile = vuln_epss.get("epss_percentile")
             epss_priority = vuln_epss.get("epss_priority")
+            nvd_enrichment = vuln_epss.get("nvd_enrichment", {})
             
             # Use EPSS priority to potentially escalate severity
             effective_severity = vuln.severity or "medium"
             if epss_priority == "critical" and effective_severity in ("low", "medium"):
                 effective_severity = "high"  # Escalate if highly likely to be exploited
+            
+            # Build details dict with all enrichment data
+            details = {
+                "external_id": vuln.external_id,
+                "dependency": dep_lookup.get(vuln.dependency_id),
+                "cvss_score": vuln.cvss_score,
+                "epss_score": epss_score,
+                "epss_percentile": epss_percentile,
+                "epss_priority": epss_priority,
+            }
+            
+            # Add NVD enrichment if available
+            if nvd_enrichment:
+                details["nvd_description"] = nvd_enrichment.get("description")
+                details["cvss_vector"] = nvd_enrichment.get("cvss_v3", {}).get("vector_string") if nvd_enrichment.get("cvss_v3") else None
+                details["cwe"] = nvd_enrichment.get("cwes", [])
+                details["references"] = nvd_enrichment.get("references", [])[:5]  # Limit references
             
             findings.append(
                 models.Finding(
@@ -293,14 +444,7 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
                     type="dependency_vuln",
                     severity=effective_severity,
                     summary=vuln.title,
-                    details={
-                        "external_id": vuln.external_id,
-                        "dependency": dep_lookup.get(vuln.dependency_id),
-                        "cvss_score": vuln.cvss_score,
-                        "epss_score": epss_score,
-                        "epss_percentile": epss_percentile,
-                        "epss_priority": epss_priority,
-                    },
+                    details=details,
                     linked_vulnerability=vuln,
                 )
             )

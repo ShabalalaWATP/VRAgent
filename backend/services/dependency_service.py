@@ -3,24 +3,58 @@ Dependency extraction service for parsing dependency manifest files.
 
 Supports:
 - Python: requirements.txt, Pipfile, pyproject.toml
-- JavaScript/Node: package.json
+- JavaScript/Node: package.json, package-lock.json
 - Java: pom.xml (Maven), build.gradle (Gradle)
-- Go: go.mod
+- Go: go.mod, go.sum
 - Ruby: Gemfile, Gemfile.lock
 - Rust: Cargo.toml, Cargo.lock
 - PHP: composer.json, composer.lock
+
+Note: When both manifest and lock files exist, lock files are preferred
+for precise versions. Deduplication is performed to avoid duplicates.
 """
 
 import json
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, Tuple
 
 from backend import models
 from backend.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _deduplicate_dependencies(deps: List[models.Dependency]) -> List[models.Dependency]:
+    """
+    Deduplicate dependencies, preferring lock file versions over manifest versions.
+    
+    When the same package appears from both manifest and lock file,
+    keep the lock file version (more precise).
+    """
+    # Key: (ecosystem, name), Value: (dependency, is_from_lock)
+    seen: Dict[Tuple[str, str], Tuple[models.Dependency, bool]] = {}
+    
+    lock_file_patterns = {'lock', '.lock', 'Gemfile.lock', 'Cargo.lock', 'go.sum'}
+    
+    for dep in deps:
+        key = (dep.ecosystem, dep.name.lower())
+        is_lock = any(pattern in (dep.manifest_path or '') for pattern in lock_file_patterns)
+        
+        if key not in seen:
+            seen[key] = (dep, is_lock)
+        else:
+            existing_dep, existing_is_lock = seen[key]
+            # Prefer lock file version, or version with actual value
+            if is_lock and not existing_is_lock:
+                seen[key] = (dep, is_lock)
+            elif dep.version and not existing_dep.version:
+                seen[key] = (dep, is_lock)
+    
+    result = [dep for dep, _ in seen.values()]
+    logger.debug(f"Deduplicated {len(deps)} -> {len(result)} dependencies")
+    return result
 
 
 def parse_dependencies(project: models.Project, source_root: Path) -> List[models.Dependency]:
@@ -32,7 +66,7 @@ def parse_dependencies(project: models.Project, source_root: Path) -> List[model
         source_root: Root path of the source code
         
     Returns:
-        List of Dependency models
+        List of Dependency models (deduplicated)
     """
     deps: List[models.Dependency] = []
     
@@ -55,6 +89,12 @@ def parse_dependencies(project: models.Project, source_root: Path) -> List[model
             continue
         deps.extend(_parse_package_json(project.id, pkg_file, source_root))
     
+    # JavaScript/Node - package-lock.json (precise versions)
+    for lock_file in source_root.rglob("package-lock.json"):
+        if "node_modules" in str(lock_file):
+            continue
+        deps.extend(_parse_package_lock_json(project.id, lock_file, source_root))
+    
     # Java - pom.xml (Maven)
     for pom in source_root.rglob("pom.xml"):
         deps.extend(_parse_pom_xml(project.id, pom, source_root))
@@ -70,6 +110,10 @@ def parse_dependencies(project: models.Project, source_root: Path) -> List[model
     # Go - go.mod
     for gomod in source_root.rglob("go.mod"):
         deps.extend(_parse_go_mod(project.id, gomod, source_root))
+    
+    # Go - go.sum (precise versions with checksums)
+    for gosum in source_root.rglob("go.sum"):
+        deps.extend(_parse_go_sum(project.id, gosum, source_root))
     
     # Ruby - Gemfile
     for gemfile in source_root.rglob("Gemfile"):
@@ -100,6 +144,9 @@ def parse_dependencies(project: models.Project, source_root: Path) -> List[model
         if "vendor" in str(composerlock):
             continue
         deps.extend(_parse_composer_lock(project.id, composerlock, source_root))
+    
+    # Deduplicate dependencies (prefer lock file versions)
+    deps = _deduplicate_dependencies(deps)
     
     logger.info(f"Extracted {len(deps)} dependencies for project {project.id}")
     return deps
@@ -254,6 +301,73 @@ def _parse_package_json(project_id: int, pkg_path: Path, source_root: Path) -> L
         logger.warning(f"Error parsing {pkg_path}: {e}")
     except Exception as e:
         logger.warning(f"Error reading {pkg_path}: {e}")
+    
+    return deps
+
+
+def _parse_package_lock_json(project_id: int, lock_path: Path, source_root: Path) -> List[models.Dependency]:
+    """
+    Parse JavaScript/Node package-lock.json for precise versions.
+    
+    Supports both lockfileVersion 2/3 (packages) and v1 (dependencies).
+    """
+    deps = []
+    try:
+        data = json.loads(lock_path.read_text(encoding='utf-8', errors='ignore') or "{}")
+        lockfile_version = data.get("lockfileVersion", 1)
+        
+        if lockfile_version >= 2:
+            # v2/v3 format: uses "packages" object
+            packages = data.get("packages", {})
+            for pkg_path_key, pkg_info in packages.items():
+                # Skip the root package (empty key "")
+                if not pkg_path_key:
+                    continue
+                # Extract name from path like "node_modules/lodash"
+                name = pkg_path_key.split("node_modules/")[-1]
+                # Handle scoped packages like "@types/node"
+                if "/" in name and not name.startswith("@"):
+                    # This might be a nested dep, use the last part
+                    name = name.split("/")[-1]
+                
+                version = pkg_info.get("version")
+                if name and version:
+                    deps.append(
+                        models.Dependency(
+                            project_id=project_id,
+                            name=name,
+                            version=version,
+                            ecosystem="npm",
+                            manifest_path=str(lock_path.relative_to(source_root)),
+                        )
+                    )
+        else:
+            # v1 format: uses "dependencies" object (recursive)
+            def extract_deps(dependencies: dict):
+                for name, info in dependencies.items():
+                    version = info.get("version")
+                    if version:
+                        deps.append(
+                            models.Dependency(
+                                project_id=project_id,
+                                name=name,
+                                version=version,
+                                ecosystem="npm",
+                                manifest_path=str(lock_path.relative_to(source_root)),
+                            )
+                        )
+                    # Recurse into nested dependencies
+                    if info.get("dependencies"):
+                        extract_deps(info["dependencies"])
+            
+            extract_deps(data.get("dependencies", {}))
+        
+        logger.debug(f"Parsed {len(deps)} dependencies from {lock_path}")
+        
+    except json.JSONDecodeError as e:
+        logger.warning(f"Error parsing {lock_path}: {e}")
+    except Exception as e:
+        logger.warning(f"Error reading {lock_path}: {e}")
     
     return deps
 
@@ -468,6 +582,56 @@ def _parse_go_mod(project_id: int, gomod_path: Path, source_root: Path) -> List[
         
     except Exception as e:
         logger.warning(f"Error parsing {gomod_path}: {e}")
+    
+    return deps
+
+
+def _parse_go_sum(project_id: int, gosum_path: Path, source_root: Path) -> List[models.Dependency]:
+    """
+    Parse Go go.sum file for precise versions with checksums.
+    
+    go.sum contains checksums for module dependencies, providing precise version info.
+    Format: <module> <version>[/go.mod] <hash>
+    """
+    deps = []
+    seen_modules: Set[Tuple[str, str]] = set()  # (name, version) to dedupe
+    
+    try:
+        content = gosum_path.read_text(encoding='utf-8', errors='ignore')
+        
+        for line in content.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            
+            parts = line.split()
+            if len(parts) >= 2:
+                name = parts[0]
+                version_str = parts[1]
+                
+                # Remove /go.mod suffix if present
+                version = version_str.replace("/go.mod", "")
+                
+                # Skip duplicate entries (go.sum has both module and go.mod entries)
+                key = (name, version)
+                if key in seen_modules:
+                    continue
+                seen_modules.add(key)
+                
+                deps.append(
+                    models.Dependency(
+                        project_id=project_id,
+                        name=name,
+                        version=version,
+                        ecosystem="Go",
+                        manifest_path=str(gosum_path.relative_to(source_root)),
+                    )
+                )
+        
+        logger.debug(f"Parsed {len(deps)} dependencies from {gosum_path}")
+        
+    except Exception as e:
+        logger.warning(f"Error parsing {gosum_path}: {e}")
     
     return deps
 

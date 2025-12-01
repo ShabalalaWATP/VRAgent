@@ -198,21 +198,59 @@ def run_security_audit(source_path: Path) -> List[SemgrepFinding]:
     all_findings: List[SemgrepFinding] = []
     seen_keys = set()
     
-    # Run with security-audit config (most comprehensive)
+    # Run with multiple security configs for comprehensive coverage
     configs = [
-        "p/security-audit",  # Comprehensive security rules
+        # Core security rulesets
+        "p/security-audit",      # Comprehensive security rules
+        "p/owasp-top-ten",       # OWASP Top 10 vulnerabilities
+        "p/cwe-top-25",          # CWE Top 25 most dangerous weaknesses
+        "p/secrets",             # Hardcoded secrets detection
+        
+        # Language-specific security rulesets
+        "p/python",              # Python security rules
+        "p/javascript",          # JavaScript security rules
+        "p/typescript",          # TypeScript security rules
+        "p/java",                # Java security rules
+        "p/go",                  # Go security rules
+        "p/c",                   # C security rules
+        "p/php",                 # PHP security rules
+        "p/ruby",                # Ruby security rules
+        "p/rust",                # Rust security rules
+        
+        # Framework-specific rulesets
+        "p/django",              # Django security
+        "p/flask",               # Flask security
+        "p/react",               # React security
+        "p/nodejs",              # Node.js security
+        "p/express",             # Express.js security
+        "p/spring",              # Spring Boot security
+        
+        # Additional security rulesets
+        "p/sql-injection",       # SQL injection patterns
+        "p/xss",                 # Cross-site scripting
+        "p/command-injection",   # Command injection
+        "p/insecure-transport",  # Insecure transport (HTTP, no TLS)
+        "p/jwt",                 # JWT security issues
+        "p/crypto",              # Cryptography issues
+        "p/deserialization",     # Insecure deserialization
     ]
     
     for config in configs:
-        findings = run_semgrep_scan(source_path, config=config)
-        
-        for finding in findings:
-            # Deduplicate by file/line/rule
-            key = (finding.file_path, finding.line_start, finding.rule_id)
-            if key not in seen_keys:
-                seen_keys.add(key)
-                all_findings.append(finding)
+        try:
+            findings = run_semgrep_scan(source_path, config=config, timeout=120)
+            
+            for finding in findings:
+                # Deduplicate by file/line/rule
+                key = (finding.file_path, finding.line_start, finding.rule_id)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_findings.append(finding)
+        except Exception as e:
+            # Some rulesets may not exist or fail - continue with others
+            logger.debug(f"Semgrep config {config} failed or not found: {e}")
+            continue
     
+    logger.info(f"Semgrep security audit found {len(all_findings)} total issues across {len(configs)} rulesets")
     return all_findings
 
 

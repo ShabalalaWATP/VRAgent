@@ -77,3 +77,12 @@ Thumbs.db
 
 # Coverage reports
 coverage/
+
+# Test exports and temporary files
+test_*.md
+test_*.pdf
+test_*.docx
+test_*.json
+test-scanners/
+test-scanners.zip
+test.pdf

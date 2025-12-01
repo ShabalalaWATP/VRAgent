@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Button,
@@ -7,12 +7,15 @@ import {
   CardContent,
   Chip,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   Grid,
+  IconButton,
   Paper,
   Skeleton,
   Stack,
+  Tooltip,
   Typography,
   alpha,
   useTheme,
@@ -70,13 +73,51 @@ const RocketIcon = () => (
   </svg>
 );
 
+const DeleteIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+  </svg>
+);
+
+const WarningIcon = () => (
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+  </svg>
+);
+
 export default function ProjectListPage() {
   const [open, setOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<{ id: number; name: string } | null>(null);
   const theme = useTheme();
+  const queryClient = useQueryClient();
+  
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["projects"],
     queryFn: api.getProjects,
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (projectId: number) => api.deleteProject(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    },
+  });
+
+  const handleDeleteClick = (project: { id: number; name: string }, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (projectToDelete) {
+      deleteMutation.mutate(projectToDelete.id);
+    }
+  };
 
   return (
     <Box>
@@ -342,23 +383,42 @@ export default function ProjectListPage() {
                 }}
               >
                 <CardContent sx={{ flexGrow: 1, p: 3 }}>
-                  <Box
-                    className="project-icon"
-                    sx={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 3,
-                      background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)} 0%, ${alpha(theme.palette.secondary.main, 0.15)} 100%)`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      mb: 2.5,
-                      color: "primary.main",
-                      transition: "all 0.4s ease",
-                    }}
-                  >
-                    <FolderIcon />
-                  </Box>
+                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                    <Box
+                      className="project-icon"
+                      sx={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 3,
+                        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)} 0%, ${alpha(theme.palette.secondary.main, 0.15)} 100%)`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        mb: 2.5,
+                        color: "primary.main",
+                        transition: "all 0.4s ease",
+                      }}
+                    >
+                      <FolderIcon />
+                    </Box>
+                    <Tooltip title="Delete project">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleDeleteClick({ id: project.id, name: project.name }, e)}
+                        sx={{
+                          color: alpha(theme.palette.error.main, 0.6),
+                          transition: "all 0.2s ease",
+                          "&:hover": {
+                            color: theme.palette.error.main,
+                            background: alpha(theme.palette.error.main, 0.1),
+                            transform: "scale(1.1)",
+                          },
+                        }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
 
                   <Typography variant="h6" fontWeight={700} gutterBottom>
                     {project.name}
@@ -475,6 +535,92 @@ export default function ProjectListPage() {
         <DialogContent sx={{ px: 3 }}>
           <NewProjectForm onCreated={() => setOpen(false)} />
         </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.95)} 0%, ${alpha(theme.palette.background.paper, 0.9)} 100%)`,
+            backdropFilter: "blur(20px)",
+            border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
+            overflow: "hidden",
+          },
+        }}
+      >
+        <Box
+          sx={{
+            height: 4,
+            background: `linear-gradient(90deg, ${theme.palette.error.main}, ${theme.palette.error.dark})`,
+          }}
+        />
+        <DialogTitle sx={{ textAlign: "center", pt: 4, pb: 2 }}>
+          <Box
+            sx={{
+              width: 80,
+              height: 80,
+              borderRadius: "50%",
+              background: alpha(theme.palette.error.main, 0.1),
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              mx: "auto",
+              mb: 2,
+              color: theme.palette.error.main,
+            }}
+          >
+            <WarningIcon />
+          </Box>
+          <Typography variant="h5" fontWeight={700}>
+            Delete Project?
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: "center", pb: 2 }}>
+          <Typography color="text.secondary">
+            Are you sure you want to delete{" "}
+            <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>
+              {projectToDelete?.name}
+            </Box>
+            ? This will permanently remove the project and all associated scans, reports, and findings.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, gap: 2, justifyContent: "center" }}>
+          <Button
+            variant="outlined"
+            onClick={() => setDeleteDialogOpen(false)}
+            sx={{
+              px: 4,
+              py: 1.25,
+              fontWeight: 600,
+              borderRadius: 2,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmDelete}
+            disabled={deleteMutation.isPending}
+            sx={{
+              px: 4,
+              py: 1.25,
+              fontWeight: 600,
+              borderRadius: 2,
+              boxShadow: `0 4px 20px ${alpha(theme.palette.error.main, 0.4)}`,
+              "&:hover": {
+                boxShadow: `0 6px 30px ${alpha(theme.palette.error.main, 0.5)}`,
+              },
+            }}
+          >
+            {deleteMutation.isPending ? "Deleting..." : "Delete Project"}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

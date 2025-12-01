@@ -47,6 +47,8 @@ export const api = {
   createProject: (payload: { name: string; description?: string; git_url?: string }) =>
     request<ProjectSummary>("/projects", { method: "POST", body: JSON.stringify(payload) }),
   getProject: (id: number) => request<ProjectSummary>(`/projects/${id}`),
+  deleteProject: (id: number) => 
+    request<{ status: string; project_id: number }>(`/projects/${id}`, { method: "DELETE" }),
   triggerScan: (projectId: number) =>
     request<ScanRun>(`/projects/${projectId}/scan`, { method: "POST" }),
   getReports: (projectId: number) => request<Report[]>(`/projects/${projectId}/reports`),
@@ -58,9 +60,11 @@ export const api = {
     request<CodeSnippet>(`/reports/${reportId}/findings/${findingId}/snippet`),
   getCodebaseStructure: (reportId: number) =>
     request<CodebaseStructure>(`/reports/${reportId}/codebase`),
+  getCodebaseSummary: (reportId: number) =>
+    request<CodebaseSummary>(`/reports/${reportId}/codebase/summary`),
   getExploitability: (reportId: number) => request<ExploitScenario[]>(`/reports/${reportId}/exploitability`),
-  startExploitability: (reportId: number) =>
-    request<{ status: string }>(`/reports/${reportId}/exploitability`, { method: "POST" }),
+  startExploitability: (reportId: number, mode: "auto" | "summary" | "full" = "auto") =>
+    request<{ status: string; mode: string }>(`/reports/${reportId}/exploitability?mode=${mode}`, { method: "POST" }),
   exportReport: (reportId: number, format: "markdown" | "pdf" | "docx") =>
     fetch(`${API_URL}/reports/${reportId}/export/${format}`)
 };
@@ -118,11 +122,18 @@ export type Finding = {
     external_id?: string;
     dependency?: string;
     cvss_score?: number;
+    cvss_vector?: string;
     epss_score?: number;
     epss_percentile?: number;
     epss_priority?: string;
     code_snippet?: string;
     message?: string;
+    cwe?: string | string[];
+    owasp?: string | string[];
+    category?: string;
+    fix?: string;
+    nvd_description?: string;
+    references?: Array<{ url: string; source?: string; tags?: string[] }>;
   };
 };
 
@@ -197,4 +208,27 @@ export type CodebaseStructure = {
     total_findings: number;
   };
   tree: CodebaseNode[];
+};
+
+export type CodebaseSummary = {
+  report_id: number;
+  project_name: string;
+  statistics: {
+    total_files: number;
+    total_lines: number;
+    languages: Record<string, number>;
+    findings_by_severity: {
+      critical: number;
+      high: number;
+      medium: number;
+      low: number;
+      info: number;
+    };
+    findings_by_type: Record<string, number>;
+    total_findings: number;
+  };
+  app_summary: string | null;
+  security_summary: string | null;
+  has_app_summary: boolean;
+  has_security_summary: boolean;
 };

@@ -62,7 +62,86 @@ SECURITY_RULES = {
     'no-script-url': 'high',
 }
 
-# Default ESLint config for security scanning
+# Default ESLint config for security scanning (flat config format for ESLint v9+)
+# Uses only built-in rules for maximum compatibility
+DEFAULT_ESLINT_FLAT_CONFIG = """
+export default [
+  {
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true
+        }
+      }
+    },
+    rules: {
+      // Code execution risks
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
+      'no-script-url': 'error',
+      
+      // Dangerous patterns
+      'no-proto': 'error',
+      'no-extend-native': 'error',
+      'no-iterator': 'error',
+      'no-restricted-globals': ['error', 'event', 'fdescribe'],
+      
+      // Code quality that impacts security
+      'no-undef': 'error',
+      'no-unused-vars': 'warn',
+      'no-use-before-define': 'error',
+      'no-shadow': 'warn',
+      'no-redeclare': 'error',
+      
+      // Potential logic errors
+      'eqeqeq': ['error', 'always'],
+      'no-eq-null': 'error',
+      'no-self-compare': 'error',
+      'no-sequences': 'error',
+      'no-throw-literal': 'error',
+      'no-unmodified-loop-condition': 'error',
+      'no-useless-concat': 'warn',
+      
+      // Regex safety
+      'no-control-regex': 'error',
+      'no-invalid-regexp': 'error',
+      'no-misleading-character-class': 'error'
+    }
+  }
+];
+"""
+
+# Extended config that uses security plugin (globally installed)
+# Uses CommonJS format to work with global modules
+EXTENDED_ESLINT_FLAT_CONFIG = """
+const security = require('eslint-plugin-security');
+
+module.exports = [
+  security.configs.recommended,
+  {
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true
+        }
+      }
+    },
+    rules: {
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
+      'no-script-url': 'error'
+    }
+  }
+];
+"""
+
+# Legacy config for ESLint v8 and below
 DEFAULT_ESLINT_CONFIG = {
     "env": {
         "browser": True,
@@ -156,11 +235,13 @@ def get_rule_severity(rule_id: str, eslint_severity: int) -> str:
     return map_eslint_severity(eslint_severity)
 
 
-def create_temp_eslint_config(directory: str) -> str:
-    """Create a temporary ESLint config file for security scanning."""
-    config_path = os.path.join(directory, '.eslintrc.security.json')
+def create_temp_eslint_config(directory: str, use_plugin: bool = False) -> str:
+    """Create a temporary ESLint config file for security scanning (flat config for v9+)."""
+    # Use .cjs for CommonJS format (works better with global modules)
+    config_path = os.path.join(directory, 'eslint.config.cjs' if use_plugin else 'eslint.config.mjs')
+    config_content = EXTENDED_ESLINT_FLAT_CONFIG if use_plugin else DEFAULT_ESLINT_FLAT_CONFIG
     with open(config_path, 'w') as f:
-        json.dump(DEFAULT_ESLINT_CONFIG, f, indent=2)
+        f.write(config_content)
     return config_path
 
 
@@ -174,11 +255,11 @@ def parse_eslint_output(output: str, base_dir: str) -> List[ESLintFinding]:
         for file_result in results:
             file_path = file_result.get('filePath', '')
             # Make path relative to base directory
-            if file_path.startswith(base_dir):
+            if file_path and file_path.startswith(base_dir):
                 file_path = file_path[len(base_dir):].lstrip(os.sep)
             
             for message in file_result.get('messages', []):
-                rule_id = message.get('ruleId', 'unknown')
+                rule_id = message.get('ruleId') or 'unknown'
                 
                 # Skip non-security rules if not in our list
                 if not any(rule_id.startswith(prefix) for prefix in ['security/', 'no-unsanitized/', 'xss/', 'no-eval', 'no-implied-eval', 'no-new-func', 'no-script-url']):
@@ -232,26 +313,10 @@ def run_eslint_security_scan(
     
     logger.info(f"Running ESLint security scan on {len(js_files)} files")
     
-    # Check if this is a Node project
-    package_json = os.path.join(directory, 'package.json')
-    has_package_json = os.path.exists(package_json)
-    
     try:
-        # Install security plugin if needed and requested
-        if install_plugins and has_package_json:
-            try:
-                # Try to install eslint-plugin-security locally
-                subprocess.run(
-                    ['npm', 'install', '--save-dev', 'eslint', 'eslint-plugin-security'],
-                    cwd=directory,
-                    capture_output=True,
-                    timeout=120,
-                )
-            except Exception as e:
-                logger.warning(f"Could not install ESLint plugins: {e}")
-        
-        # Create temporary config
-        config_path = create_temp_eslint_config(directory)
+        # Try extended config first (with security plugin)
+        # Fall back to basic config if it fails
+        config_path = create_temp_eslint_config(directory, use_plugin=True)
         
         try:
             # Run ESLint
@@ -269,13 +334,46 @@ def run_eslint_security_scan(
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env={**os.environ, 'NODE_PATH': '/usr/lib/node_modules'}  # Find globally installed plugins
             )
             
-            # ESLint returns non-zero for lint errors, which is expected
-            findings = parse_eslint_output(result.stdout, directory)
-            
-            logger.info(f"ESLint security scan found {len(findings)} issues")
-            return findings
+            # Check if ESLint ran successfully (ignore lint errors, they're expected)
+            if result.stdout and result.stdout.strip().startswith('['):
+                findings = parse_eslint_output(result.stdout, directory)
+                logger.info(f"ESLint security scan found {len(findings)} issues (with security plugin)")
+                return findings
+            else:
+                # Plugin failed, try basic config
+                logger.warning(f"ESLint with security plugin failed: {result.stderr[:200] if result.stderr else 'no output'}")
+                if os.path.exists(config_path):
+                    os.remove(config_path)
+                config_path = create_temp_eslint_config(directory, use_plugin=False)
+                
+                # Rebuild command with new config
+                cmd = [
+                    'npx', 'eslint',
+                    '--config', config_path,
+                    '--format', 'json',
+                    '--no-error-on-unmatched-pattern',
+                ]
+                cmd.extend(js_files[:100])
+                
+                result = subprocess.run(
+                    cmd,
+                    cwd=directory,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+                
+                if result.stdout and result.stdout.strip().startswith('['):
+                    findings = parse_eslint_output(result.stdout, directory)
+                    logger.info(f"ESLint security scan found {len(findings)} issues (basic rules)")
+                    return findings
+                else:
+                    if result.stderr:
+                        logger.warning(f"ESLint stderr: {result.stderr[:500]}")
+                    return []
             
         finally:
             # Cleanup temp config

@@ -65,7 +65,7 @@ class Finding(BaseModel):
 class ExploitScenario(BaseModel):
     id: int
     report_id: int
-    finding_id: int
+    finding_id: Optional[int]  # Null for executive summaries
     severity: Optional[str]
     title: str
     narrative: Optional[str]
