@@ -65,6 +65,8 @@ export const api = {
   getExploitability: (reportId: number) => request<ExploitScenario[]>(`/reports/${reportId}/exploitability`),
   startExploitability: (reportId: number, mode: "auto" | "summary" | "full" = "auto") =>
     request<{ status: string; mode: string }>(`/reports/${reportId}/exploitability?mode=${mode}`, { method: "POST" }),
+  getAttackChains: (reportId: number) => request<AttackChain[]>(`/reports/${reportId}/attack-chains`),
+  getAIInsights: (reportId: number) => request<AIInsights>(`/reports/${reportId}/ai-insights`),
   exportReport: (reportId: number, format: "markdown" | "pdf" | "docx") =>
     fetch(`${API_URL}/reports/${reportId}/export/${format}`)
 };
@@ -134,6 +136,17 @@ export type Finding = {
     fix?: string;
     nvd_description?: string;
     references?: Array<{ url: string; source?: string; tags?: string[] }>;
+    // AI Analysis fields
+    ai_analysis?: {
+      is_false_positive?: boolean;
+      false_positive_reason?: string;
+      severity_adjusted?: boolean;
+      original_severity?: string;
+      severity_reason?: string;
+      duplicate_group?: string;
+      attack_chain?: string;
+      data_flow_summary?: string;
+    };
   };
 };
 
@@ -231,4 +244,28 @@ export type CodebaseSummary = {
   security_summary: string | null;
   has_app_summary: boolean;
   has_security_summary: boolean;
+};
+
+export type AttackChain = {
+  title: string;
+  severity: string;
+  finding_ids: number[];
+  description: string;
+  impact: string;
+  likelihood: string;
+};
+
+export type FalsePositiveInfo = {
+  finding_id: number;
+  summary: string;
+  reason: string | null;
+  file_path: string | null;
+};
+
+export type AIInsights = {
+  attack_chains: AttackChain[];
+  false_positive_count: number;
+  severity_adjustments: number;
+  findings_analyzed: number;
+  false_positives: FalsePositiveInfo[];
 };

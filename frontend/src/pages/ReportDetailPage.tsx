@@ -35,7 +35,7 @@ import {
   keyframes,
 } from "@mui/material";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, ExploitScenario, Finding } from "../api/client";
+import { api, AIInsights, AttackChain, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, ExploitScenario, Finding } from "../api/client";
 
 // Animations
 const fadeIn = keyframes`
@@ -838,6 +838,7 @@ export default function ReportDetailPage() {
   const [pollExploit, setPollExploit] = useState(false);
   const [sortField, setSortField] = useState<SortField>("severity");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const [exploitMode, setExploitMode] = useState<"auto" | "summary" | "full">("summary");
 
   const reportQuery = useQuery({
     queryKey: ["report", id],
@@ -858,6 +859,13 @@ export default function ReportDetailPage() {
     refetchInterval: pollExploit ? 3000 : false,
   });
 
+  const aiInsightsQuery = useQuery({
+    queryKey: ["ai-insights", id],
+    queryFn: () => api.getAIInsights(id),
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
   const summaryQuery = useQuery({
     queryKey: ["codebase-summary", id],
     queryFn: () => api.getCodebaseSummary(id),
@@ -866,7 +874,7 @@ export default function ReportDetailPage() {
   });
 
   const startExploitMutation = useMutation({
-    mutationFn: () => api.startExploitability(id),
+    mutationFn: () => api.startExploitability(id, exploitMode),
     onSuccess: () => {
       setPollExploit(true);
       queryClient.invalidateQueries({ queryKey: ["exploitability", id] });
@@ -1606,11 +1614,23 @@ export default function ReportDetailPage() {
                       </TableSortLabel>
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Summary</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: 100 }}>AI Insights</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {sortedFindings.map((finding, idx) => {
                     const config = getSeverityConfig(finding.severity, theme);
+                    // AI analysis data from details
+                    const aiAnalysis = finding.details?.ai_analysis as {
+                      is_false_positive?: boolean;
+                      false_positive_reason?: string;
+                      severity_adjusted?: boolean;
+                      original_severity?: string;
+                      severity_reason?: string;
+                      duplicate_group?: string;
+                      attack_chain?: string;
+                      data_flow_summary?: string;
+                    } | undefined;
                     return (
                       <TableRow
                         key={finding.id}
@@ -1619,6 +1639,8 @@ export default function ReportDetailPage() {
                           "&:hover": {
                             bgcolor: alpha(theme.palette.primary.main, 0.03),
                           },
+                          // Dim false positives
+                          opacity: aiAnalysis?.is_false_positive ? 0.6 : 1,
                         }}
                       >
                         <TableCell>
@@ -1681,6 +1703,87 @@ export default function ReportDetailPage() {
                             <CodeSnippetView reportId={id} finding={finding} />
                           </Box>
                         </TableCell>
+                        <TableCell>
+                          {aiAnalysis && (
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                              {aiAnalysis.is_false_positive && (
+                                <Tooltip title={`Likely false positive: ${aiAnalysis.false_positive_reason || 'Context suggests low risk'}`}>
+                                  <Chip
+                                    size="small"
+                                    label="FP?"
+                                    sx={{
+                                      bgcolor: alpha(theme.palette.warning.main, 0.15),
+                                      color: theme.palette.warning.main,
+                                      fontSize: "0.65rem",
+                                      height: 20,
+                                      cursor: "help",
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
+                              {aiAnalysis.severity_adjusted && (
+                                <Tooltip title={`Severity adjusted from ${aiAnalysis.original_severity}: ${aiAnalysis.severity_reason || 'Based on context'}`}>
+                                  <Chip
+                                    size="small"
+                                    label={`↕ ${aiAnalysis.original_severity}`}
+                                    sx={{
+                                      bgcolor: alpha(theme.palette.info.main, 0.15),
+                                      color: theme.palette.info.main,
+                                      fontSize: "0.65rem",
+                                      height: 20,
+                                      cursor: "help",
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
+                              {aiAnalysis.duplicate_group && (
+                                <Tooltip title={`Related to findings in: ${aiAnalysis.duplicate_group}`}>
+                                  <Chip
+                                    size="small"
+                                    label="🔗"
+                                    sx={{
+                                      bgcolor: alpha(theme.palette.secondary.main, 0.15),
+                                      color: theme.palette.secondary.main,
+                                      fontSize: "0.65rem",
+                                      height: 20,
+                                      cursor: "help",
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
+                              {aiAnalysis.attack_chain && (
+                                <Tooltip title={`Part of attack chain: ${aiAnalysis.attack_chain}`}>
+                                  <Chip
+                                    size="small"
+                                    label="⛓️"
+                                    sx={{
+                                      bgcolor: alpha(theme.palette.error.main, 0.15),
+                                      color: theme.palette.error.main,
+                                      fontSize: "0.65rem",
+                                      height: 20,
+                                      cursor: "help",
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
+                              {aiAnalysis.data_flow_summary && (
+                                <Tooltip title={aiAnalysis.data_flow_summary}>
+                                  <Chip
+                                    size="small"
+                                    label="📊"
+                                    sx={{
+                                      bgcolor: alpha(theme.palette.success.main, 0.15),
+                                      color: theme.palette.success.main,
+                                      fontSize: "0.65rem",
+                                      height: 20,
+                                      cursor: "help",
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
+                            </Stack>
+                          )}
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -1701,6 +1804,118 @@ export default function ReportDetailPage() {
       {/* Tab Panel: Exploitability Analysis */}
       {activeTab === 2 && (
         <Box>
+          {/* Attack Chains Section */}
+          {aiInsightsQuery.data && aiInsightsQuery.data.attack_chains.length > 0 && (
+            <Paper
+              sx={{
+                p: 3,
+                mb: 3,
+                background: `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.08)} 0%, ${alpha(theme.palette.warning.main, 0.05)} 100%)`,
+                border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
+                borderRadius: 2,
+              }}
+            >
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                ⛓️ Attack Chains Identified
+                <Chip 
+                  size="small" 
+                  label={aiInsightsQuery.data.attack_chains.length}
+                  sx={{ 
+                    bgcolor: alpha(theme.palette.error.main, 0.15),
+                    color: theme.palette.error.main,
+                    fontWeight: 700,
+                  }}
+                />
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                These vulnerabilities can be chained together for greater impact.
+              </Typography>
+              <Grid container spacing={2}>
+                {aiInsightsQuery.data.attack_chains.map((chain: AttackChain, idx: number) => {
+                  const chainConfig = getSeverityConfig(chain.severity || "high", theme);
+                  return (
+                    <Grid item xs={12} md={6} key={idx}>
+                      <Card
+                        sx={{
+                          borderLeft: `4px solid ${chainConfig.color}`,
+                          bgcolor: alpha(chainConfig.color, 0.03),
+                        }}
+                      >
+                        <CardContent>
+                          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                            <Chip
+                              label={chainConfig.label}
+                              size="small"
+                              sx={{ bgcolor: chainConfig.bg, color: chainConfig.color, fontWeight: 600 }}
+                            />
+                            <Chip
+                              label={`${chain.likelihood} likelihood`}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontSize: "0.7rem" }}
+                            />
+                          </Stack>
+                          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                            {chain.title}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            {chain.description}
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 1 }}>
+                            <strong>Impact:</strong> {chain.impact}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                            Involves {chain.finding_ids.length} finding{chain.finding_ids.length !== 1 ? "s" : ""}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            </Paper>
+          )}
+
+          {/* AI Insights Summary */}
+          {aiInsightsQuery.data && (aiInsightsQuery.data.false_positive_count > 0 || aiInsightsQuery.data.severity_adjustments > 0) && (
+            <Paper
+              sx={{
+                p: 2,
+                mb: 3,
+                bgcolor: alpha(theme.palette.info.main, 0.05),
+                border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                borderRadius: 2,
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                🤖 AI Analysis Summary
+              </Typography>
+              <Stack direction="row" spacing={2} flexWrap="wrap">
+                {aiInsightsQuery.data.findings_analyzed > 0 && (
+                  <Chip 
+                    size="small" 
+                    label={`${aiInsightsQuery.data.findings_analyzed} findings analyzed`}
+                    sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}
+                  />
+                )}
+                {aiInsightsQuery.data.false_positive_count > 0 && (
+                  <Chip 
+                    size="small" 
+                    label={`${aiInsightsQuery.data.false_positive_count} likely false positives`}
+                    sx={{ bgcolor: alpha(theme.palette.warning.main, 0.15), color: theme.palette.warning.dark }}
+                  />
+                )}
+                {aiInsightsQuery.data.severity_adjustments > 0 && (
+                  <Chip 
+                    size="small" 
+                    label={`${aiInsightsQuery.data.severity_adjustments} severity adjustments`}
+                    sx={{ bgcolor: alpha(theme.palette.info.main, 0.15), color: theme.palette.info.dark }}
+                  />
+                )}
+              </Stack>
+            </Paper>
+          )}
+
           {exploitQuery.isLoading && (
             <Paper sx={{ p: 3 }}>
               <Skeleton variant="rectangular" height={100} />
@@ -1719,6 +1934,55 @@ export default function ReportDetailPage() {
               <Typography color="text.secondary" sx={{ mb: 2 }}>
                 Generate AI-powered exploitability narratives for high and critical findings.
               </Typography>
+              
+              {/* Mode selector */}
+              <Stack direction="row" spacing={1} justifyContent="center" sx={{ mb: 2 }}>
+                <Button
+                  variant={exploitMode === "summary" ? "contained" : "outlined"}
+                  size="small"
+                  onClick={() => setExploitMode("summary")}
+                  sx={{ 
+                    minWidth: 100,
+                    ...(exploitMode === "summary" && {
+                      background: `linear-gradient(135deg, ${theme.palette.success.main} 0%, ${theme.palette.success.dark} 100%)`,
+                    })
+                  }}
+                >
+                  Fast
+                </Button>
+                <Button
+                  variant={exploitMode === "auto" ? "contained" : "outlined"}
+                  size="small"
+                  onClick={() => setExploitMode("auto")}
+                  sx={{ 
+                    minWidth: 100,
+                    ...(exploitMode === "auto" && {
+                      background: `linear-gradient(135deg, ${theme.palette.info.main} 0%, ${theme.palette.info.dark} 100%)`,
+                    })
+                  }}
+                >
+                  Auto
+                </Button>
+                <Button
+                  variant={exploitMode === "full" ? "contained" : "outlined"}
+                  size="small"
+                  onClick={() => setExploitMode("full")}
+                  sx={{ 
+                    minWidth: 100,
+                    ...(exploitMode === "full" && {
+                      background: `linear-gradient(135deg, ${theme.palette.warning.main} 0%, ${theme.palette.warning.dark} 100%)`,
+                    })
+                  }}
+                >
+                  Detailed
+                </Button>
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+                {exploitMode === "summary" && "⚡ Fast: 1 AI call for executive summary + template-based scenarios"}
+                {exploitMode === "auto" && "🔄 Auto: Chooses based on finding count (≤15 = detailed, >15 = fast)"}
+                {exploitMode === "full" && "🔍 Detailed: Individual AI analysis per finding (slower but more thorough)"}
+              </Typography>
+
               <Button
                 variant="contained"
                 onClick={() => startExploitMutation.mutate()}

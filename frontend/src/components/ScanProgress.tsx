@@ -8,7 +8,20 @@ import {
   useTheme,
   Chip,
   Stack,
+  keyframes,
 } from "@mui/material";
+
+// Success animation
+const celebrateAnimation = keyframes`
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+`;
+
+const pulseGlow = keyframes`
+  0%, 100% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(34, 197, 94, 0.6), 0 0 60px rgba(34, 197, 94, 0.3); }
+`;
 
 interface ScanProgress {
   scan_run_id: number;
@@ -40,6 +53,7 @@ const PHASE_LABELS: Record<string, string> = {
   cve_lookup: "CVE Lookup",
   epss: "EPSS Scoring",
   nvd: "NVD Enrichment",
+  ai_analysis: "AI Analysis",
   reporting: "Generating Report",
   complete: "Complete",
   failed: "Failed",
@@ -107,19 +121,56 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
         p: 3,
         mt: 2,
         bgcolor: isComplete
-          ? alpha(theme.palette.success.main, 0.05)
+          ? alpha(theme.palette.success.main, 0.08)
           : isFailed
           ? alpha(theme.palette.error.main, 0.05)
           : alpha(theme.palette.primary.main, 0.05),
         border: `1px solid ${
           isComplete
-            ? alpha(theme.palette.success.main, 0.3)
+            ? alpha(theme.palette.success.main, 0.4)
             : isFailed
             ? alpha(theme.palette.error.main, 0.3)
             : alpha(theme.palette.primary.main, 0.2)
         }`,
+        ...(isComplete && {
+          animation: `${pulseGlow} 2s ease-in-out infinite`,
+        }),
       }}
     >
+      {/* Success Banner when complete */}
+      {isComplete && (
+        <Box
+          sx={{
+            mb: 3,
+            p: 2,
+            borderRadius: 2,
+            background: `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.15)} 0%, ${alpha(theme.palette.success.dark, 0.1)} 100%)`,
+            border: `1px solid ${alpha(theme.palette.success.main, 0.3)}`,
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            animation: `${celebrateAnimation} 0.5s ease-out`,
+          }}
+        >
+          <Box
+            sx={{
+              fontSize: "2.5rem",
+              animation: `${celebrateAnimation} 0.6s ease-out`,
+            }}
+          >
+            🎉
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight={700} color="success.main">
+              Security Scan Complete!
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              All security checks have finished. Your report is now available.
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
         <Typography variant="h6" fontWeight={600}>
           Scan Progress
@@ -191,6 +242,7 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
             "cve_lookup",
             "epss",
             "nvd",
+            "ai_analysis",
             "reporting",
             "complete",
           ];

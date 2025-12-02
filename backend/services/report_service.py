@@ -43,7 +43,7 @@ def calculate_risk(findings: List[models.Finding]) -> float:
     return round(min(100, base_score), 1)
 
 
-def build_report_summary(findings: List[models.Finding]) -> Dict:
+def build_report_summary(findings: List[models.Finding], attack_chains: List[Dict] = None, ai_summary: Dict = None) -> Dict:
     severity_counts = Counter([f.severity for f in findings])
     affected_packages = [
         f.details.get("dependency") for f in findings if f.details and f.details.get("dependency")
@@ -53,15 +53,47 @@ def build_report_summary(findings: List[models.Finding]) -> Dict:
         for f in findings
         if f.type == "code_pattern"
     ]
+    
+    # Count AI analysis stats from findings
+    false_positive_count = 0
+    severity_adjusted_count = 0
+    false_positives = []
+    
+    for f in findings:
+        ai_analysis = f.details.get("ai_analysis") if f.details else None
+        if ai_analysis:
+            if ai_analysis.get("is_false_positive"):
+                false_positive_count += 1
+                false_positives.append({
+                    "finding_id": f.id,
+                    "summary": f.summary,
+                    "reason": ai_analysis.get("false_positive_reason"),
+                    "file_path": f.file_path,
+                })
+            if ai_analysis.get("severity_adjusted"):
+                severity_adjusted_count += 1
+    
     return {
         "severity_counts": dict(severity_counts),
         "affected_packages": affected_packages,
         "code_issues": code_issues,
+        "attack_chains": attack_chains or [],
+        "ai_analysis_summary": {
+            "false_positive_count": false_positive_count,
+            "severity_adjusted_count": severity_adjusted_count,
+            "false_positives": false_positives[:20],  # Limit to 20 for report
+            **(ai_summary or {}),
+        },
     }
 
 
 def create_report(
-    db: Session, project: models.Project, scan_run: models.ScanRun, findings: List[models.Finding]
+    db: Session, 
+    project: models.Project, 
+    scan_run: models.ScanRun, 
+    findings: List[models.Finding],
+    attack_chains: List[Dict] = None,
+    ai_summary: Dict = None,
 ) -> models.Report:
     report = models.Report(
         project_id=project.id,
@@ -69,7 +101,7 @@ def create_report(
         title=f"Security report for {project.name}",
         summary="Automated scan summary",
         overall_risk_score=calculate_risk(findings),
-        data=build_report_summary(findings),
+        data=build_report_summary(findings, attack_chains, ai_summary),
     )
     db.add(report)
     db.commit()

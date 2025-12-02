@@ -413,41 +413,40 @@ Use markdown formatting with headers and bullet points. Be specific and technica
             for f in findings[:20]:
                 findings_details.append(f"- [{f.severity.upper()}] {f.type}: {f.summary[:100]}")
             
-            security_prompt = f"""You are a senior penetration tester writing a security assessment. Analyze these findings and provide actionable guidance.
+            security_prompt = f"""You are a senior red team security consultant writing a defensive security assessment. Your goal is to help the blue team understand vulnerabilities from an attacker's perspective so they can better defend their systems.
 
 FINDINGS SUMMARY:
 - Critical: {severity_counts['critical']}
 - High: {severity_counts['high']}
 - Medium: {severity_counts['medium']}
 - Low: {severity_counts['low']}
-Total: {len(findings)} security findings
+Total: {len(findings)} security weaknesses identified
 
 TOP FINDINGS:
 {chr(10).join(findings_details)}
 
-Write a detailed security analysis (300-400 words) covering:
+Write a detailed security analysis (300-400 words) from a red team perspective to help defenders understand and prioritize threats:
 
-**Overall Risk Assessment:**
-- Rate the overall security posture (Critical/High/Medium/Low risk)
-- Summarize the most serious concerns
+**Attack Surface Assessment:**
+- Rate the overall attack surface exposure (Critical/High/Moderate/Low)
+- Summarize the most significant security gaps
 
-**Critical Attack Vectors:**
-- What are the most dangerous vulnerabilities found?
-- How could an attacker chain these together?
-- What systems/data are at risk?
+**Primary Attack Vectors:**
+- What vulnerabilities would an attacker target first?
+- How might these be chained for maximum impact?
+- What high-value assets (data/systems) are at risk?
 
-**Prioritized Remediation Roadmap:**
-1. **Immediate Actions** (fix within 24-48 hours):
-   - List the most critical issues to fix first
-2. **Short-term Fixes** (fix within 1-2 weeks):
-   - Important but less urgent issues
-3. **Long-term Improvements**:
-   - Architectural or process improvements
+**Threat Prioritization:**
+1. **Critical Priority** - Vulnerabilities enabling immediate compromise
+2. **High Priority** - Significant weaknesses requiring urgent attention
+3. **Standard Priority** - Important issues for the remediation backlog
 
-**Quick Wins:**
-- List 3-5 easy fixes that significantly improve security
+**Defensive Recommendations:**
+- What should the security team focus on first?
+- Quick wins that significantly reduce attack surface
+- Detection opportunities for monitoring
 
-Use markdown formatting. Be specific about vulnerability types and remediation steps."""
+Use markdown formatting. Write from an attacker's perspective to help defenders think like adversaries."""
 
             response = client.models.generate_content(
                 model=settings.gemini_model_id,
@@ -523,9 +522,11 @@ def generate_markdown(
     
     # ==================== HEADER ====================
     lines.extend([
-        "# 🛡️ Security Assessment Report",
+        "# 🎯 Offensive Security Assessment",
         "",
         f"## {report.title}",
+        "",
+        "> **For Defensive Application Security** - This report uses an attacker's perspective to help identify and remediate vulnerabilities before they can be exploited.",
         "",
         "---",
         "",
@@ -533,16 +534,16 @@ def generate_markdown(
         "|----------|-------|",
         f"| **Report ID** | {report.id} |",
         f"| **Generated** | {report.created_at.strftime('%Y-%m-%d %H:%M:%S') if report.created_at else 'N/A'} |",
-        f"| **Risk Score** | {report.overall_risk_score or 'N/A'}/100 |",
-        f"| **Total Findings** | {len(findings)} |",
+        f"| **Attack Surface Score** | {report.overall_risk_score or 'N/A'}/100 |",
+        f"| **Exploitable Weaknesses** | {len(findings)} |",
         "",
         "---",
         "",
     ])
     
-    # ==================== EXECUTIVE SUMMARY ====================
+    # ==================== ATTACK SURFACE SUMMARY ====================
     lines.extend([
-        "## 📋 Executive Summary",
+        "## 🎯 Attack Surface Summary",
         "",
     ])
     
@@ -552,26 +553,26 @@ def generate_markdown(
     # Quick severity breakdown in summary
     if any(severity_counts.values()):
         lines.extend([
-            "### Vulnerability Distribution",
+            "### Exploitability Matrix",
             "",
-            "| Severity | Count | Risk Level |",
-            "|----------|-------|------------|",
+            "| Severity | Count | Exploitation Priority |",
+            "|----------|-------|----------------------|",
         ])
         for severity in ["critical", "high", "medium", "low", "info"]:
             count = severity_counts.get(severity, 0)
             if count > 0:
                 emoji = severity_emoji.get(severity, "⚪")
-                lines.append(f"| {emoji} **{severity.upper()}** | {count} | {'IMMEDIATE ACTION' if severity == 'critical' else 'HIGH PRIORITY' if severity == 'high' else 'MODERATE' if severity == 'medium' else 'LOW PRIORITY'} |")
+                lines.append(f"| {emoji} **{severity.upper()}** | {count} | {'🔥 EXPLOIT IMMEDIATELY' if severity == 'critical' else '⚡ HIGH VALUE TARGET' if severity == 'high' else '🎯 OPPORTUNISTIC' if severity == 'medium' else '📝 LOW PRIORITY'} |")
         lines.append("")
     
-    # ==================== AI APPLICATION ANALYSIS ====================
+    # ==================== AI TARGET ANALYSIS ====================
     if ai_summaries.get("app_summary"):
         lines.extend([
             "---",
             "",
-            "## 🎯 Application Overview (AI Analysis)",
+            "## 🔍 Target Reconnaissance (AI Analysis)",
             "",
-            "> *This analysis was generated by Gemini AI based on code review*",
+            "> *AI-powered target analysis for exploit development*",
             "",
             ai_summaries["app_summary"],
             "",
@@ -580,9 +581,9 @@ def generate_markdown(
         lines.extend([
             "---",
             "",
-            "## 🎯 Application Overview",
+            "## 🔍 Target Reconnaissance",
             "",
-            "> ⚠️ *AI analysis not available. Set GEMINI_API_KEY environment variable to enable AI-powered insights.*",
+            "> ⚠️ *AI analysis not available. Set GEMINI_API_KEY environment variable to enable AI-powered target analysis.*",
             "",
         ])
     
@@ -612,14 +613,14 @@ def generate_markdown(
                 lines.append(f"| {lang} | {count} |")
             lines.append("")
     
-    # ==================== AI SECURITY ANALYSIS ====================
+    # ==================== AI ATTACK VECTOR ANALYSIS ====================
     if ai_summaries.get("security_summary"):
         lines.extend([
             "---",
             "",
-            "## 🔒 Security Risk Analysis (AI Analysis)",
+            "## ⚔️ Attack Vector Analysis (AI Analysis)",
             "",
-            "> *This security assessment was generated by Gemini AI*",
+            "> *AI-generated offensive analysis for penetration testing*",
             "",
             ai_summaries["security_summary"],
             "",
@@ -628,28 +629,129 @@ def generate_markdown(
         lines.extend([
             "---",
             "",
-            "## 🔒 Security Risk Analysis",
+            "## ⚔️ Attack Vector Analysis",
             "",
-            "> ⚠️ *AI security analysis not available. Set GEMINI_API_KEY environment variable to enable AI-powered risk assessment.*",
+            "> ⚠️ *AI analysis not available. Set GEMINI_API_KEY environment variable to enable AI-powered attack analysis.*",
             "",
         ])
     
-    # ==================== DETAILED FINDINGS ====================
+    # ==================== AI INSIGHTS (FALSE POSITIVES & ATTACK CHAINS) ====================
+    # Extract AI analysis from findings
+    false_positives = []
+    severity_adjustments = []
+    for f in findings:
+        if f.details and f.details.get("ai_analysis"):
+            ai = f.details["ai_analysis"]
+            if ai.get("is_false_positive"):
+                false_positives.append({
+                    "summary": f.summary,
+                    "file": f.file_path,
+                    "line": f.start_line,
+                    "reason": ai.get("false_positive_reason", "No reason provided"),
+                    "confidence": ai.get("confidence", 0)
+                })
+            if ai.get("severity_adjustment") and ai.get("severity_adjustment") != f.severity:
+                severity_adjustments.append({
+                    "summary": f.summary,
+                    "file": f.file_path,
+                    "line": f.start_line,
+                    "original": f.severity,
+                    "adjusted": ai.get("severity_adjustment"),
+                    "reason": ai.get("adjustment_reason", "No reason provided")
+                })
+    
+    # Extract attack chains from report data
+    attack_chains = []
+    if report.data and report.data.get("ai_insights"):
+        attack_chains = report.data["ai_insights"].get("attack_chains", [])
+    
+    # Only show section if we have AI insights
+    if false_positives or severity_adjustments or attack_chains:
+        lines.extend([
+            "---",
+            "",
+            "## 🤖 AI-Powered Insights",
+            "",
+            "> *The following insights were generated by AI analysis to help prioritize remediation efforts and reduce noise.*",
+            "",
+        ])
+        
+        # False Positives Section
+        if false_positives:
+            lines.extend([
+                "### 🎯 Likely False Positives",
+                "",
+                f"The AI analysis identified **{len(false_positives)}** finding(s) that are likely false positives. ",
+                "These findings may not represent actual security risks and should be reviewed manually before being dismissed.",
+                "",
+                "| Finding | Location | Confidence | Reason |",
+                "|---------|----------|------------|--------|",
+            ])
+            for fp in false_positives:
+                location = f"`{fp['file']}:{fp['line']}`" if fp['file'] else "N/A"
+                confidence = f"{fp['confidence']*100:.0f}%" if fp.get('confidence') else "N/A"
+                reason = fp['reason'][:80] + "..." if len(fp['reason']) > 80 else fp['reason']
+                lines.append(f"| {fp['summary'][:50]} | {location} | {confidence} | {reason} |")
+            lines.extend(["", ""])
+        
+        # Severity Adjustments Section  
+        if severity_adjustments:
+            lines.extend([
+                "### ⚖️ Severity Adjustments",
+                "",
+                f"The AI analysis suggests **{len(severity_adjustments)}** severity adjustment(s) based on context analysis:",
+                "",
+                "| Finding | Original | Suggested | Reason |",
+                "|---------|----------|-----------|--------|",
+            ])
+            for adj in severity_adjustments:
+                orig_emoji = severity_emoji.get((adj['original'] or '').lower(), "⚪")
+                adj_emoji = severity_emoji.get((adj['adjusted'] or '').lower(), "⚪")
+                reason = adj['reason'][:80] + "..." if len(adj['reason']) > 80 else adj['reason']
+                lines.append(f"| {adj['summary'][:50]} | {orig_emoji} {adj['original'].upper()} | {adj_emoji} {adj['adjusted'].upper()} | {reason} |")
+            lines.extend(["", ""])
+        
+        # Attack Chains Section
+        if attack_chains:
+            lines.extend([
+                "### ⛓️ Attack Chains Discovered",
+                "",
+                f"The AI analysis discovered **{len(attack_chains)}** potential attack chain(s) where multiple vulnerabilities could be chained together:",
+                "",
+            ])
+            for i, chain in enumerate(attack_chains, 1):
+                chain_sev = chain.get('severity', 'medium').upper()
+                chain_emoji = severity_emoji.get(chain.get('severity', 'medium').lower(), "⚪")
+                lines.extend([
+                    f"#### {i}. {chain_emoji} {chain.get('title', 'Unnamed Chain')}",
+                    "",
+                    f"**Severity:** {chain_sev} | **Likelihood:** {chain.get('likelihood', 'Unknown')}",
+                    "",
+                    f"**Description:** {chain.get('chain_description', 'No description')}",
+                    "",
+                    f"**Potential Impact:** {chain.get('impact', 'Unknown impact')}",
+                    "",
+                    f"**Findings Involved:** {', '.join([f'#{fid}' for fid in chain.get('finding_ids', [])])}",
+                    "",
+                ])
+            lines.append("")
+    
+    # ==================== EXPLOITABLE WEAKNESSES ====================
     lines.extend([
         "---",
         "",
-        "## 🔍 Detailed Findings",
+        "## 💣 Exploitable Weaknesses",
         "",
     ])
     
     if not findings:
         lines.extend([
-            "✅ **Congratulations!** No vulnerabilities were found during the security scan.",
+            "🛡️ **Target Hardened** - No exploitable weaknesses identified in this assessment.",
             "",
-            "While no issues were detected, we recommend:",
-            "- Continuing regular security scans as part of your CI/CD pipeline",
-            "- Keeping all dependencies up to date",
-            "- Following security best practices for your technology stack",
+            "The target application appears to have a limited attack surface. Consider:",
+            "- Deeper manual testing for logic flaws",
+            "- Social engineering vectors",
+            "- Infrastructure-level attacks",
             "",
         ])
     else:
@@ -750,12 +852,12 @@ def generate_markdown(
                         "",
                     ])
                 
-                # Add fix/recommendation if available
+                # Add exploitation notes if available (was "fix")
                 if finding.details and finding.details.get("fix"):
                     lines.extend([
-                        "**Recommended Fix:**",
+                        "**Exploitation Notes:**",
                         "",
-                        f"> {finding.details['fix']}",
+                        f"> 🎯 {finding.details['fix']}",
                         "",
                     ])
                 
@@ -779,15 +881,13 @@ def generate_markdown(
                 lines.append("")
                 finding_number += 1
     
-    # ==================== EXPLOITABILITY ANALYSIS ====================
+    # ==================== EXPLOIT DEVELOPMENT GUIDE ====================
     if exploit_scenarios:
         lines.extend([
-            "## 💥 Exploitability Analysis (AI-Generated)",
+            "## 🔥 Exploit Development Guide (AI-Generated)",
             "",
-            "> ⚠️ **Educational Disclaimer:** The following exploit scenarios are provided strictly for ",
-            "> security education and authorized penetration testing purposes. Understanding how ",
-            "> vulnerabilities can be exploited helps defenders build more secure systems.",
-            "> **Never use these techniques against systems without explicit written permission.**",
+            "> **For Defensive App Security:** Understanding how attackers exploit vulnerabilities helps ",
+            "> security teams prioritize remediation and build stronger defenses.",
             "",
         ])
         
@@ -885,33 +985,29 @@ def generate_markdown(
                     "",
                 ])
             
-            if scenario.mitigation_notes:
-                lines.extend([
-                    "#### 🛡️ Recommended Mitigation",
-                    "",
-                    f"> ✅ {scenario.mitigation_notes}",
-                    "",
-                ])
+            # Removed mitigation notes - offensive focus
             
             lines.extend(["---", ""])
     
-    # ==================== AFFECTED DEPENDENCIES ====================
+    # ==================== VULNERABLE DEPENDENCIES ====================
     if report.data and report.data.get("affected_packages"):
         packages = [p for p in report.data["affected_packages"] if p]
         if packages:
             lines.extend([
-                "## 📦 Affected Dependencies",
+                "## 📦 Vulnerable Dependencies (Attack Surface)",
                 "",
-                "The following packages have known vulnerabilities:",
+                "The following packages have known CVEs that may be exploitable:",
                 "",
             ])
             for pkg in sorted(set(packages)):
-                lines.append(f"- `{pkg}`")
+                lines.append(f"- `{pkg}` - Research exploit-db/GitHub for public exploits")
             lines.extend(["", ""])
     
-    # ==================== RECOMMENDATIONS ====================
+    # ==================== ATTACK STRATEGY ====================
     lines.extend([
-        "## 📝 Recommendations",
+        "## ⚔️ Attack Strategy Notes",
+        "",
+        "> **For Defensive App Security:** Use this attacker perspective to understand and prioritize your remediation efforts.",
         "",
     ])
     
@@ -920,32 +1016,44 @@ def generate_markdown(
     
     if critical_count > 0 or high_count > 0:
         lines.extend([
-            "### 🚨 Immediate Actions Required",
+            "### 🔥 High-Value Targets",
             "",
-            f"1. **Address {critical_count + high_count} critical/high severity findings immediately**",
-            "   - These vulnerabilities pose the highest risk to your application",
-            "   - Prioritize fixes based on exploitability and business impact",
+            f"**{critical_count + high_count} critical/high severity weaknesses** identified for immediate exploitation:",
+            "",
+            "1. **Prioritize by Impact** - Focus on vulnerabilities that provide:",
+            "   - Remote Code Execution (RCE)",
+            "   - Authentication Bypass",
+            "   - Data Exfiltration paths",
+            "",
+            "2. **Chain for Maximum Impact** - Look for combinations that:",
+            "   - Escalate privileges",
+            "   - Enable lateral movement",
+            "   - Bypass security controls",
             "",
         ])
     
     lines.extend([
-        "### 📋 General Recommendations",
+        "### 🎯 Exploitation Methodology",
         "",
-        "1. **Implement a Vulnerability Management Process**",
-        "   - Integrate security scanning into your CI/CD pipeline",
-        "   - Set up automated alerts for new vulnerabilities",
+        "1. **Reconnaissance Phase**",
+        "   - Map the complete attack surface",
+        "   - Identify all entry points and data flows",
+        "   - Research public exploits for identified CVEs",
         "",
-        "2. **Keep Dependencies Updated**",
-        "   - Regularly audit and update third-party packages",
-        "   - Use tools like Dependabot or Renovate for automated updates",
+        "2. **Weaponization**",
+        "   - Develop or adapt PoC exploits",
+        "   - Test in isolated environment first",
+        "   - Prepare payload delivery mechanisms",
         "",
-        "3. **Code Review Best Practices**",
-        "   - Include security review in code review checklists",
-        "   - Train developers on secure coding practices",
+        "3. **Exploitation**",
+        "   - Execute against highest-value targets first",
+        "   - Document all successful attack paths",
+        "   - Capture evidence for reporting",
         "",
-        "4. **Defense in Depth**",
-        "   - Implement multiple layers of security controls",
-        "   - Use Web Application Firewalls (WAF) where appropriate",
+        "4. **Post-Exploitation**",
+        "   - Establish persistence if authorized",
+        "   - Enumerate internal resources",
+        "   - Identify paths to crown jewels",
         "",
     ])
     
@@ -953,9 +1061,11 @@ def generate_markdown(
     lines.extend([
         "---",
         "",
-        "*Report generated by VRAgent Security Scanner*",
+        "*Offensive Security Assessment generated by VRAgent*",
         "",
-        f"*Scan completed: {report.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if report.created_at else 'N/A'}*",
+        f"*Assessment completed: {report.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if report.created_at else 'N/A'}*",
+        "",
+        "> **Purpose:** This offensive security report is intended for defensive application security - helping teams understand and fix vulnerabilities before attackers can exploit them.",
         "",
     ])
     
@@ -1509,13 +1619,13 @@ def generate_pdf(
                 story.append(Spacer(1, 8))
                 finding_num += 1
     
-    # ==================== EXPLOITABILITY ANALYSIS ====================
+    # ==================== EXPLOIT DEVELOPMENT GUIDE ====================
     if exploit_scenarios:
         story.append(PageBreak())
-        story.append(Paragraph("💥 Exploitability Analysis (AI-Generated)", heading_style))
+        story.append(Paragraph("🔥 Exploit Development Guide (AI-Generated)", heading_style))
         story.append(Paragraph(
-            "<i>⚠️ Educational purposes only - for authorized security testing</i>", 
-            ParagraphStyle('disclaimer', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#c53030'))
+            "<i>For Defensive App Security: Understanding exploitation helps prioritize remediation</i>", 
+            ParagraphStyle('disclaimer', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#2b6cb0'))
         ))
         story.append(Spacer(1, 12))
         
@@ -1580,37 +1690,43 @@ def generate_pdf(
                 poc_text = _escape_html(scenario.poc_outline[:400] + ("..." if len(scenario.poc_outline) > 400 else ""))
                 story.append(Paragraph(f"<font face='Courier' size='8'>{poc_text}</font>", body_style))
             
-            if scenario.mitigation_notes:
-                story.append(Paragraph("<b>🛡️ Mitigation:</b>", body_style))
-                mitigation_text = _escape_html(scenario.mitigation_notes[:300] + ("..." if len(scenario.mitigation_notes) > 300 else ""))
-                story.append(Paragraph(mitigation_text, body_style))
+            # Removed mitigation - offensive focus
             
             story.append(Spacer(1, 16))
     
-    # ==================== RECOMMENDATIONS ====================
+    # ==================== ATTACK STRATEGY ====================
     story.append(PageBreak())
-    story.append(Paragraph("📝 Recommendations", heading_style))
+    story.append(Paragraph("⚔️ Attack Strategy Notes", heading_style))
+    story.append(Paragraph(
+        "<i>For Defensive App Security: Use this attacker perspective to prioritize your remediation</i>",
+        ParagraphStyle('note', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#2b6cb0'))
+    ))
+    story.append(Spacer(1, 8))
     
     critical_high = severity_counts.get("critical", 0) + severity_counts.get("high", 0)
     if critical_high > 0:
-        story.append(Paragraph(f"<b>🚨 Immediate Action Required:</b> Address {critical_high} critical/high severity findings", body_style))
+        story.append(Paragraph(f"<b>🔥 High-Value Targets:</b> {critical_high} critical/high severity weaknesses identified", body_style))
         story.append(Spacer(1, 8))
     
-    recommendations = [
-        "Implement vulnerability management process with CI/CD integration",
-        "Keep all dependencies updated regularly using automated tools",
-        "Include security review in code review checklists",
-        "Implement defense in depth with multiple security controls",
-        "Conduct regular security training for development team"
+    attack_methodology = [
+        "Reconnaissance: Map complete attack surface and identify entry points",
+        "Weaponization: Develop PoC exploits and prepare payload delivery",
+        "Exploitation: Execute against highest-value targets first",
+        "Post-Exploitation: Establish persistence and enumerate internal resources",
+        "Document all successful attack paths for reporting"
     ]
     
-    for rec in recommendations:
-        story.append(Paragraph(f"• {rec}", body_style))
+    for item in attack_methodology:
+        story.append(Paragraph(f"• {item}", body_style))
     
     # Footer
     story.append(Spacer(1, 30))
     story.append(Paragraph(
-        f"<i>Report generated by VRAgent Security Scanner - {report.created_at.strftime('%Y-%m-%d %H:%M:%S') if report.created_at else 'N/A'}</i>",
+        f"<i>Offensive Security Assessment - VRAgent - For Defensive App Security Purposes</i>",
+        ParagraphStyle('footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=1)
+    ))
+    story.append(Paragraph(
+        f"<i>{report.created_at.strftime('%Y-%m-%d %H:%M:%S') if report.created_at else 'N/A'}</i>",
         ParagraphStyle('footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=1)
     ))
     
@@ -1844,16 +1960,15 @@ def generate_docx(
                 doc.add_paragraph()  # Spacing
                 finding_num += 1
     
-    # ==================== EXPLOITABILITY ANALYSIS ====================
+    # ==================== RED TEAM ANALYSIS ====================
     if exploit_scenarios:
-        doc.add_heading("💥 Exploitability Analysis (AI-Generated)", level=1)
+        doc.add_heading("🔥 Red Team Analysis (AI-Generated)", level=1)
         
         # Disclaimer
         disclaimer = doc.add_paragraph()
-        disclaimer.add_run("⚠️ Educational Disclaimer: ").bold = True
-        disclaimer.add_run("The following exploit scenarios are provided strictly for security education "
-                          "and authorized penetration testing purposes. Never use these techniques "
-                          "against systems without explicit written permission.")
+        disclaimer.add_run("Defensive Purpose: ").bold = True
+        disclaimer.add_run("Understanding how attackers might exploit these vulnerabilities helps "
+                          "security teams prioritize remediation and implement effective detection controls.")
         doc.add_paragraph()
         
         for i, scenario in enumerate(exploit_scenarios, 1):
@@ -1946,11 +2061,7 @@ def generate_docx(
                 run.font.name = 'Courier New'
                 run.font.size = Pt(9)
             
-            if scenario.mitigation_notes:
-                doc.add_heading("🛡️ Recommended Mitigation", level=3)
-                p = doc.add_paragraph()
-                p.add_run("✅ ").bold = True
-                p.add_run(scenario.mitigation_notes)
+            # Removed mitigation - offensive focus
             
             doc.add_paragraph()  # Spacing between scenarios
     
@@ -1958,37 +2069,44 @@ def generate_docx(
     if report.data and report.data.get("affected_packages"):
         packages = [p for p in report.data["affected_packages"] if p]
         if packages:
-            doc.add_heading("📦 Affected Dependencies", level=1)
+            doc.add_heading("📦 Vulnerable Dependencies", level=1)
             for pkg in sorted(set(packages)):
-                doc.add_paragraph(pkg, style='List Bullet')
+                doc.add_paragraph(f"{pkg} - Check for available patches or updates", style='List Bullet')
     
-    # ==================== RECOMMENDATIONS ====================
-    doc.add_heading("📝 Recommendations", level=1)
+    # ==================== ATTACK STRATEGY ====================
+    doc.add_heading("⚔️ Attack Strategy Notes", level=1)
+    
+    # Defensive purpose notice
+    notice = doc.add_paragraph()
+    notice.add_run("For Defensive App Security: ").bold = True
+    notice.add_run("Use this attacker perspective to understand and prioritize your remediation efforts.")
+    doc.add_paragraph()
     
     critical_high = severity_counts.get("critical", 0) + severity_counts.get("high", 0)
     if critical_high > 0:
         p = doc.add_paragraph()
-        p.add_run(f"🚨 Immediate Action Required: ").bold = True
-        p.add_run(f"Address {critical_high} critical/high severity findings")
+        p.add_run(f"🔥 High-Value Targets: ").bold = True
+        p.add_run(f"{critical_high} critical/high severity weaknesses identified for immediate exploitation")
         doc.add_paragraph()
     
-    doc.add_heading("General Recommendations", level=2)
-    recommendations = [
-        "Implement a vulnerability management process with CI/CD integration",
-        "Keep all dependencies updated regularly using automated tools",
-        "Include security review in code review checklists",
-        "Implement defense in depth with multiple security controls",
-        "Conduct regular security training for the development team"
+    doc.add_heading("Exploitation Methodology", level=2)
+    attack_methodology = [
+        "Reconnaissance: Map complete attack surface and identify entry points",
+        "Weaponization: Develop PoC exploits and prepare payload delivery",
+        "Exploitation: Execute against highest-value targets first",
+        "Post-Exploitation: Establish persistence and enumerate internal resources",
+        "Document all successful attack paths for reporting"
     ]
-    for rec in recommendations:
-        doc.add_paragraph(rec, style='List Bullet')
+    for item in attack_methodology:
+        doc.add_paragraph(item, style='List Bullet')
     
     # ==================== FOOTER ====================
     doc.add_paragraph()
     footer = doc.add_paragraph()
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    footer.add_run("Report generated by VRAgent Security Scanner").italic = True
+    footer.add_run("Offensive Security Assessment - VRAgent").italic = True
     footer.add_run(f"\n{report.created_at.strftime('%Y-%m-%d %H:%M:%S') if report.created_at else 'N/A'}").italic = True
+    footer.add_run("\nFor Defensive Application Security Purposes").italic = True
     
     buffer = BytesIO()
     doc.save(buffer)

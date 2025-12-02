@@ -12,6 +12,7 @@ from backend.services import cve_service, dependency_service, report_service
 from backend.services import secret_service, eslint_service, epss_service, semgrep_service
 from backend.services import nvd_service, bandit_service, gosec_service
 from backend.services import spotbugs_service, clangtidy_service
+from backend.services import ai_analysis_service
 from backend.services.codebase_service import (
     create_code_chunks,
     iter_source_files,
@@ -458,15 +459,110 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
 
         logger.info(f"Total findings: {len(findings)}")
         
-        # Phase 10: Generate report (90-95%)
+        # Phase 10: AI-Enhanced Analysis (88-92%)
+        attack_chains_data = []
+        ai_summary = None
+        if findings:
+            _broadcast_progress(scan_run.id, "ai_analysis", 88, "AI-enhanced vulnerability analysis")
+            try:
+                # Convert findings to dicts for AI analysis
+                findings_dicts = []
+                code_snippets = {}
+                for f in findings:
+                    finding_dict = {
+                        "id": f.id,
+                        "type": f.type,
+                        "severity": f.severity,
+                        "file_path": f.file_path,
+                        "start_line": f.start_line,
+                        "end_line": f.end_line,
+                        "summary": f.summary,
+                        "details": f.details or {},
+                    }
+                    findings_dicts.append(finding_dict)
+                    # Get code snippet from details if available
+                    if f.details and f.details.get("code_snippet"):
+                        code_snippets[f.id] = f.details["code_snippet"]
+                
+                ai_result = asyncio.run(ai_analysis_service.analyze_findings(
+                    findings_dicts,
+                    code_snippets=code_snippets,
+                    enable_llm=True,
+                    max_llm_findings=20
+                ))
+                if ai_result:
+                    from sqlalchemy.orm.attributes import flag_modified
+                    
+                    # Store AI summary for report
+                    ai_summary = {
+                        "findings_analyzed": ai_result.findings_analyzed,
+                        "false_positives_detected": ai_result.false_positives_detected,
+                        "severity_adjustments": ai_result.severity_adjustments,
+                    }
+                    
+                    # Convert attack chains to dicts for storage
+                    for chain in ai_result.attack_chains:
+                        attack_chains_data.append({
+                            "title": chain.title,
+                            "severity": chain.severity,
+                            "finding_ids": chain.finding_ids,
+                            "description": chain.chain_description,
+                            "impact": chain.impact,
+                            "likelihood": chain.likelihood,
+                        })
+                    
+                    # Apply results to findings
+                    for f in findings:
+                        if f.id in ai_result.analysis_results:
+                            result = ai_result.analysis_results[f.id]
+                            # Store AI analysis in details (must create new dict for SQLAlchemy)
+                            new_details = dict(f.details) if f.details else {}
+                            new_details["ai_analysis"] = {
+                                "is_false_positive": result.false_positive_score >= 0.5,
+                                "false_positive_reason": result.false_positive_reason,
+                                "severity_adjusted": result.adjusted_severity is not None,
+                                "original_severity": f.severity if result.adjusted_severity else None,
+                                "severity_reason": result.severity_reason,
+                                "data_flow_summary": result.data_flow,
+                            }
+                            f.details = new_details
+                            flag_modified(f, "details")
+                            # Update severity if adjusted
+                            if result.adjusted_severity:
+                                f.severity = result.adjusted_severity
+                    
+                    # Store attack chain info in findings
+                    for chain in ai_result.attack_chains:
+                        for finding_id in chain.finding_ids:
+                            for f in findings:
+                                if f.id == finding_id:
+                                    new_details = dict(f.details) if f.details else {}
+                                    if "ai_analysis" not in new_details:
+                                        new_details["ai_analysis"] = {}
+                                    new_details["ai_analysis"]["attack_chain"] = chain.title
+                                    f.details = new_details
+                                    flag_modified(f, "details")
+                    
+                    db.commit()
+                    logger.info(f"AI analysis complete: {ai_result.false_positives_detected} likely false positives, "
+                               f"{ai_result.severity_adjustments} severity adjustments, "
+                               f"{len(ai_result.attack_chains)} attack chains")
+            except Exception as e:
+                logger.warning(f"AI analysis failed (non-critical): {e}")
+        
+        # Phase 11: Generate report (92-98%)
         _broadcast_progress(scan_run.id, "reporting", 92, "Generating report")
-        report = report_service.create_report(db, project, scan_run, findings)
+        report = report_service.create_report(
+            db, project, scan_run, findings, 
+            attack_chains=attack_chains_data,
+            ai_summary=ai_summary
+        )
         scan_run.status = "complete"
         scan_run.finished_at = datetime.utcnow()
         db.add(scan_run)
         db.commit()
         
-        # Phase 11: Complete (100%)
+        # Phase 12: Complete (100%)
         _broadcast_progress(scan_run.id, "complete", 100, f"Scan complete. {len(findings)} findings")
         
         logger.info(f"Scan completed successfully. Report ID: {report.id}")

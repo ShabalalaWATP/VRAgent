@@ -31,6 +31,9 @@ import {
   useTheme,
   Theme,
   keyframes,
+  Snackbar,
+  Slide,
+  SlideProps,
 } from "@mui/material";
 import { useState } from "react";
 import UploadCodeForm from "../components/UploadCodeForm";
@@ -239,6 +242,7 @@ export default function ProjectDetailPage() {
   const [activeScanId, setActiveScanId] = useState<number | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<{ id: number; date: string } | null>(null);
+  const [scanCompleteSnackbar, setScanCompleteSnackbar] = useState(false);
 
   const projectQuery = useQuery({
     queryKey: ["project", id],
@@ -288,6 +292,7 @@ export default function ProjectDetailPage() {
 
   const handleScanComplete = () => {
     setActiveScanId(null);
+    setScanCompleteSnackbar(true);
     queryClient.invalidateQueries({ queryKey: ["reports", id] });
   };
 
@@ -869,6 +874,33 @@ export default function ProjectDetailPage() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Scan Complete Snackbar */}
+        <Snackbar
+          open={scanCompleteSnackbar}
+          autoHideDuration={6000}
+          onClose={() => setScanCompleteSnackbar(false)}
+          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+          TransitionComponent={(props: SlideProps) => <Slide {...props} direction="up" />}
+        >
+          <Alert
+            onClose={() => setScanCompleteSnackbar(false)}
+            severity="success"
+            variant="filled"
+            sx={{
+              width: "100%",
+              fontWeight: 600,
+              fontSize: "1rem",
+              background: `linear-gradient(135deg, ${theme.palette.success.main} 0%, ${theme.palette.success.dark} 100%)`,
+              boxShadow: `0 8px 32px ${alpha(theme.palette.success.main, 0.4)}`,
+              "& .MuiAlert-icon": {
+                fontSize: "1.5rem",
+              },
+            }}
+          >
+            🎉 Security Scan Complete! Your report is ready to view.
+          </Alert>
+        </Snackbar>
       </Box>
     </Box>
   );

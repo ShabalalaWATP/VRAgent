@@ -1,3 +1,5 @@
+from typing import List, Dict, Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -40,3 +42,35 @@ def list_findings(report_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Report not found")
     findings = db.query(models.Finding).filter(models.Finding.scan_run_id == report.scan_run_id).all()
     return findings
+
+
+@router.get("/{report_id}/attack-chains")
+def get_attack_chains(report_id: int, db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
+    """Get attack chains identified by AI analysis for a report."""
+    report = db.get(models.Report, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # Attack chains are stored in report.data
+    attack_chains = report.data.get("attack_chains", []) if report.data else []
+    return attack_chains
+
+
+@router.get("/{report_id}/ai-insights")
+def get_ai_insights(report_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Get AI analysis insights including false positives and severity adjustments."""
+    report = db.get(models.Report, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # AI summary is stored in report.data
+    ai_summary = report.data.get("ai_analysis_summary", {}) if report.data else {}
+    attack_chains = report.data.get("attack_chains", []) if report.data else []
+    
+    return {
+        "attack_chains": attack_chains,
+        "false_positive_count": ai_summary.get("false_positive_count", 0),
+        "severity_adjustments": ai_summary.get("severity_adjusted_count", 0),
+        "findings_analyzed": ai_summary.get("findings_analyzed", 0),
+        "false_positives": ai_summary.get("false_positives", []),
+    }
