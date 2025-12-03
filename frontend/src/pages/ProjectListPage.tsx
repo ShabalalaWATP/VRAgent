@@ -21,9 +21,10 @@ import {
   useTheme,
   keyframes,
 } from "@mui/material";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import NewProjectForm from "../components/NewProjectForm";
 import { api } from "../api/client";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 
 // Animations
 const float = keyframes`
@@ -91,6 +92,7 @@ export default function ProjectListPage() {
   const [projectToDelete, setProjectToDelete] = useState<{ id: number; name: string } | null>(null);
   const theme = useTheme();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["projects"],
@@ -204,9 +206,30 @@ export default function ProjectListPage() {
                 </Typography>
               </Box>
             </Stack>
-            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 500 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 500, mb: 2 }}>
               Manage your codebases and run AI-powered vulnerability scans to detect security issues before they become problems.
             </Typography>
+            
+            {/* Quick Learn Access */}
+            <Chip
+              icon={<MenuBookIcon sx={{ fontSize: 18 }} />}
+              label="New to security scanning? Visit the Learning Hub →"
+              clickable
+              onClick={() => navigate("/learn")}
+              sx={{
+                background: `linear-gradient(135deg, ${alpha("#6366f1", 0.15)}, ${alpha("#8b5cf6", 0.1)})`,
+                border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+                color: "#a78bfa",
+                fontWeight: 500,
+                fontSize: "0.8rem",
+                py: 2.5,
+                px: 1,
+                "&:hover": {
+                  background: `linear-gradient(135deg, ${alpha("#6366f1", 0.25)}, ${alpha("#8b5cf6", 0.2)})`,
+                  boxShadow: `0 4px 20px ${alpha("#8b5cf6", 0.3)}`,
+                },
+              }}
+            />
           </Box>
           
           <Button
@@ -308,9 +331,10 @@ export default function ProjectListPage() {
           <Typography variant="h5" fontWeight={700} gutterBottom>
             Ready to launch? 🚀
           </Typography>
-          <Typography color="text.secondary" sx={{ mb: 4, maxWidth: 400, mx: "auto" }}>
+          <Typography color="text.secondary" sx={{ mb: 3, maxWidth: 400, mx: "auto" }}>
             Create your first project to start scanning for vulnerabilities and secure your codebase.
           </Typography>
+          <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap">
           <Button 
             variant="contained" 
             startIcon={<AddIcon />} 
@@ -327,6 +351,24 @@ export default function ProjectListPage() {
           >
             Create First Project
           </Button>
+          <Button
+            variant="outlined"
+            startIcon={<MenuBookIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{
+              px: 3,
+              py: 1.5,
+              borderColor: alpha("#8b5cf6", 0.5),
+              color: "#a78bfa",
+              "&:hover": {
+                borderColor: "#8b5cf6",
+                bgcolor: alpha("#8b5cf6", 0.1),
+              },
+            }}
+          >
+            Learn First
+          </Button>
+          </Stack>
         </Paper>
       )}
 

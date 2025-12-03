@@ -40,6 +40,7 @@ import UploadCodeForm from "../components/UploadCodeForm";
 import CloneRepoForm from "../components/CloneRepoForm";
 import ScanProgress from "../components/ScanProgress";
 import { api } from "../api/client";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 
 // Animations
 const float = keyframes`
@@ -556,9 +557,26 @@ export default function ProjectDetailPage() {
                     border: `1px solid ${alpha(theme.palette.info.main, 0.1)}`,
                   }}
                 >
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
                     💡 Tip: Upload code or clone a repository first, then run a scan to detect vulnerabilities.
                   </Typography>
+                  <Chip
+                    icon={<MenuBookIcon sx={{ fontSize: 16 }} />}
+                    label="Learn how scanning works →"
+                    size="small"
+                    clickable
+                    onClick={() => navigate("/learn/scanning")}
+                    sx={{
+                      background: `linear-gradient(135deg, ${alpha("#6366f1", 0.15)}, ${alpha("#8b5cf6", 0.1)})`,
+                      border: `1px solid ${alpha("#8b5cf6", 0.25)}`,
+                      color: "#a78bfa",
+                      fontWeight: 500,
+                      fontSize: "0.7rem",
+                      "&:hover": {
+                        background: `linear-gradient(135deg, ${alpha("#6366f1", 0.25)}, ${alpha("#8b5cf6", 0.2)})`,
+                      },
+                    }}
+                  />
                 </Box>
               )}
             </CardContent>
@@ -632,9 +650,28 @@ export default function ProjectDetailPage() {
             <Typography variant="h6" gutterBottom fontWeight={600}>
               No reports yet
             </Typography>
-            <Typography color="text.secondary" sx={{ maxWidth: 400, mx: "auto" }}>
+            <Typography color="text.secondary" sx={{ maxWidth: 400, mx: "auto", mb: 2 }}>
               Upload code and run a scan to generate your first vulnerability report.
             </Typography>
+            <Chip
+              icon={<MenuBookIcon sx={{ fontSize: 16 }} />}
+              label="📚 Learn about VRAgent's scanning capabilities"
+              size="small"
+              clickable
+              onClick={() => navigate("/learn")}
+              sx={{
+                background: `linear-gradient(135deg, ${alpha("#6366f1", 0.12)}, ${alpha("#8b5cf6", 0.08)})`,
+                border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+                color: "#a78bfa",
+                fontWeight: 500,
+                fontSize: "0.75rem",
+                py: 2,
+                "&:hover": {
+                  background: `linear-gradient(135deg, ${alpha("#6366f1", 0.2)}, ${alpha("#8b5cf6", 0.15)})`,
+                  boxShadow: `0 2px 12px ${alpha("#8b5cf6", 0.2)}`,
+                },
+              }}
+            />
           </Paper>
         )}
 

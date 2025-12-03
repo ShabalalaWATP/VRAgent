@@ -11,12 +11,32 @@ import {
   alpha,
   keyframes,
   Chip,
+  Button,
 } from "@mui/material";
 import { Routes, Route, Link } from "react-router-dom";
 import { useThemeMode } from "./theme/ThemeProvider";
 import ProjectListPage from "./pages/ProjectListPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
 import ReportDetailPage from "./pages/ReportDetailPage";
+import LearnHubPage from "./pages/LearnHubPage";
+import ScanningPage from "./pages/ScanningPage";
+import AIAnalysisPage from "./pages/AIAnalysisPage";
+import KillChainPage from "./pages/KillChainPage";
+import MitreAttackPage from "./pages/MitreAttackPage";
+import GlossaryPage from "./pages/GlossaryPage";
+import OwaspTop10Page from "./pages/OwaspTop10Page";
+import CveCweCvssPage from "./pages/CveCweCvssPage";
+import CommandsPage from "./pages/CommandsPage";
+import PentestGuidePage from "./pages/PentestGuidePage";
+import OwaspMobilePage from "./pages/OwaspMobilePage";
+import AuthCryptoGuidePage from "./pages/AuthCryptoGuidePage";
+import DataSecretsPage from "./pages/DataSecretsPage";
+import FuzzingGuidePage from "./pages/FuzzingGuidePage";
+import ArchitecturePage from "./pages/ArchitecturePage";
+import ApiSecurityPage from "./pages/ApiSecurityPage";
+import ReverseEngineeringPage from "./pages/ReverseEngineeringPage";
+import MobilePentestPage from "./pages/MobilePentestPage";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 
 // Animations
 const pulse = keyframes`
@@ -158,7 +178,41 @@ function App() {
           <Box sx={{ flexGrow: 1 }} />
 
           {/* Action Buttons */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Tooltip title="📚 Security Learning Hub - Tutorials, Guides & Reference">
+              <Button
+                component={Link}
+                to="/learn"
+                startIcon={<MenuBookIcon sx={{ fontSize: "1.3rem !important" }} />}
+                variant="contained"
+                size="medium"
+                sx={{
+                  background: `linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)`,
+                  color: "white",
+                  fontWeight: 700,
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontSize: "0.95rem",
+                  boxShadow: `0 4px 15px ${alpha("#8b5cf6", 0.4)}, 0 0 20px ${alpha("#8b5cf6", 0.2)}`,
+                  animation: `${pulse} 3s ease-in-out infinite`,
+                  border: `1px solid ${alpha("#a855f7", 0.5)}`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #9333ea 100%)`,
+                    boxShadow: `0 6px 25px ${alpha("#8b5cf6", 0.5)}, 0 0 30px ${alpha("#8b5cf6", 0.3)}`,
+                    transform: "translateY(-2px)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Learn
+              </Button>
+            </Tooltip>
+            
             <Tooltip title="View on GitHub">
               <IconButton
                 component="a"
@@ -204,6 +258,24 @@ function App() {
           <Route path="/" element={<ProjectListPage />} />
           <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="/reports/:reportId" element={<ReportDetailPage />} />
+          <Route path="/learn" element={<LearnHubPage />} />
+          <Route path="/learn/scanning" element={<ScanningPage />} />
+          <Route path="/learn/ai-analysis" element={<AIAnalysisPage />} />
+          <Route path="/learn/kill-chain" element={<KillChainPage />} />
+          <Route path="/learn/mitre-attack" element={<MitreAttackPage />} />
+          <Route path="/learn/glossary" element={<GlossaryPage />} />
+          <Route path="/learn/owasp" element={<OwaspTop10Page />} />
+          <Route path="/learn/cve-cwe-cvss" element={<CveCweCvssPage />} />
+          <Route path="/learn/commands" element={<CommandsPage />} />
+          <Route path="/learn/pentest-guide" element={<PentestGuidePage />} />
+          <Route path="/learn/owasp-mobile" element={<OwaspMobilePage />} />
+          <Route path="/learn/auth-crypto" element={<AuthCryptoGuidePage />} />
+          <Route path="/learn/data-secrets" element={<DataSecretsPage />} />
+          <Route path="/learn/fuzzing" element={<FuzzingGuidePage />} />
+          <Route path="/learn/architecture" element={<ArchitecturePage />} />
+          <Route path="/learn/api-security" element={<ApiSecurityPage />} />
+          <Route path="/learn/reverse-engineering" element={<ReverseEngineeringPage />} />
+          <Route path="/learn/mobile-pentest" element={<MobilePentestPage />} />
         </Routes>
       </Container>
     </>
