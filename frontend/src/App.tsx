@@ -36,7 +36,11 @@ import ArchitecturePage from "./pages/ArchitecturePage";
 import ApiSecurityPage from "./pages/ApiSecurityPage";
 import ReverseEngineeringPage from "./pages/ReverseEngineeringPage";
 import MobilePentestPage from "./pages/MobilePentestPage";
+import PcapAnalyzerPage from "./pages/PcapAnalyzerPage";
+import NetworkAnalysisHub from "./pages/NetworkAnalysisHub";
+import NmapAnalyzerPage from "./pages/NmapAnalyzerPage";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
+import HubIcon from "@mui/icons-material/Hub";
 
 // Animations
 const pulse = keyframes`
@@ -179,7 +183,40 @@ function App() {
 
           {/* Action Buttons */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Tooltip title="📚 Security Learning Hub - Tutorials, Guides & Reference">
+            <Tooltip title="Network Analysis - PCAP & Nmap Security Analysis">
+              <Button
+                component={Link}
+                to="/network"
+                startIcon={<HubIcon sx={{ fontSize: "1.3rem !important" }} />}
+                variant="contained"
+                size="medium"
+                sx={{
+                  background: `linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%)`,
+                  color: "white",
+                  fontWeight: 700,
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontSize: "0.95rem",
+                  boxShadow: `0 4px 15px ${alpha("#0891b2", 0.4)}, 0 0 20px ${alpha("#0891b2", 0.2)}`,
+                  border: `1px solid ${alpha("#06b6d4", 0.5)}`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #0891b2 0%, #0e7490 50%, #155e75 100%)`,
+                    boxShadow: `0 6px 25px ${alpha("#0891b2", 0.5)}, 0 0 30px ${alpha("#0891b2", 0.3)}`,
+                    transform: "translateY(-2px)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Network Analysis
+              </Button>
+            </Tooltip>
+            
+            <Tooltip title="Security Learning Hub - Tutorials, Guides & Reference">
               <Button
                 component={Link}
                 to="/learn"
@@ -258,6 +295,10 @@ function App() {
           <Route path="/" element={<ProjectListPage />} />
           <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="/reports/:reportId" element={<ReportDetailPage />} />
+          <Route path="/network" element={<NetworkAnalysisHub />} />
+          <Route path="/network/pcap" element={<PcapAnalyzerPage />} />
+          <Route path="/network/nmap" element={<NmapAnalyzerPage />} />
+          <Route path="/pcap" element={<PcapAnalyzerPage />} />
           <Route path="/learn" element={<LearnHubPage />} />
           <Route path="/learn/scanning" element={<ScanningPage />} />
           <Route path="/learn/ai-analysis" element={<AIAnalysisPage />} />

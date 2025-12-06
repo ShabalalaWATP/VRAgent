@@ -14,7 +14,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SPOTBUGS_HOME=/opt/spotbugs
 
 # Install system dependencies including git for cloning repos,
-# Node.js for ESLint, Go for Gosec, clang-tidy for C/C++, and build tools
+# Node.js for ESLint, Go for Gosec, clang-tidy for C/C++, nmap for network scanning, 
+# tshark for packet capture, and build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -25,9 +26,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     default-jdk-headless \
     clang-tidy \
+    nmap \
+    tshark \
+    libcap2-bin \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip /usr/bin/nmap \
+    && setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap
 
 # Install Go (for gosec)
 RUN wget -q https://go.dev/dl/go1.21.5.linux-amd64.tar.gz \
@@ -61,10 +67,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p backend
 COPY . ./backend/
 
-# Create non-root user for security
-RUN adduser --disabled-password --gecos '' appuser && \
-    chown -R appuser:appuser /app
-USER appuser
+# Note: Running as root to allow nmap privileged scans (SYN, UDP)
+# For production, consider using a separate nmap service with limited privileges
 
 # Expose port
 EXPOSE 8000

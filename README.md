@@ -1,6 +1,10 @@
 # AI Agent Vulnerability Research (VRAgent)
 
-An end-to-end platform for automated security vulnerability scanning of code projects. Upload your code, run scans, and get detailed reports with AI-powered exploitability analysis.
+An end-to-end platform for automated security vulnerability scanning and analysis. VRAgent provides:
+- **Code Security Scanning**: Upload code or clone repositories for comprehensive vulnerability detection with 7 specialized scanners
+- **Network Security Analysis**: Run Nmap scans and analyze PCAP files with AI-powered insights
+- **AI-Powered Reports**: Google Gemini generates detailed exploitability narratives, attack scenarios, and remediation guidance
+- **Interactive Learning Hub**: Educational content covering security fundamentals, attack frameworks, and pentesting methodologies
 
 ## 🎯 Features
 
@@ -50,6 +54,24 @@ VRAgent integrates **7 specialized security scanners** for comprehensive vulnera
   - Recommended mitigations
   - **30+ Built-in Templates**: Pre-defined exploit templates for common vulnerability types
 
+### Performance Optimizations
+- **Redis Caching**: External API responses (OSV, NVD, EPSS) are cached in Redis to reduce latency and API load
+  - OSV CVE lookups: 24-hour cache
+  - NVD enrichment data: 24-hour cache  
+  - EPSS scores: 12-hour cache
+  - Common dependencies (lodash, requests, express) are often already cached
+- **Embedding Reuse**: Repeat scans skip embedding generation for unchanged code chunks
+  - Code chunks are fingerprinted by file path, line range, and content hash
+  - Only new or modified code gets sent for embedding
+  - Dramatically reduces AI API costs on incremental scans
+- **Parallel Scanner Execution**: Security scanners run concurrently for faster results
+  - Up to 4 scanners run in parallel using ThreadPoolExecutor
+  - Most beneficial for polyglot projects (Python + JS + Go, etc.)
+  - Single-language projects see modest improvement
+- **Cache Management API**: Endpoints to view stats and clear caches
+  - `GET /cache/stats`: View hit rates, memory usage, keys by namespace
+  - `DELETE /cache/{namespace}`: Clear specific cache (osv, nvd, epss, embedding)
+
 ### Risk Scoring
 - **Intelligent 0-100 Scale**: Risk scores use a weighted formula with diminishing returns:
   - Critical findings contribute up to 40 points
@@ -66,6 +88,29 @@ VRAgent integrates **7 specialized security scanners** for comprehensive vulnera
 - **Expandable Code Snippets**: View vulnerable code with syntax highlighting
 - **Interactive Codebase Map**: Visual tree view with per-file vulnerability counts
 - **Improved Exploitability Display**: Clean card-based layout with colored sections for attack narrative, impact, PoC, and mitigations
+
+### Learning Hub
+VRAgent includes a comprehensive **Security Learning Hub** with educational content for security professionals:
+
+| Topic | Description |
+|-------|-------------|
+| **How Scanning Works** | The 9-step pipeline VRAgent uses to analyze code |
+| **AI Analysis Explained** | How Gemini AI transforms findings into intelligence |
+| **VRAgent Architecture** | Docker services, data models, and system design |
+| **Cyber Kill Chain** | Lockheed Martin's 7-phase attack framework |
+| **MITRE ATT&CK** | Adversary tactics and techniques (14 tactics, 200+ techniques) |
+| **OWASP Top 10** | The 10 most critical web application security risks |
+| **OWASP Mobile Top 10** | Mobile application security risks |
+| **CVE, CWE & CVSS** | Vulnerability identification and scoring systems |
+| **Pentest Methodology** | Step-by-step penetration testing guide |
+| **Mobile Pentesting** | iOS and Android security testing |
+| **API Security** | Securing REST, GraphQL, and WebSocket APIs |
+| **Auth & Crypto** | Authentication, encryption, and key management |
+| **Data & Secrets** | Protecting sensitive information |
+| **Fuzzing Guide** | Automated vulnerability discovery techniques |
+| **Reverse Engineering** | Binary analysis and malware techniques |
+| **Security Glossary** | 100+ security terms and definitions |
+| **Security Commands** | Essential CLI tools (nmap, burp, metasploit, etc.) |
 
 ### Reports & Exports
 - **Multiple Export Formats**: Generate professional reports in:
@@ -88,6 +133,50 @@ VRAgent integrates **7 specialized security scanners** for comprehensive vulnera
 - **REST API**: Full API for programmatic access
 - **Project Management**: Create, view, and delete projects with history
 
+### Network Security Analysis
+
+VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traffic and infrastructure:
+
+#### Nmap Scanner & Analyzer
+- **Live Scanning**: Run Nmap scans directly from the browser
+  - Multiple scan types: Basic, Quick, Full Port, Service Detection, OS Detection, Vulnerability Scripts
+  - Target validation (IP, CIDR ranges up to /24, hostnames)
+  - Custom port specification
+  - Real-time scan progress
+- **File Upload**: Analyze existing Nmap XML/text output files
+- **AI-Powered Analysis**: Gemini AI generates comprehensive security reports including:
+  - Network overview and attack surface assessment
+  - Risk scoring (0-100 scale)
+  - Key findings with severity ratings
+  - Vulnerable services identification
+  - Host-by-host security posture
+  - Recommendations for remediation
+- **AI Chat**: Interactive chat to discuss scan results with Gemini AI
+- **Report Management**: Save, view, and delete scan reports
+- **Export Options**: Download reports as Markdown, PDF, or DOCX
+
+#### PCAP Analyzer
+- **Live Packet Capture**: Capture network traffic directly (requires tshark)
+  - Multiple capture profiles: General, Web Traffic, DNS, Authentication, Database, VoIP
+  - Interface selection
+  - Custom BPF filters
+  - Configurable duration and packet limits
+- **File Upload**: Analyze existing PCAP/PCAPNG files
+- **Traffic Analysis**: Automatic parsing of:
+  - Protocol distribution and statistics
+  - Connection tracking (source/destination pairs)
+  - DNS queries and responses
+  - HTTP requests and responses
+  - Suspicious patterns detection
+- **AI-Powered Security Analysis**: Gemini AI analyzes traffic for:
+  - Security threats and anomalies
+  - Protocol-specific vulnerabilities
+  - Data exfiltration indicators
+  - Authentication weaknesses
+  - Recommendations
+- **AI Chat**: Interactive chat to discuss PCAP analysis with Gemini AI
+- **Report Persistence**: Analysis reports saved to database for later retrieval
+
 ## 🏗️ Architecture
 
 ```
@@ -96,12 +185,31 @@ VRAgent integrates **7 specialized security scanners** for comprehensive vulnera
 │    Frontend     │     │       API        │     │   + pgvector    │
 └─────────────────┘     └────────┬─────────┘     └─────────────────┘
                                  │
-                                 ▼
-                        ┌─────────────────┐     ┌─────────────────┐
-                        │      Redis      │◀───▶│   RQ Worker     │
-                        │     Queue       │     │  (Background)   │
-                        └─────────────────┘     └─────────────────┘
+                    ┌────────────┼────────────┐
+                    │            │            │
+                    ▼            ▼            ▼
+           ┌──────────────┐ ┌────────┐ ┌─────────────┐
+           │ Security     │ │ Redis  │ │  External   │
+           │ Scanners     │ │ Queue  │ │  APIs       │
+           │ (7 tools)    │ │        │ │ (OSV/NVD)   │
+           └──────────────┘ └───┬────┘ └─────────────┘
+                                │
+                                ▼
+                        ┌─────────────────┐
+                        │   RQ Worker     │
+                        │  (Background)   │
+                        └─────────────────┘
 ```
+
+**Key Components:**
+- **Frontend**: React SPA with Material UI, real-time WebSocket updates
+- **Backend**: FastAPI REST API with async support
+- **Database**: PostgreSQL with pgvector for embeddings
+- **Workers**: Background job processing for long-running scans
+- **Redis**: Job queuing, WebSocket pub/sub, and API response caching
+- **Scanners**: Semgrep, Bandit, ESLint, gosec, SpotBugs, clang-tidy, Secret Scanner
+- **Network Tools**: Nmap (scanning), tshark (packet capture)
+- **AI**: Google Gemini for code analysis, exploitability narratives, and network analysis
 
 ## 🚀 Quick Start with Docker (Recommended)
 
@@ -384,6 +492,19 @@ You have two options:
    - Detailed findings tables with CVE/CWE links
    - CVSS scores and EPSS exploitation probabilities
 5. Generate **SBOM** exports in CycloneDX or SPDX format
+
+#### Using the Learning Hub
+
+1. Click the **Learn** icon in the sidebar (or navigate to `/learn`)
+2. Browse topics organized by category:
+   - **About VRAgent**: How scanning works, AI analysis, architecture
+   - **Security Fundamentals**: Kill Chain, MITRE ATT&CK, OWASP
+   - **Practical Guides**: Pentesting, mobile security, API security
+3. Each topic includes:
+   - In-depth explanations with examples
+   - Quick reference tables
+   - Links to external resources
+   - Practical tips and best practices
 
 ---
 
@@ -903,6 +1024,35 @@ The frontend will be available at http://localhost:5173
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
+| `GET` | `/health/detailed` | Detailed health with cache stats |
+
+### Cache Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/cache/stats` | Get cache statistics (hits, misses, memory, keys) |
+| `DELETE` | `/cache/{namespace}` | Clear cache namespace (osv, nvd, epss, embedding) |
+
+### Network Analysis
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/network/status` | Check Nmap/tshark availability |
+| `POST` | `/network/nmap/analyze` | Analyze uploaded Nmap files |
+| `POST` | `/network/nmap/scan` | Run live Nmap scan |
+| `GET` | `/network/nmap/scan-types` | List available scan types |
+| `GET` | `/network/nmap/validate-target` | Validate scan target |
+| `POST` | `/network/pcap/analyze` | Analyze uploaded PCAP files |
+| `POST` | `/network/pcap/capture` | Run live packet capture |
+| `GET` | `/network/pcap/capture-profiles` | List capture profiles |
+| `GET` | `/network/pcap/interfaces` | List network interfaces |
+| `POST` | `/network/pcap/validate-filter` | Validate BPF filter |
+| `GET` | `/network/pcap/status` | Check capture status |
+| `GET` | `/network/reports` | List saved network reports |
+| `GET` | `/network/reports/{id}` | Get specific report |
+| `DELETE` | `/network/reports/{id}` | Delete a report |
+| `GET` | `/network/reports/{id}/export/{format}` | Export report (markdown/pdf/docx) |
+| `POST` | `/network/chat` | Chat with AI about analysis results |
 
 Full interactive documentation available at `/docs` when running the backend.
 
@@ -939,6 +1089,7 @@ VRAgent/
 │   ├── alembic.ini          # Migration configuration
 │   │
 │   ├── core/
+│   │   ├── cache.py         # Redis caching layer
 │   │   ├── config.py        # Settings management
 │   │   ├── database.py      # Database connection
 │   │   ├── exceptions.py    # Custom exceptions
@@ -952,29 +1103,37 @@ VRAgent/
 │   │   ├── scans.py         # Scan endpoints
 │   │   ├── reports.py       # Report endpoints
 │   │   ├── exports.py       # Export endpoints
-│   │   └── exploitability.py
+│   │   ├── exploitability.py # AI exploit analysis
+│   │   ├── network.py       # Network analysis (Nmap/PCAP)
+│   │   └── webhooks.py      # Webhook notifications
 │   │
 │   ├── services/
-│   │   ├── bandit_service.py     # Python security scanning (Bandit)
-│   │   ├── clangtidy_service.py  # C/C++ security scanning (clang-tidy)
-│   │   ├── codebase_service.py   # Code extraction & parsing
-│   │   ├── cve_service.py        # OSV vulnerability lookup
-│   │   ├── dependency_service.py # Multi-language dependency parsing
-│   │   ├── embedding_service.py  # Gemini embeddings
-│   │   ├── epss_service.py       # EPSS vulnerability scoring
-│   │   ├── eslint_service.py     # JavaScript/TypeScript scanning (ESLint)
-│   │   ├── exploit_service.py    # AI exploitability analysis
-│   │   ├── export_service.py     # Report generation (MD/PDF/DOCX)
-│   │   ├── git_service.py        # Repository cloning
-│   │   ├── gosec_service.py      # Go security scanning (gosec)
-│   │   ├── nvd_service.py        # NVD CVE enrichment
-│   │   ├── report_service.py     # Report creation
-│   │   ├── sbom_service.py       # SBOM generation (CycloneDX/SPDX)
-│   │   ├── scan_service.py       # Scan orchestration
-│   │   ├── secret_service.py     # Secret detection
-│   │   ├── semgrep_service.py    # Multi-language SAST (Semgrep)
-│   │   ├── spotbugs_service.py   # Java/Kotlin scanning (SpotBugs)
-│   │   └── webhook_service.py    # Webhook notifications
+│   │   ├── ai_analysis_service.py    # Gemini AI analysis
+│   │   ├── bandit_service.py         # Python security scanning (Bandit)
+│   │   ├── clangtidy_service.py      # C/C++ security scanning (clang-tidy)
+│   │   ├── codebase_service.py       # Code extraction & parsing
+│   │   ├── cve_service.py            # OSV vulnerability lookup
+│   │   ├── dependency_service.py     # Multi-language dependency parsing
+│   │   ├── embedding_service.py      # Gemini embeddings
+│   │   ├── epss_service.py           # EPSS vulnerability scoring
+│   │   ├── eslint_service.py         # JavaScript/TypeScript scanning (ESLint)
+│   │   ├── exploit_service.py        # AI exploitability analysis
+│   │   ├── export_service.py         # Report generation (MD/PDF/DOCX)
+│   │   ├── git_service.py            # Repository cloning
+│   │   ├── gosec_service.py          # Go security scanning (gosec)
+│   │   ├── network_export_service.py # Network report exports
+│   │   ├── nmap_service.py           # Nmap scanning & parsing
+│   │   ├── nvd_service.py            # NVD CVE enrichment
+│   │   ├── pcap_service.py           # PCAP analysis & capture
+│   │   ├── project_service.py        # Project management
+│   │   ├── report_service.py         # Report creation
+│   │   ├── sbom_service.py           # SBOM generation (CycloneDX/SPDX)
+│   │   ├── scan_service.py           # Scan orchestration
+│   │   ├── secret_service.py         # Secret detection
+│   │   ├── semgrep_service.py        # Multi-language SAST (Semgrep)
+│   │   ├── spotbugs_service.py       # Java/Kotlin scanning (SpotBugs)
+│   │   ├── webhook_service.py        # Webhook notifications
+│   │   └── websocket_service.py      # Real-time updates
 │   │
 │   ├── tasks/
 │   │   └── jobs.py          # Background job definitions
@@ -1000,11 +1159,17 @@ VRAgent/
         ├── components/
         │   ├── CloneRepoForm.tsx    # Git clone interface
         │   ├── NewProjectForm.tsx   # Project creation form
+        │   ├── ScanProgress.tsx     # Real-time scan progress
         │   └── UploadCodeForm.tsx   # Zip upload form
         └── pages/
-            ├── ProjectListPage.tsx
-            ├── ProjectDetailPage.tsx
-            └── ReportDetailPage.tsx
+            ├── ProjectListPage.tsx      # Project listing
+            ├── ProjectDetailPage.tsx    # Project details & scans
+            ├── ReportDetailPage.tsx     # Scan report view
+            ├── NetworkAnalysisHub.tsx   # Network tools hub
+            ├── NmapAnalyzerPage.tsx     # Nmap scanning & analysis
+            ├── PcapAnalyzerPage.tsx     # PCAP capture & analysis
+            ├── LearnHubPage.tsx         # Security learning hub
+            └── [Learning Pages]         # Educational content (17 topics)
 ```
 
 ## ⚙️ Configuration
@@ -1211,3 +1376,41 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [gosec](https://securego.io/) - Go security checker
 - [SpotBugs](https://spotbugs.github.io/) - Java static analysis
 - [ESLint](https://eslint.org/) - JavaScript/TypeScript linting
+
+---
+
+## 📋 Changelog
+
+### December 6, 2025
+
+#### Network Analysis Enhancements
+
+**Nmap Analyzer - New Features:**
+- **AI Chat Integration**: Added ability to chat with Gemini AI about Nmap scan results
+  - Floating chat window appears after scan completion
+  - Full context of scan results, hosts, findings, and AI report provided to the LLM
+  - Suggested questions to help users get started
+  - Markdown rendering for formatted AI responses
+  - Conversation history maintained within session
+
+- **Saved Reports Tab**: New tab to view and manage saved Nmap reports
+  - Table displaying all saved Nmap reports with title, date, risk level, and findings count
+  - View button to load and display any saved report
+  - Delete button with confirmation to remove reports
+  - Automatic refresh when switching to the tab
+
+**Bug Fixes:**
+- Fixed Nmap live scan crash (white screen) caused by:
+  - Property name mismatch: backend returns `host.ports` but frontend was accessing `host.open_ports`
+  - Object rendering error: `network_overview` is an object but was being rendered directly as text
+  - Null safety: Added fallback for undefined `findings` array
+
+**PCAP Analyzer:**
+- **AI Chat Integration**: Added chat feature to discuss PCAP analysis results with Gemini
+- **Report Persistence**: PCAP analysis reports are now saved to the database for later retrieval
+
+**Backend API:**
+- New endpoint: `POST /network/chat` - Chat with AI about network analysis results
+  - Supports both Nmap and PCAP analysis types
+  - Accepts message, conversation history, and scan context
+  - Returns AI-generated response with full context awareness

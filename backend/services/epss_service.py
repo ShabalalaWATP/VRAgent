@@ -13,13 +13,17 @@ from typing import Dict, List, Optional, Tuple
 import httpx
 
 from backend.core.logging import get_logger
+from backend.core.cache import cache
 
 logger = get_logger(__name__)
 
 # EPSS API endpoint
 EPSS_API_URL = "https://api.first.org/data/v1/epss"
 
-# Cache for EPSS scores (CVE ID -> (score, percentile, timestamp))
+# Cache namespace for EPSS lookups
+CACHE_NAMESPACE = "epss"
+
+# Legacy in-memory cache (kept for backward compatibility, but Redis is preferred)
 _epss_cache: Dict[str, Tuple[float, float, datetime]] = {}
 CACHE_TTL = timedelta(hours=24)
 
@@ -59,7 +63,19 @@ class EPSSScore:
 
 
 def _get_cached_score(cve_id: str) -> Optional[EPSSScore]:
-    """Get cached EPSS score if still valid."""
+    """Get cached EPSS score if still valid (checks Redis first, then in-memory)."""
+    # Check Redis cache first
+    if cache.is_connected:
+        cached = cache.get(CACHE_NAMESPACE, cve_id)
+        if cached is not None:
+            return EPSSScore(
+                cve_id=cve_id, 
+                score=cached["score"], 
+                percentile=cached["percentile"],
+                date=cached.get("date")
+            )
+    
+    # Fall back to in-memory cache
     if cve_id in _epss_cache:
         score, percentile, timestamp = _epss_cache[cve_id]
         if datetime.now() - timestamp < CACHE_TTL:
@@ -67,8 +83,16 @@ def _get_cached_score(cve_id: str) -> Optional[EPSSScore]:
     return None
 
 
-def _cache_score(cve_id: str, score: float, percentile: float) -> None:
-    """Cache an EPSS score."""
+def _cache_score(cve_id: str, score: float, percentile: float, date: Optional[str] = None) -> None:
+    """Cache an EPSS score (to both Redis and in-memory)."""
+    # Cache to Redis (preferred)
+    cache.set(CACHE_NAMESPACE, cve_id, {
+        "score": score,
+        "percentile": percentile,
+        "date": date
+    })
+    
+    # Also cache in-memory as backup
     _epss_cache[cve_id] = (score, percentile, datetime.now())
 
 
@@ -109,7 +133,7 @@ async def get_epss_score(cve_id: str) -> Optional[EPSSScore]:
                 date = epss_data.get("date")
                 
                 # Cache the result
-                _cache_score(cve_id, score, percentile)
+                _cache_score(cve_id, score, percentile, date)
                 
                 return EPSSScore(
                     cve_id=cve_id,
@@ -153,22 +177,39 @@ async def get_epss_scores_batch(cve_ids: List[str]) -> Dict[str, EPSSScore]:
             cve_id = f"CVE-{cve_id}"
         normalized_ids.append(cve_id)
     
-    # Check cache for already-fetched scores
+    # Check cache for already-fetched scores (batch lookup from Redis)
     results: Dict[str, EPSSScore] = {}
     ids_to_fetch = []
     
-    for cve_id in normalized_ids:
-        cached = _get_cached_score(cve_id)
-        if cached:
-            results[cve_id] = cached
-        else:
-            ids_to_fetch.append(cve_id)
+    if cache.is_connected:
+        cached_data = cache.get_many(CACHE_NAMESPACE, normalized_ids)
+        for cve_id in normalized_ids:
+            if cve_id in cached_data:
+                data = cached_data[cve_id]
+                results[cve_id] = EPSSScore(
+                    cve_id=cve_id,
+                    score=data["score"],
+                    percentile=data["percentile"],
+                    date=data.get("date")
+                )
+            else:
+                ids_to_fetch.append(cve_id)
+    else:
+        # Fall back to in-memory cache check
+        for cve_id in normalized_ids:
+            cached = _get_cached_score(cve_id)
+            if cached:
+                results[cve_id] = cached
+            else:
+                ids_to_fetch.append(cve_id)
     
     if not ids_to_fetch:
+        logger.info(f"All {len(normalized_ids)} EPSS scores found in cache")
         return results
     
     # Batch API request (API supports up to 100 CVEs per request)
     batch_size = 100
+    items_to_cache: Dict[str, dict] = {}
     
     for i in range(0, len(ids_to_fetch), batch_size):
         batch = ids_to_fetch[i:i + batch_size]
@@ -192,8 +233,16 @@ async def get_epss_scores_batch(cve_ids: List[str]) -> Dict[str, EPSSScore]:
                             percentile = float(epss_data.get("percentile", 0)) * 100
                             date = epss_data.get("date")
                             
-                            # Cache and store result
-                            _cache_score(cve_id, score, percentile)
+                            # Store for batch caching
+                            items_to_cache[cve_id] = {
+                                "score": score,
+                                "percentile": percentile,
+                                "date": date
+                            }
+                            
+                            # Also cache in-memory
+                            _epss_cache[cve_id] = (score, percentile, datetime.now())
+                            
                             results[cve_id] = EPSSScore(
                                 cve_id=cve_id,
                                 score=score,
@@ -204,6 +253,12 @@ async def get_epss_scores_batch(cve_ids: List[str]) -> Dict[str, EPSSScore]:
         except Exception as e:
             logger.error(f"EPSS batch API error: {e}")
             continue
+    
+    # Batch cache to Redis
+    if items_to_cache and cache.is_connected:
+        cached_count = cache.set_many(CACHE_NAMESPACE, items_to_cache)
+        if cached_count > 0:
+            logger.debug(f"Cached {cached_count} EPSS scores to Redis")
     
     logger.info(f"Retrieved EPSS scores for {len(results)}/{len(normalized_ids)} CVEs")
     return results

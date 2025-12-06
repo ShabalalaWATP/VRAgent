@@ -170,3 +170,31 @@ class ExploitScenario(Base):
 
     report = relationship("Report", back_populates="exploit_scenarios")
     finding = relationship("Finding", back_populates="exploit_scenarios")
+
+
+class NetworkAnalysisReport(Base):
+    """Stores PCAP and Nmap analysis reports."""
+    __tablename__ = "network_analysis_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    analysis_type = Column(String, nullable=False)  # 'pcap' or 'nmap'
+    title = Column(String, nullable=False)
+    filename = Column(String, nullable=True)  # Original uploaded filename(s)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Risk assessment
+    risk_level = Column(String, nullable=True)  # Critical, High, Medium, Low
+    risk_score = Column(Integer, nullable=True)  # 0-100
+    
+    # Summary data
+    summary_data = Column(JSON, nullable=True)  # Protocol stats, top talkers, etc.
+    
+    # Findings
+    findings_data = Column(JSON, nullable=True)  # List of security findings
+    
+    # AI Analysis - structured report
+    ai_report = Column(JSON, nullable=True)  # Full structured AI report
+    
+    # Export metadata
+    last_exported_at = Column(DateTime(timezone=True), nullable=True)
+    export_formats = Column(JSON, nullable=True)  # List of formats exported

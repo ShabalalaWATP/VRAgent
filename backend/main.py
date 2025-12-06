@@ -6,7 +6,7 @@ from backend.core.config import settings
 from backend.core.database import Base, engine
 from backend.core.exceptions import VRAgentError
 from backend.core.logging import get_logger
-from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks
+from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network
 from backend import models  # noqa: F401  # ensure models are registered
 
 logger = get_logger(__name__)
@@ -73,6 +73,8 @@ app.include_router(exports.router, prefix="/reports", tags=["exports"])
 app.include_router(exploitability.router, prefix="/reports", tags=["exploitability"])
 app.include_router(webhooks.router, prefix="/projects", tags=["webhooks"])
 app.include_router(websocket.router, tags=["websocket"])
+app.include_router(pcap.router, tags=["pcap"])
+app.include_router(network.router, tags=["network-analysis"])
 
 
 @app.get("/health")
@@ -90,6 +92,7 @@ def health_detailed():
     from redis import Redis
     from sqlalchemy import text
     from backend.core.database import engine
+    from backend.core.cache import cache
     
     health_status = {
         "status": "ok",
@@ -106,13 +109,18 @@ def health_detailed():
         health_status["services"]["database"] = {"status": "error", "message": str(e)}
         health_status["status"] = "degraded"
     
-    # Check Redis
+    # Check Redis and cache
     try:
         redis_client = Redis.from_url(settings.redis_url)
         redis_client.ping()
         health_status["services"]["redis"] = {"status": "ok"}
+        
+        # Get cache stats
+        cache_stats = cache.get_stats()
+        health_status["services"]["cache"] = cache_stats
     except Exception as e:
         health_status["services"]["redis"] = {"status": "error", "message": str(e)}
+        health_status["services"]["cache"] = {"status": "unavailable"}
         health_status["status"] = "degraded"
     
     # Check Gemini API (optional)
@@ -129,6 +137,37 @@ def health_detailed():
         health_status["services"]["semgrep"] = {"status": "not_installed", "message": "Deep static analysis unavailable"}
     
     return health_status
+
+
+@app.get("/cache/stats")
+def cache_stats():
+    """
+    Get detailed cache statistics.
+    Shows Redis cache hit rates, memory usage, and keys by namespace.
+    """
+    from backend.core.cache import cache
+    return cache.get_stats()
+
+
+@app.delete("/cache/{namespace}")
+def clear_cache_namespace(namespace: str):
+    """
+    Clear all cached data in a specific namespace.
+    
+    Namespaces:
+    - osv: CVE/vulnerability lookups from OSV.dev
+    - nvd: NVD enrichment data
+    - epss: EPSS exploitation scores
+    - embedding: Code embeddings
+    """
+    from backend.core.cache import cache
+    
+    valid_namespaces = ["osv", "nvd", "epss", "embedding"]
+    if namespace not in valid_namespaces:
+        return {"error": f"Invalid namespace. Valid options: {valid_namespaces}"}
+    
+    count = cache.clear_namespace(namespace)
+    return {"message": f"Cleared {count} keys from {namespace} cache"}
 
 
 @app.on_event("startup")

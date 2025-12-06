@@ -24,6 +24,7 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  Grid,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -251,21 +252,20 @@ const ReverseEngineeringPage: React.FC = () => {
                   <CodeBlock
                     language="text"
                     code={`High Memory
-┌─────────────────────┐
-│       Stack         │ ← Local variables, return addresses (grows down)
-├─────────────────────┤
-│         ↓           │
-│                     │
-│         ↑           │
-├─────────────────────┤
-│        Heap         │ ← Dynamic allocations (grows up)
-├─────────────────────┤
-│        BSS          │ ← Uninitialized global variables
-├─────────────────────┤
-│        Data         │ ← Initialized global variables
-├─────────────────────┤
-│        Text         │ ← Executable code (read-only)
-└─────────────────────┘
++---------------------+
+|       Stack         | <- Local variables, return addresses (grows down)
+|         v           |
+|                     |
+|         ^           |
++---------------------+
+|        Heap         | <- Dynamic allocations (grows up)
++---------------------+
+|        BSS          | <- Uninitialized global variables
++---------------------+
+|        Data         | <- Initialized global variables
++---------------------+
+|        Text         | <- Executable code (read-only)
++---------------------+
 Low Memory`}
                   />
                 </AccordionDetails>
@@ -480,6 +480,61 @@ scylla_x64.exe              # Attach to process and dump+fix imports`}
                 excellent documentation. Perfect for learning RE fundamentals.
               </Alert>
 
+              <Grid container spacing={2} sx={{ mt: 1, mb: 2 }}>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2.5, bgcolor: "#0f1024", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle1" sx={{ color: "#a855f7", fontWeight: 600, mb: 1 }}>
+                      Ghidra Starter Pack
+                    </Typography>
+                    <List dense>
+                      {[
+                        "Download zip, extract, run ghidraRun (Java 17+ required).",
+                        "Create Non-Shared project > import binary > accept analysis defaults.",
+                        "Enable Decompiler window (Window > Decompiler) and Symbol Tree.",
+                        "Right click function > Rename, apply Data Type, add comments.",
+                        "Use Xrefs (hover shortcut: X) to trace callers/callees quickly.",
+                      ].map((item) => (
+                        <ListItem key={item} sx={{ py: 0.4 }}>
+                          <ListItemIcon sx={{ minWidth: 30 }}>
+                            <CheckCircleIcon sx={{ color: "#22c55e" }} fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300", fontSize: "0.9rem" } }} />
+                        </ListItem>
+                      ))}
+                    </List>
+                    <Alert severity="info" sx={{ mt: 1, bgcolor: "rgba(168,85,247,0.08)" }}>
+                      Save often. Ghidra auto-analysis can be restarted via <code>Analysis &gt; Auto Analyze</code> after changing options.
+                    </Alert>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2.5, bgcolor: "#0f1024", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle1" sx={{ color: "#a855f7", fontWeight: 600, mb: 1 }}>
+                      WinDbg (Preview) Starter Pack
+                    </Typography>
+                    <List dense>
+                      {[
+                        "Install WinDbg Preview from Microsoft Store (uses modern UI and engines).",
+                        "Set symbols: File > Settings > Symbol Path = srv*C:\\symbols*https://msdl.microsoft.com/download/symbols.",
+                        "User-mode attach: File > Attach to Process (select target) or launch with arguments.",
+                        "Open command window (Ctrl+Alt+D) and issue .symfix; .reload /f to sync symbols.",
+                        "Use .exr -1 for last exception, kb for call stack, and !analyze -v for crash triage.",
+                      ].map((item) => (
+                        <ListItem key={item} sx={{ py: 0.4 }}>
+                          <ListItemIcon sx={{ minWidth: 30 }}>
+                            <SecurityIcon sx={{ color: "#22c55e" }} fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300", fontSize: "0.9rem" } }} />
+                        </ListItem>
+                      ))}
+                    </List>
+                    <Alert severity="warning" sx={{ mt: 1, bgcolor: "rgba(245,158,11,0.08)" }}>
+                      Enable symbols before running commands. Without symbols, call stacks and breakpoints will be unreliable.
+                    </Alert>
+                  </Paper>
+                </Grid>
+              </Grid>
+
               <Typography variant="h6" sx={{ color: "grey.200", mt: 3, mb: 2 }}>
                 Quick Setup Commands
               </Typography>
@@ -498,6 +553,23 @@ bash -c "$(curl -fsSL https://gef.blah.cat/sh)"
 
 # Basic file analysis with radare2
 r2 -A ./binary`}
+              />
+
+              <Typography variant="h6" sx={{ color: "grey.200", mt: 2, mb: 1 }}>
+                WinDbg Symbol Path (PowerShell)
+              </Typography>
+              <CodeBlock
+                language="powershell"
+                code={`# Create a local symbol cache and set environment variable
+$env:_NT_SYMBOL_PATH='srv*C:\\\\symbols*https://msdl.microsoft.com/download/symbols'
+
+# Launch WinDbg Preview from shell
+windbgx.exe
+
+# Inside WinDbg: refresh symbols and load modules
+.symfix
+.reload /f
+!sym noisy   ; optional: show symbol resolution issues`}
               />
             </Box>
           </TabPanel>
@@ -721,13 +793,13 @@ rabin2 -i suspicious.exe | grep -E "(CreateFile|WriteFile|Socket|Http)"`}
                     <ListItem>
                       <ListItemText
                         primary="1. Create New Project"
-                        secondary="File → New Project → Non-Shared Project"
+                        secondary="File > New Project > Non-Shared Project"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemText
                         primary="2. Import Binary"
-                        secondary="File → Import File → Select binary → Accept defaults"
+                        secondary="File > Import File > Select binary > Accept defaults"
                       />
                     </ListItem>
                     <ListItem>
@@ -739,15 +811,77 @@ rabin2 -i suspicious.exe | grep -E "(CreateFile|WriteFile|Socket|Http)"`}
                     <ListItem>
                       <ListItemText
                         primary="4. Find Entry Point"
-                        secondary="Symbol Tree → Functions → entry or main"
+                        secondary="Symbol Tree > Functions > entry or main"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemText
                         primary="5. Review Decompiler"
-                        secondary="Window → Decompiler (shows pseudo-C code)"
+                        secondary="Window > Decompiler (shows pseudo-C code)"
                       />
                     </ListItem>
+                  </List>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="h6">Ghidra: First 15 Minutes Checklist</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <List dense>
+                    {[
+                      "Run auto-analysis, then jump to entry/main; rename obvious functions (e.g., sub_401000 -> init_config).",
+                      "Open Decompiler + Listing side-by-side; press X on API imports to see where they are used.",
+                      "Mark global variables with meaningful names and data types (right click > Data > type).",
+                      "Use Search > For Strings to find URLs, registry paths, keys; press D to create data labels.",
+                      "Check Functions window for small, repeated helpers (often crypto/encoding) and explore cross-references.",
+                    ].map((item) => (
+                      <ListItem key={item} sx={{ py: 0.4 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon color="success" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <CodeBlock
+                    language="text"
+                    code={`Handy keys (Listing/Decompiler):
+F        -> Go to address/symbol
+G        -> Jump to other address
+X        -> Xrefs (who calls this?)
+Ctrl+L   -> Search strings
+Ctrl+Shift+F -> Search for instruction pattern
+;        -> Comment line
+R        -> Rename symbol
+Y        -> Change data type/size
+P        -> Create/clear function
+Space    -> Switch between Graph/Listing view`}
+                  />
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="h6">Decompilation Cleanup Plan</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <List dense>
+                    {[
+                      "Fix wrong calling conventions on imported functions (Function Signature).",
+                      "Convert obvious arrays/structs instead of raw bytes; apply data types to offsets you see repeatedly.",
+                      "Inline constants (e.g., flags, magic numbers) with labels so the decompiler becomes readable.",
+                      "Mark library thunks (memcpy, memset, strcmp) to avoid noise and clarify control flow.",
+                      "Group related functions with bookmarks or function tags (persistence, network, crypto).",
+                    ].map((item) => (
+                      <ListItem key={item} sx={{ py: 0.4 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon color="success" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                      </ListItem>
+                    ))}
                   </List>
                 </AccordionDetails>
               </Accordion>
@@ -798,8 +932,8 @@ rabin2 -i suspicious.exe | grep -E "(CreateFile|WriteFile|Socket|Http)"`}
               </Typography>
 
               <Alert severity="error" sx={{ mb: 3 }}>
-                <strong>⚠️ Always use isolated VMs for malware analysis!</strong> Use snapshots
-                and network isolation. Never run suspicious code on your main system.
+                <strong>Always use isolated VMs for malware analysis.</strong> Take snapshots and
+                keep network isolation. Never run suspicious code on your main system.
               </Alert>
 
               <Accordion defaultExpanded>
@@ -813,20 +947,65 @@ rabin2 -i suspicious.exe | grep -E "(CreateFile|WriteFile|Socket|Http)"`}
 gdb ./binary
 
 # GEF commands (after installing GEF)
-gef➤ info functions          # List functions
-gef➤ disass main             # Disassemble main
-gef➤ b *main+42              # Breakpoint at offset
-gef➤ b *0x401234             # Breakpoint at address
-gef➤ r                       # Run program
-gef➤ r arg1 arg2             # Run with arguments
-gef➤ ni                      # Next instruction
-gef➤ si                      # Step into
-gef➤ c                       # Continue
-gef➤ x/20x $rsp              # Examine 20 hex words at RSP
-gef➤ x/s 0x402000            # Examine as string
-gef➤ vmmap                   # Memory mappings
-gef➤ registers               # Show all registers`}
+gef> info functions          # List functions
+gef> disass main             # Disassemble main
+gef> b *main+42              # Breakpoint at offset
+gef> b *0x401234             # Breakpoint at address
+gef> r                       # Run program
+gef> r arg1 arg2             # Run with arguments
+gef> ni                      # Next instruction
+gef> si                      # Step into
+gef> c                       # Continue
+gef> x/20x $rsp              # Examine 20 hex words at RSP
+gef> x/s 0x402000            # Examine as string
+gef> vmmap                   # Memory mappings
+gef> registers               # Show all registers`}
                   />
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="h6">WinDbg Quick Start (User-Mode)</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <CodeBlock
+                    language="text"
+                    code={`# Start or attach (WinDbg Preview)
+# File > Start debugging > Launch executable (with args) OR Attach to process
+
+# Set up symbols early
+.symfix; .reload /f
+.lines               ; show source if available
+.logopen /t dbg.log  ; log output to file
+
+# Control execution
+g          ; go (run)
+p / t      ; step over (use /t to step a single thread)
+t          ; step into
+gc         ; continue until return
+bl / bd / be ; list, disable, enable breakpoints
+
+# Breakpoints (use bu for rebasing-safe)
+bu user32!MessageBoxA
+bp 0x401000 \"kb 5; .printf \\\"hit!\\\\n\\\"\" 
+
+# Inspection
+kb         ; call stack
+r          ; registers
+dv         ; display locals (if symbols)
+!peb       ; PEB overview
+!teb       ; TEB overview
+x kernel32!*CreateFile*   ; find APIs
+s -d 0x00400000 L?0x1000 ff d8 ff e0  ; scan for JPEG header
+
+# Exiting
+.detach    ; detach from process
+.logclose  ; close log`}
+                  />
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    Use <code>bu</code> instead of <code>bp</code> when ASLR is enabled so breakpoints rebind after reloads.
+                  </Alert>
                 </AccordionDetails>
               </Accordion>
 
@@ -924,7 +1103,7 @@ ltrace ./binary`}
 
               <Paper sx={{ p: 3, bgcolor: "#1a1a2e", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#a855f7", mb: 2 }}>
-                  📋 Analysis Steps
+                  Analysis Steps
                 </Typography>
                 <List>
                   {[
@@ -960,9 +1139,36 @@ ltrace ./binary`}
                 </List>
               </Paper>
 
+              <Paper sx={{ p: 3, bgcolor: "#101124", borderRadius: 2, mt: 3 }}>
+                <Typography variant="h6" sx={{ color: "#a855f7", mb: 2 }}>
+                  Day-One Walkthrough (Beginner Friendly)
+                </Typography>
+                <List dense>
+                  {[
+                    "1) Copy sample into an isolated VM snapshot; record SHA-256 and store original in a read-only folder.",
+                    "2) Run triage commands (file, strings, checksec/rabin2) and note indicators like URLs, mutex names, or imports.",
+                    "3) Open in Ghidra, auto-analyze, and rename high-signal functions (networking, crypto, persistence). Add comments as you learn.",
+                    "4) Plan dynamic run: decide inputs/arguments; set WinDbg symbol path and breakpoints on CreateProcess, VirtualAlloc, WriteProcessMemory.",
+                    "5) Execute under WinDbg with logging enabled (.logopen); capture call stacks and memory dumps when interesting events occur.",
+                    "6) Revisit Ghidra with runtime knowledge (addresses, decrypted strings) and annotate functions so future runs are faster.",
+                    "7) Export findings: IOCs (domains, hashes), behaviors (injection, persistence), and detection ideas (YARA, ETW, Sysmon).",
+                  ].map((step) => (
+                    <ListItem key={step} sx={{ py: 0.35 }}>
+                      <ListItemIcon sx={{ minWidth: 30 }}>
+                        <CheckCircleIcon sx={{ color: "#22c55e" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={step} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Keep a running notebook (addresses, API patterns, function names). Iteration is normal; expect to loop between static and dynamic phases.
+                </Alert>
+              </Paper>
+
               <Alert severity="info" sx={{ mt: 3 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  📚 Learning Resources
+                  Learning Resources
                 </Typography>
                 <List dense>
                   {[

@@ -22,6 +22,7 @@ import httpx
 
 from backend.core.config import settings
 from backend.core.logging import get_logger
+from backend.core.cache import cache
 
 logger = get_logger(__name__)
 
@@ -30,7 +31,10 @@ REQUEST_TIMEOUT = 30
 MAX_CONCURRENT_REQUESTS = 3  # Conservative to respect rate limits
 RATE_LIMIT_DELAY = 6.5  # Seconds between requests (5 req/30s without API key)
 
-# Cache for CVE lookups (reduces API calls)
+# Cache namespace for NVD lookups
+CACHE_NAMESPACE = "nvd"
+
+# Legacy in-memory cache (kept for backward compatibility, but Redis is preferred)
 _cve_cache: Dict[str, Dict[str, Any]] = {}
 _cache_expiry: Dict[str, datetime] = {}
 CACHE_TTL_HOURS = 24
@@ -53,14 +57,39 @@ def _get_api_headers() -> Dict[str, str]:
 
 
 def _is_cache_valid(cve_id: str) -> bool:
-    """Check if cached CVE data is still valid."""
+    """Check if cached CVE data is still valid (checks Redis first, then in-memory)."""
+    # Check Redis cache first
+    if cache.is_connected:
+        cached = cache.get(CACHE_NAMESPACE, cve_id)
+        if cached is not None:
+            return True
+    
+    # Fall back to in-memory cache
     if cve_id not in _cve_cache or cve_id not in _cache_expiry:
         return False
     return datetime.utcnow() < _cache_expiry[cve_id]
 
 
+def _get_cached_cve(cve_id: str) -> Optional[Dict[str, Any]]:
+    """Get cached CVE data (checks Redis first, then in-memory)."""
+    # Check Redis cache first
+    if cache.is_connected:
+        cached = cache.get(CACHE_NAMESPACE, cve_id)
+        if cached is not None:
+            return cached
+    
+    # Fall back to in-memory cache
+    if cve_id in _cve_cache and _is_cache_valid(cve_id):
+        return _cve_cache[cve_id]
+    return None
+
+
 def _cache_cve(cve_id: str, data: Dict[str, Any]) -> None:
-    """Cache CVE data with TTL."""
+    """Cache CVE data with TTL (to both Redis and in-memory)."""
+    # Cache to Redis (preferred)
+    cache.set(CACHE_NAMESPACE, cve_id, data)
+    
+    # Also cache in-memory as backup
     _cve_cache[cve_id] = data
     _cache_expiry[cve_id] = datetime.utcnow() + timedelta(hours=CACHE_TTL_HOURS)
 
@@ -156,6 +185,7 @@ def _parse_references(references: List[Dict]) -> List[Dict[str, Any]]:
 async def lookup_cve(cve_id: str) -> Optional[Dict[str, Any]]:
     """
     Look up detailed CVE information from NVD.
+    Uses Redis cache to avoid redundant API calls.
     
     Args:
         cve_id: CVE identifier (e.g., "CVE-2021-44228")
@@ -166,10 +196,11 @@ async def lookup_cve(cve_id: str) -> Optional[Dict[str, Any]]:
     if not cve_id or not cve_id.startswith("CVE-"):
         return None
     
-    # Check cache first
-    if _is_cache_valid(cve_id):
+    # Check cache first (Redis or in-memory)
+    cached = _get_cached_cve(cve_id)
+    if cached is not None:
         logger.debug(f"Cache hit for {cve_id}")
-        return _cve_cache[cve_id]
+        return cached
     
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
@@ -267,13 +298,23 @@ async def lookup_cves_batch(cve_ids: List[str]) -> Dict[str, Dict[str, Any]]:
     
     results: Dict[str, Dict[str, Any]] = {}
     
-    # Check cache first - this is free
+    # Check cache first (batch lookup from Redis)
     uncached_ids = []
-    for cve_id in valid_ids:
-        if _is_cache_valid(cve_id):
-            results[cve_id] = _cve_cache[cve_id]
-        else:
-            uncached_ids.append(cve_id)
+    if cache.is_connected:
+        cached_data = cache.get_many(CACHE_NAMESPACE, valid_ids)
+        for cve_id in valid_ids:
+            if cve_id in cached_data:
+                results[cve_id] = cached_data[cve_id]
+            else:
+                uncached_ids.append(cve_id)
+    else:
+        # Fall back to in-memory cache check
+        for cve_id in valid_ids:
+            cached = _get_cached_cve(cve_id)
+            if cached is not None:
+                results[cve_id] = cached
+            else:
+                uncached_ids.append(cve_id)
     
     if not uncached_ids:
         logger.info(f"All {len(valid_ids)} CVEs found in cache")

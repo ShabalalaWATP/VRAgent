@@ -1,11 +1,14 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set, Dict, Any, Callable
+import hashlib
 
 from sqlalchemy.orm import Session
 
 from backend import models
+from backend.core.config import settings
 from backend.core.exceptions import ScanError
 from backend.core.logging import get_logger
 from backend.services import cve_service, dependency_service, report_service
@@ -24,6 +27,9 @@ from backend.services.websocket_service import progress_manager
 from backend.services.webhook_service import notify_scan_complete, get_webhooks
 
 logger = get_logger(__name__)
+
+# Maximum parallel scanners (don't overwhelm the system)
+MAX_PARALLEL_SCANNERS = 4
 
 
 def _broadcast_progress(scan_run_id: int, phase: str, progress: int, message: str = ""):
@@ -50,6 +56,304 @@ def _detect_language(path: Path) -> str:
         ".kts": "kotlin",
     }
     return mapping.get(path.suffix, "unknown")
+
+
+def _compute_code_hash(code: str) -> str:
+    """Compute a hash of code content for change detection."""
+    return hashlib.sha256(code.encode()).hexdigest()[:32]
+
+
+def _get_existing_embeddings(
+    db: Session, 
+    project_id: int
+) -> dict:
+    """
+    Get existing code chunks with embeddings for a project.
+    Returns a dict mapping (file_path, start_line, code_hash) -> embedding.
+    This allows us to reuse embeddings when code hasn't changed.
+    """
+    existing_chunks = db.query(models.CodeChunk).filter(
+        models.CodeChunk.project_id == project_id,
+        models.CodeChunk.embedding.isnot(None)
+    ).all()
+    
+    embeddings_map = {}
+    for chunk in existing_chunks:
+        # Only include chunks that have non-zero embeddings
+        if chunk.embedding is not None:
+            # Check if it's a zero vector (placeholder)
+            embedding_list = list(chunk.embedding) if hasattr(chunk.embedding, '__iter__') else []
+            if embedding_list and any(v != 0.0 for v in embedding_list[:10]):  # Check first 10 values
+                code_hash = _compute_code_hash(chunk.code)
+                key = (chunk.file_path, chunk.start_line, code_hash)
+                embeddings_map[key] = embedding_list
+    
+    return embeddings_map
+
+
+def _reuse_or_generate_embeddings(
+    db: Session,
+    project: models.Project,
+    new_chunks: List[models.CodeChunk],
+    existing_embeddings: dict
+) -> tuple:
+    """
+    Check which chunks already have embeddings that can be reused.
+    Returns (chunks_needing_embeddings, chunks_with_reused_embeddings, reuse_count).
+    """
+    chunks_to_embed = []
+    reused_count = 0
+    
+    for chunk in new_chunks:
+        code_hash = _compute_code_hash(chunk.code)
+        key = (chunk.file_path, chunk.start_line, code_hash)
+        
+        if key in existing_embeddings:
+            # Reuse existing embedding
+            chunk.embedding = existing_embeddings[key]
+            reused_count += 1
+        else:
+            chunks_to_embed.append(chunk)
+    
+    return chunks_to_embed, reused_count
+
+
+def _run_scanners_parallel(source_root: Path) -> Dict[str, List[Any]]:
+    """
+    Run all SAST scanners in parallel using ThreadPoolExecutor.
+    
+    Each scanner runs in its own thread (they're subprocess-bound anyway).
+    Returns a dict mapping scanner name to list of findings.
+    """
+    results: Dict[str, List[Any]] = {
+        "semgrep": [],
+        "bandit": [],
+        "gosec": [],
+        "spotbugs": [],
+        "clangtidy": [],
+        "eslint": [],
+        "secrets": [],
+    }
+    
+    # Define scanner tasks: (name, check_available_func, run_func)
+    scanner_tasks = []
+    
+    # Semgrep (all languages)
+    if semgrep_service.is_semgrep_available():
+        scanner_tasks.append(("semgrep", lambda: semgrep_service.run_security_audit(source_root)))
+    
+    # Bandit (Python)
+    if bandit_service.is_bandit_available():
+        scanner_tasks.append(("bandit", lambda: bandit_service.run_security_audit(source_root)))
+    
+    # gosec (Go)
+    if gosec_service.is_gosec_available():
+        scanner_tasks.append(("gosec", lambda: gosec_service.run_security_audit(source_root)))
+    
+    # SpotBugs (Java)
+    if spotbugs_service.is_spotbugs_available():
+        scanner_tasks.append(("spotbugs", lambda: spotbugs_service.run_security_audit(source_root)))
+    
+    # clang-tidy (C/C++)
+    if clangtidy_service.is_clangtidy_available():
+        scanner_tasks.append(("clangtidy", lambda: clangtidy_service.run_security_audit(source_root)))
+    
+    # ESLint (JS/TS) - always available (falls back gracefully)
+    scanner_tasks.append(("eslint", lambda: eslint_service.run_eslint_security_scan(str(source_root))))
+    
+    # Secret scanner (Python-based, always available)
+    scanner_tasks.append(("secrets", lambda: secret_service.scan_directory(str(source_root))))
+    
+    if not scanner_tasks:
+        logger.warning("No scanners available")
+        return results
+    
+    logger.info(f"Running {len(scanner_tasks)} scanners in parallel: {[t[0] for t in scanner_tasks]}")
+    
+    # Run scanners in parallel
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SCANNERS) as executor:
+        # Submit all tasks
+        future_to_name = {
+            executor.submit(run_func): name 
+            for name, run_func in scanner_tasks
+        }
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_name):
+            name = future_to_name[future]
+            try:
+                scanner_results = future.result()
+                results[name] = scanner_results if scanner_results else []
+                logger.info(f"Scanner {name} completed: {len(results[name])} findings")
+            except Exception as e:
+                logger.error(f"Scanner {name} failed: {e}")
+                results[name] = []
+    
+    total_findings = sum(len(v) for v in results.values())
+    logger.info(f"All scanners complete. Total findings: {total_findings}")
+    
+    return results
+
+
+def _convert_scanner_results_to_findings(
+    scanner_results: Dict[str, List[Any]], 
+    source_root: Path
+) -> List[models.Finding]:
+    """Convert raw scanner results into Finding models."""
+    findings: List[models.Finding] = []
+    
+    # Process Semgrep findings
+    for sg_finding in scanner_results.get("semgrep", []):
+        try:
+            rel_path = str(Path(sg_finding.file_path).relative_to(source_root))
+        except ValueError:
+            rel_path = sg_finding.file_path
+        
+        findings.append(
+            models.Finding(
+                type="semgrep",
+                severity=sg_finding.severity,
+                file_path=rel_path,
+                start_line=sg_finding.line_start,
+                end_line=sg_finding.line_end,
+                summary=f"[{sg_finding.rule_id}] {sg_finding.message}",
+                details={
+                    "rule_id": sg_finding.rule_id,
+                    "category": sg_finding.category,
+                    "cwe": sg_finding.cwe,
+                    "owasp": sg_finding.owasp,
+                    "code_snippet": sg_finding.code_snippet[:500] if sg_finding.code_snippet else None,
+                    "fix": sg_finding.fix,
+                },
+            )
+        )
+    
+    # Process Bandit findings
+    for bandit_finding in scanner_results.get("bandit", []):
+        try:
+            rel_path = str(Path(bandit_finding.file_path).relative_to(source_root))
+        except ValueError:
+            rel_path = bandit_finding.file_path
+        
+        findings.append(
+            models.Finding(
+                type="bandit",
+                severity=bandit_finding.severity,
+                file_path=rel_path,
+                start_line=bandit_finding.line_number,
+                end_line=bandit_finding.line_range[1] if bandit_finding.line_range and len(bandit_finding.line_range) > 1 else bandit_finding.line_number,
+                summary=f"[{bandit_finding.test_id}] {bandit_finding.message}",
+                details={
+                    "test_id": bandit_finding.test_id,
+                    "test_name": bandit_finding.test_name,
+                    "confidence": bandit_finding.confidence,
+                    "cwe": bandit_finding.cwe,
+                    "code_snippet": bandit_finding.code[:500] if bandit_finding.code else None,
+                    "more_info": bandit_finding.more_info,
+                },
+            )
+        )
+    
+    # Process gosec findings
+    for gosec_finding in scanner_results.get("gosec", []):
+        try:
+            rel_path = str(Path(gosec_finding.file_path).relative_to(source_root))
+        except ValueError:
+            rel_path = gosec_finding.file_path
+        
+        findings.append(
+            models.Finding(
+                type="gosec",
+                severity=gosec_finding.severity,
+                file_path=rel_path,
+                start_line=gosec_finding.line,
+                end_line=gosec_finding.line,
+                summary=f"[{gosec_finding.rule_id}] {gosec_finding.details}",
+                details={
+                    "rule_id": gosec_finding.rule_id,
+                    "cwe": gosec_finding.cwe,
+                    "confidence": gosec_finding.confidence,
+                    "code_snippet": gosec_finding.code[:500] if gosec_finding.code else None,
+                },
+            )
+        )
+    
+    # Process SpotBugs findings
+    for sb_finding in scanner_results.get("spotbugs", []):
+        findings.append(
+            models.Finding(
+                type="spotbugs",
+                severity=sb_finding.severity,
+                file_path=sb_finding.file_path,
+                start_line=sb_finding.line,
+                end_line=sb_finding.line,
+                summary=f"[{sb_finding.bug_type}] {sb_finding.message}",
+                details={
+                    "bug_type": sb_finding.bug_type,
+                    "category": sb_finding.category,
+                    "priority": sb_finding.priority,
+                    "class_name": sb_finding.class_name,
+                    "method_name": sb_finding.method_name,
+                    "cwe": sb_finding.cwe,
+                },
+            )
+        )
+    
+    # Process clang-tidy findings
+    for ct_finding in scanner_results.get("clangtidy", []):
+        findings.append(
+            models.Finding(
+                type="clangtidy",
+                severity=ct_finding.severity,
+                file_path=ct_finding.file_path,
+                start_line=ct_finding.line,
+                end_line=ct_finding.line,
+                summary=f"[{ct_finding.check_name}] {ct_finding.message}",
+                details={
+                    "check_name": ct_finding.check_name,
+                    "column": ct_finding.column,
+                    "cwe": ct_finding.cwe,
+                    "code_snippet": ct_finding.code_snippet,
+                },
+            )
+        )
+    
+    # Process ESLint findings
+    for eslint_finding in scanner_results.get("eslint", []):
+        findings.append(
+            models.Finding(
+                type="eslint_security",
+                severity=eslint_finding.severity,
+                file_path=eslint_finding.file_path,
+                start_line=eslint_finding.line,
+                end_line=eslint_finding.end_line,
+                summary=f"[{eslint_finding.rule_id}] {eslint_finding.message}",
+                details={
+                    "rule_id": eslint_finding.rule_id,
+                    "column": eslint_finding.column,
+                },
+            )
+        )
+    
+    # Process secret findings
+    for secret in scanner_results.get("secrets", []):
+        findings.append(
+            models.Finding(
+                type="secret",
+                severity=secret.severity,
+                file_path=secret.file_path,
+                start_line=secret.line_number,
+                end_line=secret.line_number,
+                summary=f"Potential {secret.secret_type} detected",
+                details={
+                    "secret_type": secret.secret_type,
+                    "description": secret.description,
+                    "masked_value": secret.masked_value,
+                },
+            )
+        )
+    
+    return findings
 
 
 def _static_checks(file_path: Path, contents: str) -> List[models.Finding]:
@@ -159,210 +463,52 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
         db.commit()
 
         # Phase 3: Generate embeddings (30-45%)
-        _broadcast_progress(scan_run.id, "embedding", 35, "Generating code embeddings")
-        logger.debug("Generating code embeddings")
-        asyncio.run(enrich_code_chunks(all_chunks))
-        db.add_all(all_chunks)
-        db.commit()
-        _broadcast_progress(scan_run.id, "embedding", 45, "Embeddings complete")
-
-        # Phase 4: Secret detection (45-50%)
-        _broadcast_progress(scan_run.id, "secrets", 48, "Scanning for hardcoded secrets")
-        logger.debug("Scanning for hardcoded secrets")
-        secret_findings = secret_service.scan_directory(str(source_root))
-        for secret in secret_findings:
-            findings.append(
-                models.Finding(
-                    type="secret",
-                    severity=secret.severity,
-                    file_path=secret.file_path,
-                    start_line=secret.line_number,
-                    end_line=secret.line_number,
-                    summary=f"Potential {secret.secret_type} detected",
-                    details={
-                        "secret_type": secret.secret_type,
-                        "description": secret.description,
-                        "masked_value": secret.masked_value,
-                    },
+        # Check if we should skip embeddings entirely
+        if settings.skip_embeddings:
+            logger.info("Skipping embeddings (SKIP_EMBEDDINGS=true)")
+            _broadcast_progress(scan_run.id, "embedding", 45, "Embeddings skipped (disabled)")
+        else:
+            _broadcast_progress(scan_run.id, "embedding", 35, "Generating code embeddings")
+            logger.debug("Checking for reusable embeddings from previous scans")
+            
+            # Get existing embeddings from previous scans of this project
+            existing_embeddings = _get_existing_embeddings(db, project.id)
+            
+            if existing_embeddings:
+                logger.info(f"Found {len(existing_embeddings)} existing embeddings to potentially reuse")
+                chunks_to_embed, reused_count = _reuse_or_generate_embeddings(
+                    db, project, all_chunks, existing_embeddings
                 )
-            )
-        logger.info(f"Found {len(secret_findings)} potential secrets")
-
-        # Phase 5: ESLint security scan (50-55%)
-        _broadcast_progress(scan_run.id, "eslint", 52, "Running ESLint security scan")
-        logger.debug("Running ESLint security scan")
-        eslint_findings = eslint_service.run_eslint_security_scan(str(source_root))
-        for eslint_finding in eslint_findings:
-            findings.append(
-                models.Finding(
-                    type="eslint_security",
-                    severity=eslint_finding.severity,
-                    file_path=eslint_finding.file_path,
-                    start_line=eslint_finding.line,
-                    end_line=eslint_finding.end_line,
-                    summary=f"[{eslint_finding.rule_id}] {eslint_finding.message}",
-                    details={
-                        "rule_id": eslint_finding.rule_id,
-                        "column": eslint_finding.column,
-                    },
-                )
-            )
-        logger.info(f"Found {len(eslint_findings)} ESLint security issues")
-
-        # Phase 6: Semgrep security scan (55-65%)
-        _broadcast_progress(scan_run.id, "semgrep", 58, "Running Semgrep security scan")
-        logger.debug("Running Semgrep security scan")
-        if semgrep_service.is_semgrep_available():
-            semgrep_findings = semgrep_service.run_security_audit(source_root)
-            for sg_finding in semgrep_findings:
-                # Make path relative to source root
-                try:
-                    rel_path = str(Path(sg_finding.file_path).relative_to(source_root))
-                except ValueError:
-                    rel_path = sg_finding.file_path
                 
-                findings.append(
-                    models.Finding(
-                        type="semgrep",
-                        severity=sg_finding.severity,
-                        file_path=rel_path,
-                        start_line=sg_finding.line_start,
-                        end_line=sg_finding.line_end,
-                        summary=f"[{sg_finding.rule_id}] {sg_finding.message}",
-                        details={
-                            "rule_id": sg_finding.rule_id,
-                            "category": sg_finding.category,
-                            "cwe": sg_finding.cwe,
-                            "owasp": sg_finding.owasp,
-                            "code_snippet": sg_finding.code_snippet[:500] if sg_finding.code_snippet else None,
-                            "fix": sg_finding.fix,
-                        },
+                if reused_count > 0:
+                    logger.info(f"Reused {reused_count} embeddings from previous scan, "
+                               f"{len(chunks_to_embed)} chunks need new embeddings")
+                    _broadcast_progress(
+                        scan_run.id, "embedding", 38, 
+                        f"Reusing {reused_count} embeddings, generating {len(chunks_to_embed)} new"
                     )
-                )
-            logger.info(f"Found {len(semgrep_findings)} Semgrep security issues")
-        else:
-            logger.info("Semgrep not installed, skipping deep static analysis")
-        _broadcast_progress(scan_run.id, "semgrep", 65, "Static analysis complete")
-
-        # Phase 6b: Bandit Python security scan (if Python files exist)
-        _broadcast_progress(scan_run.id, "bandit", 66, "Running Bandit Python security scan")
-        logger.debug("Running Bandit Python security scan")
-        if bandit_service.is_bandit_available():
-            bandit_findings = bandit_service.run_security_audit(source_root)
-            for bandit_finding in bandit_findings:
-                # Make path relative to source root
-                try:
-                    rel_path = str(Path(bandit_finding.file_path).relative_to(source_root))
-                except ValueError:
-                    rel_path = bandit_finding.file_path
                 
-                findings.append(
-                    models.Finding(
-                        type="bandit",
-                        severity=bandit_finding.severity,
-                        file_path=rel_path,
-                        start_line=bandit_finding.line_number,
-                        end_line=bandit_finding.line_range[1] if bandit_finding.line_range and len(bandit_finding.line_range) > 1 else bandit_finding.line_number,
-                        summary=f"[{bandit_finding.test_id}] {bandit_finding.message}",
-                        details={
-                            "test_id": bandit_finding.test_id,
-                            "test_name": bandit_finding.test_name,
-                            "confidence": bandit_finding.confidence,
-                            "cwe": bandit_finding.cwe,
-                            "code_snippet": bandit_finding.code[:500] if bandit_finding.code else None,
-                            "more_info": bandit_finding.more_info,
-                        },
-                    )
-                )
-            logger.info(f"Found {len(bandit_findings)} Bandit Python security issues")
-        else:
-            logger.info("Bandit not installed, skipping Python security analysis")
+                # Only generate embeddings for chunks that need them
+                if chunks_to_embed:
+                    asyncio.run(enrich_code_chunks(chunks_to_embed))
+            else:
+                # No existing embeddings, generate all
+                logger.debug("No existing embeddings found, generating all")
+                asyncio.run(enrich_code_chunks(all_chunks))
+            
+            db.add_all(all_chunks)
+            db.commit()
+            _broadcast_progress(scan_run.id, "embedding", 45, "Embeddings complete")
 
-        # Phase 6c: gosec Go security scan (if Go files exist)
-        _broadcast_progress(scan_run.id, "gosec", 67, "Running gosec Go security scan")
-        logger.debug("Running gosec Go security scan")
-        if gosec_service.is_gosec_available():
-            gosec_findings = gosec_service.run_security_audit(source_root)
-            for gosec_finding in gosec_findings:
-                # Make path relative to source root
-                try:
-                    rel_path = str(Path(gosec_finding.file_path).relative_to(source_root))
-                except ValueError:
-                    rel_path = gosec_finding.file_path
-                
-                findings.append(
-                    models.Finding(
-                        type="gosec",
-                        severity=gosec_finding.severity,
-                        file_path=rel_path,
-                        start_line=gosec_finding.line,
-                        end_line=gosec_finding.line,
-                        summary=f"[{gosec_finding.rule_id}] {gosec_finding.details}",
-                        details={
-                            "rule_id": gosec_finding.rule_id,
-                            "cwe": gosec_finding.cwe,
-                            "confidence": gosec_finding.confidence,
-                            "code_snippet": gosec_finding.code[:500] if gosec_finding.code else None,
-                        },
-                    )
-                )
-            logger.info(f"Found {len(gosec_findings)} gosec Go security issues")
-        else:
-            logger.info("gosec not installed, skipping Go security analysis")
-
-        # Phase 6d: SpotBugs Java security scan (if Java files exist)
-        _broadcast_progress(scan_run.id, "spotbugs", 68, "Running SpotBugs Java security scan")
-        logger.debug("Running SpotBugs Java security scan")
-        if spotbugs_service.is_spotbugs_available():
-            spotbugs_findings = spotbugs_service.run_security_audit(source_root)
-            for sb_finding in spotbugs_findings:
-                findings.append(
-                    models.Finding(
-                        type="spotbugs",
-                        severity=sb_finding.severity,
-                        file_path=sb_finding.file_path,
-                        start_line=sb_finding.line,
-                        end_line=sb_finding.line,
-                        summary=f"[{sb_finding.bug_type}] {sb_finding.message}",
-                        details={
-                            "bug_type": sb_finding.bug_type,
-                            "category": sb_finding.category,
-                            "priority": sb_finding.priority,
-                            "class_name": sb_finding.class_name,
-                            "method_name": sb_finding.method_name,
-                            "cwe": sb_finding.cwe,
-                        },
-                    )
-                )
-            logger.info(f"Found {len(spotbugs_findings)} SpotBugs Java security issues")
-        else:
-            logger.info("SpotBugs not installed, skipping Java security analysis")
-
-        # Phase 6e: clang-tidy C/C++ security scan
-        _broadcast_progress(scan_run.id, "clangtidy", 69, "Running clang-tidy C/C++ security scan")
-        logger.debug("Running clang-tidy C/C++ security scan")
-        if clangtidy_service.is_clangtidy_available():
-            clangtidy_findings = clangtidy_service.run_security_audit(source_root)
-            for ct_finding in clangtidy_findings:
-                findings.append(
-                    models.Finding(
-                        type="clangtidy",
-                        severity=ct_finding.severity,
-                        file_path=ct_finding.file_path,
-                        start_line=ct_finding.line,
-                        end_line=ct_finding.line,
-                        summary=f"[{ct_finding.check_name}] {ct_finding.message}",
-                        details={
-                            "check_name": ct_finding.check_name,
-                            "column": ct_finding.column,
-                            "cwe": ct_finding.cwe,
-                            "code_snippet": ct_finding.code_snippet,
-                        },
-                    )
-                )
-            logger.info(f"Found {len(clangtidy_findings)} clang-tidy C/C++ security issues")
-        else:
-            logger.info("clang-tidy not installed, skipping C/C++ security analysis")
+        # Phase 4-6: Run all SAST scanners in parallel (45-70%)
+        _broadcast_progress(scan_run.id, "scanning", 48, "Running security scanners in parallel")
+        logger.info("Starting parallel security scanner execution")
+        
+        scanner_results = _run_scanners_parallel(source_root)
+        scanner_findings = _convert_scanner_results_to_findings(scanner_results, source_root)
+        findings.extend(scanner_findings)
+        
+        _broadcast_progress(scan_run.id, "scanning", 70, f"Scanners complete: {len(scanner_findings)} findings")
 
         # Phase 7: Parse dependencies (65-75%)
         _broadcast_progress(scan_run.id, "dependencies", 68, "Parsing dependencies")

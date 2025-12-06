@@ -25,6 +25,7 @@ import { Link, useNavigate } from "react-router-dom";
 import NewProjectForm from "../components/NewProjectForm";
 import { api } from "../api/client";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
+import HubIcon from "@mui/icons-material/Hub";
 
 // Animations
 const float = keyframes`
@@ -211,25 +212,46 @@ export default function ProjectListPage() {
             </Typography>
             
             {/* Quick Learn Access */}
-            <Chip
-              icon={<MenuBookIcon sx={{ fontSize: 18 }} />}
-              label="New to security scanning? Visit the Learning Hub →"
-              clickable
-              onClick={() => navigate("/learn")}
-              sx={{
-                background: `linear-gradient(135deg, ${alpha("#6366f1", 0.15)}, ${alpha("#8b5cf6", 0.1)})`,
-                border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
-                color: "#a78bfa",
-                fontWeight: 500,
-                fontSize: "0.8rem",
-                py: 2.5,
-                px: 1,
-                "&:hover": {
-                  background: `linear-gradient(135deg, ${alpha("#6366f1", 0.25)}, ${alpha("#8b5cf6", 0.2)})`,
-                  boxShadow: `0 4px 20px ${alpha("#8b5cf6", 0.3)}`,
-                },
-              }}
-            />
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              <Chip
+                icon={<HubIcon sx={{ fontSize: 18 }} />}
+                label="Network Analysis - Analyze PCAP & Nmap scans →"
+                clickable
+                onClick={() => navigate("/network")}
+                sx={{
+                  background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.15)}, ${alpha("#0891b2", 0.1)})`,
+                  border: `1px solid ${alpha("#06b6d4", 0.3)}`,
+                  color: "#22d3ee",
+                  fontWeight: 500,
+                  fontSize: "0.8rem",
+                  py: 2.5,
+                  px: 1,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.25)}, ${alpha("#0891b2", 0.2)})`,
+                    boxShadow: `0 4px 20px ${alpha("#06b6d4", 0.3)}`,
+                  },
+                }}
+              />
+              <Chip
+                icon={<MenuBookIcon sx={{ fontSize: 18 }} />}
+                label="New to security scanning? Visit the Learning Hub →"
+                clickable
+                onClick={() => navigate("/learn")}
+                sx={{
+                  background: `linear-gradient(135deg, ${alpha("#6366f1", 0.15)}, ${alpha("#8b5cf6", 0.1)})`,
+                  border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+                  color: "#a78bfa",
+                  fontWeight: 500,
+                  fontSize: "0.8rem",
+                  py: 2.5,
+                  px: 1,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, ${alpha("#6366f1", 0.25)}, ${alpha("#8b5cf6", 0.2)})`,
+                    boxShadow: `0 4px 20px ${alpha("#8b5cf6", 0.3)}`,
+                  },
+                }}
+              />
+            </Box>
           </Box>
           
           <Button
@@ -531,6 +553,65 @@ export default function ProjectListPage() {
           ))}
         </Grid>
       )}
+
+      {/* Network Analysis Link */}
+      <Card
+        component={Link}
+        to="/network"
+        sx={{
+          mt: 6,
+          textDecoration: "none",
+          display: "flex",
+          alignItems: "center",
+          p: 3,
+          background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.08)} 0%, ${alpha("#0891b2", 0.05)} 100%)`,
+          border: `1px solid ${alpha("#06b6d4", 0.2)}`,
+          borderRadius: 3,
+          transition: "all 0.3s ease",
+          "&:hover": {
+            transform: "translateY(-4px)",
+            boxShadow: `0 10px 30px ${alpha("#06b6d4", 0.2)}`,
+            border: `1px solid ${alpha("#06b6d4", 0.4)}`,
+          },
+        }}
+      >
+        <Box
+          sx={{
+            width: 56,
+            height: 56,
+            borderRadius: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: `linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)`,
+            color: "#fff",
+            mr: 3,
+          }}
+        >
+          <HubIcon sx={{ fontSize: 32 }} />
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <Typography
+            variant="h6"
+            fontWeight={700}
+            sx={{
+              background: `linear-gradient(135deg, #22d3ee 0%, #0891b2 100%)`,
+              backgroundClip: "text",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              mb: 0.5,
+            }}
+          >
+            Network Analysis
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Analyze Wireshark PCAP captures and Nmap scan results with AI-powered security insights
+          </Typography>
+        </Box>
+        <Box sx={{ color: "#22d3ee" }}>
+          <ArrowRightIcon />
+        </Box>
+      </Card>
 
       {/* Create Project Dialog */}
       <Dialog

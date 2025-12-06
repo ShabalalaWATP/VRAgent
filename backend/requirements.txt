@@ -7,7 +7,7 @@ python-multipart==0.0.6
 websockets>=13.0
 
 # Google Gemini AI
-google-genai>=1.0.0
+google-generativeai>=0.8.0
 
 # Database
 SQLAlchemy==2.0.20
@@ -30,6 +30,9 @@ markdown==3.4.4
 # Security scanning
 semgrep>=1.50.0
 bandit>=1.7.0
+
+# PCAP analysis
+scapy>=2.5.0
 
 # Testing
 pytest==7.4.0
