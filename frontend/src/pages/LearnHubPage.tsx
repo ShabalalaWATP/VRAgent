@@ -30,6 +30,8 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import ApiIcon from "@mui/icons-material/Api";
 import MemoryIcon from "@mui/icons-material/Memory";
+import HubIcon from "@mui/icons-material/Hub";
+import WifiIcon from "@mui/icons-material/Wifi";
 
 interface LearnCard {
   title: string;
@@ -67,7 +69,35 @@ const appCards: LearnCard[] = [
     path: "/learn/architecture",
     color: "#6366f1",
     tags: ["Docker", "FastAPI", "PostgreSQL"],
+  },
+];
+
+// Network Analysis learning pages
+const networkCards: LearnCard[] = [
+  {
+    title: "Network Analysis Hub",
+    description: "Learn what the Network Analysis Hub does: Nmap scanning, PCAP analysis, and AI-powered insights.",
+    icon: <HubIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/network-hub",
+    color: "#0ea5e9",
+    tags: ["Nmap", "PCAP", "AI Chat"],
     badge: "New",
+  },
+  {
+    title: "Wireshark Essentials",
+    description: "Master packet analysis with essential display filters, capture filters, and security use cases.",
+    icon: <WifiIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/wireshark",
+    color: "#06b6d4",
+    tags: ["Filters", "BPF", "Packets"],
+  },
+  {
+    title: "Nmap & Zenmap Guide",
+    description: "Network scanning fundamentals: scan types, common commands, and NSE scripting basics.",
+    icon: <RadarIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/nmap",
+    color: "#8b5cf6",
+    tags: ["Port Scanning", "NSE", "Discovery"],
   },
 ];
 
@@ -342,7 +372,7 @@ export default function LearnHubPage() {
         }}
       >
         {[
-          { value: "17", label: "Learning Topics" },
+          { value: "20", label: "Learning Topics" },
           { value: "120+", label: "Glossary Terms" },
           { value: "200+", label: "Commands" },
           { value: "30+", label: "Attack Types" },
@@ -385,7 +415,34 @@ export default function LearnHubPage() {
 
       <Divider sx={{ my: 5 }} />
 
-      {/* SECTION 2: Security Fundamentals */}
+      {/* SECTION 2: Network Analysis */}
+      <Box sx={{ mb: 6 }}>
+        <Paper
+          sx={{
+            p: 3,
+            mb: 3,
+            borderRadius: 3,
+            background: `linear-gradient(135deg, ${alpha("#0ea5e9", 0.1)}, ${alpha("#06b6d4", 0.05)})`,
+            border: `1px solid ${alpha("#0ea5e9", 0.2)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+            <HubIcon sx={{ color: "#0ea5e9", fontSize: 32 }} />
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              🌐 Network Analysis
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            Master network security tools. Learn how to use VRAgent's Network Hub, Wireshark, and Nmap effectively.
+          </Typography>
+        </Paper>
+        
+        <CardGrid cards={networkCards} columns={{ xs: 12, sm: 6, md: 4, lg: 4 }} />
+      </Box>
+
+      <Divider sx={{ my: 5 }} />
+
+      {/* SECTION 3: Security Fundamentals */}
       <Box sx={{ mb: 6 }}>
         <Paper
           sx={{
@@ -412,7 +469,7 @@ export default function LearnHubPage() {
 
       <Divider sx={{ my: 5 }} />
 
-      {/* SECTION 3: Quick Reference */}
+      {/* SECTION 4: Quick Reference */}
       <Box sx={{ mb: 6 }}>
         <Paper
           sx={{

@@ -39,6 +39,9 @@ import MobilePentestPage from "./pages/MobilePentestPage";
 import PcapAnalyzerPage from "./pages/PcapAnalyzerPage";
 import NetworkAnalysisHub from "./pages/NetworkAnalysisHub";
 import NmapAnalyzerPage from "./pages/NmapAnalyzerPage";
+import NetworkAnalysisGuidePage from "./pages/NetworkAnalysisGuidePage";
+import WiresharkGuidePage from "./pages/WiresharkGuidePage";
+import NmapGuidePage from "./pages/NmapGuidePage";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
 
@@ -317,6 +320,9 @@ function App() {
           <Route path="/learn/api-security" element={<ApiSecurityPage />} />
           <Route path="/learn/reverse-engineering" element={<ReverseEngineeringPage />} />
           <Route path="/learn/mobile-pentest" element={<MobilePentestPage />} />
+          <Route path="/learn/network-hub" element={<NetworkAnalysisGuidePage />} />
+          <Route path="/learn/wireshark" element={<WiresharkGuidePage />} />
+          <Route path="/learn/nmap" element={<NmapGuidePage />} />
         </Routes>
       </Container>
     </>
