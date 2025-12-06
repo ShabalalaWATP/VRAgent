@@ -186,6 +186,34 @@ function App() {
 
           {/* Action Buttons */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Tooltip title="Projects - Manage your codebases">
+              <Button
+                component={Link}
+                to="/"
+                startIcon={<Box component="span" sx={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" /></svg></Box>}
+                variant="outlined"
+                size="medium"
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontWeight: 600,
+                  px: 2,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontSize: "0.95rem",
+                  borderColor: alpha(theme.palette.divider, 0.3),
+                  "&:hover": {
+                    borderColor: theme.palette.primary.main,
+                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                    color: theme.palette.primary.main,
+                  },
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Projects
+              </Button>
+            </Tooltip>
+            
             <Tooltip title="Network Analysis - PCAP & Nmap Security Analysis">
               <Button
                 component={Link}
