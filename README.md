@@ -112,6 +112,13 @@ VRAgent includes a comprehensive **Security Learning Hub** with educational cont
 | **Security Glossary** | 100+ security terms and definitions |
 | **Security Commands** | Essential CLI tools (nmap, burp, metasploit, etc.) |
 
+#### Network Analysis Learning Pages
+| Topic | Description |
+|-------|-------------|
+| **Network Analysis Hub Guide** | Complete guide to VRAgent's network security tools with use cases and workflows |
+| **Wireshark Essentials** | Beginner-friendly guide to packet analysis, display/capture filters, and security use cases |
+| **Nmap Essentials** | Comprehensive Nmap guide covering scan types, NSE scripts, timing, and real-world scenarios |
+
 ### Reports & Exports
 - **Multiple Export Formats**: Generate professional reports in:
   - **Markdown**: Well-structured with tables, links, and severity breakdown

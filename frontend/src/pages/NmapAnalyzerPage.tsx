@@ -718,6 +718,23 @@ const NmapAnalyzerPage: React.FC = () => {
             </Typography>
           </Box>
         </Box>
+        <Chip
+          component={Link}
+          to="/learn/nmap"
+          icon={<LightbulbIcon sx={{ fontSize: 16 }} />}
+          label="Learn Nmap Essentials →"
+          clickable
+          size="small"
+          sx={{
+            background: alpha("#8b5cf6", 0.1),
+            border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+            color: "#a78bfa",
+            fontWeight: 500,
+            "&:hover": {
+              background: alpha("#8b5cf6", 0.2),
+            },
+          }}
+        />
       </Box>
 
       {/* Tabbed Interface */}

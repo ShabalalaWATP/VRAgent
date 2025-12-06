@@ -191,21 +191,26 @@ function App() {
                 component={Link}
                 to="/"
                 startIcon={<Box component="span" sx={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" /></svg></Box>}
-                variant="outlined"
+                variant="contained"
                 size="medium"
                 sx={{
-                  color: theme.palette.text.secondary,
-                  fontWeight: 600,
-                  px: 2,
+                  background: `linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)`,
+                  color: "white",
+                  fontWeight: 700,
+                  px: 2.5,
                   py: 1,
                   borderRadius: 2,
                   textTransform: "none",
                   fontSize: "0.95rem",
-                  borderColor: alpha(theme.palette.divider, 0.3),
+                  boxShadow: `0 4px 15px ${alpha("#059669", 0.4)}, 0 0 20px ${alpha("#059669", 0.2)}`,
+                  border: `1px solid ${alpha("#10b981", 0.5)}`,
                   "&:hover": {
-                    borderColor: theme.palette.primary.main,
-                    bgcolor: alpha(theme.palette.primary.main, 0.1),
-                    color: theme.palette.primary.main,
+                    background: `linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%)`,
+                    boxShadow: `0 6px 25px ${alpha("#059669", 0.5)}, 0 0 30px ${alpha("#059669", 0.3)}`,
+                    transform: "translateY(-2px)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
                   },
                   transition: "all 0.3s ease",
                 }}

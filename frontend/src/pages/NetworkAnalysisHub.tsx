@@ -40,6 +40,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import ArticleIcon from "@mui/icons-material/Article";
 import HubIcon from "@mui/icons-material/Hub";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 import { apiClient, SavedNetworkReport } from "../api/client";
 
 const NetworkAnalysisHub: React.FC = () => {
@@ -134,13 +135,30 @@ const NetworkAnalysisHub: React.FC = () => {
           <HubIcon sx={{ fontSize: 40, color: "primary.main" }} />
           <Box>
             <Typography variant="h4" fontWeight={700}>
-              Network Analysis
+              Network Analysis Hub
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Analyze network traffic captures and scan results with AI-powered security insights
             </Typography>
           </Box>
         </Box>
+        <Chip
+          component={Link}
+          to="/learn/network-hub"
+          icon={<MenuBookIcon sx={{ fontSize: 16 }} />}
+          label="Learn About the Network Hub →"
+          clickable
+          size="small"
+          sx={{
+            background: alpha("#0ea5e9", 0.1),
+            border: `1px solid ${alpha("#0ea5e9", 0.3)}`,
+            color: "#38bdf8",
+            fontWeight: 500,
+            "&:hover": {
+              background: alpha("#0ea5e9", 0.2),
+            },
+          }}
+        />
       </Box>
 
       {/* Tool Cards */}

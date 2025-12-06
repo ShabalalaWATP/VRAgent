@@ -1089,10 +1089,27 @@ export default function PcapAnalyzerPage() {
             PCAP Analyzer
           </Typography>
         </Box>
-        <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 700, mx: "auto" }}>
+        <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 700, mx: "auto", mb: 2 }}>
           Upload Wireshark packet captures (.pcap, .pcapng) for security analysis. Detects cleartext credentials,
           suspicious traffic patterns, protocol anomalies, and more.
         </Typography>
+        <Chip
+          component={Link}
+          to="/learn/wireshark"
+          icon={<InfoIcon sx={{ fontSize: 16 }} />}
+          label="Learn Wireshark Essentials →"
+          clickable
+          size="small"
+          sx={{
+            background: alpha("#06b6d4", 0.1),
+            border: `1px solid ${alpha("#06b6d4", 0.3)}`,
+            color: "#22d3ee",
+            fontWeight: 500,
+            "&:hover": {
+              background: alpha("#06b6d4", 0.2),
+            },
+          }}
+        />
       </Box>
 
       {/* Tabs */}
