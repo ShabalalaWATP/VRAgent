@@ -62,6 +62,24 @@ export const api = {
     request<CodebaseStructure>(`/reports/${reportId}/codebase`),
   getCodebaseSummary: (reportId: number) =>
     request<CodebaseSummary>(`/reports/${reportId}/codebase/summary`),
+  getFileContent: (reportId: number, filePath: string) =>
+    request<FileContent>(`/reports/${reportId}/codebase/file?file_path=${encodeURIComponent(filePath)}`),
+  getDependencies: (reportId: number) =>
+    request<DependencyGraph>(`/reports/${reportId}/dependencies`),
+  getScanDiff: (reportId: number, compareReportId: number) =>
+    request<ScanDiff>(`/reports/${reportId}/diff/${compareReportId}`),
+  getFileTrends: (reportId: number, filePath: string) =>
+    request<FileTrends>(`/reports/${reportId}/file-trends/${encodeURIComponent(filePath)}`),
+  getTodos: (reportId: number) =>
+    request<TodoScanResult>(`/reports/${reportId}/todos`),
+  searchCode: (reportId: number, query: string) =>
+    request<CodeSearchResult>(`/reports/${reportId}/search-code?q=${encodeURIComponent(query)}`),
+  explainCode: (reportId: number, filePath: string, code: string, language?: string) =>
+    request<CodeExplanation>(`/reports/${reportId}/explain-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: filePath, code, language }),
+    }),
   getExploitability: (reportId: number) => request<ExploitScenario[]>(`/reports/${reportId}/exploitability`),
   startExploitability: (reportId: number, mode: "auto" | "summary" | "full" = "auto") =>
     request<{ status: string; mode: string }>(`/reports/${reportId}/exploitability?mode=${mode}`, { method: "POST" }),
@@ -262,6 +280,143 @@ export type CodebaseSummary = {
   security_summary: string | null;
   has_app_summary: boolean;
   has_security_summary: boolean;
+};
+
+// File content for inline code preview
+export type FileContent = {
+  file_path: string;
+  language: string | null;
+  chunks: {
+    start_line: number;
+    end_line: number;
+    code: string;
+  }[];
+  findings: {
+    line: number;
+    severity: string;
+    type: string;
+    summary: string;
+  }[];
+  total_lines: number;
+  source?: "disk" | "chunks";  // "disk" = full file, "chunks" = assembled from indexed chunks
+};
+
+// Dependency graph types
+export type ExternalDependency = {
+  name: string;
+  version: string | null;
+  ecosystem: string;
+  manifest_path: string | null;
+  has_vulnerabilities: boolean;
+};
+
+export type InternalImport = {
+  source: string;
+  target: string;
+  type: string;
+};
+
+export type DependencyGraph = {
+  report_id: number;
+  external_dependencies: ExternalDependency[];
+  internal_imports: InternalImport[];
+  files: string[];
+  summary: {
+    total_external: number;
+    vulnerable_count: number;
+    total_internal_edges: number;
+    total_files: number;
+    ecosystems: string[];
+  };
+};
+
+// Scan diff types (Feature 5)
+export type DiffFinding = {
+  id: number;
+  type: string;
+  severity: string;
+  summary: string;
+  file_path: string | null;
+  start_line: number | null;
+};
+
+export type ScanDiff = {
+  report_id: number;
+  compare_report_id: number;
+  current_report_date: string | null;
+  compare_report_date: string | null;
+  new_findings: DiffFinding[];
+  fixed_findings: DiffFinding[];
+  summary: {
+    total_new: number;
+    total_fixed: number;
+    files_with_new_findings: number;
+    files_with_fixed_findings: number;
+    severity_changes: {
+      critical: { new: number; fixed: number };
+      high: { new: number; fixed: number };
+      medium: { new: number; fixed: number };
+      low: { new: number; fixed: number };
+      info: { new: number; fixed: number };
+    };
+    net_change: number;
+  };
+  changed_files: string[];
+};
+
+// File trends for sparkline (Feature: Finding Trends)
+export type FileTrendPoint = {
+  report_id: number;
+  created_at: string | null;
+  finding_count: number;
+  severity_counts: Record<string, number>;
+};
+
+export type FileTrends = {
+  file_path: string;
+  trends: FileTrendPoint[];
+  current_report_id: number;
+};
+
+// TODO/FIXME Scanner types
+export type TodoItem = {
+  type: "TODO" | "FIXME" | "HACK" | "XXX" | "BUG" | "NOTE";
+  file_path: string;
+  line: number;
+  text: string;
+  full_line: string;
+};
+
+export type TodoScanResult = {
+  total: number;
+  summary: Record<string, number>;
+  by_file: Record<string, TodoItem[]>;
+  items: TodoItem[];
+};
+
+// Code Search types
+export type CodeSearchMatch = {
+  file_path: string;
+  line: number;
+  content: string;
+  context_before: string | null;
+  context_after: string | null;
+  language: string | null;
+};
+
+export type CodeSearchResult = {
+  query: string;
+  total: number;
+  results: CodeSearchMatch[];
+  truncated: boolean;
+};
+
+// Code Explanation types
+export type CodeExplanation = {
+  file_path: string;
+  explanation: string | null;
+  findings_count: number;
+  error?: string;
 };
 
 export type AttackChain = {

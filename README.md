@@ -124,6 +124,16 @@ VRAgent integrates **10+ specialized security scanners** for comprehensive vulne
 - **Interactive Findings Table**: Sort by severity, type, file, or line number
 - **Expandable Code Snippets**: View vulnerable code with syntax highlighting
 - **Interactive Codebase Map**: Visual tree view with per-file vulnerability counts
+  - **Breadcrumb Navigation**: Quick navigation through folder hierarchy
+  - **Dual Search Modes**: Search by file name or search code content across all files
+  - **Syntax Highlighting**: Prism.js-powered code preview with language detection
+  - **Jump to Finding**: Click finding badges to scroll directly to vulnerable lines
+  - **File Diff View**: Compare file changes between scan versions
+  - **Copy Code Button**: One-click copy with visual confirmation
+  - **Heatmap Overlay**: Toggle finding density visualization on treemap
+  - **Finding Trends Sparkline**: Mini chart showing finding history per file
+  - **TODO/FIXME Scanner**: Detects code comment markers (TODO, FIXME, HACK, XXX, BUG)
+  - **AI Code Explanation**: Gemini-powered explanations of what code files do
 - **Improved Exploitability Display**: Clean card-based layout with colored sections for attack narrative, impact, PoC, and mitigations
 
 ### Learning Hub
@@ -1035,6 +1045,11 @@ The frontend will be available at http://localhost:5173
 | `GET` | `/reports/{id}/findings/{fid}/snippet` | Get code snippet for finding |
 | `GET` | `/reports/{id}/codebase` | Get codebase structure tree |
 | `GET` | `/reports/{id}/codebase/summary` | Get AI-generated codebase summaries |
+| `GET` | `/reports/{id}/file-content/{path}` | Get file content with syntax info |
+| `GET` | `/reports/{id}/file-trends/{path}` | Get finding trends for a file |
+| `GET` | `/reports/{id}/todos` | Scan for TODO/FIXME comments |
+| `GET` | `/reports/{id}/search-code?q={query}` | Full-text search across code |
+| `POST` | `/reports/{id}/explain-code` | AI explanation for code file |
 | `GET` | `/reports/{id}/export/markdown` | Export as Markdown |
 | `GET` | `/reports/{id}/export/pdf` | Export as PDF |
 | `GET` | `/reports/{id}/export/docx` | Export as DOCX |
@@ -1513,6 +1528,41 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ---
 
 ## 📋 Changelog
+
+### December 7, 2025 (Latest)
+
+#### Codebase Map Enhancements
+
+**AI Code Explanation:**
+- New "Explain with AI" button in code preview header (sparkle icon)
+- Uses Google Gemini 2.0 Flash to analyze and explain code files
+- Provides:
+  - Overview of what the file does
+  - Key functions and classes explained
+  - Security concerns highlighted (especially if findings exist)
+  - Code quality observations
+- Results displayed in collapsible panel with markdown rendering
+- Loading state with visual feedback during analysis
+
+**Full-Text Code Search:**
+- Added search mode toggle (File | Code) next to the search input
+- **File mode** (default): Searches file names as before
+- **Code mode**: Searches actual code content across all files
+- Press Enter or click the search icon to execute content search
+- Results show:
+  - File path
+  - Line number
+  - Matching content with search term highlighted
+- Click any result to jump directly to that file and line
+- Up to 100 matches returned per search
+
+**Additional Codebase Map Features (this session):**
+- Copy Code Button - One-click code copying with visual confirmation
+- Heatmap Overlay - Toggle button to visualize finding density on treemap
+- Finding Trends Sparkline - Mini chart showing finding history per file over scans
+- TODO/FIXME Scanner - Detects and displays code comment markers (TODO, FIXME, HACK, XXX, BUG)
+
+---
 
 ### December 7, 2025
 

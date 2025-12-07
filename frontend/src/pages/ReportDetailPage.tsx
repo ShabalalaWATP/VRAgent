@@ -1,5 +1,28 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Treemap, ResponsiveContainer, Tooltip as RechartsTooltip, Sankey, Layer, Rectangle } from "recharts";
+import Prism from "prismjs";
+import "prismjs/themes/prism-tomorrow.css";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-c";
+import "prismjs/components/prism-cpp";
+import "prismjs/components/prism-csharp";
+import "prismjs/components/prism-go";
+import "prismjs/components/prism-rust";
+import "prismjs/components/prism-ruby";
+import "prismjs/components/prism-php";
+import "prismjs/components/prism-swift";
+import "prismjs/components/prism-kotlin";
+import "prismjs/components/prism-sql";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-yaml";
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-markdown";
+import "prismjs/components/prism-css";
+import "prismjs/components/prism-scss";
 import {
   Alert,
   Box,
@@ -37,10 +60,23 @@ import {
   useTheme,
   Theme,
   keyframes,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Snackbar,
 } from "@mui/material";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, AIInsights, AttackChain, ChatMessage, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, ExploitScenario, Finding } from "../api/client";
+import { api, AIInsights, AttackChain, ChatMessage, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, ExploitScenario, Finding, FileContent, DependencyGraph, ScanDiff, FileTrends, TodoScanResult, TodoItem, CodeSearchResult, CodeSearchMatch, CodeExplanation } from "../api/client";
+
+// AI Icon for explanation feature
+const AIIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19,9L20.25,6.25L23,5L20.25,3.75L19,1L17.75,3.75L15,5L17.75,6.25L19,9Z M11.5,9.5L9,4L6.5,9.5L1,12L6.5,14.5L9,20L11.5,14.5L17,12L11.5,9.5Z M19,15L17.75,17.75L15,19L17.75,20.25L19,23L20.25,20.25L23,19L20.25,17.75L19,15Z" />
+  </svg>
+);
 import ReactMarkdown from "react-markdown";
+import { LineChart, Line, ResponsiveContainer as SparklineContainer } from "recharts";
 
 // Animations
 const fadeIn = keyframes`
@@ -148,6 +184,86 @@ const CloseIcon = () => (
     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
   </svg>
 );
+
+const NavigateNextIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+  </svg>
+);
+
+const HomeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+  </svg>
+);
+
+const JumpIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z" />
+  </svg>
+);
+
+// Copy icon for code preview
+const CopyIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+  </svg>
+);
+
+// Check icon for copy confirmation
+const CheckIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+  </svg>
+);
+
+// Prism language mapping
+const getPrismLanguage = (language: string): string => {
+  const mapping: Record<string, string> = {
+    python: "python",
+    javascript: "javascript",
+    javascriptreact: "javascript",
+    typescript: "typescript",
+    typescriptreact: "typescript",
+    java: "java",
+    c: "c",
+    cpp: "cpp",
+    csharp: "csharp",
+    go: "go",
+    rust: "rust",
+    ruby: "ruby",
+    php: "php",
+    swift: "swift",
+    kotlin: "kotlin",
+    sql: "sql",
+    shell: "bash",
+    bash: "bash",
+    yaml: "yaml",
+    yml: "yaml",
+    json: "json",
+    jsonc: "json",
+    markdown: "markdown",
+    md: "markdown",
+    css: "css",
+    scss: "scss",
+    html: "markup",
+    xml: "markup",
+  };
+  return mapping[language?.toLowerCase()] || "clike";
+};
+
+// Syntax highlight code
+const highlightCode = (code: string, language: string): string => {
+  try {
+    const prismLang = getPrismLanguage(language);
+    if (Prism.languages[prismLang]) {
+      return Prism.highlight(code, Prism.languages[prismLang], prismLang);
+    }
+  } catch (e) {
+    // Fallback to plain text
+  }
+  return code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+};
 
 const ChatIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -396,12 +512,15 @@ function CodeSnippetView({ reportId, finding }: CodeSnippetViewProps) {
   );
 }
 
-// Language color mapping
+// Language color mapping (comprehensive)
 const getLanguageColor = (language: string | undefined, theme: Theme) => {
   const colors: Record<string, string> = {
+    // Programming languages
     python: "#3572A5",
     javascript: "#f1e05a",
+    javascriptreact: "#f1e05a",
     typescript: "#3178c6",
+    typescriptreact: "#3178c6",
     java: "#b07219",
     go: "#00ADD8",
     rust: "#dea584",
@@ -413,16 +532,144 @@ const getLanguageColor = (language: string | undefined, theme: Theme) => {
     swift: "#ffac45",
     kotlin: "#A97BFF",
     scala: "#c22d40",
+    groovy: "#4298b8",
+    perl: "#0298c3",
+    lua: "#000080",
+    r: "#198CE7",
+    elixir: "#6e4a7e",
+    erlang: "#B83998",
+    haskell: "#5e5086",
+    clojure: "#db5855",
+    "objective-c": "#438eff",
+    
+    // Web/Markup
     html: "#e34c26",
     css: "#563d7c",
+    scss: "#c6538c",
+    sass: "#a53b70",
+    less: "#1d365d",
+    vue: "#41b883",
+    svelte: "#ff3e00",
+    
+    // Data/Config
     json: "#292929",
+    jsonc: "#292929",
     yaml: "#cb171e",
+    xml: "#0060ac",
+    toml: "#9c4221",
+    ini: "#d1dbe0",
+    
+    // Documentation
     markdown: "#083fa1",
+    restructuredtext: "#141414",
+    plaintext: "#888888",
+    
+    // Database
     sql: "#e38c00",
+    
+    // Shell/Scripts
     shell: "#89e051",
+    powershell: "#012456",
+    batch: "#C1F12E",
+    
+    // DevOps/Build
     dockerfile: "#384d54",
+    terraform: "#7B42BC",
+    bicep: "#0078D4",
+    makefile: "#427819",
+    cmake: "#064F8C",
+    
+    // GraphQL/API
+    graphql: "#e10098",
+    protobuf: "#4285F4",
+    
+    // Images (for display reference)
+    image: "#888888",
+    svg: "#FFB13B",
+    
+    // Special
+    env: "#ECD53F",
+    gitignore: "#F05032",
+    lockfile: "#6c757d",
+    unknown: "#808080",
   };
-  return colors[language?.toLowerCase() || ""] || theme.palette.grey[500];
+  const lang = language?.toLowerCase() || "";
+  return colors[lang] || theme.palette.grey[500];
+};
+
+// Detect language from file extension (fallback for old scans)
+const detectLanguageFromPath = (filePath: string): string => {
+  const ext = filePath.split(".").pop()?.toLowerCase() || "";
+  const filename = filePath.split("/").pop()?.toLowerCase() || "";
+  
+  // Special filenames first
+  const specialFiles: Record<string, string> = {
+    "dockerfile": "dockerfile",
+    "makefile": "makefile",
+    "gemfile": "ruby",
+    "rakefile": "ruby",
+    "podfile": "ruby",
+    "vagrantfile": "ruby",
+    "jenkinsfile": "groovy",
+    "cmakelists.txt": "cmake",
+    ".gitignore": "gitignore",
+    ".dockerignore": "dockerfile",
+    ".env": "env",
+    ".env.local": "env",
+    ".env.example": "env",
+  };
+  
+  if (specialFiles[filename]) return specialFiles[filename];
+  
+  // Extension mapping
+  const extMap: Record<string, string> = {
+    // Web
+    "php": "php", "phtml": "php", "php3": "php", "php4": "php", "php5": "php",
+    "js": "javascript", "mjs": "javascript", "cjs": "javascript", "jsx": "javascript",
+    "ts": "typescript", "tsx": "typescript", "mts": "typescript", "cts": "typescript",
+    "html": "html", "htm": "html", "xhtml": "html",
+    "css": "css", "scss": "scss", "sass": "sass", "less": "less",
+    "vue": "vue", "svelte": "svelte",
+    
+    // Backend
+    "py": "python", "pyw": "python", "pyx": "python",
+    "java": "java", "kt": "kotlin", "kts": "kotlin",
+    "go": "go", "rs": "rust", "rb": "ruby", "erb": "ruby",
+    "cs": "csharp", "fs": "fsharp", "vb": "vb",
+    "swift": "swift", "m": "objective-c", "mm": "objective-c",
+    "c": "c", "h": "c", "cpp": "cpp", "cc": "cpp", "cxx": "cpp", "hpp": "cpp",
+    "scala": "scala", "clj": "clojure", "ex": "elixir", "exs": "elixir",
+    "lua": "lua", "pl": "perl", "pm": "perl", "r": "r",
+    "dart": "dart", "zig": "zig", "nim": "nim", "v": "v",
+    
+    // Config/Data
+    "json": "json", "yaml": "yaml", "yml": "yaml", "toml": "toml",
+    "xml": "xml", "csv": "csv", "ini": "ini", "conf": "config",
+    "md": "markdown", "rst": "restructuredtext", "txt": "text",
+    
+    // Shell/Scripts
+    "sh": "shell", "bash": "shell", "zsh": "shell", "fish": "shell",
+    "ps1": "powershell", "psm1": "powershell", "bat": "batch", "cmd": "batch",
+    
+    // DevOps/IaC
+    "tf": "terraform", "hcl": "terraform",
+    "sql": "sql", "graphql": "graphql", "gql": "graphql",
+    "proto": "protobuf",
+    
+    // Other
+    "asm": "assembly", "s": "assembly",
+    "lock": "lockfile",
+  };
+  
+  return extMap[ext] || "unknown";
+};
+
+// Get effective language (use detected if stored is unknown)
+const getEffectiveLanguage = (file: { path: string; language?: string }): string => {
+  if (file.language && file.language.toLowerCase() !== "unknown") {
+    return file.language;
+  }
+  return detectLanguageFromPath(file.path);
 };
 
 // File metadata dialog
@@ -498,11 +745,11 @@ function FileMetadataDialog({ file, open, onClose }: FileMetadataDialogProps) {
             Language
           </Typography>
           <Chip 
-            label={file.language || "Unknown"} 
+            label={getEffectiveLanguage(file)} 
             size="small"
             sx={{ 
-              bgcolor: alpha(getLanguageColor(file.language, theme), 0.15),
-              color: getLanguageColor(file.language, theme),
+              bgcolor: alpha(getLanguageColor(getEffectiveLanguage(file), theme), 0.15),
+              color: getLanguageColor(getEffectiveLanguage(file), theme),
               fontWeight: 600,
             }}
           />
@@ -558,12 +805,15 @@ interface TreeNodeProps {
   onToggleFolder: (path: string) => void;
   onShowMetadata: (file: CodebaseFile) => void;
   searchQuery?: string;
+  onFileClick?: (file: CodebaseFile) => void;
+  selectedPath?: string | null;
 }
 
-function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata, searchQuery = "" }: TreeNodeProps) {
+function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata, searchQuery = "", onFileClick, selectedPath }: TreeNodeProps) {
   const theme = useTheme();
   const isFolder = node.type === "folder";
   const isExpanded = isFolder && expandedFolders.has(node.path);
+  const isSelected = !isFolder && selectedPath === node.path;
   
   // Highlight matching text
   const highlightMatch = (text: string) => {
@@ -592,6 +842,14 @@ function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata
 
   const badge = getFindingsBadge(node.findings);
 
+  const handleClick = () => {
+    if (isFolder) {
+      onToggleFolder(node.path);
+    } else if (onFileClick) {
+      onFileClick(node as CodebaseFile);
+    }
+  };
+
   return (
     <Box>
       <Box
@@ -601,14 +859,16 @@ function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata
           py: 0.5,
           px: 1,
           pl: depth * 2 + 1,
-          cursor: isFolder ? "pointer" : "default",
+          cursor: isFolder || onFileClick ? "pointer" : "default",
           borderRadius: 1,
           transition: "all 0.15s ease",
+          bgcolor: isSelected ? alpha(theme.palette.primary.main, 0.1) : "transparent",
+          borderLeft: isSelected ? `3px solid ${theme.palette.primary.main}` : "3px solid transparent",
           "&:hover": {
             bgcolor: alpha(theme.palette.primary.main, 0.05),
           },
         }}
-        onClick={() => isFolder && onToggleFolder(node.path)}
+        onClick={handleClick}
       >
         {isFolder && (
           <Box sx={{ mr: 0.5, display: "flex", alignItems: "center", color: "text.secondary" }}>
@@ -632,7 +892,7 @@ function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata
           component="div"
           sx={{ 
             fontFamily: "monospace",
-            fontSize: "0.8rem",
+            fontSize: "0.95rem",
             flex: 1,
             fontWeight: isFolder ? 600 : 400,
           }}
@@ -694,6 +954,8 @@ function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata
                 onToggleFolder={onToggleFolder}
                 onShowMetadata={onShowMetadata}
                 searchQuery={searchQuery}
+                onFileClick={onFileClick}
+                selectedPath={selectedPath}
               />
             ))}
           </Box>
@@ -706,12 +968,17 @@ function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata
 // Codebase Map View component
 interface CodebaseMapViewProps {
   reportId: number;
+  projectId: number;
+  availableReports?: { id: number; created_at: string }[];
 }
 
 // Severity filter type
 type SeverityFilter = "all" | "critical" | "high" | "medium" | "low";
 
-function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
+// View mode type - expanded with new views
+type ViewMode = "tree" | "treemap" | "dependencies" | "diff" | "todos";
+
+function CodebaseMapView({ reportId, projectId, availableReports = [] }: CodebaseMapViewProps) {
   const theme = useTheme();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<CodebaseFile | null>(null);
@@ -722,11 +989,88 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [selectedLanguages, setSelectedLanguages] = useState<Set<string>>(new Set());
   const [showStats, setShowStats] = useState(true);
+  
+  // View mode state
+  const [viewMode, setViewMode] = useState<ViewMode>("tree");
+  
+  // Code preview state
+  const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [showCodePreview, setShowCodePreview] = useState(true);
+  
+  // Search dropdown state (Feature 2)
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  
+  // Jump to finding ref (Feature 4)
+  const codePreviewRef = useRef<HTMLDivElement>(null);
+  const [highlightedFindingLine, setHighlightedFindingLine] = useState<number | null>(null);
+  
+  // Diff view state (Feature 5)
+  const [compareReportId, setCompareReportId] = useState<number | null>(null);
+  
+  // Copy code state
+  const [codeCopied, setCodeCopied] = useState(false);
+  
+  // Heatmap mode state
+  const [heatmapMode, setHeatmapMode] = useState(false);
+  
+  // Content search state
+  const [contentSearchQuery, setContentSearchQuery] = useState("");
+  const [contentSearchResults, setContentSearchResults] = useState<CodeSearchResult | null>(null);
+  const [isSearchingContent, setIsSearchingContent] = useState(false);
+  const [searchMode, setSearchMode] = useState<"filename" | "content">("filename");
+  
+  // AI Explanation state
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [explanation, setExplanation] = useState<CodeExplanation | null>(null);
+  const [isExplaining, setIsExplaining] = useState(false);
+  
+  // Filter to only reports older than current one for comparison
+  const comparableReports = useMemo(() => {
+    return availableReports.filter(r => r.id !== reportId).sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [availableReports, reportId]);
 
   const codebaseQuery = useQuery({
     queryKey: ["codebase", reportId],
     queryFn: () => api.getCodebaseStructure(reportId),
     enabled: !!reportId,
+  });
+
+  // Query for file content preview
+  const fileContentQuery = useQuery({
+    queryKey: ["fileContent", reportId, previewFile],
+    queryFn: () => api.getFileContent(reportId, previewFile!),
+    enabled: !!reportId && !!previewFile,
+  });
+
+  // Query for dependencies
+  const dependenciesQuery = useQuery({
+    queryKey: ["dependencies", reportId],
+    queryFn: () => api.getDependencies(reportId),
+    enabled: !!reportId && viewMode === "dependencies",
+  });
+  
+  // Query for scan diff (Feature 5)
+  const diffQuery = useQuery({
+    queryKey: ["scanDiff", reportId, compareReportId],
+    queryFn: () => api.getScanDiff(reportId, compareReportId!),
+    enabled: !!reportId && !!compareReportId && viewMode === "diff",
+  });
+  
+  // Query for TODOs (Feature: TODO/FIXME Scanner)
+  const todosQuery = useQuery({
+    queryKey: ["todos", reportId],
+    queryFn: () => api.getTodos(reportId),
+    enabled: !!reportId && viewMode === "todos",
+  });
+  
+  // Query for file trends (Feature: Finding Trends Sparkline)
+  const fileTrendsQuery = useQuery({
+    queryKey: ["fileTrends", reportId, previewFile],
+    queryFn: () => api.getFileTrends(reportId, previewFile!),
+    enabled: !!reportId && !!previewFile,
   });
 
   // Collect all files for filtering
@@ -750,7 +1094,7 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
   const languageStats = useMemo(() => {
     const stats: Record<string, { files: number; lines: number; findings: number }> = {};
     for (const file of allFiles) {
-      const lang = file.language || "Unknown";
+      const lang = getEffectiveLanguage(file);
       if (!stats[lang]) {
         stats[lang] = { files: 0, lines: 0, findings: 0 };
       }
@@ -773,6 +1117,137 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
     return false;
   }, [searchQuery]);
 
+  // Search results for dropdown (Feature 2)
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim() || searchQuery.length < 2) return [];
+    const query = searchQuery.toLowerCase();
+    return allFiles
+      .filter(file => 
+        file.name.toLowerCase().includes(query) || 
+        file.path.toLowerCase().includes(query)
+      )
+      .slice(0, 8) // Limit to 8 results
+      .map(file => ({
+        ...file,
+        matchType: file.name.toLowerCase().includes(query) ? "name" : "path",
+      }));
+  }, [allFiles, searchQuery]);
+
+  // Breadcrumb path parts (Feature 1)
+  const breadcrumbParts = useMemo(() => {
+    if (!previewFile) return [];
+    const parts = previewFile.split("/").filter(Boolean);
+    return parts.map((part, idx) => ({
+      name: part,
+      path: parts.slice(0, idx + 1).join("/"),
+      isLast: idx === parts.length - 1,
+    }));
+  }, [previewFile]);
+
+  // Handle breadcrumb navigation
+  const handleBreadcrumbClick = (path: string) => {
+    // Expand the folder and scroll to it
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      next.add(path);
+      return next;
+    });
+  };
+
+  // Handle search result click (Feature 2)
+  const handleSearchResultClick = (file: CodebaseFile) => {
+    setPreviewFile(file.path);
+    setSearchFocused(false);
+    // Expand parent folders
+    const parts = file.path.split("/");
+    const foldersToExpand = new Set<string>();
+    for (let i = 1; i < parts.length; i++) {
+      foldersToExpand.add(parts.slice(0, i).join("/"));
+    }
+    setExpandedFolders(prev => new Set([...prev, ...foldersToExpand]));
+  };
+
+  // Jump to finding line (Feature 4)
+  const handleJumpToFinding = (lineNum: number) => {
+    setHighlightedFindingLine(lineNum);
+    // Scroll to the line
+    setTimeout(() => {
+      const lineElement = document.getElementById(`code-line-${lineNum}`);
+      if (lineElement && codePreviewRef.current) {
+        lineElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
+    // Clear highlight after animation
+    setTimeout(() => setHighlightedFindingLine(null), 2000);
+  };
+  
+  // Copy code to clipboard (Feature: Copy Button)
+  const handleCopyCode = useCallback(async () => {
+    if (!fileContentQuery.data) return;
+    
+    const allCode = fileContentQuery.data.chunks
+      .map(chunk => chunk.code)
+      .join("\n\n// ... (chunk break) ...\n\n");
+    
+    try {
+      await navigator.clipboard.writeText(allCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy code:", err);
+    }
+  }, [fileContentQuery.data]);
+  
+  // Content search handler
+  const handleContentSearch = useCallback(async () => {
+    const query = contentSearchQuery.trim();
+    if (query.length < 2) {
+      setContentSearchResults(null);
+      return;
+    }
+    
+    setIsSearchingContent(true);
+    try {
+      const result = await api.searchCode(reportId, query);
+      setContentSearchResults(result);
+    } catch (err) {
+      console.error("Content search failed:", err);
+      setContentSearchResults(null);
+    } finally {
+      setIsSearchingContent(false);
+    }
+  }, [reportId, contentSearchQuery]);
+  
+  // AI Explanation handler
+  const handleExplainCode = useCallback(async () => {
+    if (!fileContentQuery.data || !previewFile || isExplaining) return;
+    
+    setIsExplaining(true);
+    setShowExplanation(true);
+    setExplanation(null);
+    
+    try {
+      const allCode = fileContentQuery.data.chunks.map(c => c.code).join("\n");
+      const result = await api.explainCode(
+        reportId,
+        previewFile,
+        allCode,
+        fileContentQuery.data.language || undefined
+      );
+      setExplanation(result);
+    } catch (err) {
+      console.error("Explain code failed:", err);
+      setExplanation({ 
+        file_path: previewFile, 
+        explanation: "Failed to generate explanation. Please try again.", 
+        findings_count: 0,
+        error: "Request failed" 
+      });
+    } finally {
+      setIsExplaining(false);
+    }
+  }, [reportId, previewFile, fileContentQuery.data, isExplaining]);
+
   // Severity filter
   const matchesSeverity = useCallback((node: CodebaseNode): boolean => {
     if (severityFilter === "all") return true;
@@ -793,7 +1268,7 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
       // Folder matches if any child matches
       return (node as CodebaseFolder).children.some(child => matchesLanguage(child));
     }
-    return selectedLanguages.has((node as CodebaseFile).language || "Unknown");
+    return selectedLanguages.has(getEffectiveLanguage(node as CodebaseFile));
   }, [selectedLanguages]);
 
   // Filter tree recursively
@@ -829,6 +1304,259 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
     if (!codebaseQuery.data) return [];
     return filterTree(codebaseQuery.data.tree);
   }, [codebaseQuery.data, filterTree]);
+
+  // Treemap data structure for interactive visualization
+  const treemapData = useMemo(() => {
+    if (!codebaseQuery.data) return [];
+    
+    // Build treemap from filtered files
+    const buildTreemapNode = (nodes: CodebaseNode[]): any[] => {
+      return nodes.map(node => {
+        if (node.type === "folder") {
+          const folder = node as CodebaseFolder;
+          const children = buildTreemapNode(folder.children);
+          // Only include folder if it has children
+          if (children.length === 0) return null;
+          return {
+            name: folder.name,
+            path: folder.path,
+            children,
+          };
+        }
+        // File node
+        const file = node as CodebaseFile;
+        // Apply filters
+        if (!matchesSearch(file) || !matchesSeverity(file) || !matchesLanguage(file)) {
+          return null;
+        }
+        const severity = file.findings.critical > 0 ? "critical"
+          : file.findings.high > 0 ? "high"
+          : file.findings.medium > 0 ? "medium"
+          : file.findings.low > 0 ? "low"
+          : "none";
+        return {
+          name: file.name,
+          path: file.path,
+          size: Math.max(file.lines || 1, 10), // Min size for visibility
+          language: getEffectiveLanguage(file),
+          lines: file.lines || 0,
+          findings: file.findings.total,
+          severity,
+          file, // Keep reference for click handling
+        };
+      }).filter(Boolean);
+    };
+    
+    // Flatten to group by language for a cleaner treemap
+    const byLanguage: Record<string, any[]> = {};
+    const collectByLanguage = (nodes: any[]) => {
+      for (const node of nodes) {
+        if (node.children) {
+          collectByLanguage(node.children);
+        } else {
+          const lang = node.language;
+          if (!byLanguage[lang]) byLanguage[lang] = [];
+          byLanguage[lang].push(node);
+        }
+      }
+    };
+    collectByLanguage(buildTreemapNode(codebaseQuery.data.tree));
+    
+    return Object.entries(byLanguage)
+      .map(([language, files]) => ({
+        name: language,
+        children: files,
+      }))
+      .filter(group => group.children.length > 0)
+      .sort((a, b) => b.children.length - a.children.length);
+  }, [codebaseQuery.data, matchesSearch, matchesSeverity, matchesLanguage]);
+
+  // Custom treemap content
+  const TreemapContent = (props: any) => {
+    const { x, y, width, height, name, language, severity, findings, depth } = props;
+    
+    if (depth === 1) {
+      // Language group header
+      return (
+        <g>
+          <rect
+            x={x}
+            y={y}
+            width={width}
+            height={height}
+            fill={alpha(getLanguageColor(name, theme), 0.2)}
+            stroke={getLanguageColor(name, theme)}
+            strokeWidth={2}
+          />
+          {width > 50 && height > 20 && (
+            <>
+              {/* Text shadow for readability */}
+              <text
+                x={x + 8}
+                y={y + 18}
+                fill={theme.palette.mode === "dark" ? "#000" : "#fff"}
+                fontSize={14}
+                fontWeight={700}
+                fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+                dominantBaseline="middle"
+                stroke={theme.palette.mode === "dark" ? "#000" : "#fff"}
+                strokeWidth={3}
+                paintOrder="stroke"
+              >
+                {name}
+              </text>
+              <text
+                x={x + 8}
+                y={y + 18}
+                fill={getLanguageColor(name, theme)}
+                fontSize={14}
+                fontWeight={700}
+                fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+                dominantBaseline="middle"
+              >
+                {name}
+              </text>
+            </>
+          )}
+        </g>
+      );
+    }
+    
+    // File cell
+    const getSeverityColor = () => {
+      switch (severity) {
+        case "critical": return theme.palette.error.main;
+        case "high": return "#f97316";
+        case "medium": return theme.palette.warning.main;
+        case "low": return theme.palette.info.main;
+        default: return getLanguageColor(language, theme);
+      }
+    };
+    
+    // Heatmap mode: color based on finding density
+    const getHeatmapColor = () => {
+      if (findings === 0) return alpha(theme.palette.success.main, 0.3);
+      if (findings === 1) return alpha(theme.palette.warning.light, 0.5);
+      if (findings <= 3) return alpha(theme.palette.warning.main, 0.6);
+      if (findings <= 5) return alpha("#f97316", 0.7);
+      return alpha(theme.palette.error.main, 0.8);
+    };
+    
+    const fillColor = heatmapMode
+      ? getHeatmapColor()
+      : (severity !== "none" 
+        ? alpha(getSeverityColor(), 0.6) 
+        : alpha(getLanguageColor(language, theme), 0.4));
+    
+    // Determine text color for best contrast
+    const textColor = theme.palette.mode === "dark" ? "#fff" : "#000";
+    const textShadowColor = theme.palette.mode === "dark" ? "#000" : "#fff";
+    
+    return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          fill={fillColor}
+          stroke={alpha(theme.palette.background.paper, 0.8)}
+          strokeWidth={1}
+          style={{ cursor: "pointer" }}
+        />
+        {width > 45 && height > 22 && (
+          <>
+            {/* Text shadow for readability */}
+            <text
+              x={x + 5}
+              y={y + 14}
+              fill={textShadowColor}
+              fontSize={12}
+              fontWeight={600}
+              fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+              dominantBaseline="middle"
+              stroke={textShadowColor}
+              strokeWidth={3}
+              paintOrder="stroke"
+            >
+              {name.length > Math.floor(width / 7) ? name.slice(0, Math.floor(width / 7)) + "…" : name}
+            </text>
+            <text
+              x={x + 5}
+              y={y + 14}
+              fill={textColor}
+              fontSize={12}
+              fontWeight={600}
+              fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+              dominantBaseline="middle"
+            >
+              {name.length > Math.floor(width / 7) ? name.slice(0, Math.floor(width / 7)) + "…" : name}
+            </text>
+          </>
+        )}
+        {findings > 0 && width > 35 && height > 35 && (
+          <>
+            <text
+              x={x + 5}
+              y={y + 28}
+              fill={textShadowColor}
+              fontSize={11}
+              fontWeight={700}
+              fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+              dominantBaseline="middle"
+              stroke={textShadowColor}
+              strokeWidth={3}
+              paintOrder="stroke"
+            >
+              {findings} issues
+            </text>
+            <text
+              x={x + 5}
+              y={y + 28}
+              fill={getSeverityColor()}
+              fontSize={11}
+              fontWeight={700}
+              fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+              dominantBaseline="middle"
+            >
+              {findings} issues
+            </text>
+          </>
+        )}
+      </g>
+    );
+  };
+
+  // Treemap tooltip
+  const TreemapTooltipContent = ({ active, payload }: any) => {
+    if (!active || !payload || !payload.length) return null;
+    const data = payload[0].payload;
+    if (!data.language) return null; // Skip language group tooltips
+    
+    return (
+      <Paper sx={{ p: 1.5, maxWidth: 300 }}>
+        <Typography variant="body2" fontWeight={700} fontFamily="monospace" sx={{ mb: 0.5 }}>
+          {data.name}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" display="block">
+          {data.path}
+        </Typography>
+        <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="caption">
+            <strong>{data.lines?.toLocaleString()}</strong> lines
+          </Typography>
+          <Typography variant="caption">
+            <strong>{data.language}</strong>
+          </Typography>
+          {data.findings > 0 && (
+            <Typography variant="caption" color="error">
+              <strong>{data.findings}</strong> findings
+            </Typography>
+          )}
+        </Stack>
+      </Paper>
+    );
+  };
 
   // Auto-expand folders when searching
   useEffect(() => {
@@ -1105,34 +1833,273 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
         }}
       >
         <Grid container spacing={2} alignItems="center">
-          {/* Fuzzy File Search (Quick Win #1) */}
+          {/* Fuzzy File Search with Dropdown (Feature 2) */}
           <Grid item xs={12} md={5}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Search files... (e.g., auth, .py, service)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-                endAdornment: searchQuery && (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setSearchQuery("")}>
-                      <ClearIcon />
+            <Box ref={searchRef} sx={{ position: "relative" }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                {/* Search Mode Toggle */}
+                <ToggleButtonGroup
+                  value={searchMode}
+                  exclusive
+                  onChange={(_, value) => value && setSearchMode(value)}
+                  size="small"
+                  sx={{ flexShrink: 0 }}
+                >
+                  <ToggleButton value="filename" sx={{ px: 1, py: 0.5, fontSize: "0.7rem" }}>
+                    <Tooltip title="Search file names">
+                      <span>File</span>
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="content" sx={{ px: 1, py: 0.5, fontSize: "0.7rem" }}>
+                    <Tooltip title="Search code content">
+                      <span>Code</span>
+                    </Tooltip>
+                  </ToggleButton>
+                </ToggleButtonGroup>
+                
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder={searchMode === "filename" ? "Search files... (e.g., auth, .py, service)" : "Search code... (e.g., password, API_KEY, def main)"}
+                  value={searchMode === "filename" ? searchQuery : contentSearchQuery}
+                  onChange={(e) => {
+                    if (searchMode === "filename") {
+                      setSearchQuery(e.target.value);
+                    } else {
+                      setContentSearchQuery(e.target.value);
+                    }
+                  }}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && searchMode === "content" && contentSearchQuery.trim()) {
+                      handleContentSearch();
+                    }
+                  }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        {(searchMode === "filename" ? searchQuery : contentSearchQuery) && (
+                          <IconButton 
+                            size="small" 
+                            onClick={() => {
+                              if (searchMode === "filename") {
+                                setSearchQuery("");
+                              } else {
+                                setContentSearchQuery("");
+                                setContentSearchResults(null);
+                              }
+                            }}
+                          >
+                            <ClearIcon />
+                          </IconButton>
+                        )}
+                        {searchMode === "content" && contentSearchQuery.trim() && (
+                          <IconButton 
+                            size="small" 
+                            onClick={handleContentSearch}
+                            disabled={isSearchingContent}
+                            sx={{ color: "primary.main" }}
+                          >
+                            {isSearchingContent ? <CircularProgress size={16} /> : <SearchIcon />}
+                          </IconButton>
+                        )}
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: theme.palette.background.paper,
+                    },
+                  }}
+                />
+              </Stack>
+              
+              {/* Filename Search Results Dropdown (Feature 2) */}
+              {searchMode === "filename" && searchFocused && searchResults.length > 0 && (
+                <Paper
+                  sx={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    mt: 0.5,
+                    maxHeight: 320,
+                    overflow: "auto",
+                    border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                    boxShadow: theme.shadows[8],
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary" sx={{ p: 1, display: "block", borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+                    {searchResults.length} file{searchResults.length !== 1 ? "s" : ""} found
+                  </Typography>
+                  {searchResults.map((file) => (
+                    <Box
+                      key={file.path}
+                      onClick={() => handleSearchResultClick(file)}
+                      sx={{
+                        p: 1.5,
+                        cursor: "pointer",
+                        borderBottom: `1px solid ${alpha(theme.palette.divider, 0.05)}`,
+                        "&:hover": {
+                          bgcolor: alpha(theme.palette.primary.main, 0.08),
+                        },
+                        "&:last-child": {
+                          borderBottom: "none",
+                        },
+                      }}
+                    >
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <FileIcon />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={600} noWrap>
+                            {file.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                            {file.path}
+                          </Typography>
+                        </Box>
+                        <Chip
+                          size="small"
+                          label={getEffectiveLanguage(file)}
+                          sx={{
+                            height: 20,
+                            fontSize: "0.65rem",
+                            bgcolor: alpha(getLanguageColor(getEffectiveLanguage(file), theme), 0.15),
+                            color: getLanguageColor(getEffectiveLanguage(file), theme),
+                          }}
+                        />
+                        {file.findings.total > 0 && (
+                          <Chip
+                            size="small"
+                            label={`${file.findings.total}`}
+                            sx={{
+                              height: 20,
+                              fontSize: "0.65rem",
+                              bgcolor: alpha(theme.palette.error.main, 0.15),
+                              color: theme.palette.error.main,
+                            }}
+                          />
+                        )}
+                      </Stack>
+                    </Box>
+                  ))}
+                </Paper>
+              )}
+              
+              {/* Content Search Results Dropdown */}
+              {searchMode === "content" && contentSearchResults && (
+                <Paper
+                  sx={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    mt: 0.5,
+                    maxHeight: 400,
+                    overflow: "auto",
+                    border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                    boxShadow: theme.shadows[8],
+                  }}
+                >
+                  <Stack 
+                    direction="row" 
+                    justifyContent="space-between" 
+                    alignItems="center"
+                    sx={{ 
+                      p: 1, 
+                      borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                      bgcolor: alpha(theme.palette.primary.main, 0.05),
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {contentSearchResults.total} match{contentSearchResults.total !== 1 ? "es" : ""} in {new Set(contentSearchResults.results.map(r => r.file_path)).size} file{new Set(contentSearchResults.results.map(r => r.file_path)).size !== 1 ? "s" : ""}
+                    </Typography>
+                    <IconButton size="small" onClick={() => setContentSearchResults(null)}>
+                      <Box sx={{ fontSize: 16, display: "flex" }}><ClearIcon /></Box>
                     </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  bgcolor: theme.palette.background.paper,
-                },
-              }}
-            />
+                  </Stack>
+                  {contentSearchResults.results.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
+                      No matches found for "{contentSearchResults.query}"
+                    </Typography>
+                  ) : (
+                    contentSearchResults.results.map((match: CodeSearchMatch, index: number) => (
+                      <Box
+                        key={`${match.file_path}-${match.line}-${index}`}
+                        onClick={() => {
+                          // Navigate to file and line
+                          const matchingFile = allFiles.find((f: CodebaseFile) => f.path === match.file_path);
+                          if (matchingFile) {
+                            setPreviewFile(matchingFile.path);
+                            setTimeout(() => handleJumpToFinding(match.line), 300);
+                          }
+                          setContentSearchResults(null);
+                        }}
+                        sx={{
+                          p: 1.5,
+                          cursor: "pointer",
+                          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.05)}`,
+                          "&:hover": {
+                            bgcolor: alpha(theme.palette.primary.main, 0.08),
+                          },
+                          "&:last-child": {
+                            borderBottom: "none",
+                          },
+                        }}
+                      >
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                          <FileIcon />
+                          <Typography variant="caption" fontWeight={600} noWrap sx={{ flex: 1 }}>
+                            {match.file_path}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={`L${match.line}`}
+                            sx={{
+                              height: 18,
+                              fontSize: "0.6rem",
+                              bgcolor: alpha(theme.palette.info.main, 0.15),
+                              color: theme.palette.info.main,
+                            }}
+                          />
+                        </Stack>
+                        <Box
+                          sx={{
+                            p: 1,
+                            bgcolor: alpha(theme.palette.background.default, 0.5),
+                            borderRadius: 1,
+                            fontFamily: "monospace",
+                            fontSize: "0.75rem",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-all",
+                            "& mark": {
+                              bgcolor: alpha(theme.palette.warning.main, 0.4),
+                              color: "inherit",
+                              borderRadius: "2px",
+                              px: 0.25,
+                            },
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html: match.content.replace(
+                              new RegExp(`(${contentSearchResults.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
+                              '<mark>$1</mark>'
+                            ),
+                          }}
+                        />
+                      </Box>
+                    ))
+                  )}
+                </Paper>
+              )}
+            </Box>
           </Grid>
 
           {/* Severity Filter (Quick Win #2) */}
@@ -1255,54 +2222,1209 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
         )}
       </Paper>
 
-      {/* Tree Controls */}
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-        <Button size="small" variant="outlined" onClick={handleExpandAll}>
-          Expand All
-        </Button>
-        <Button size="small" variant="outlined" onClick={handleCollapseAll}>
-          Collapse All
-        </Button>
+      {/* View Mode & Tree Controls */}
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" justifyContent="space-between">
+        <Stack direction="row" spacing={1} alignItems="center">
+          {viewMode === "tree" && (
+            <>
+              <Button size="small" variant="outlined" onClick={handleExpandAll}>
+                Expand All
+              </Button>
+              <Button size="small" variant="outlined" onClick={handleCollapseAll}>
+                Collapse All
+              </Button>
+              {showCodePreview && (
+                <Button 
+                  size="small" 
+                  variant="contained"
+                  onClick={() => setShowCodePreview(false)}
+                  sx={{ ml: 1 }}
+                >
+                  Hide Code Preview
+                </Button>
+              )}
+            </>
+          )}
+        </Stack>
+        <ToggleButtonGroup
+          value={viewMode}
+          exclusive
+          onChange={(_, value) => value && setViewMode(value)}
+          size="small"
+        >
+          <ToggleButton value="tree" sx={{ px: 2, py: 0.5 }}>
+            🌲 Tree
+          </ToggleButton>
+          <ToggleButton value="treemap" sx={{ px: 2, py: 0.5 }}>
+            📊 Treemap
+          </ToggleButton>
+          <ToggleButton value="dependencies" sx={{ px: 2, py: 0.5 }}>
+            🔗 Dependencies
+          </ToggleButton>
+          <ToggleButton 
+            value="diff" 
+            sx={{ px: 2, py: 0.5 }}
+            disabled={comparableReports.length === 0}
+          >
+            📈 Diff {comparableReports.length > 0 && `(${comparableReports.length})`}
+          </ToggleButton>
+          <ToggleButton value="todos" sx={{ px: 2, py: 0.5 }}>
+            📝 TODOs
+          </ToggleButton>
+        </ToggleButtonGroup>
+        
+        {/* Heatmap Toggle for Treemap */}
+        {viewMode === "treemap" && (
+          <Tooltip title="Toggle heatmap mode - shows finding density">
+            <Button
+              size="small"
+              variant={heatmapMode ? "contained" : "outlined"}
+              onClick={() => setHeatmapMode(!heatmapMode)}
+              sx={{ 
+                textTransform: "none", 
+                minWidth: "auto",
+                bgcolor: heatmapMode ? alpha(theme.palette.error.main, 0.8) : undefined,
+                "&:hover": {
+                  bgcolor: heatmapMode ? theme.palette.error.main : undefined,
+                },
+              }}
+            >
+              🔥 Heatmap
+            </Button>
+          </Tooltip>
+        )}
       </Stack>
 
-      {/* File Tree */}
-      <Paper
-        sx={{
-          p: 2,
-          bgcolor: alpha(theme.palette.background.paper, 0.5),
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          borderRadius: 2,
-          maxHeight: 500,
-          overflow: "auto",
-        }}
-      >
-        {filteredTree.length === 0 ? (
-          <Box sx={{ p: 3, textAlign: "center" }}>
-            <Typography color="text.secondary">
-              No files match the current filters.
-            </Typography>
-            <Button 
-              size="small" 
-              onClick={handleClearFilters}
-              sx={{ mt: 1, textTransform: "none" }}
+      {/* File Tree View with Optional Code Preview */}
+      {viewMode === "tree" && (
+        <Stack spacing={2}>
+          {/* File Tree */}
+          <Paper
+            sx={{
+              p: 2,
+              bgcolor: alpha(theme.palette.background.paper, 0.5),
+              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              borderRadius: 2,
+              maxHeight: showCodePreview ? 350 : 600,
+              overflow: "auto",
+            }}
+          >
+            {filteredTree.length === 0 ? (
+              <Box sx={{ p: 3, textAlign: "center" }}>
+                <Typography color="text.secondary">
+                  No files match the current filters.
+                </Typography>
+                <Button 
+                  size="small" 
+                  onClick={handleClearFilters}
+                  sx={{ mt: 1, textTransform: "none" }}
+                >
+                  Clear Filters
+                </Button>
+              </Box>
+            ) : (
+              filteredTree.map((node) => (
+                <TreeNode
+                  key={node.path}
+                  node={node}
+                  depth={0}
+                  expandedFolders={expandedFolders}
+                  onToggleFolder={handleToggleFolder}
+                  onShowMetadata={handleShowMetadata}
+                  searchQuery={searchQuery}
+                  onFileClick={showCodePreview ? (file) => setPreviewFile(file.path) : undefined}
+                  selectedPath={previewFile}
+                />
+              ))
+            )}
+          </Paper>
+          
+          {/* Code Preview Panel - Full Width Below Tree */}
+          {showCodePreview && (
+            <Paper
+              sx={{
+                p: 2,
+                bgcolor: alpha(theme.palette.background.paper, 0.5),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                borderRadius: 2,
+              }}
             >
-              Clear Filters
-            </Button>
-          </Box>
-        ) : (
-          filteredTree.map((node) => (
-            <TreeNode
-              key={node.path}
-              node={node}
-              depth={0}
-              expandedFolders={expandedFolders}
-              onToggleFolder={handleToggleFolder}
-              onShowMetadata={handleShowMetadata}
-              searchQuery={searchQuery}
-            />
-          ))
-        )}
-      </Paper>
+              {!previewFile ? (
+                <Box sx={{ p: 4, textAlign: "center" }}>
+                  <Typography color="text.secondary">
+                    ☝️ Click a file in the tree above to preview its code
+                  </Typography>
+                </Box>
+              ) : fileContentQuery.isLoading ? (
+                <Box sx={{ p: 4, textAlign: "center" }}>
+                  <CircularProgress size={24} />
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Loading file...
+                  </Typography>
+                </Box>
+              ) : fileContentQuery.isError ? (
+                <Alert severity="error">Failed to load file content</Alert>
+              ) : fileContentQuery.data ? (
+                <Box>
+                  {/* Breadcrumb Navigation (Feature 1) */}
+                  <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 2, flexWrap: "wrap" }}>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => setPreviewFile(null)}
+                      sx={{ p: 0.5 }}
+                    >
+                      <HomeIcon />
+                    </IconButton>
+                    {breadcrumbParts.map((part, idx) => (
+                      <Stack key={part.path} direction="row" alignItems="center" spacing={0.5}>
+                        <NavigateNextIcon />
+                        {part.isLast ? (
+                          <Chip
+                            size="small"
+                            label={part.name}
+                            sx={{
+                              fontWeight: 600,
+                              bgcolor: alpha(getLanguageColor(fileContentQuery.data?.language || "", theme), 0.15),
+                              color: getLanguageColor(fileContentQuery.data?.language || "", theme),
+                            }}
+                          />
+                        ) : (
+                          <Button
+                            size="small"
+                            onClick={() => handleBreadcrumbClick(part.path)}
+                            sx={{ 
+                              textTransform: "none", 
+                              minWidth: "auto", 
+                              px: 1,
+                              py: 0.25,
+                              fontSize: "0.8rem",
+                              color: "text.secondary",
+                              "&:hover": { color: "primary.main" },
+                            }}
+                          >
+                            {part.name}
+                          </Button>
+                        )}
+                      </Stack>
+                    ))}
+                    <Box sx={{ flex: 1 }} />
+                    
+                    {/* File Trends Sparkline */}
+                    {fileTrendsQuery.data && fileTrendsQuery.data.trends.length > 1 && (
+                      <Tooltip title={`Finding trends over ${fileTrendsQuery.data.trends.length} scans`}>
+                        <Box sx={{ width: 60, height: 24, mr: 1 }}>
+                          <SparklineContainer width="100%" height="100%">
+                            <LineChart data={fileTrendsQuery.data.trends}>
+                              <Line 
+                                type="monotone" 
+                                dataKey="finding_count" 
+                                stroke={theme.palette.warning.main}
+                                strokeWidth={2}
+                                dot={false}
+                              />
+                            </LineChart>
+                          </SparklineContainer>
+                        </Box>
+                      </Tooltip>
+                    )}
+                    
+                    <Typography variant="caption" color="text.secondary">
+                      {fileContentQuery.data.total_lines} lines
+                    </Typography>
+                    
+                    {/* AI Explain Button */}
+                    <Tooltip title={isExplaining ? "Analyzing..." : "Explain with AI"}>
+                      <IconButton 
+                        size="small" 
+                        onClick={handleExplainCode}
+                        disabled={isExplaining}
+                        sx={{ 
+                          color: showExplanation ? "primary.main" : "text.secondary",
+                          transition: "color 0.2s",
+                          animation: isExplaining ? `${fadeIn} 0.5s ease infinite alternate` : "none",
+                        }}
+                      >
+                        {isExplaining ? <CircularProgress size={18} /> : <AIIcon />}
+                      </IconButton>
+                    </Tooltip>
+                    
+                    {/* Copy Code Button */}
+                    <Tooltip title={codeCopied ? "Copied!" : "Copy code"}>
+                      <IconButton 
+                        size="small" 
+                        onClick={handleCopyCode}
+                        sx={{ 
+                          color: codeCopied ? "success.main" : "text.secondary",
+                          transition: "color 0.2s",
+                        }}
+                      >
+                        {codeCopied ? <CheckIcon /> : <CopyIcon />}
+                      </IconButton>
+                    </Tooltip>
+                    
+                    <IconButton 
+                      size="small" 
+                      onClick={() => setPreviewFile(null)}
+                      sx={{ color: "text.secondary" }}
+                    >
+                      <CloseIcon />
+                    </IconButton>
+                  </Stack>
+                  
+                  {/* Findings Summary with Jump Links (Feature 4) */}
+                  {fileContentQuery.data.findings.length > 0 && (
+                    <Alert 
+                      severity="warning" 
+                      sx={{ mb: 2 }}
+                      action={
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          {fileContentQuery.data.findings.slice(0, 5).map((f, i) => (
+                            <Tooltip key={i} title={`Jump to line ${f.line}: ${f.type}`}>
+                              <Chip
+                                size="small"
+                                label={`L${f.line}`}
+                                onClick={() => handleJumpToFinding(f.line)}
+                                icon={<JumpIcon />}
+                                sx={{
+                                  cursor: "pointer",
+                                  height: 22,
+                                  fontSize: "0.7rem",
+                                  bgcolor: alpha(
+                                    f.severity === "critical" ? theme.palette.error.main :
+                                    f.severity === "high" ? "#f97316" :
+                                    f.severity === "medium" ? theme.palette.warning.main :
+                                    theme.palette.info.main,
+                                    0.2
+                                  ),
+                                  "&:hover": { 
+                                    bgcolor: alpha(
+                                      f.severity === "critical" ? theme.palette.error.main :
+                                      f.severity === "high" ? "#f97316" :
+                                      f.severity === "medium" ? theme.palette.warning.main :
+                                      theme.palette.info.main,
+                                      0.35
+                                    ),
+                                  },
+                                }}
+                              />
+                            </Tooltip>
+                          ))}
+                          {fileContentQuery.data.findings.length > 5 && (
+                            <Typography variant="caption" color="text.secondary">
+                              +{fileContentQuery.data.findings.length - 5} more
+                            </Typography>
+                          )}
+                        </Stack>
+                      }
+                    >
+                      {fileContentQuery.data.findings.length} finding(s) in this file - click to jump
+                    </Alert>
+                  )}
+                  
+                  {fileContentQuery.data.source === "chunks" && fileContentQuery.data.chunks.length > 1 && (
+                    <Alert severity="info" sx={{ mb: 2, py: 0.5 }} icon={false}>
+                      <Typography variant="caption">
+                        📝 Showing {fileContentQuery.data.chunks.length} indexed code sections. 
+                        Source file not available on disk.
+                      </Typography>
+                    </Alert>
+                  )}
+                  
+                  {/* Code with Syntax Highlighting (Feature 3) */}
+                  <Box
+                    ref={codePreviewRef}
+                    sx={{
+                      bgcolor: "#1e1e1e",
+                      borderRadius: 1,
+                      overflow: "auto",
+                      maxHeight: 500,
+                      "& pre": { margin: 0 },
+                      "& .token.comment": { color: "#6a9955" },
+                      "& .token.string": { color: "#ce9178" },
+                      "& .token.keyword": { color: "#569cd6" },
+                      "& .token.function": { color: "#dcdcaa" },
+                      "& .token.number": { color: "#b5cea8" },
+                      "& .token.operator": { color: "#d4d4d4" },
+                      "& .token.class-name": { color: "#4ec9b0" },
+                      "& .token.punctuation": { color: "#d4d4d4" },
+                      "& .token.property": { color: "#9cdcfe" },
+                      "& .token.boolean": { color: "#569cd6" },
+                      "& .token.builtin": { color: "#4ec9b0" },
+                    }}
+                  >
+                    {fileContentQuery.data.chunks.map((chunk, idx) => (
+                      <Box key={idx} sx={{ position: "relative" }}>
+                        <pre
+                          style={{
+                            margin: 0,
+                            padding: "12px 16px",
+                            fontSize: "0.85rem",
+                            fontFamily: "'Fira Code', Monaco, Consolas, monospace",
+                            lineHeight: 1.6,
+                            whiteSpace: "pre",
+                            overflowX: "auto",
+                            color: "#d4d4d4",
+                          }}
+                        >
+                          {chunk.code.split("\n").map((line, lineIdx) => {
+                            const lineNum = chunk.start_line + lineIdx;
+                            const finding = fileContentQuery.data!.findings.find(f => f.line === lineNum);
+                            const isHighlighted = highlightedFindingLine === lineNum;
+                            const highlightedHtml = highlightCode(line, fileContentQuery.data?.language || "");
+                            return (
+                              <Box
+                                key={lineIdx}
+                                id={`code-line-${lineNum}`}
+                                component="div"
+                                sx={{
+                                  display: "flex",
+                                  bgcolor: isHighlighted 
+                                    ? alpha(theme.palette.primary.main, 0.3)
+                                    : finding 
+                                      ? alpha(
+                                          finding.severity === "critical" ? theme.palette.error.main :
+                                          finding.severity === "high" ? "#f97316" :
+                                          finding.severity === "medium" ? theme.palette.warning.main :
+                                          theme.palette.info.main,
+                                          0.15
+                                        )
+                                      : "transparent",
+                                  transition: "background-color 0.3s ease",
+                                  "&:hover": {
+                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                  },
+                                }}
+                              >
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    minWidth: 50,
+                                    pr: 2,
+                                    color: finding ? (
+                                      finding.severity === "critical" ? theme.palette.error.main :
+                                      finding.severity === "high" ? "#f97316" :
+                                      theme.palette.warning.main
+                                    ) : "#6e7681",
+                                    fontWeight: finding ? 700 : 400,
+                                    textAlign: "right",
+                                    userSelect: "none",
+                                    borderRight: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                                    mr: 2,
+                                  }}
+                                >
+                                  {lineNum}
+                                </Box>
+                                <Box 
+                                  component="span" 
+                                  sx={{ flex: 1 }}
+                                  dangerouslySetInnerHTML={{ __html: highlightedHtml || " " }}
+                                />
+                                {finding && (
+                                  <Tooltip title={`${finding.type}: ${finding.summary}`}>
+                                    <Chip
+                                      size="small"
+                                      label={finding.severity}
+                                      onClick={() => handleJumpToFinding(lineNum)}
+                                      sx={{
+                                        ml: 1,
+                                        height: 18,
+                                        fontSize: "0.65rem",
+                                        cursor: "pointer",
+                                        bgcolor: alpha(
+                                          finding.severity === "critical" ? theme.palette.error.main :
+                                          finding.severity === "high" ? "#f97316" :
+                                          finding.severity === "medium" ? theme.palette.warning.main :
+                                          theme.palette.info.main,
+                                          0.3
+                                        ),
+                                        "&:hover": {
+                                          bgcolor: alpha(
+                                            finding.severity === "critical" ? theme.palette.error.main :
+                                            finding.severity === "high" ? "#f97316" :
+                                            finding.severity === "medium" ? theme.palette.warning.main :
+                                            theme.palette.info.main,
+                                            0.5
+                                          ),
+                                        },
+                                      }}
+                                    />
+                                  </Tooltip>
+                                )}
+                              </Box>
+                            );
+                          })}
+                        </pre>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              ) : null}
+              
+              {/* AI Explanation Panel */}
+              <Collapse in={showExplanation && explanation !== null}>
+                <Box
+                  sx={{
+                    mt: 2,
+                    p: 2,
+                    bgcolor: alpha(theme.palette.primary.main, 0.05),
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                    borderRadius: 2,
+                  }}
+                >
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <AIIcon />
+                      <Typography variant="subtitle2" fontWeight={600} color="primary.main">
+                        AI Code Analysis
+                      </Typography>
+                    </Stack>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => setShowExplanation(false)}
+                      sx={{ color: "text.secondary" }}
+                    >
+                      <CloseIcon />
+                    </IconButton>
+                  </Stack>
+                  {explanation && (
+                    <Box
+                      sx={{
+                        "& h1, & h2, & h3": {
+                          fontSize: "1rem",
+                          fontWeight: 600,
+                          color: "primary.main",
+                          mt: 2,
+                          mb: 1,
+                        },
+                        "& h1:first-of-type, & h2:first-of-type": {
+                          mt: 0,
+                        },
+                        "& p": {
+                          fontSize: "0.875rem",
+                          mb: 1,
+                          lineHeight: 1.6,
+                        },
+                        "& ul, & ol": {
+                          pl: 2,
+                          mb: 1,
+                        },
+                        "& li": {
+                          fontSize: "0.875rem",
+                          mb: 0.5,
+                        },
+                        "& code": {
+                          fontFamily: "monospace",
+                          fontSize: "0.8rem",
+                          bgcolor: alpha(theme.palette.background.default, 0.8),
+                          px: 0.5,
+                          py: 0.25,
+                          borderRadius: 0.5,
+                        },
+                        "& pre": {
+                          bgcolor: alpha(theme.palette.background.default, 0.8),
+                          p: 1.5,
+                          borderRadius: 1,
+                          overflow: "auto",
+                          "& code": {
+                            bgcolor: "transparent",
+                            p: 0,
+                          },
+                        },
+                        "& strong": {
+                          color: "warning.main",
+                        },
+                      }}
+                    >
+                      <ReactMarkdown>{explanation.explanation}</ReactMarkdown>
+                    </Box>
+                  )}
+                </Box>
+              </Collapse>
+            </Paper>
+          )}
+        </Stack>
+      )}
+
+      {/* Interactive Treemap View */}
+      {viewMode === "treemap" && (
+        <Paper
+          sx={{
+            p: 2,
+            bgcolor: alpha(theme.palette.background.paper, 0.5),
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 2,
+          }}
+        >
+          {treemapData.length === 0 ? (
+            <Box sx={{ p: 3, textAlign: "center" }}>
+              <Typography color="text.secondary">
+                No files match the current filters.
+              </Typography>
+              <Button 
+                size="small" 
+                onClick={handleClearFilters}
+                sx={{ mt: 1, textTransform: "none" }}
+              >
+                Clear Filters
+              </Button>
+            </Box>
+          ) : (
+            <>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  📊 Codebase Visualization
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Each rectangle represents a file. Size = lines of code. Grouped by language.
+                  Files with vulnerabilities are highlighted in red/orange.
+                </Typography>
+              </Box>
+              <Box sx={{ height: 500, border: `1px solid ${alpha(theme.palette.divider, 0.2)}`, borderRadius: 1 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <Treemap
+                    data={treemapData}
+                    dataKey="size"
+                    aspectRatio={4 / 3}
+                    stroke={theme.palette.divider}
+                    fill={theme.palette.primary.main}
+                    content={<TreemapContent />}
+                    onClick={(data: any) => {
+                      if (data?.file) {
+                        handleShowMetadata(data.file);
+                      }
+                    }}
+                  >
+                    <RechartsTooltip content={<TreemapTooltipContent />} />
+                  </Treemap>
+                </ResponsiveContainer>
+              </Box>
+              <Stack direction="row" spacing={2} sx={{ mt: 2 }} flexWrap="wrap" alignItems="center">
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  Legend:
+                </Typography>
+                {heatmapMode ? (
+                  // Heatmap legend
+                  <>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      <Box sx={{ width: 14, height: 14, borderRadius: 1, bgcolor: alpha(theme.palette.success.main, 0.3) }} />
+                      <Typography variant="caption">0 findings</Typography>
+                    </Stack>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      <Box sx={{ width: 14, height: 14, borderRadius: 1, bgcolor: alpha(theme.palette.warning.light, 0.5) }} />
+                      <Typography variant="caption">1 finding</Typography>
+                    </Stack>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      <Box sx={{ width: 14, height: 14, borderRadius: 1, bgcolor: alpha(theme.palette.warning.main, 0.6) }} />
+                      <Typography variant="caption">2-3 findings</Typography>
+                    </Stack>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      <Box sx={{ width: 14, height: 14, borderRadius: 1, bgcolor: alpha("#f97316", 0.7) }} />
+                      <Typography variant="caption">4-5 findings</Typography>
+                    </Stack>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      <Box sx={{ width: 14, height: 14, borderRadius: 1, bgcolor: alpha(theme.palette.error.main, 0.8) }} />
+                      <Typography variant="caption">6+ findings</Typography>
+                    </Stack>
+                  </>
+                ) : (
+                  // Normal legend
+                  <>
+                    {languageStats.slice(0, 6).map(({ language }) => (
+                      <Stack key={language} direction="row" alignItems="center" spacing={0.5}>
+                        <Box
+                          sx={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: 1,
+                            bgcolor: alpha(getLanguageColor(language, theme), 0.5),
+                            border: `2px solid ${getLanguageColor(language, theme)}`,
+                          }}
+                        />
+                        <Typography variant="caption">{language}</Typography>
+                      </Stack>
+                    ))}
+                    <Box sx={{ borderLeft: `1px solid ${theme.palette.divider}`, pl: 2, ml: 1 }}>
+                      <Stack direction="row" spacing={1}>
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <Box sx={{ width: 14, height: 14, borderRadius: 1, bgcolor: alpha(theme.palette.error.main, 0.7) }} />
+                          <Typography variant="caption">Critical</Typography>
+                        </Stack>
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <Box sx={{ width: 14, height: 14, borderRadius: 1, bgcolor: alpha("#f97316", 0.7) }} />
+                          <Typography variant="caption">High</Typography>
+                        </Stack>
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <Box sx={{ width: 14, height: 14, borderRadius: 1, bgcolor: alpha(theme.palette.warning.main, 0.7) }} />
+                          <Typography variant="caption">Medium</Typography>
+                        </Stack>
+                      </Stack>
+                    </Box>
+                  </>
+                )}
+              </Stack>
+            </>
+          )}
+        </Paper>
+      )}
+
+      {/* Dependencies View */}
+      {viewMode === "dependencies" && (
+        <Paper
+          sx={{
+            p: 2,
+            bgcolor: alpha(theme.palette.background.paper, 0.5),
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 2,
+          }}
+        >
+          {dependenciesQuery.isLoading ? (
+            <Box sx={{ p: 4, textAlign: "center" }}>
+              <CircularProgress size={32} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Loading dependencies...
+              </Typography>
+            </Box>
+          ) : dependenciesQuery.isError ? (
+            <Alert severity="error">Failed to load dependency information</Alert>
+          ) : dependenciesQuery.data ? (
+            <Box>
+              {/* Summary Cards */}
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={6} sm={3}>
+                  <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+                    <Typography variant="h4" fontWeight={700} color="primary">
+                      {dependenciesQuery.data.summary.total_external}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">External Packages</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(theme.palette.secondary.main, 0.05) }}>
+                    <Typography variant="h4" fontWeight={700} color="secondary">
+                      {dependenciesQuery.data.summary.ecosystems.length}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Ecosystems</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
+                    <Typography variant="h4" fontWeight={700} sx={{ color: theme.palette.warning.main }}>
+                      {dependenciesQuery.data.summary.total_internal_edges}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Internal Imports</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(theme.palette.error.main, 0.05) }}>
+                    <Typography variant="h4" fontWeight={700} color="error">
+                      {dependenciesQuery.data.external_dependencies.filter(d => d.has_vulnerabilities).length}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Vulnerable Packages</Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              {/* External Dependencies Table */}
+              <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                📦 External Dependencies
+              </Typography>
+              
+              {dependenciesQuery.data.external_dependencies.length === 0 ? (
+                <Typography color="text.secondary" sx={{ mb: 3 }}>
+                  No external dependencies found in manifest files.
+                </Typography>
+              ) : (
+                <TableContainer component={Paper} sx={{ mb: 3, maxHeight: 300 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Package</TableCell>
+                        <TableCell>Version</TableCell>
+                        <TableCell>Ecosystem</TableCell>
+                        <TableCell>Status</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {dependenciesQuery.data.external_dependencies.slice(0, 50).map((dep, idx) => (
+                        <TableRow key={idx} sx={{ "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.05) } }}>
+                          <TableCell>
+                            <Typography variant="body2" fontFamily="monospace" fontWeight={500}>
+                              {dep.name}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontFamily="monospace" color="text.secondary">
+                              {dep.version || "any"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              size="small" 
+                              label={dep.ecosystem}
+                              sx={{ 
+                                fontSize: "0.7rem",
+                                bgcolor: alpha(getLanguageColor(dep.ecosystem, theme), 0.15),
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {dep.has_vulnerabilities ? (
+                              <Chip 
+                                size="small" 
+                                label="⚠️ Vulnerable"
+                                sx={{ 
+                                  fontSize: "0.65rem",
+                                  bgcolor: alpha(theme.palette.error.main, 0.15),
+                                  color: theme.palette.error.main,
+                                }}
+                              />
+                            ) : (
+                              <Typography variant="caption" color="success.main">✓ OK</Typography>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+
+              {/* Internal Imports Graph Placeholder */}
+              {dependenciesQuery.data.internal_imports.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                    🔗 Internal File Imports
+                  </Typography>
+                  <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.default, 0.5), maxHeight: 250, overflow: "auto" }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+                      {dependenciesQuery.data.internal_imports.length} import relationships detected
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      {dependenciesQuery.data.internal_imports.slice(0, 30).map((imp, idx) => (
+                        <Chip
+                          key={idx}
+                          size="small"
+                          label={
+                            <Typography variant="caption" fontFamily="monospace" sx={{ fontSize: "0.65rem" }}>
+                              {imp.source.split("/").pop()} → {imp.target.split("/").pop()}
+                            </Typography>
+                          }
+                          sx={{ 
+                            bgcolor: alpha(theme.palette.info.main, 0.1),
+                            border: `1px solid ${alpha(theme.palette.info.main, 0.3)}`,
+                          }}
+                        />
+                      ))}
+                      {dependenciesQuery.data.internal_imports.length > 30 && (
+                        <Chip
+                          size="small"
+                          label={`+${dependenciesQuery.data.internal_imports.length - 30} more`}
+                          sx={{ bgcolor: alpha(theme.palette.text.secondary, 0.1) }}
+                        />
+                      )}
+                    </Box>
+                  </Paper>
+                </>
+              )}
+            </Box>
+          ) : null}
+        </Paper>
+      )}
+
+      {/* Diff View (Feature 5) */}
+      {viewMode === "diff" && (
+        <Paper
+          sx={{
+            p: 2,
+            bgcolor: alpha(theme.palette.background.paper, 0.5),
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 2,
+          }}
+        >
+          {/* Report Selector */}
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+            <Typography variant="subtitle2">Compare with:</Typography>
+            <FormControl size="small" sx={{ minWidth: 300 }}>
+              <InputLabel>Select a previous scan</InputLabel>
+              <Select
+                value={compareReportId || ""}
+                label="Select a previous scan"
+                onChange={(e) => setCompareReportId(Number(e.target.value) || null)}
+              >
+                {comparableReports.map((r) => (
+                  <MenuItem key={r.id} value={r.id}>
+                    Scan #{r.id} - {new Date(r.created_at).toLocaleString()}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+
+          {!compareReportId ? (
+            <Box sx={{ p: 4, textAlign: "center" }}>
+              <Typography color="text.secondary">
+                Select a previous scan to compare findings
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                {comparableReports.length > 0 
+                  ? `${comparableReports.length} scan(s) available for comparison`
+                  : "No other scans available for this project"
+                }
+              </Typography>
+            </Box>
+          ) : diffQuery.isLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+              <CircularProgress size={40} />
+              <Typography sx={{ ml: 2 }}>Comparing scans...</Typography>
+            </Box>
+          ) : diffQuery.isError ? (
+            <Alert severity="error">Failed to compare scans</Alert>
+          ) : diffQuery.data ? (
+            <Box>
+              {/* Summary Cards */}
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={6} md={3}>
+                  <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.error.main, 0.1), textAlign: "center" }}>
+                    <Typography variant="h4" color="error.main" fontWeight="bold">
+                      {diffQuery.data.new_findings.length}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">New Findings</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.success.main, 0.1), textAlign: "center" }}>
+                    <Typography variant="h4" color="success.main" fontWeight="bold">
+                      {diffQuery.data.fixed_findings.length}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Fixed Findings</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Paper sx={{ 
+                    p: 2, 
+                    bgcolor: alpha(
+                      diffQuery.data.new_findings.length > diffQuery.data.fixed_findings.length 
+                        ? theme.palette.warning.main 
+                        : theme.palette.info.main, 
+                      0.1
+                    ), 
+                    textAlign: "center" 
+                  }}>
+                    <Typography 
+                      variant="h4" 
+                      fontWeight="bold"
+                      color={
+                        diffQuery.data.new_findings.length - diffQuery.data.fixed_findings.length > 0
+                          ? "error.main"
+                          : diffQuery.data.new_findings.length - diffQuery.data.fixed_findings.length < 0
+                          ? "success.main"
+                          : "text.primary"
+                      }
+                    >
+                      {diffQuery.data.new_findings.length - diffQuery.data.fixed_findings.length > 0 ? "+" : ""}
+                      {diffQuery.data.new_findings.length - diffQuery.data.fixed_findings.length}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Net Change</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.info.main, 0.1), textAlign: "center" }}>
+                    <Typography variant="h4" color="info.main" fontWeight="bold">
+                      {diffQuery.data.changed_files.length}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Files Changed</Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              {/* Severity Changes Summary */}
+              {diffQuery.data.summary?.severity_changes && (
+                <Box sx={{ mb: 3, p: 2, bgcolor: alpha(theme.palette.background.default, 0.5), borderRadius: 1 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Severity Breakdown</Typography>
+                  <Stack direction="row" spacing={2} flexWrap="wrap">
+                    {Object.entries(diffQuery.data.summary.severity_changes).map(([severity, changes]) => (
+                      <Chip
+                        key={severity}
+                        size="small"
+                        label={
+                          <Typography variant="caption">
+                            {severity}: {(changes as { new: number; fixed: number }).new > 0 && <span style={{ color: theme.palette.error.main }}>+{(changes as { new: number; fixed: number }).new}</span>}
+                            {(changes as { new: number; fixed: number }).new > 0 && (changes as { new: number; fixed: number }).fixed > 0 && " / "}
+                            {(changes as { new: number; fixed: number }).fixed > 0 && <span style={{ color: theme.palette.success.main }}>-{(changes as { new: number; fixed: number }).fixed}</span>}
+                          </Typography>
+                        }
+                        sx={{
+                          bgcolor: alpha(
+                            severity === "critical" ? theme.palette.error.dark :
+                            severity === "high" ? theme.palette.error.main :
+                            severity === "medium" ? theme.palette.warning.main :
+                            severity === "low" ? theme.palette.info.main :
+                            theme.palette.grey[500],
+                            0.2
+                          )
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              {/* New Findings */}
+              {diffQuery.data.new_findings.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2, color: "error.main" }}>
+                    🆕 New Findings ({diffQuery.data.new_findings.length})
+                  </Typography>
+                  <Stack spacing={1}>
+                    {diffQuery.data.new_findings.map((finding, idx) => (
+                      <Paper 
+                        key={idx}
+                        sx={{ 
+                          p: 1.5, 
+                          bgcolor: alpha(theme.palette.error.main, 0.05),
+                          border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
+                          "&:hover": { bgcolor: alpha(theme.palette.error.main, 0.1) }
+                        }}
+                      >
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Chip 
+                            size="small" 
+                            label={finding.severity}
+                            sx={{ 
+                              bgcolor: alpha(
+                                finding.severity === "critical" ? theme.palette.error.dark :
+                                finding.severity === "high" ? theme.palette.error.main :
+                                finding.severity === "medium" ? theme.palette.warning.main :
+                                theme.palette.info.main,
+                                0.2
+                              ),
+                              fontSize: "0.65rem",
+                              height: 20,
+                            }}
+                          />
+                          <Typography variant="body2" fontWeight="medium">
+                            {finding.type}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" fontFamily="monospace">
+                            {finding.file_path}{finding.start_line ? `:${finding.start_line}` : ""}
+                          </Typography>
+                        </Stack>
+                        {finding.summary && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                            {finding.summary}
+                          </Typography>
+                        )}
+                      </Paper>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              {/* Fixed Findings */}
+              {diffQuery.data.fixed_findings.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" sx={{ mb: 2, color: "success.main" }}>
+                    ✅ Fixed Findings ({diffQuery.data.fixed_findings.length})
+                  </Typography>
+                  <Stack spacing={1}>
+                    {diffQuery.data.fixed_findings.map((finding, idx) => (
+                      <Paper 
+                        key={idx}
+                        sx={{ 
+                          p: 1.5, 
+                          bgcolor: alpha(theme.palette.success.main, 0.05),
+                          border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
+                          "&:hover": { bgcolor: alpha(theme.palette.success.main, 0.1) }
+                        }}
+                      >
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Chip 
+                            size="small" 
+                            label={finding.severity}
+                            sx={{ 
+                              bgcolor: alpha(theme.palette.success.main, 0.3),
+                              fontSize: "0.65rem",
+                              height: 20,
+                              textDecoration: "line-through",
+                            }}
+                          />
+                          <Typography variant="body2" sx={{ textDecoration: "line-through", opacity: 0.7 }}>
+                            {finding.type}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" fontFamily="monospace" sx={{ textDecoration: "line-through", opacity: 0.7 }}>
+                            {finding.file_path}{finding.start_line ? `:${finding.start_line}` : ""}
+                          </Typography>
+                        </Stack>
+                        {finding.summary && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block", textDecoration: "line-through", opacity: 0.7 }}>
+                            {finding.summary}
+                          </Typography>
+                        )}
+                      </Paper>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              {/* No Changes */}
+              {diffQuery.data.new_findings.length === 0 && diffQuery.data.fixed_findings.length === 0 && (
+                <Box sx={{ p: 4, textAlign: "center" }}>
+                  <Typography variant="h6" color="success.main">🎉 No Changes</Typography>
+                  <Typography color="text.secondary">
+                    The scan results are identical between these two scans.
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          ) : null}
+        </Paper>
+      )}
+
+      {/* TODOs View (Feature: TODO/FIXME Scanner) */}
+      {viewMode === "todos" && (
+        <Paper
+          sx={{
+            p: 2,
+            bgcolor: alpha(theme.palette.background.paper, 0.5),
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 2,
+          }}
+        >
+          {todosQuery.isLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+              <CircularProgress size={40} />
+              <Typography sx={{ ml: 2 }}>Scanning for TODOs...</Typography>
+            </Box>
+          ) : todosQuery.isError ? (
+            <Alert severity="error">Failed to scan for TODOs</Alert>
+          ) : todosQuery.data ? (
+            <Box>
+              {/* Summary Header */}
+              <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
+                <Typography variant="h6">
+                  📝 Code Comments Scanner
+                </Typography>
+                <Chip 
+                  label={`${todosQuery.data.total} total`}
+                  size="small"
+                  sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}
+                />
+                {Object.entries(todosQuery.data.summary).map(([type, count]) => (
+                  <Chip
+                    key={type}
+                    size="small"
+                    label={`${type}: ${count}`}
+                    sx={{
+                      bgcolor: alpha(
+                        type === "FIXME" || type === "BUG" ? theme.palette.error.main :
+                        type === "TODO" ? theme.palette.warning.main :
+                        type === "HACK" || type === "XXX" ? theme.palette.info.main :
+                        theme.palette.success.main,
+                        0.15
+                      ),
+                      color: type === "FIXME" || type === "BUG" ? theme.palette.error.main :
+                        type === "TODO" ? theme.palette.warning.main :
+                        type === "HACK" || type === "XXX" ? theme.palette.info.main :
+                        theme.palette.success.main,
+                    }}
+                  />
+                ))}
+              </Stack>
+
+              {todosQuery.data.total === 0 ? (
+                <Box sx={{ p: 4, textAlign: "center" }}>
+                  <Typography variant="h6" color="success.main">✨ Clean Code!</Typography>
+                  <Typography color="text.secondary">
+                    No TODO, FIXME, HACK, or BUG comments found in the codebase.
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ maxHeight: 500, overflow: "auto" }}>
+                  {Object.entries(todosQuery.data.by_file).map(([filePath, items]) => (
+                    <Box key={filePath} sx={{ mb: 2 }}>
+                      <Typography 
+                        variant="subtitle2" 
+                        fontFamily="monospace"
+                        sx={{ 
+                          bgcolor: alpha(theme.palette.background.default, 0.5),
+                          p: 1,
+                          borderRadius: 1,
+                          cursor: "pointer",
+                          "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.1) },
+                        }}
+                        onClick={() => {
+                          setPreviewFile(filePath);
+                          setViewMode("tree");
+                        }}
+                      >
+                        📄 {filePath} ({items.length})
+                      </Typography>
+                      <Stack spacing={0.5} sx={{ pl: 2, mt: 1 }}>
+                        {items.map((item, idx) => (
+                          <Paper
+                            key={idx}
+                            sx={{
+                              p: 1,
+                              bgcolor: alpha(
+                                item.type === "FIXME" || item.type === "BUG" ? theme.palette.error.main :
+                                item.type === "TODO" ? theme.palette.warning.main :
+                                item.type === "HACK" || item.type === "XXX" ? theme.palette.info.main :
+                                theme.palette.success.main,
+                                0.05
+                              ),
+                              border: `1px solid ${alpha(
+                                item.type === "FIXME" || item.type === "BUG" ? theme.palette.error.main :
+                                item.type === "TODO" ? theme.palette.warning.main :
+                                item.type === "HACK" || item.type === "XXX" ? theme.palette.info.main :
+                                theme.palette.success.main,
+                                0.2
+                              )}`,
+                              cursor: "pointer",
+                              "&:hover": { 
+                                bgcolor: alpha(theme.palette.primary.main, 0.08),
+                              },
+                            }}
+                            onClick={() => {
+                              setPreviewFile(filePath);
+                              setViewMode("tree");
+                              setTimeout(() => handleJumpToFinding(item.line), 500);
+                            }}
+                          >
+                            <Stack direction="row" alignItems="center" spacing={1}>
+                              <Chip
+                                size="small"
+                                label={item.type}
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.65rem",
+                                  fontWeight: 700,
+                                  bgcolor: alpha(
+                                    item.type === "FIXME" || item.type === "BUG" ? theme.palette.error.main :
+                                    item.type === "TODO" ? theme.palette.warning.main :
+                                    item.type === "HACK" || item.type === "XXX" ? theme.palette.info.main :
+                                    theme.palette.success.main,
+                                    0.2
+                                  ),
+                                }}
+                              />
+                              <Typography variant="caption" color="text.secondary" fontFamily="monospace">
+                                L{item.line}
+                              </Typography>
+                              <Typography variant="body2" sx={{ flex: 1 }}>
+                                {item.text || "(no description)"}
+                              </Typography>
+                            </Stack>
+                          </Paper>
+                        ))}
+                      </Stack>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          ) : null}
+        </Paper>
+      )}
 
       {/* File Metadata Dialog */}
       <FileMetadataDialog
@@ -1345,6 +3467,13 @@ export default function ReportDetailPage() {
     queryKey: ["report", id],
     queryFn: () => api.getReport(id),
     enabled: !!id,
+  });
+
+  // Query to get all reports for the same project (for diff feature)
+  const projectReportsQuery = useQuery({
+    queryKey: ["project-reports", reportQuery.data?.project_id],
+    queryFn: () => api.getReports(reportQuery.data!.project_id),
+    enabled: !!reportQuery.data?.project_id,
   });
 
   const findingsQuery = useQuery({
@@ -2344,7 +4473,11 @@ export default function ReportDetailPage() {
       {/* Tab Panel: Codebase Map */}
       {activeTab === 1 && (
         <Box sx={{ mb: 4 }}>
-          <CodebaseMapView reportId={id} />
+          <CodebaseMapView 
+            reportId={id} 
+            projectId={reportQuery.data?.project_id || 0}
+            availableReports={projectReportsQuery.data?.map(r => ({ id: r.id, created_at: r.created_at })) || []}
+          />
         </Box>
       )}
 

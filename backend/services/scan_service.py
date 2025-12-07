@@ -74,20 +74,188 @@ def _broadcast_progress(scan_run_id: int, phase: str, progress: int, message: st
 
 
 def _detect_language(path: Path) -> str:
+    """Detect programming language from file extension."""
+    # Get extension in lowercase
+    ext = path.suffix.lower()
+    
+    # Also check for special filenames without extension
+    filename = path.name.lower()
+    
+    # Special filename mappings (files without meaningful extension)
+    special_files = {
+        "dockerfile": "dockerfile",
+        "docker-compose.yml": "yaml",
+        "docker-compose.yaml": "yaml",
+        ".dockerignore": "dockerfile",
+        ".gitignore": "gitignore",
+        ".env": "env",
+        ".env.example": "env",
+        ".env.local": "env",
+        "makefile": "makefile",
+        "cmakelists.txt": "cmake",
+        "gemfile": "ruby",
+        "rakefile": "ruby",
+        "podfile": "ruby",
+        "vagrantfile": "ruby",
+        "jenkinsfile": "groovy",
+        "procfile": "yaml",
+    }
+    
+    if filename in special_files:
+        return special_files[filename]
+    
+    # Extension-based mapping (comprehensive)
     mapping = {
+        # Python
         ".py": "python",
+        ".pyx": "python",
+        ".pyi": "python",
+        ".pyw": "python",
+        
+        # JavaScript / TypeScript
         ".js": "javascript",
+        ".jsx": "javascriptreact",
+        ".mjs": "javascript",
+        ".cjs": "javascript",
         ".ts": "typescript",
         ".tsx": "typescriptreact",
+        ".mts": "typescript",
+        ".cts": "typescript",
+        
+        # Web
+        ".html": "html",
+        ".htm": "html",
+        ".xhtml": "html",
+        ".css": "css",
+        ".scss": "scss",
+        ".sass": "sass",
+        ".less": "less",
+        ".vue": "vue",
+        ".svelte": "svelte",
+        
+        # Data / Config
+        ".json": "json",
+        ".json5": "json5",
+        ".jsonc": "jsonc",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".xml": "xml",
+        ".toml": "toml",
+        ".ini": "ini",
+        ".cfg": "ini",
+        ".conf": "conf",
+        ".properties": "properties",
+        ".env": "env",
+        
+        # JVM Languages
         ".java": "java",
-        ".rb": "ruby",
-        ".go": "go",
-        ".php": "php",
-        ".rs": "rust",
         ".kt": "kotlin",
         ".kts": "kotlin",
+        ".scala": "scala",
+        ".groovy": "groovy",
+        ".gradle": "groovy",
+        ".clj": "clojure",
+        ".cljs": "clojurescript",
+        
+        # Systems Programming
+        ".c": "c",
+        ".h": "c",
+        ".cpp": "cpp",
+        ".cc": "cpp",
+        ".cxx": "cpp",
+        ".hpp": "cpp",
+        ".hxx": "cpp",
+        ".hh": "cpp",
+        ".rs": "rust",
+        ".go": "go",
+        ".zig": "zig",
+        
+        # Apple / Mobile
+        ".swift": "swift",
+        ".m": "objective-c",
+        ".mm": "objective-cpp",
+        
+        # .NET
+        ".cs": "csharp",
+        ".fs": "fsharp",
+        ".vb": "vb",
+        ".csproj": "xml",
+        ".fsproj": "xml",
+        ".vbproj": "xml",
+        ".sln": "sln",
+        
+        # Scripting
+        ".rb": "ruby",
+        ".erb": "erb",
+        ".php": "php",
+        ".phtml": "php",
+        ".pl": "perl",
+        ".pm": "perl",
+        ".lua": "lua",
+        ".r": "r",
+        ".R": "r",
+        
+        # Shell
+        ".sh": "shell",
+        ".bash": "shell",
+        ".zsh": "shell",
+        ".fish": "shell",
+        ".ps1": "powershell",
+        ".psm1": "powershell",
+        ".bat": "batch",
+        ".cmd": "batch",
+        
+        # Database
+        ".sql": "sql",
+        ".psql": "sql",
+        ".mysql": "sql",
+        
+        # Functional
+        ".hs": "haskell",
+        ".lhs": "haskell",
+        ".elm": "elm",
+        ".ex": "elixir",
+        ".exs": "elixir",
+        ".erl": "erlang",
+        ".ml": "ocaml",
+        ".mli": "ocaml",
+        
+        # Documentation
+        ".md": "markdown",
+        ".markdown": "markdown",
+        ".rst": "restructuredtext",
+        ".txt": "plaintext",
+        ".adoc": "asciidoc",
+        ".tex": "latex",
+        
+        # Build / DevOps
+        ".dockerfile": "dockerfile",
+        ".tf": "terraform",
+        ".tfvars": "terraform",
+        ".hcl": "hcl",
+        ".bicep": "bicep",
+        ".nix": "nix",
+        
+        # GraphQL / API
+        ".graphql": "graphql",
+        ".gql": "graphql",
+        ".proto": "protobuf",
+        
+        # Images (for reference - usually not scanned)
+        ".svg": "svg",
+        ".png": "image",
+        ".jpg": "image",
+        ".jpeg": "image",
+        ".gif": "image",
+        ".ico": "image",
+        ".webp": "image",
+        
+        # Other
+        ".lock": "lockfile",
+        ".editorconfig": "editorconfig",
+        ".gitattributes": "gitattributes",
     }
-    return mapping.get(path.suffix, "unknown")
+    return mapping.get(ext, "unknown")
 
 
 def _compute_code_hash(code: str) -> str:

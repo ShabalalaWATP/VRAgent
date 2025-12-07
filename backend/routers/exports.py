@@ -636,6 +636,435 @@ def get_codebase_structure(report_id: int, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/{report_id}/codebase/file")
+def get_file_content(
+    report_id: int,
+    file_path: str = Query(..., description="The file path to retrieve"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get the FULL code content for a specific file.
+    
+    Reads the actual file from the project zip/directory to ensure 100% content is returned.
+    Falls back to stored chunks if the file is not accessible.
+    """
+    import zipfile
+    from pathlib import Path
+    
+    report = _get_report(db, report_id)
+    project = report.project
+    
+    # Get findings for this file
+    findings = db.query(models.Finding).filter(
+        models.Finding.scan_run_id == report.scan_run_id,
+        models.Finding.file_path == file_path
+    ).all()
+    
+    # Build finding highlights (line -> severity mapping)
+    finding_lines = {}
+    for f in findings:
+        if f.start_line:
+            end = f.end_line or f.start_line
+            for line in range(f.start_line, end + 1):
+                if line not in finding_lines or _severity_rank(f.severity) > _severity_rank(finding_lines[line]["severity"]):
+                    finding_lines[line] = {
+                        "severity": f.severity,
+                        "type": f.type,
+                        "summary": f.summary
+                    }
+    
+    # Language detection helper
+    def detect_language(ext: str) -> str:
+        lang_map = {
+            ".py": "python", ".js": "javascript", ".ts": "typescript",
+            ".tsx": "typescriptreact", ".jsx": "javascriptreact",
+            ".java": "java", ".kt": "kotlin", ".go": "go",
+            ".rs": "rust", ".rb": "ruby", ".php": "php",
+            ".c": "c", ".cpp": "cpp", ".h": "c", ".hpp": "cpp",
+            ".cs": "csharp", ".swift": "swift",
+            ".html": "html", ".css": "css", ".scss": "scss",
+            ".json": "json", ".yaml": "yaml", ".yml": "yaml",
+            ".xml": "xml", ".sql": "sql", ".sh": "shell",
+            ".md": "markdown", ".txt": "plaintext",
+        }
+        return lang_map.get(ext.lower(), "plaintext")
+    
+    # Try to read the actual file for 100% content
+    full_content = None
+    language = None
+    
+    if project.upload_path:
+        upload_path = Path(project.upload_path)
+        
+        # Check if it's a zip file
+        if upload_path.suffix.lower() == '.zip' and upload_path.exists():
+            try:
+                with zipfile.ZipFile(upload_path, 'r') as zf:
+                    # Try to find the file in the zip
+                    # file_path might be "DVWA/login.php" but in zip it could be under a root folder
+                    
+                    # Try exact match first
+                    zip_names = zf.namelist()
+                    target_file = None
+                    
+                    # Normalize file_path
+                    normalized_path = file_path.lstrip("/").replace("\\", "/")
+                    
+                    # Strategy 1: Exact match
+                    if normalized_path in zip_names:
+                        target_file = normalized_path
+                    
+                    # Strategy 2: Try with common zip root folder patterns
+                    if not target_file:
+                        for name in zip_names:
+                            # Check if file matches after first directory component
+                            # e.g., "DVWA-master/DVWA/login.php" matches "DVWA/login.php"
+                            parts = name.split("/", 1)
+                            if len(parts) > 1 and parts[1] == normalized_path:
+                                target_file = name
+                                break
+                            # Also try direct suffix match
+                            if name.endswith("/" + normalized_path) or name == normalized_path:
+                                target_file = name
+                                break
+                    
+                    if target_file:
+                        # Read file content from zip
+                        content_bytes = zf.read(target_file)
+                        full_content = content_bytes.decode('utf-8', errors='replace')
+                        
+                        # Detect language
+                        ext = Path(target_file).suffix
+                        language = detect_language(ext)
+                        
+            except Exception as e:
+                logger.warning(f"Failed to read file from zip {upload_path}: {e}")
+        
+        # If not a zip, try direct file access (folder-based project)
+        elif upload_path.is_dir():
+            normalized_path = file_path.lstrip("/").replace("\\", "/")
+            
+            # Strategy 1: Direct path
+            possible_paths = [
+                upload_path / normalized_path,
+            ]
+            
+            # Strategy 2: Check immediate subdirectories (common when extracted)
+            for subdir in upload_path.iterdir():
+                if subdir.is_dir():
+                    possible_paths.append(subdir / normalized_path)
+            
+            # Strategy 3: Search recursively for the file if simple paths don't work
+            for try_path in possible_paths:
+                if try_path.exists() and try_path.is_file():
+                    try:
+                        full_content = try_path.read_text(encoding='utf-8', errors='replace')
+                        language = detect_language(try_path.suffix)
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to read file {try_path}: {e}")
+            
+            # Strategy 4: If still not found, search by filename as last resort
+            if full_content is None:
+                filename = normalized_path.split("/")[-1]
+                for found_path in upload_path.rglob(filename):
+                    if found_path.is_file():
+                        # Verify it's the right file by checking path suffix matches
+                        if str(found_path).replace("\\", "/").endswith(normalized_path):
+                            try:
+                                full_content = found_path.read_text(encoding='utf-8', errors='replace')
+                                language = detect_language(found_path.suffix)
+                                break
+                            except Exception as e:
+                                logger.warning(f"Failed to read file {found_path}: {e}")
+    
+    # If we got full content, return it as a single chunk
+    if full_content is not None:
+        lines = full_content.split('\n')
+        return {
+            "file_path": file_path,
+            "language": language,
+            "chunks": [{
+                "start_line": 1,
+                "end_line": len(lines),
+                "code": full_content
+            }],
+            "findings": [{"line": line, **info} for line, info in finding_lines.items()],
+            "total_lines": len(lines),
+            "source": "disk"  # Indicates full file from source
+        }
+    
+    # Fallback: use stored chunks from database
+    chunks = db.query(models.CodeChunk).filter(
+        models.CodeChunk.project_id == report.project_id,
+        models.CodeChunk.file_path == file_path
+    ).order_by(models.CodeChunk.start_line).all()
+    
+    if not chunks:
+        # Try partial match (for paths that might differ slightly)
+        filename = file_path.split("/")[-1]
+        chunks = db.query(models.CodeChunk).filter(
+            models.CodeChunk.project_id == report.project_id,
+            models.CodeChunk.file_path.contains(filename)
+        ).order_by(models.CodeChunk.start_line).all()
+    
+    if not chunks:
+        raise HTTPException(status_code=404, detail="File not found in codebase")
+    
+    # Concatenate chunks
+    code_parts = []
+    language = chunks[0].language if chunks else None
+    
+    for chunk in chunks:
+        code_parts.append({
+            "start_line": chunk.start_line,
+            "end_line": chunk.end_line,
+            "code": chunk.code
+        })
+    
+    return {
+        "file_path": file_path,
+        "language": language,
+        "chunks": code_parts,
+        "findings": [{"line": line, **info} for line, info in finding_lines.items()],
+        "total_lines": max(c.end_line for c in chunks) if chunks else 0,
+        "source": "chunks"  # Indicates assembled from stored chunks
+    }
+
+
+def _severity_rank(severity: str) -> int:
+    """Get numeric rank for severity for comparison."""
+    ranks = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
+    return ranks.get((severity or "info").lower(), 0)
+
+
+@router.get("/{report_id}/dependencies")
+def get_dependencies(report_id: int, db: Session = Depends(get_db)):
+    """
+    Get dependency information for the project.
+    
+    Returns both external dependencies (from manifest files) and 
+    internal imports between files for visualization.
+    """
+    import re
+    
+    report = _get_report(db, report_id)
+    project_id = report.project_id
+    
+    # Get external dependencies from the database
+    external_deps = db.query(models.Dependency).filter(
+        models.Dependency.project_id == project_id
+    ).all()
+    
+    # Get all code chunks to analyze internal imports
+    chunks = db.query(models.CodeChunk).filter(
+        models.CodeChunk.project_id == project_id
+    ).all()
+    
+    # Parse imports from code chunks
+    internal_imports = []
+    import_patterns = {
+        "python": [
+            r'^import\s+(\S+)',
+            r'^from\s+(\S+)\s+import',
+        ],
+        "javascript": [
+            r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]',
+            r'require\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)',
+        ],
+        "typescript": [
+            r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]',
+            r'require\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)',
+        ],
+        "java": [
+            r'^import\s+([\w.]+)',
+        ],
+        "go": [
+            r'import\s+[\'"]([^\'"]+)[\'"]',
+            r'import\s+\w+\s+[\'"]([^\'"]+)[\'"]',
+        ],
+    }
+    
+    file_imports = defaultdict(set)
+    for chunk in chunks:
+        lang = (chunk.language or "").lower()
+        patterns = import_patterns.get(lang, [])
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, chunk.code, re.MULTILINE)
+            for match in matches:
+                # Check if it's a relative/internal import
+                if match.startswith(".") or match.startswith("./") or match.startswith("../"):
+                    file_imports[chunk.file_path].add(match)
+                elif "/" in match and not match.startswith("@"):
+                    # Could be internal path
+                    file_imports[chunk.file_path].add(match)
+    
+    # Build graph nodes and edges
+    files = list(set(c.file_path for c in chunks))
+    file_set = set(files)
+    
+    edges = []
+    for source_file, imports in file_imports.items():
+        for imp in imports:
+            # Try to resolve the import to an actual file
+            for target_file in files:
+                # Simple matching - check if import matches end of file path
+                imp_clean = imp.replace("./", "").replace("../", "")
+                if target_file.endswith(imp_clean) or target_file.endswith(imp_clean + ".py") or \
+                   target_file.endswith(imp_clean + ".js") or target_file.endswith(imp_clean + ".ts"):
+                    edges.append({
+                        "source": source_file,
+                        "target": target_file,
+                        "type": "internal"
+                    })
+    
+    # Check for vulnerabilities linked to dependencies
+    vulnerable_deps = set()
+    vulns = db.query(models.Vulnerability).filter(
+        models.Vulnerability.project_id == project_id,
+        models.Vulnerability.dependency_id.isnot(None)
+    ).all()
+    for v in vulns:
+        vulnerable_deps.add(v.dependency_id)
+    
+    return {
+        "report_id": report_id,
+        "external_dependencies": [
+            {
+                "name": d.name,
+                "version": d.version,
+                "ecosystem": d.ecosystem,
+                "manifest_path": d.manifest_path,
+                "has_vulnerabilities": d.id in vulnerable_deps
+            }
+            for d in external_deps
+        ],
+        "internal_imports": edges,
+        "files": files,
+        "summary": {
+            "total_external": len(external_deps),
+            "vulnerable_count": len(vulnerable_deps),
+            "total_internal_edges": len(edges),
+            "total_files": len(files),
+            "ecosystems": list(set(d.ecosystem for d in external_deps if d.ecosystem))
+        }
+    }
+
+
+@router.get("/{report_id}/diff/{compare_report_id}")
+def get_scan_diff(report_id: int, compare_report_id: int, db: Session = Depends(get_db)):
+    """
+    Compare two scan reports to show what changed.
+    
+    Returns:
+    - New findings (in current but not in compare)
+    - Fixed findings (in compare but not in current)
+    - Changed files (modified between scans)
+    - New files (added since compare)
+    - Removed files (deleted since compare)
+    """
+    report = _get_report(db, report_id)
+    compare_report = _get_report(db, compare_report_id)
+    
+    # Ensure same project
+    if report.project_id != compare_report.project_id:
+        raise HTTPException(status_code=400, detail="Reports must be from the same project")
+    
+    # Get findings for both reports
+    current_findings = db.query(models.Finding).filter(
+        models.Finding.scan_run_id == report.scan_run_id
+    ).all()
+    compare_findings = db.query(models.Finding).filter(
+        models.Finding.scan_run_id == compare_report.scan_run_id
+    ).all()
+    
+    # Create fingerprints for findings (file + line + type)
+    def finding_fingerprint(f):
+        return f"{f.file_path}:{f.start_line}:{f.type}"
+    
+    current_fps = {finding_fingerprint(f): f for f in current_findings}
+    compare_fps = {finding_fingerprint(f): f for f in compare_findings}
+    
+    # Find new and fixed findings
+    new_finding_fps = set(current_fps.keys()) - set(compare_fps.keys())
+    fixed_finding_fps = set(compare_fps.keys()) - set(current_fps.keys())
+    
+    new_findings = [
+        {
+            "id": current_fps[fp].id,
+            "type": current_fps[fp].type,
+            "severity": current_fps[fp].severity,
+            "summary": current_fps[fp].summary,
+            "file_path": current_fps[fp].file_path,
+            "start_line": current_fps[fp].start_line,
+        }
+        for fp in new_finding_fps
+    ]
+    
+    fixed_findings = [
+        {
+            "id": compare_fps[fp].id,
+            "type": compare_fps[fp].type,
+            "severity": compare_fps[fp].severity,
+            "summary": compare_fps[fp].summary,
+            "file_path": compare_fps[fp].file_path,
+            "start_line": compare_fps[fp].start_line,
+        }
+        for fp in fixed_finding_fps
+    ]
+    
+    # Get files for both scans
+    current_chunks = db.query(models.CodeChunk).filter(
+        models.CodeChunk.project_id == report.project_id
+    ).all()
+    # Note: For simplicity, we use the same chunks since project hasn't changed
+    # In a real implementation with versioned code, we'd track file hashes
+    
+    current_files = set(c.file_path for c in current_chunks)
+    
+    # Build file change summary
+    files_with_new_findings = set(f["file_path"] for f in new_findings)
+    files_with_fixed_findings = set(f["file_path"] for f in fixed_findings)
+    
+    # Count findings changes by severity
+    severity_changes = {
+        "critical": {"new": 0, "fixed": 0},
+        "high": {"new": 0, "fixed": 0},
+        "medium": {"new": 0, "fixed": 0},
+        "low": {"new": 0, "fixed": 0},
+        "info": {"new": 0, "fixed": 0},
+    }
+    
+    for f in new_findings:
+        sev = (f["severity"] or "info").lower()
+        if sev in severity_changes:
+            severity_changes[sev]["new"] += 1
+    
+    for f in fixed_findings:
+        sev = (f["severity"] or "info").lower()
+        if sev in severity_changes:
+            severity_changes[sev]["fixed"] += 1
+    
+    return {
+        "report_id": report_id,
+        "compare_report_id": compare_report_id,
+        "current_report_date": report.created_at.isoformat() if report.created_at else None,
+        "compare_report_date": compare_report.created_at.isoformat() if compare_report.created_at else None,
+        "new_findings": new_findings,
+        "fixed_findings": fixed_findings,
+        "summary": {
+            "total_new": len(new_findings),
+            "total_fixed": len(fixed_findings),
+            "files_with_new_findings": len(files_with_new_findings),
+            "files_with_fixed_findings": len(files_with_fixed_findings),
+            "severity_changes": severity_changes,
+            "net_change": len(new_findings) - len(fixed_findings),
+        },
+        "changed_files": list(files_with_new_findings | files_with_fixed_findings),
+    }
+
+
 @router.post("/{report_id}/chat", response_model=ReportChatResponse)
 async def chat_about_report(report_id: int, request: ReportChatRequest, db: Session = Depends(get_db)):
     """
@@ -783,3 +1212,257 @@ Answer the user's question based on this security scan report. Be helpful, speci
             response="",
             error=f"Chat error: {str(e)}"
         )
+
+
+@router.get("/{report_id}/file-trends/{file_path:path}")
+def get_file_trends(report_id: int, file_path: str, db: Session = Depends(get_db)):
+    """
+    Get finding count trends for a specific file across recent scans.
+    Returns the last N reports for the same project with finding counts for this file.
+    """
+    report = _get_report(db, report_id)
+    
+    # Get the last 10 reports for this project (most recent first)
+    reports = db.query(models.Report).filter(
+        models.Report.project_id == report.project_id
+    ).order_by(models.Report.created_at.desc()).limit(10).all()
+    
+    # For each report, count findings in this file
+    trends = []
+    for r in reversed(reports):  # Oldest to newest for chart
+        finding_count = db.query(func.count(models.Finding.id)).filter(
+            models.Finding.scan_run_id == r.scan_run_id,
+            models.Finding.file_path == file_path
+        ).scalar() or 0
+        
+        # Get severity breakdown
+        severity_counts = {}
+        for sev in ["critical", "high", "medium", "low", "info"]:
+            count = db.query(func.count(models.Finding.id)).filter(
+                models.Finding.scan_run_id == r.scan_run_id,
+                models.Finding.file_path == file_path,
+                func.lower(models.Finding.severity) == sev
+            ).scalar() or 0
+            if count > 0:
+                severity_counts[sev] = count
+        
+        trends.append({
+            "report_id": r.id,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "finding_count": finding_count,
+            "severity_counts": severity_counts,
+        })
+    
+    return {
+        "file_path": file_path,
+        "trends": trends,
+        "current_report_id": report_id,
+    }
+
+
+@router.get("/{report_id}/todos")
+def get_todos(report_id: int, db: Session = Depends(get_db)):
+    """
+    Scan code chunks for TODO, FIXME, HACK, XXX, BUG, NOTE comments.
+    Returns a list of all comment markers found with line numbers.
+    """
+    import re
+    
+    report = _get_report(db, report_id)
+    
+    # Get all code chunks for this project
+    chunks = db.query(models.CodeChunk).filter(
+        models.CodeChunk.project_id == report.project_id
+    ).all()
+    
+    # Patterns to match (case insensitive)
+    patterns = {
+        "TODO": re.compile(r'(?:#|//|/\*|\*|--|\'\'\'|"""|<!--|;)\s*TODO[:\s](.+?)(?:\*/|-->|\n|$)', re.IGNORECASE),
+        "FIXME": re.compile(r'(?:#|//|/\*|\*|--|\'\'\'|"""|<!--|;)\s*FIXME[:\s](.+?)(?:\*/|-->|\n|$)', re.IGNORECASE),
+        "HACK": re.compile(r'(?:#|//|/\*|\*|--|\'\'\'|"""|<!--|;)\s*HACK[:\s](.+?)(?:\*/|-->|\n|$)', re.IGNORECASE),
+        "XXX": re.compile(r'(?:#|//|/\*|\*|--|\'\'\'|"""|<!--|;)\s*XXX[:\s](.+?)(?:\*/|-->|\n|$)', re.IGNORECASE),
+        "BUG": re.compile(r'(?:#|//|/\*|\*|--|\'\'\'|"""|<!--|;)\s*BUG[:\s](.+?)(?:\*/|-->|\n|$)', re.IGNORECASE),
+        "NOTE": re.compile(r'(?:#|//|/\*|\*|--|\'\'\'|"""|<!--|;)\s*NOTE[:\s](.+?)(?:\*/|-->|\n|$)', re.IGNORECASE),
+    }
+    
+    todos = []
+    
+    for chunk in chunks:
+        if not chunk.code:
+            continue
+            
+        lines = chunk.code.split('\n')
+        for line_offset, line in enumerate(lines):
+            line_num = (chunk.start_line or 1) + line_offset
+            
+            for marker, pattern in patterns.items():
+                match = pattern.search(line)
+                if match:
+                    # Get the text after the marker
+                    text = match.group(1).strip() if match.lastindex else ""
+                    # Fallback: grab rest of line after marker
+                    if not text:
+                        idx = line.upper().find(marker)
+                        if idx >= 0:
+                            text = line[idx + len(marker):].strip().lstrip(':').strip()
+                    
+                    todos.append({
+                        "type": marker,
+                        "file_path": chunk.file_path,
+                        "line": line_num,
+                        "text": text[:200],  # Limit length
+                        "full_line": line.strip()[:300],
+                    })
+    
+    # Sort by file, then by line
+    todos.sort(key=lambda x: (x["file_path"], x["line"]))
+    
+    # Summary counts
+    summary = {}
+    for t in todos:
+        summary[t["type"]] = summary.get(t["type"], 0) + 1
+    
+    # Group by file
+    by_file = {}
+    for t in todos:
+        if t["file_path"] not in by_file:
+            by_file[t["file_path"]] = []
+        by_file[t["file_path"]].append(t)
+    
+    return {
+        "total": len(todos),
+        "summary": summary,
+        "by_file": by_file,
+        "items": todos,
+    }
+
+
+@router.get("/{report_id}/search-code")
+def search_code(
+    report_id: int, 
+    q: str = Query(..., min_length=2, description="Search query"),
+    db: Session = Depends(get_db)
+):
+    """
+    Full-text search across code content in the codebase.
+    Returns matching lines with context.
+    """
+    import re
+    
+    report = _get_report(db, report_id)
+    
+    # Get all code chunks for this project
+    chunks = db.query(models.CodeChunk).filter(
+        models.CodeChunk.project_id == report.project_id
+    ).all()
+    
+    results = []
+    query_lower = q.lower()
+    
+    for chunk in chunks:
+        if not chunk.code:
+            continue
+        
+        lines = chunk.code.split('\n')
+        for line_offset, line in enumerate(lines):
+            if query_lower in line.lower():
+                line_num = (chunk.start_line or 1) + line_offset
+                
+                # Get context (1 line before and after)
+                context_before = lines[line_offset - 1] if line_offset > 0 else None
+                context_after = lines[line_offset + 1] if line_offset < len(lines) - 1 else None
+                
+                results.append({
+                    "file_path": chunk.file_path,
+                    "line": line_num,
+                    "content": line.strip(),
+                    "context_before": context_before.strip() if context_before else None,
+                    "context_after": context_after.strip() if context_after else None,
+                    "language": chunk.language,
+                })
+        
+        # Limit results to prevent huge responses
+        if len(results) >= 100:
+            break
+    
+    return {
+        "query": q,
+        "total": len(results),
+        "results": results[:100],
+        "truncated": len(results) >= 100,
+    }
+
+
+class ExplainCodeRequest(BaseModel):
+    file_path: str
+    code: str
+    language: str = None
+
+
+@router.post("/{report_id}/explain-code")
+def explain_code(report_id: int, request: ExplainCodeRequest, db: Session = Depends(get_db)):
+    """
+    Use AI to explain what a code file does.
+    """
+    from google import genai
+    from google.genai import types
+    
+    report = _get_report(db, report_id)
+    
+    # Get findings for this file to provide context
+    findings = db.query(models.Finding).filter(
+        models.Finding.scan_run_id == report.scan_run_id,
+        models.Finding.file_path == request.file_path
+    ).all()
+    
+    findings_context = ""
+    if findings:
+        findings_context = f"\n\n## Security Findings in this file ({len(findings)} total):\n"
+        for f in findings[:10]:
+            findings_context += f"- Line {f.start_line}: [{f.severity}] {f.type} - {f.summary[:100]}\n"
+    
+    try:
+        client = genai.Client()
+        
+        prompt = f"""You are a code analysis assistant. Explain what this code file does in a clear, concise way.
+
+## File: {request.file_path}
+## Language: {request.language or 'Unknown'}
+
+```{request.language or ''}
+{request.code[:15000]}
+```
+{findings_context}
+
+Provide:
+1. **Purpose**: What does this file/module do? (1-2 sentences)
+2. **Key Components**: Main functions/classes and what they do
+3. **Data Flow**: How data moves through this code
+4. **Dependencies**: What external libraries/modules it uses
+5. **Security Notes**: Any security-relevant observations based on the code and findings
+
+Keep the explanation concise but informative. Use bullet points."""
+
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[{"role": "user", "parts": [{"text": prompt}]}],
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=1500,
+            )
+        )
+        
+        return {
+            "file_path": request.file_path,
+            "explanation": response.text,
+            "findings_count": len(findings),
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "file_path": request.file_path,
+            "explanation": None,
+            "error": f"Failed to generate explanation: {str(e)}",
+        }
