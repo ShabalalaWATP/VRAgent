@@ -1,7 +1,8 @@
 import hashlib
 import json
+import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from backend.core.config import settings
 from backend.core.exceptions import GeminiAPIError
@@ -10,14 +11,19 @@ from backend import models
 
 logger = get_logger(__name__)
 
-# Gemini embedding model - text-embedding-004 produces 768-dim vectors
-EMBEDDING_MODEL = "text-embedding-004"
-EMBEDDING_DIM = 768  # text-embedding-004 produces 768 dimensions
+# Gemini embedding model - gemini-embedding-001 supports 256-3072 dimensions via MRL
+# Using 768 dims for good balance of quality and storage (default is 3072)
+EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_DIM = 768  # Can be 256, 512, 768, 1536, or 3072
 
 # Cost optimization settings
 MAX_EMBEDDING_BATCH_SIZE = 100  # Max texts per API call
 MAX_TEXT_LENGTH = 4000  # Truncate to reduce tokens (saves ~50% vs 8000)
 EMBEDDING_CACHE_DIR = Path("/tmp/vragent_embedding_cache")
+
+# Large codebase handling
+ADAPTIVE_EMBEDDING_THRESHOLD = 1000  # Start adaptive mode above this many chunks
+HIGH_PRIORITY_PERCENTAGE = 0.3  # Embed top 30% when above threshold
 
 # Smart filtering - skip code that's unlikely to have security issues
 SKIP_PATTERNS = {
@@ -100,6 +106,11 @@ def prioritize_chunks(chunks: List[models.CodeChunk], max_chunks: int = 500) -> 
     Prioritize chunks for embedding based on security relevance.
     
     This reduces costs by only embedding the most security-relevant code.
+    Uses a sophisticated scoring system that considers:
+    - Security keyword density
+    - File path indicators (auth, api, etc.)
+    - Code complexity signals
+    - Entry point indicators
     
     Args:
         chunks: All code chunks from the project
@@ -111,33 +122,119 @@ def prioritize_chunks(chunks: List[models.CodeChunk], max_chunks: int = 500) -> 
     if len(chunks) <= max_chunks:
         return chunks
     
-    # Score chunks by security relevance
+    # Adaptive scaling for very large codebases
+    if len(chunks) > ADAPTIVE_EMBEDDING_THRESHOLD:
+        # Scale down max_chunks proportionally but keep minimum coverage
+        scale_factor = ADAPTIVE_EMBEDDING_THRESHOLD / len(chunks)
+        adaptive_max = max(
+            int(max_chunks * scale_factor * 1.5),  # Scale with boost
+            int(len(chunks) * HIGH_PRIORITY_PERCENTAGE),  # At least top 30%
+            200  # Minimum baseline
+        )
+        max_chunks = min(max_chunks, adaptive_max)
+        logger.info(f"Adaptive embedding: {len(chunks)} chunks -> limiting to {max_chunks} (scale factor: {scale_factor:.2f})")
+    
+    # Score chunks by security relevance with enhanced algorithm
     scored = []
     for chunk in chunks:
-        if _should_skip_chunk(chunk.code, chunk.file_path):
+        score, skip_reason = _score_chunk_for_embedding(chunk)
+        if skip_reason:
             continue
-        
-        # Count security keywords
-        code_lower = chunk.code.lower()
-        score = sum(1 for kw in SECURITY_KEYWORDS if kw in code_lower)
-        
-        # Boost certain file types
-        if any(ext in chunk.file_path for ext in [".py", ".js", ".ts", ".java", ".go"]):
-            score += 1
-        
-        # Boost files with security-related names
-        path_lower = chunk.file_path.lower()
-        if any(term in path_lower for term in ["auth", "security", "crypto", "api", "route", "handler"]):
-            score += 3
-        
         scored.append((score, chunk))
     
     # Sort by score (descending) and take top chunks
     scored.sort(key=lambda x: x[0], reverse=True)
     selected = [chunk for _, chunk in scored[:max_chunks]]
     
-    logger.info(f"Prioritized {len(selected)} of {len(chunks)} chunks for embedding (saved {len(chunks) - len(selected)} API calls)")
+    # Log distribution for debugging
+    if scored:
+        top_score = scored[0][0] if scored else 0
+        threshold_score = scored[max_chunks - 1][0] if len(scored) >= max_chunks else 0
+        logger.info(
+            f"Prioritized {len(selected)} of {len(chunks)} chunks for embedding "
+            f"(score range: {threshold_score:.1f}-{top_score:.1f}, saved {len(chunks) - len(selected)} API calls)"
+        )
+    
     return selected
+
+
+def _score_chunk_for_embedding(chunk: models.CodeChunk) -> Tuple[float, Optional[str]]:
+    """
+    Score a code chunk for embedding priority.
+    
+    Returns:
+        Tuple of (score, skip_reason) where skip_reason is None if chunk should be processed
+    """
+    code = chunk.code
+    file_path = chunk.file_path
+    
+    # Skip conditions
+    if _should_skip_chunk(code, file_path):
+        return 0.0, "Skipped by filter"
+    
+    # Base score
+    score = 0.0
+    code_lower = code.lower()
+    path_lower = file_path.lower()
+    
+    # 1. Security keyword scoring (primary factor)
+    keyword_hits = 0
+    for kw in SECURITY_KEYWORDS:
+        count = code_lower.count(kw)
+        if count > 0:
+            keyword_hits += min(count, 3)  # Cap per-keyword contribution
+    score += keyword_hits * 2
+    
+    # 2. High-value security patterns (boost significantly)
+    high_value_patterns = [
+        (r'(?:password|passwd|pwd)\s*=', 5, "password assignment"),
+        (r'(?:api[_-]?key|secret[_-]?key|auth[_-]?token)\s*=', 5, "credential assignment"),
+        (r'execute\s*\([^)]*\+', 4, "dynamic query execution"),
+        (r'eval\s*\(|exec\s*\(', 4, "code execution"),
+        (r'subprocess|os\.system|shell\s*=\s*true', 4, "command execution"),
+        (r'sql.*?["\'].*?\+|f["\'].*?select|f["\'].*?insert', 4, "SQL construction"),
+        (r'\.innerHTML\s*=|document\.write', 3, "DOM manipulation"),
+        (r'pickle\.load|yaml\.load|deserialize', 3, "deserialization"),
+        (r'verify\s*=\s*false|cert\s*=\s*false', 3, "cert verification disabled"),
+        (r'@app\.route|@router\.|@api\.|\.get\(|\.post\(', 2, "API endpoint"),
+        (r'def\s+(?:login|auth|verify|validate)', 2, "auth function"),
+        (r'crypto|cipher|hash|hmac|bcrypt|argon', 2, "cryptography"),
+    ]
+    
+    for pattern, boost, _ in high_value_patterns:
+        if re.search(pattern, code_lower):
+            score += boost
+    
+    # 3. File path scoring
+    high_value_paths = [
+        ("auth", 4), ("login", 4), ("security", 4), ("crypto", 4),
+        ("api", 3), ("route", 3), ("handler", 3), ("controller", 3),
+        ("middleware", 3), ("validator", 2), ("sanitize", 2),
+        ("admin", 2), ("user", 2), ("permission", 2), ("role", 2),
+        ("upload", 2), ("download", 2), ("file", 1), ("config", 1),
+    ]
+    
+    for term, boost in high_value_paths:
+        if term in path_lower:
+            score += boost
+    
+    # 4. Language boost (some languages need more attention)
+    if any(ext in file_path for ext in [".py", ".php", ".rb", ".js"]):
+        score += 1  # Interpreted languages often have more vulns
+    
+    # 5. Code complexity indicators
+    if len(code) > 500:
+        score += 1  # Longer functions more likely to have issues
+    
+    # Penalize likely low-value code
+    if re.search(r'^(?:import|from|require|use)\s', code):
+        if code.count('\n') < 5:  # Pure import block
+            score -= 2
+    
+    if re.search(r'(?:test_|_test|spec_|_spec|mock|stub)', path_lower):
+        score -= 3  # Test files less priority
+    
+    return max(score, 0.1), None  # Ensure minimum positive score
 
 
 async def embed_texts(texts: List[str], use_cache: bool = True) -> List[List[float]]:
@@ -188,9 +285,10 @@ async def embed_texts(texts: List[str], use_cache: bool = True) -> List[List[flo
     if not texts_to_embed:
         return [results[i] for i in range(len(texts))]
     
-    # Use Google GenAI SDK
+    # Use Google GenAI SDK (new unified SDK)
     try:
         from google import genai
+        from google.genai import types
         
         client = genai.Client(api_key=settings.gemini_api_key)
         
@@ -202,10 +300,13 @@ async def embed_texts(texts: List[str], use_cache: bool = True) -> List[List[flo
                 try:
                     response = client.models.embed_content(
                         model=EMBEDDING_MODEL,
-                        contents=text
+                        contents=text,
+                        config=types.EmbedContentConfig(
+                            output_dimensionality=EMBEDDING_DIM
+                        )
                     )
-                    # Handle response - embeddings is a list of ContentEmbedding objects
-                    if response.embeddings and len(response.embeddings) > 0:
+                    # Handle response - embeddings is a list
+                    if response and response.embeddings:
                         embedding = list(response.embeddings[0].values)
                     else:
                         embedding = [0.0] * EMBEDDING_DIM

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -27,6 +27,7 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  TextField,
   Tooltip,
   Typography,
   alpha,
@@ -35,7 +36,8 @@ import {
   keyframes,
 } from "@mui/material";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, AIInsights, AttackChain, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, ExploitScenario, Finding } from "../api/client";
+import { api, AIInsights, AttackChain, ChatMessage, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, ExploitScenario, Finding } from "../api/client";
+import ReactMarkdown from "react-markdown";
 
 // Animations
 const fadeIn = keyframes`
@@ -141,6 +143,42 @@ const MapIcon = () => (
 const CloseIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+  </svg>
+);
+
+const ChatIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z" />
+  </svg>
+);
+
+const SendIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+  </svg>
+);
+
+const SmartToyIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zM7.5 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S9.83 13 9 13s-1.5-.67-1.5-1.5zM16 17H8v-2h8v2zm-1-4c-.83 0-1.5-.67-1.5-1.5S14.17 10 15 10s1.5.67 1.5 1.5S15.83 13 15 13z" />
+  </svg>
+);
+
+const PersonIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+  </svg>
+);
+
+const ExpandMoreIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z" />
+  </svg>
+);
+
+const ExpandLessIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z" />
   </svg>
 );
 
@@ -840,6 +878,14 @@ export default function ReportDetailPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [exploitMode, setExploitMode] = useState<"auto" | "summary" | "full">("summary");
 
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   const reportQuery = useQuery({
     queryKey: ["report", id],
     queryFn: () => api.getReport(id),
@@ -926,6 +972,52 @@ export default function ReportDetailPage() {
     } else {
       setSortField(field);
       setSortOrder("asc");
+    }
+  };
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages]);
+
+  // Handle sending chat message
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || chatLoading || !id) return;
+
+    const userMessage: ChatMessage = { role: "user", content: chatInput.trim() };
+    setChatMessages((prev) => [...prev, userMessage]);
+    setChatInput("");
+    setChatLoading(true);
+    setChatError(null);
+
+    try {
+      const response = await api.chatAboutReport(
+        id,
+        userMessage.content,
+        chatMessages,
+        activeTab === 2 ? "exploitability" : "findings"
+      );
+
+      if (response.error) {
+        setChatError(response.error);
+      } else {
+        const assistantMessage: ChatMessage = { role: "assistant", content: response.response };
+        setChatMessages((prev) => [...prev, assistantMessage]);
+      }
+    } catch (err: any) {
+      setChatError(err.message || "Failed to send message");
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  // Handle Enter key in chat input
+  const handleChatKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
     }
   };
 
@@ -2136,6 +2228,239 @@ export default function ReportDetailPage() {
             </Grid>
           )}
         </Box>
+      )}
+
+      {/* Chat Window - Visible on Findings and Exploitability tabs */}
+      {(activeTab === 0 || activeTab === 2) && findingsQuery.data && (
+        <Paper
+          sx={{
+            position: "fixed",
+            bottom: 0,
+            right: 24,
+            width: chatOpen ? 450 : 200,
+            maxHeight: chatOpen ? "60vh" : "auto",
+            zIndex: 1200,
+            borderRadius: "12px 12px 0 0",
+            boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
+            overflow: "hidden",
+            transition: "all 0.3s ease",
+          }}
+        >
+          {/* Chat Header */}
+          <Box
+            onClick={() => setChatOpen(!chatOpen)}
+            sx={{
+              p: 2,
+              bgcolor: activeTab === 2 ? theme.palette.error.main : theme.palette.primary.main,
+              color: "white",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              "&:hover": { 
+                bgcolor: activeTab === 2 ? theme.palette.error.dark : theme.palette.primary.dark 
+              },
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <ChatIcon />
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Ask About {activeTab === 2 ? "Exploits" : "Findings"}
+              </Typography>
+            </Box>
+            <IconButton size="small" sx={{ color: "white" }}>
+              {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+            </IconButton>
+          </Box>
+
+          {/* Chat Content */}
+          <Collapse in={chatOpen}>
+            {/* Messages Area */}
+            <Box
+              sx={{
+                height: "calc(60vh - 140px)",
+                maxHeight: 400,
+                overflowY: "auto",
+                p: 2,
+                bgcolor: alpha(theme.palette.background.default, 0.5),
+              }}
+            >
+              {/* Welcome message */}
+              {chatMessages.length === 0 && (
+                <Box sx={{ textAlign: "center", py: 4 }}>
+                  <SmartToyIcon />
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: 1 }}>
+                    Ask me anything about these {activeTab === 2 ? "exploit scenarios" : "security findings"}!
+                  </Typography>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                    {(activeTab === 2
+                      ? [
+                          "Which exploit has the highest impact?",
+                          "Summarize the attack narratives",
+                          "What should I fix first?",
+                          "How can I prevent these attacks?",
+                        ]
+                      : [
+                          "What's the most critical vulnerability?",
+                          "Show me SQL injection findings",
+                          "Which files have the most issues?",
+                          "Summarize the security posture",
+                        ]
+                    ).map((suggestion, i) => (
+                      <Chip
+                        key={i}
+                        label={suggestion}
+                        variant="outlined"
+                        size="small"
+                        onClick={() => setChatInput(suggestion)}
+                        sx={{ cursor: "pointer", "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.1) } }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* Chat Messages */}
+              {chatMessages.map((msg, i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    display: "flex",
+                    justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                    mb: 2,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      maxWidth: "85%",
+                      display: "flex",
+                      gap: 1,
+                      flexDirection: msg.role === "user" ? "row-reverse" : "row",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        bgcolor: msg.role === "user" ? theme.palette.primary.main : theme.palette.secondary.main,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {msg.role === "user" ? (
+                        <PersonIcon />
+                      ) : (
+                        <SmartToyIcon />
+                      )}
+                    </Box>
+                    <Paper
+                      sx={{
+                        p: 1.5,
+                        bgcolor: msg.role === "user" ? theme.palette.primary.main : theme.palette.background.paper,
+                        color: msg.role === "user" ? "white" : "text.primary",
+                        borderRadius: 2,
+                        "& p": { m: 0 },
+                        "& p:not(:last-child)": { mb: 1 },
+                        "& code": {
+                          bgcolor: alpha(msg.role === "user" ? "#fff" : theme.palette.primary.main, 0.2),
+                          px: 0.5,
+                          borderRadius: 0.5,
+                          fontFamily: "monospace",
+                          fontSize: "0.85em",
+                        },
+                        "& ul, & ol": { pl: 2, m: 0 },
+                        "& li": { mb: 0.5 },
+                      }}
+                    >
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </Paper>
+                  </Box>
+                </Box>
+              ))}
+
+              {/* Loading indicator */}
+              {chatLoading && (
+                <Box sx={{ display: "flex", justifyContent: "flex-start", mb: 2 }}>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Box
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        bgcolor: theme.palette.secondary.main,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <SmartToyIcon />
+                    </Box>
+                    <Paper sx={{ p: 1.5, borderRadius: 2 }}>
+                      <Box sx={{ display: "flex", gap: 0.5 }}>
+                        <CircularProgress size={8} />
+                        <CircularProgress size={8} sx={{ animationDelay: "0.2s" }} />
+                        <CircularProgress size={8} sx={{ animationDelay: "0.4s" }} />
+                      </Box>
+                    </Paper>
+                  </Box>
+                </Box>
+              )}
+
+              {/* Error message */}
+              {chatError && (
+                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setChatError(null)}>
+                  {chatError}
+                </Alert>
+              )}
+
+              <div ref={chatEndRef} />
+            </Box>
+
+            {/* Input Area */}
+            <Box
+              sx={{
+                p: 2,
+                borderTop: `1px solid ${theme.palette.divider}`,
+                bgcolor: theme.palette.background.paper,
+              }}
+            >
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder={`Ask about ${activeTab === 2 ? "exploits" : "findings"}...`}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={handleChatKeyDown}
+                  disabled={chatLoading}
+                  multiline
+                  maxRows={3}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: 2,
+                    },
+                  }}
+                />
+                <IconButton
+                  color="primary"
+                  onClick={handleSendMessage}
+                  disabled={!chatInput.trim() || chatLoading}
+                  sx={{
+                    bgcolor: theme.palette.primary.main,
+                    color: "white",
+                    "&:hover": { bgcolor: theme.palette.primary.dark },
+                    "&:disabled": { bgcolor: theme.palette.action.disabledBackground },
+                  }}
+                >
+                  <SendIcon />
+                </IconButton>
+              </Box>
+            </Box>
+          </Collapse>
+        </Paper>
       )}
     </Box>
   );

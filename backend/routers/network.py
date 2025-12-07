@@ -981,11 +981,11 @@ async def chat_about_analysis(request: ChatRequest):
         )
     
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types
         import json
         
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel(settings.gemini_model_id)
+        client = genai.Client(api_key=settings.gemini_api_key)
         
         # Build context based on analysis type
         summary = request.context.get("summary", {})
@@ -1051,22 +1051,31 @@ Answer the user's question based on this PCAP analysis. Be helpful, specific, an
 
 Keep responses concise but informative. Use technical terms appropriately but explain them if the user seems to need clarification."""
 
-        # Build conversation messages
-        messages = [{"role": "user", "parts": [context + "\n\nThe user's first question is below."]}]
+        # Build conversation history for multi-turn chat
+        contents = []
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part(text=context + "\n\nThe user's first question is below.")]
+        ))
         
         # Add conversation history
         for msg in request.conversation_history:
-            if msg.role == "user":
-                messages.append({"role": "user", "parts": [msg.content]})
-            else:
-                messages.append({"role": "model", "parts": [msg.content]})
+            contents.append(types.Content(
+                role="user" if msg.role == "user" else "model",
+                parts=[types.Part(text=msg.content)]
+            ))
         
         # Add current message
-        messages.append({"role": "user", "parts": [request.message]})
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part(text=request.message)]
+        ))
         
         # Generate response
-        chat = model.start_chat(history=messages[:-1])
-        response = await chat.send_message_async(request.message)
+        response = await client.aio.models.generate_content(
+            model=settings.gemini_model_id,
+            contents=contents
+        )
         
         return ChatResponse(response=response.text)
         

@@ -1,7 +1,7 @@
 # AI Agent Vulnerability Research (VRAgent)
 
 An end-to-end platform for automated security vulnerability scanning and analysis. VRAgent provides:
-- **Code Security Scanning**: Upload code or clone repositories for comprehensive vulnerability detection with 7 specialized scanners
+- **Code Security Scanning**: Upload code or clone repositories for comprehensive vulnerability detection with 10+ specialized scanners
 - **Network Security Analysis**: Run Nmap scans and analyze PCAP files with AI-powered insights
 - **AI-Powered Reports**: Google Gemini generates detailed exploitability narratives, attack scenarios, and remediation guidance
 - **Interactive Learning Hub**: Educational content covering security fundamentals, attack frameworks, and pentesting methodologies
@@ -14,7 +14,7 @@ An end-to-end platform for automated security vulnerability scanning and analysi
 
 ### Security Scanners
 
-VRAgent integrates **7 specialized security scanners** for comprehensive vulnerability detection:
+VRAgent integrates **10+ specialized security scanners** for comprehensive vulnerability detection:
 
 | Scanner | Languages | What It Detects |
 |---------|-----------|-----------------|
@@ -25,6 +25,36 @@ VRAgent integrates **7 specialized security scanners** for comprehensive vulnera
 | **SpotBugs + FindSecBugs** | Java/Kotlin | SQL injection, XXE, LDAP injection, weak crypto, Spring security |
 | **clang-tidy** | C/C++ | Buffer overflows, format strings, insecure functions, memory safety |
 | **Secret Scanner** | All files | 50+ secret types: AWS, GCP, Azure, OpenAI, Anthropic, Hugging Face, and more |
+| **Docker Scanner** | Dockerfiles, Images | Dockerfile misconfigurations, image vulnerabilities via Trivy/Grype |
+| **IaC Scanner** | Terraform, K8s, CloudFormation | Infrastructure security issues, misconfigurations, compliance violations |
+
+### Docker & Container Security
+- **Dockerfile Scanning**: 15+ security rules including:
+  - Running as root detection (DS001)
+  - Hardcoded secrets in ENV/ARG (DS002)
+  - Missing HEALTHCHECK (DS004)
+  - Using `latest` tag (DS006)
+  - Exposing sensitive ports (DS007)
+  - ADD vs COPY misuse (DS013)
+  - Privileged operations (DS014)
+- **Container Image Scanning**: Integration with Trivy/Grype for CVE detection in base images
+- **Docker Compose Analysis**: Parses docker-compose.yml for security issues
+
+### Infrastructure as Code (IaC) Security
+- **Multi-Framework Support**:
+  - **Terraform**: HCL configuration scanning
+  - **Kubernetes**: YAML manifest analysis
+  - **CloudFormation**: AWS template scanning
+  - **ARM Templates**: Azure resource templates
+- **40+ Built-in Rules**: Including:
+  - Unencrypted storage (IAC001)
+  - Public access enabled (IAC002)
+  - Missing logging/monitoring (IAC003)
+  - Overly permissive IAM (IAC004)
+  - Hardcoded credentials (IAC005)
+  - Missing network policies (IAC009)
+  - Privileged containers (IAC013)
+- **Tool Integration**: Checkov and tfsec for comprehensive analysis
 
 ### Dependency Security
 - **7 Ecosystem Support**: Parses manifests for comprehensive dependency analysis:
@@ -38,6 +68,9 @@ VRAgent integrates **7 specialized security scanners** for comprehensive vulnera
 - **CVE Database Lookup**: Queries OSV.dev for known vulnerabilities (aggregates CVE, GHSA, and ecosystem advisories)
 - **NVD Enrichment**: Full CVSS vectors, CWE mappings, and reference links from NIST
 - **EPSS Prioritization**: Score vulnerabilities by real-world exploitation probability
+- **Transitive Dependency Analysis**: Builds complete dependency trees to find vulnerabilities in indirect dependencies
+- **Reachability Analysis**: Determines if vulnerable code paths are actually reachable from your application
+- **CISA KEV Integration**: Flags vulnerabilities in CISA's Known Exploited Vulnerabilities catalog
 
 ### AI-Powered Analysis
 - **Google Gemini Integration**: AI-powered code analysis and exploitability narratives
@@ -64,10 +97,14 @@ VRAgent integrates **7 specialized security scanners** for comprehensive vulnera
   - Code chunks are fingerprinted by file path, line range, and content hash
   - Only new or modified code gets sent for embedding
   - Dramatically reduces AI API costs on incremental scans
-- **Parallel Scanner Execution**: Security scanners run concurrently for faster results
-  - Up to 4 scanners run in parallel using ThreadPoolExecutor
-  - Most beneficial for polyglot projects (Python + JS + Go, etc.)
-  - Single-language projects see modest improvement
+- **Parallel Phase Execution**: Major scan phases run concurrently for 2-3x faster scans
+  - SAST scanners, Docker scanning, IaC scanning, and dependency analysis run in parallel
+  - Thread-safe progress tracking with ParallelPhaseTracker
+  - Automatic result aggregation from all parallel phases
+- **Smart Scanner Deduplication**: Cross-scanner finding deduplication
+  - Merges duplicate findings from different scanners (e.g., Semgrep + Bandit)
+  - Location-based and content-based matching
+  - Preserves highest severity and combines metadata
 - **Cache Management API**: Endpoints to view stats and clear caches
   - `GET /cache/stats`: View hit rates, memory usage, keys by namespace
   - `DELETE /cache/{namespace}`: Clear specific cache (osv, nvd, epss, embedding)
@@ -214,7 +251,7 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
 - **Database**: PostgreSQL with pgvector for embeddings
 - **Workers**: Background job processing for long-running scans
 - **Redis**: Job queuing, WebSocket pub/sub, and API response caching
-- **Scanners**: Semgrep, Bandit, ESLint, gosec, SpotBugs, clang-tidy, Secret Scanner
+- **Scanners**: Semgrep, Bandit, ESLint, gosec, SpotBugs, clang-tidy, Secret Scanner, Docker Scanner, IaC Scanner
 - **Network Tools**: Nmap (scanning), tshark (packet capture)
 - **AI**: Google Gemini for code analysis, exploitability narratives, and network analysis
 
@@ -1003,6 +1040,7 @@ The frontend will be available at http://localhost:5173
 | `GET` | `/reports/{id}/export/docx` | Export as DOCX |
 | `GET` | `/reports/{id}/export/sbom/cyclonedx` | Export SBOM (CycloneDX) |
 | `GET` | `/reports/{id}/export/sbom/spdx` | Export SBOM (SPDX) |
+| `POST` | `/reports/{id}/chat` | Chat with AI about findings/exploits |
 
 ### Webhooks
 
@@ -1120,7 +1158,9 @@ VRAgent/
 │   │   ├── clangtidy_service.py      # C/C++ security scanning (clang-tidy)
 │   │   ├── codebase_service.py       # Code extraction & parsing
 │   │   ├── cve_service.py            # OSV vulnerability lookup
+│   │   ├── deduplication_service.py  # Cross-scanner finding deduplication
 │   │   ├── dependency_service.py     # Multi-language dependency parsing
+│   │   ├── docker_scan_service.py    # Docker & container security
 │   │   ├── embedding_service.py      # Gemini embeddings
 │   │   ├── epss_service.py           # EPSS vulnerability scoring
 │   │   ├── eslint_service.py         # JavaScript/TypeScript scanning (ESLint)
@@ -1128,17 +1168,20 @@ VRAgent/
 │   │   ├── export_service.py         # Report generation (MD/PDF/DOCX)
 │   │   ├── git_service.py            # Repository cloning
 │   │   ├── gosec_service.py          # Go security scanning (gosec)
+│   │   ├── iac_scan_service.py       # Infrastructure as Code scanning
 │   │   ├── network_export_service.py # Network report exports
 │   │   ├── nmap_service.py           # Nmap scanning & parsing
 │   │   ├── nvd_service.py            # NVD CVE enrichment
 │   │   ├── pcap_service.py           # PCAP analysis & capture
 │   │   ├── project_service.py        # Project management
+│   │   ├── reachability_service.py   # Call graph & reachability analysis
 │   │   ├── report_service.py         # Report creation
 │   │   ├── sbom_service.py           # SBOM generation (CycloneDX/SPDX)
 │   │   ├── scan_service.py           # Scan orchestration
 │   │   ├── secret_service.py         # Secret detection
 │   │   ├── semgrep_service.py        # Multi-language SAST (Semgrep)
 │   │   ├── spotbugs_service.py       # Java/Kotlin scanning (SpotBugs)
+│   │   ├── transitive_deps_service.py # Transitive dependency analysis
 │   │   ├── webhook_service.py        # Webhook notifications
 │   │   └── websocket_service.py      # Real-time updates
 │   │
@@ -1236,6 +1279,58 @@ To run completely free (no LLM):
 SKIP_EMBEDDINGS=true GEMINI_API_KEY= docker-compose up
 ```
 
+### Large Codebase Handling
+
+VRAgent is optimized to handle large codebases (100k+ LOC) efficiently without sacrificing analysis quality:
+
+#### Intelligent Code Chunking
+- **AST-based parsing**: Python files use Abstract Syntax Tree parsing for accurate function/class boundaries
+- **Language-aware splitting**: Custom parsers for JS/TS, Java/Kotlin, Go, Ruby, PHP, Rust, and C/C++
+- **Size-bounded chunks**: Prevents oversized chunks that could overwhelm analysis
+- **Semantic boundaries**: Preserves code context for better vulnerability detection
+
+#### Streaming File Processing
+- **Batch processing**: Files are processed in batches to limit memory usage
+- **Progressive commits**: Code chunks are saved to database incrementally
+- **Early termination**: Stops gracefully when limits are reached, reporting partial results
+
+#### Smart Prioritization
+- **Security keyword scoring**: Code with authentication, crypto, SQL keywords gets priority
+- **High-value pattern detection**: Recognizes password assignments, API endpoints, command execution
+- **File path analysis**: Prioritizes files in `/auth/`, `/api/`, `/security/` directories
+- **Adaptive scaling**: Automatically adjusts limits for very large codebases
+
+#### Large Codebase Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAX_SOURCE_FILES` | Maximum source files to process | `5000` |
+| `MAX_TOTAL_CHUNKS` | Maximum code chunks across all files | `5000` |
+| `MAX_CHUNKS_PER_FILE` | Maximum chunks per individual file | `50` |
+| `CHUNK_FLUSH_THRESHOLD` | Chunks before DB flush (memory control) | `500` |
+| `SCANNER_TIMEOUT` | Per-scanner timeout in seconds | `600` |
+| `MAX_PARALLEL_SCANNERS` | Concurrent scanner limit | `4` |
+| `MAX_FINDINGS_FOR_AI` | Max findings for AI analysis | `500` |
+| `MAX_FINDINGS_FOR_LLM` | Max findings sent to LLM | `50` |
+
+**Example configuration for very large codebases (500k+ LOC):**
+```bash
+MAX_TOTAL_CHUNKS=10000 \
+MAX_EMBEDDING_CHUNKS=1000 \
+SCANNER_TIMEOUT=1200 \
+MAX_FINDINGS_FOR_AI=1000 \
+docker-compose up
+```
+
+**Recommended settings by codebase size:**
+| Codebase Size | Files | Recommended Config |
+|---------------|-------|-------------------|
+| Small (<10k LOC) | <100 | Default settings |
+| Medium (10k-50k LOC) | 100-500 | Default settings |
+| Large (50k-200k LOC) | 500-2000 | Default settings |
+| Very Large (200k-500k LOC) | 2000-5000 | `MAX_TOTAL_CHUNKS=8000`, `SCANNER_TIMEOUT=900` |
+| Massive (500k+ LOC) | 5000+ | `MAX_TOTAL_CHUNKS=15000`, `SCANNER_TIMEOUT=1200`, `MAX_EMBEDDING_CHUNKS=1500` |
+
 ### Database Setup (Manual)
 
 If not using Docker, you'll need to set up PostgreSQL with pgvector:
@@ -1301,7 +1396,7 @@ Scans for over 50 types of secrets including:
 
 ### Static Analysis Scanners
 
-VRAgent runs **7 specialized security scanners** automatically based on the languages detected in your project:
+VRAgent runs **10+ specialized security scanners** automatically based on the languages and infrastructure detected in your project:
 
 #### Semgrep (Multi-Language SAST)
 Deep semantic analysis with 30+ security rulesets:
@@ -1347,6 +1442,37 @@ C/C++ security analyzer:
 - Memory safety issues, null pointer dereferences
 - Runs automatically when `.c`, `.cpp`, `.h`, `.hpp` files detected
 
+#### Docker Scanner
+Dockerfile and container image security:
+- **Dockerfile Linting**: 15+ rules for best practices and security
+  - DS001: Running as root
+  - DS002: Hardcoded secrets
+  - DS004: Missing HEALTHCHECK
+  - DS006: Using `latest` tag
+  - DS007: Sensitive port exposure
+  - DS013: ADD vs COPY misuse
+  - DS014: Privileged operations
+- **Image Vulnerability Scanning**: Trivy/Grype integration for CVE detection
+- **Docker Compose Analysis**: Multi-service security review
+- Runs automatically when `Dockerfile` or `docker-compose.yml` detected
+
+#### IaC Scanner (Terraform, Kubernetes, CloudFormation)
+Infrastructure as Code security analyzer:
+- **Terraform**: HCL security misconfigurations
+- **Kubernetes**: YAML manifest security issues
+- **CloudFormation**: AWS template vulnerabilities
+- **ARM Templates**: Azure resource security
+- **40+ Built-in Rules**:
+  - IAC001: Unencrypted storage
+  - IAC002: Public access enabled
+  - IAC003: Missing logging
+  - IAC004: Overly permissive IAM
+  - IAC005: Hardcoded credentials
+  - IAC009: Missing network policies
+  - IAC013: Privileged containers
+- **Tool Integration**: Checkov and tfsec when available
+- Runs automatically when `.tf`, `.yaml`/`.yml` (K8s), or CloudFormation templates detected
+
 ### Infrastructure Security
 
 - **Path Traversal Protection**: Zip extraction validates all paths to prevent directory escape attacks
@@ -1388,6 +1514,71 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📋 Changelog
 
+### December 7, 2025
+
+#### Docker & Infrastructure as Code Scanning
+
+**Docker Security Scanner:**
+- New `docker_scan_service.py` for comprehensive container security
+- **Dockerfile Linting**: 15+ security rules (DS001-DS015)
+  - Running as root, hardcoded secrets, missing HEALTHCHECK
+  - Using `latest` tag, sensitive ports, ADD vs COPY
+- **Image Scanning**: Integration with Trivy and Grype for CVE detection
+- **Docker Compose Analysis**: Multi-container security review
+- Automatic detection of Dockerfiles and docker-compose.yml
+
+**Infrastructure as Code Scanner:**
+- New `iac_scan_service.py` for infrastructure security
+- **Multi-Framework Support**:
+  - Terraform (.tf, .tfvars)
+  - Kubernetes (manifests, Helm charts)
+  - CloudFormation (JSON/YAML templates)
+  - ARM Templates (Azure)
+- **40+ Built-in Rules** (IAC001-IAC040+)
+- **Tool Integration**: Checkov and tfsec when available
+- Automatic framework detection
+
+#### Performance & Analysis Improvements
+
+**Parallel Phase Execution:**
+- Major scan phases now run concurrently (2-3x faster)
+- `ParallelPhaseTracker` for thread-safe progress tracking
+- SAST + Docker + IaC + Dependencies run in parallel
+- Automatic result aggregation
+
+**Scanner Deduplication:**
+- New `deduplication_service.py` merges duplicate findings
+- Cross-scanner matching (Semgrep + Bandit, etc.)
+- Location-based and content-based deduplication
+- Preserves highest severity rating
+
+**Transitive Dependency Analysis:**
+- New `transitive_deps_service.py` builds full dependency trees
+- Detects vulnerabilities in indirect dependencies
+- Shows dependency path to vulnerable package
+- Depth tracking for prioritization
+
+**Reachability Analysis:**
+- New `reachability_service.py` for call graph analysis
+- Determines if vulnerable functions are actually called
+- Reduces false positives for unused vulnerable code
+- Language-aware analysis for Python, JavaScript, Java, Go
+
+**CISA KEV Integration:**
+- Flags CVEs in CISA's Known Exploited Vulnerabilities catalog
+- `kev_in_wild` field on findings
+- Priority indicator for actively exploited vulnerabilities
+
+#### Frontend Updates
+
+**Improved Scan Progress Display:**
+- All new phases visible in real-time progress
+- Categorized phase display with icons
+- Expandable categories for detailed sub-phase tracking
+- Visual status indicators (complete/active/pending)
+
+---
+
 ### December 6, 2025
 
 #### Network Analysis Enhancements
@@ -1421,3 +1612,49 @@ This project is licensed under the MIT License - see the LICENSE file for detail
   - Supports both Nmap and PCAP analysis types
   - Accepts message, conversation history, and scan context
   - Returns AI-generated response with full context awareness
+
+---
+
+### December 7, 2025
+
+#### VR Scan Chat Integration
+
+**New Feature: AI Chat for Vulnerability Reports**
+- Added interactive chat window to VR Scan report pages (Findings and Exploitability tabs)
+- Chat with Gemini AI about scan findings, attack chains, and exploit scenarios
+- Full context awareness - LLM receives:
+  - All findings grouped by severity (Critical, High, Medium, Low, Info)
+  - AI analysis summary (false positives, severity adjustments)
+  - Attack chains identified during analysis
+  - Exploit scenarios with narratives and mitigations
+- Suggested questions to help users get started
+- Conversation history maintained for multi-turn discussions
+- Context-aware UI: Blue header for Findings tab, Red header for Exploitability tab
+
+**Backend API:**
+- New endpoint: `POST /reports/{id}/chat` - Chat with AI about VR Scan results
+  - Accepts message, conversation history, and context tab (findings/exploitability)
+  - Returns AI-generated response with full report context
+
+#### Learning Hub Documentation Updates
+
+**Updated Pages with Accurate Technical Details:**
+
+- **How Scanning Works** (`/learn/scanning`):
+  - Documented accurate 9-phase parallel scanning pipeline
+  - Added all 9 scanners including Trivy (Docker) and Checkov/tfsec (IaC)
+  - Updated statistics: 30+ languages, 2500+ rules, 50+ secret patterns
+  - Added Docker and IaC scanning sections with rule examples
+
+- **AI Analysis Explained** (`/learn/ai-analysis`):
+  - Documented hybrid heuristics + LLM approach
+  - Added heuristic patterns for false positive detection and severity adjustment
+  - Explained MAX_FINDINGS_FOR_LLM=50 batching strategy
+  - Documented 16+ built-in exploit templates
+  - Added background summary generation details
+
+- **VRAgent Architecture** (`/learn/architecture`):
+  - Expanded to 18 backend services (added Docker, IaC, AI Analysis services)
+  - Updated 13-step request flow with parallel execution
+  - Added pgvector, Semgrep, Trivy, Checkov to technology stack
+  - Documented embedding storage and reuse strategy

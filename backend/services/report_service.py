@@ -43,7 +43,7 @@ def calculate_risk(findings: List[models.Finding]) -> float:
     return round(min(100, base_score), 1)
 
 
-def build_report_summary(findings: List[models.Finding], attack_chains: List[Dict] = None, ai_summary: Dict = None) -> Dict:
+def build_report_summary(findings: List[models.Finding], attack_chains: List[Dict] = None, ai_summary: Dict = None, scan_stats: Dict = None) -> Dict:
     severity_counts = Counter([f.severity for f in findings])
     affected_packages = [
         f.details.get("dependency") for f in findings if f.details and f.details.get("dependency")
@@ -59,6 +59,11 @@ def build_report_summary(findings: List[models.Finding], attack_chains: List[Dic
     severity_adjusted_count = 0
     false_positives = []
     
+    # Count transitive and reachability stats from findings
+    transitive_vuln_count = 0
+    unreachable_vuln_count = 0
+    severity_downgraded_count = 0
+    
     for f in findings:
         ai_analysis = f.details.get("ai_analysis") if f.details else None
         if ai_analysis:
@@ -72,6 +77,19 @@ def build_report_summary(findings: List[models.Finding], attack_chains: List[Dic
                 })
             if ai_analysis.get("severity_adjusted"):
                 severity_adjusted_count += 1
+        
+        # Check for transitive dependency info
+        if f.details and f.details.get("is_transitive"):
+            transitive_vuln_count += 1
+        
+        # Check for reachability info
+        if f.details and f.details.get("reachability"):
+            if not f.details["reachability"].get("is_reachable"):
+                unreachable_vuln_count += 1
+        
+        # Check for severity downgrade
+        if f.details and f.details.get("severity_downgraded"):
+            severity_downgraded_count += 1
     
     return {
         "severity_counts": dict(severity_counts),
@@ -84,6 +102,12 @@ def build_report_summary(findings: List[models.Finding], attack_chains: List[Dic
             "false_positives": false_positives[:20],  # Limit to 20 for report
             **(ai_summary or {}),
         },
+        "scan_stats": {
+            **(scan_stats or {}),
+            "transitive_vulnerabilities": transitive_vuln_count,
+            "unreachable_vulnerabilities": unreachable_vuln_count,
+            "severity_downgrades": severity_downgraded_count,
+        },
     }
 
 
@@ -94,6 +118,7 @@ def create_report(
     findings: List[models.Finding],
     attack_chains: List[Dict] = None,
     ai_summary: Dict = None,
+    scan_stats: Dict = None,
 ) -> models.Report:
     report = models.Report(
         project_id=project.id,
@@ -101,7 +126,7 @@ def create_report(
         title=f"Security report for {project.name}",
         summary="Automated scan summary",
         overall_risk_score=calculate_risk(findings),
-        data=build_report_summary(findings, attack_chains, ai_summary),
+        data=build_report_summary(findings, attack_chains, ai_summary, scan_stats),
     )
     db.add(report)
     db.commit()

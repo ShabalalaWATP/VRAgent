@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     database_url: str = Field(..., validation_alias="DATABASE_URL")
     redis_url: str = Field(..., validation_alias="REDIS_URL")
     gemini_api_key: str = Field("", validation_alias="GEMINI_API_KEY")
-    gemini_model_id: str = Field("gemini-pro", validation_alias="GEMINI_MODEL_ID")
+    # Default to Gemini 2.5 Flash - best balance of cost and capability
+    # Other options: gemini-2.5-flash, gemini-3-pro-preview (most capable)
+    gemini_model_id: str = Field("gemini-2.5-flash", validation_alias="GEMINI_MODEL_ID")
     environment: str = Field("development", validation_alias="ENVIRONMENT")
     
     # NVD API key (optional - increases rate limits from 5/30s to 50/30s)
@@ -27,6 +29,20 @@ class Settings(BaseSettings):
     max_llm_exploit_calls: int = Field(20, validation_alias="MAX_LLM_EXPLOIT_CALLS")  # Max LLM calls for exploits
     enable_embedding_cache: bool = Field(True, validation_alias="ENABLE_EMBEDDING_CACHE")  # Disk cache for embeddings
     skip_embeddings: bool = Field(False, validation_alias="SKIP_EMBEDDINGS")  # Skip embedding entirely (cheapest)
+    
+    # Large codebase handling settings
+    max_source_files: int = Field(5000, validation_alias="MAX_SOURCE_FILES")  # Max files to process
+    max_total_chunks: int = Field(5000, validation_alias="MAX_TOTAL_CHUNKS")  # Max code chunks
+    max_chunks_per_file: int = Field(50, validation_alias="MAX_CHUNKS_PER_FILE")  # Max chunks per file
+    chunk_flush_threshold: int = Field(500, validation_alias="CHUNK_FLUSH_THRESHOLD")  # DB flush threshold
+    
+    # Scanner settings for large codebases
+    scanner_timeout: int = Field(600, validation_alias="SCANNER_TIMEOUT")  # Per-scanner timeout (10 min)
+    max_parallel_scanners: int = Field(4, validation_alias="MAX_PARALLEL_SCANNERS")  # Parallel scanner limit
+    
+    # AI Analysis settings for large codebases
+    max_findings_for_ai: int = Field(500, validation_alias="MAX_FINDINGS_FOR_AI")  # Max findings for AI analysis
+    max_findings_for_llm: int = Field(50, validation_alias="MAX_FINDINGS_FOR_LLM")  # Max findings sent to LLM
     
     @field_validator("environment")
     @classmethod

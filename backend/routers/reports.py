@@ -1,11 +1,29 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend import models
 from backend.core.database import get_db
 from backend.schemas import Finding, Report
+
+
+# Chat models
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ReportChatRequest(BaseModel):
+    message: str
+    conversation_history: List[ChatMessage] = []
+    context_tab: str = "findings"  # "findings" or "exploitability"
+
+
+class ReportChatResponse(BaseModel):
+    response: str
+    error: Optional[str] = None
 
 router = APIRouter()
 
@@ -74,3 +92,150 @@ def get_ai_insights(report_id: int, db: Session = Depends(get_db)) -> Dict[str, 
         "findings_analyzed": ai_summary.get("findings_analyzed", 0),
         "false_positives": ai_summary.get("false_positives", []),
     }
+
+
+@router.post("/{report_id}/chat", response_model=ReportChatResponse)
+async def chat_about_report(report_id: int, request: ReportChatRequest, db: Session = Depends(get_db)):
+    """
+    Chat with Gemini about a VR Scan report's findings and exploitability analysis.
+    
+    Allows users to ask follow-up questions about security findings, attack chains,
+    and exploit scenarios.
+    """
+    from backend.core.config import settings
+    
+    if not settings.gemini_api_key:
+        return ReportChatResponse(
+            response="",
+            error="Chat unavailable: GEMINI_API_KEY not configured"
+        )
+    
+    # Get the report
+    report = db.get(models.Report, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # Get findings
+    findings = db.query(models.Finding).filter(models.Finding.scan_run_id == report.scan_run_id).all()
+    
+    # Get exploitability scenarios
+    exploit_scenarios = db.query(models.ExploitScenario).filter(
+        models.ExploitScenario.report_id == report_id
+    ).all()
+    
+    try:
+        from google import genai
+        from google.genai import types
+        import json
+        
+        client = genai.Client(api_key=settings.gemini_api_key)
+        
+        # Build findings summary
+        findings_by_severity = {"critical": [], "high": [], "medium": [], "low": [], "info": []}
+        for f in findings:
+            severity = (f.severity or "info").lower()
+            if severity in findings_by_severity:
+                findings_by_severity[severity].append({
+                    "type": f.type,
+                    "title": f.title,
+                    "file": f.file_path,
+                    "line": f.start_line,
+                    "description": f.description[:300] if f.description else None,
+                    "cwe_id": f.cwe_id,
+                    "cve_id": f.cve_id,
+                })
+        
+        # Build exploit scenarios summary
+        exploit_data = []
+        for es in exploit_scenarios:
+            exploit_data.append({
+                "title": es.title,
+                "severity": es.severity,
+                "attack_narrative": es.attack_narrative[:500] if es.attack_narrative else None,
+                "impact": es.impact,
+                "mitigation": es.mitigation[:300] if es.mitigation else None,
+                "cvss_score": es.cvss_score,
+            })
+        
+        # Get AI analysis summary and attack chains from report data
+        ai_summary = report.data.get("ai_analysis_summary", {}) if report.data else {}
+        attack_chains = report.data.get("attack_chains", []) if report.data else []
+        
+        # Build the context prompt
+        context = f"""You are a helpful security analyst assistant. You have access to a vulnerability scan report and should answer questions about it.
+
+## SCAN REPORT CONTEXT
+
+### Report Overview
+- Report ID: {report.id}
+- Project: {report.project.name if report.project else 'Unknown'}
+- Created: {report.created_at}
+- Total Findings: {len(findings)}
+
+### Findings Summary by Severity
+- Critical: {len(findings_by_severity['critical'])} findings
+- High: {len(findings_by_severity['high'])} findings
+- Medium: {len(findings_by_severity['medium'])} findings
+- Low: {len(findings_by_severity['low'])} findings
+- Info: {len(findings_by_severity['info'])} findings
+
+### Critical & High Findings (Details)
+{json.dumps(findings_by_severity['critical'][:10] + findings_by_severity['high'][:15], indent=2)}
+
+### Medium Findings (Sample)
+{json.dumps(findings_by_severity['medium'][:10], indent=2)}
+
+### AI Analysis Summary
+- False Positives Identified: {ai_summary.get('false_positive_count', 0)}
+- Severity Adjustments: {ai_summary.get('severity_adjusted_count', 0)}
+
+### Attack Chains Identified
+{json.dumps(attack_chains[:5], indent=2) if attack_chains else "No attack chains identified."}
+
+### Exploit Scenarios ({len(exploit_data)} total)
+{json.dumps(exploit_data[:10], indent=2) if exploit_data else "No exploit scenarios generated yet."}
+
+---
+
+Answer the user's question based on this security scan report. Be helpful, specific, and reference the findings when relevant. 
+- If asked about specific vulnerabilities, reference the CWE/CVE IDs when available.
+- For remediation questions, provide actionable code-level fixes when possible.
+- For risk assessment questions, consider the attack chains and exploit scenarios.
+- Keep responses concise but technically accurate.
+- If asked about something not in the data, let them know what information is available."""
+
+        # Build conversation history
+        conversation = [{"role": "user", "parts": [{"text": context}]}]
+        conversation.append({"role": "model", "parts": [{"text": "I understand. I have access to this vulnerability scan report with its findings, attack chains, and exploit scenarios. I'm ready to answer questions about the security analysis. What would you like to know?"}]})
+        
+        # Add prior conversation
+        for msg in request.conversation_history:
+            conversation.append({
+                "role": "user" if msg.role == "user" else "model",
+                "parts": [{"text": msg.content}]
+            })
+        
+        # Add current message
+        conversation.append({
+            "role": "user",
+            "parts": [{"text": request.message}]
+        })
+        
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=conversation,
+            config=types.GenerateContentConfig(
+                temperature=0.7,
+                max_output_tokens=2048,
+            )
+        )
+        
+        return ReportChatResponse(response=response.text)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return ReportChatResponse(
+            response="",
+            error=f"Chat error: {str(e)}"
+        )

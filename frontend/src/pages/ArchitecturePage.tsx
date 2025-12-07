@@ -68,53 +68,92 @@ const backendServices: ServiceInfo[] = [
   {
     name: "Scan Service",
     file: "scan_service.py",
-    description: "Orchestrates the entire scanning pipeline, coordinating all other services in sequence.",
+    description: "Orchestrates the entire scanning pipeline with parallel phase execution using ThreadPoolExecutor.",
     responsibilities: [
-      "Manages the 9-phase scanning workflow",
-      "Coordinates scanner execution based on detected languages",
-      "Tracks scan progress and status via WebSocket",
-      "Handles errors gracefully and reports partial results",
-      "Calculates final risk scores using weighted formula",
+      "Manages the 9-phase scanning workflow with progress tracking",
+      "Runs SAST, Docker, IaC, and dependency scanning in parallel",
+      "Coordinates embedding generation with reuse from previous scans",
+      "Handles cross-scanner deduplication of findings",
+      "Broadcasts real-time progress via WebSocket",
     ],
-    dependencies: ["codebase_service", "dependency_service", "secret_service", "semgrep_service", "exploit_service"],
+    dependencies: ["codebase_service", "dependency_service", "semgrep_service", "docker_scan_service", "iac_scan_service"],
     color: "#3b82f6",
   },
   {
     name: "Codebase Service",
     file: "codebase_service.py",
-    description: "Handles code extraction, parsing, and analysis. First step in the scanning pipeline.",
+    description: "Handles code extraction with security protections and intelligent chunking for embeddings.",
     responsibilities: [
-      "Extracts ZIP archives with path traversal protection",
-      "Detects programming languages by file extension",
-      "Counts lines of code, files, and directories",
-      "Identifies frameworks from manifest files",
-      "Builds the codebase tree structure for UI",
+      "Extracts archives with zip bomb protection (500MB/10K file limits)",
+      "Path traversal protection validates all extracted paths",
+      "Streaming extraction handles large codebases efficiently",
+      "Intelligent chunking respects function/class boundaries",
+      "Security-relevant code prioritized for embedding",
     ],
     color: "#8b5cf6",
   },
   {
+    name: "Embedding Service",
+    file: "embedding_service.py",
+    description: "Generates vector embeddings using Gemini for semantic code search.",
+    responsibilities: [
+      "Uses gemini-embedding-001 model (768 dimensions)",
+      "Content hash comparison enables embedding reuse",
+      "Batch processing for efficient API usage",
+      "Stored in PostgreSQL with pgvector extension",
+      "Can be disabled via SKIP_EMBEDDINGS for faster scans",
+    ],
+    color: "#ec4899",
+  },
+  {
     name: "Dependency Service",
     file: "dependency_service.py",
-    description: "Parses dependency manifests for 7 ecosystems and extracts version information.",
+    description: "Parses dependency manifests across 8 ecosystems with lock file support.",
     responsibilities: [
-      "Parses requirements.txt, package.json, pom.xml, go.mod, Gemfile, Cargo.toml, composer.json",
-      "Handles lock files for precise version resolution",
-      "Normalizes package names across ecosystems",
-      "Deduplicates dependencies from multiple sources",
-      "Maps dependencies to ecosystem for CVE lookup",
+      "Parses: requirements.txt, Pipfile, pyproject.toml (Python)",
+      "Parses: package.json, package-lock.json, yarn.lock (npm)",
+      "Parses: pom.xml, build.gradle (Java), go.mod/sum (Go)",
+      "Parses: Gemfile (Ruby), Cargo.toml (Rust), composer.json (PHP)",
+      "Deduplicates dependencies from multiple manifest files",
     ],
     color: "#10b981",
   },
   {
+    name: "Transitive Deps Service",
+    file: "transitive_deps_service.py",
+    description: "Analyzes lock files to build complete dependency trees.",
+    responsibilities: [
+      "Parses package-lock.json, yarn.lock, pnpm-lock.yaml",
+      "Parses poetry.lock, Pipfile.lock, go.sum",
+      "Identifies direct vs transitive dependencies",
+      "Maps vulnerable paths through dependency tree",
+      "Calculates dependency depth for prioritization",
+    ],
+    color: "#f59e0b",
+  },
+  {
+    name: "Reachability Service",
+    file: "reachability_service.py",
+    description: "Determines if vulnerable dependencies are actually used in reachable code paths.",
+    responsibilities: [
+      "Analyzes import statements across all source files",
+      "Checks if vulnerable package functions are called",
+      "Marks unreachable vulnerabilities for deprioritization",
+      "Provides import evidence for reachable vulns",
+      "Reduces false positives from unused dependencies",
+    ],
+    color: "#7c3aed",
+  },
+  {
     name: "CVE Service",
     file: "cve_service.py",
-    description: "Queries OSV.dev to find known vulnerabilities in dependencies.",
+    description: "Queries OSV.dev for known vulnerabilities in dependencies.",
     responsibilities: [
       "Batch queries OSV API (100 deps per request)",
       "Maps ecosystem names to OSV format",
-      "Extracts CVE IDs, severity, and affected versions",
+      "Extracts CVE/GHSA IDs, severity, affected versions",
       "Handles rate limiting with concurrent batches",
-      "Aggregates CVE, GHSA, and ecosystem advisories",
+      "Aggregates advisories from multiple sources",
     ],
     dependencies: ["nvd_service", "epss_service"],
     color: "#ef4444",
@@ -122,144 +161,159 @@ const backendServices: ServiceInfo[] = [
   {
     name: "NVD Service",
     file: "nvd_service.py",
-    description: "Enriches CVE data with detailed information from NIST's National Vulnerability Database.",
+    description: "Enriches CVEs with detailed data from NIST NVD and CISA KEV.",
     responsibilities: [
-      "Fetches full CVSS v3/v4 vector strings",
+      "Fetches full CVSS v3/v4 vectors and scores",
       "Retrieves CWE weakness classifications",
-      "Gets reference links to advisories and patches",
+      "Checks CISA KEV (Known Exploited Vulnerabilities)",
+      "KEV matches auto-escalate to HIGH severity",
       "Caches responses for 24 hours",
-      "Handles rate limiting (5 or 50 req/30s)",
     ],
-    color: "#f59e0b",
+    color: "#dc2626",
   },
   {
     name: "EPSS Service",
     file: "epss_service.py",
-    description: "Scores vulnerabilities by real-world exploitation probability using FIRST's EPSS API.",
+    description: "Scores CVEs by real-world exploitation probability using FIRST's EPSS.",
     responsibilities: [
       "Batch queries EPSS API for all CVEs",
-      "Returns exploitation probability (0-1 scale)",
+      "Returns exploitation probability (0-100%)",
       "Provides percentile ranking vs all CVEs",
+      "High EPSS scores escalate severity",
       "Caches scores for 24 hours",
-      "Prioritizes actively exploited vulnerabilities",
     ],
-    color: "#ec4899",
+    color: "#f97316",
   },
   {
     name: "Semgrep Service",
     file: "semgrep_service.py",
-    description: "Runs Semgrep SAST scanner with 30+ security rulesets for multi-language analysis.",
+    description: "Runs Semgrep with 2000+ security rules across 30+ languages.",
     responsibilities: [
-      "Executes Semgrep with language-specific rulesets",
+      "Executes with OWASP, CWE, and framework rulesets",
       "Parses SARIF output into normalized findings",
-      "Applies OWASP, CWE, and framework-specific rules",
-      "Performs taint tracking for data flow analysis",
-      "Maps findings to files and line numbers",
+      "Supports taint tracking for data flow analysis",
+      "Configurable rule severity and timeout",
+      "Primary SAST scanner for all languages",
     ],
     color: "#6366f1",
   },
   {
     name: "Secret Service",
     file: "secret_service.py",
-    description: "Scans for 50+ types of hardcoded secrets and credentials.",
+    description: "Scans for 50+ types of hardcoded secrets with high-confidence patterns.",
     responsibilities: [
-      "Detects AWS, Azure, GCP, OpenAI, and other API keys",
-      "Finds private keys (RSA, SSH, PGP)",
-      "Identifies database connection strings",
-      "Reports file location and matched pattern",
-      "High-confidence regex with low false positives",
+      "Detects AWS, Azure, GCP, OpenAI API keys",
+      "Finds GitHub, GitLab, Slack, Discord tokens",
+      "Identifies Stripe, Twilio, SendGrid keys",
+      "Detects RSA, SSH, PGP private keys",
+      "Database connection strings and passwords",
     ],
     color: "#dc2626",
   },
   {
-    name: "Exploit Service",
-    file: "exploit_service.py",
-    description: "Generates AI-powered exploitability analysis using Google Gemini.",
+    name: "Docker Scan Service",
+    file: "docker_scan_service.py",
+    description: "Scans Docker resources using Trivy and custom Dockerfile linting.",
     responsibilities: [
-      "Groups findings by vulnerability category",
-      "Uses 30+ built-in exploit templates for common vulns",
-      "Calls Gemini API for novel vulnerability types",
-      "Generates attack narratives with PoC outlines",
-      "Provides impact assessment and mitigations",
+      "Trivy scans images for OS-level vulnerabilities",
+      "Custom Dockerfile rules detect misconfigurations",
+      "Checks for running as root, exposed ports",
+      "Detects secrets in build args",
+      "Validates base image versioning",
     ],
-    dependencies: ["ai_analysis_service"],
+    color: "#2496ed",
+  },
+  {
+    name: "IaC Scan Service",
+    file: "iac_scan_service.py",
+    description: "Infrastructure as Code scanning with Checkov and tfsec.",
+    responsibilities: [
+      "Checkov scans Terraform, K8s, CloudFormation, Helm",
+      "tfsec provides additional Terraform checks",
+      "Detects public S3, unencrypted storage, IAM issues",
+      "Identifies missing network policies in K8s",
+      "Supports ARM templates for Azure",
+    ],
     color: "#7c3aed",
   },
   {
     name: "AI Analysis Service",
     file: "ai_analysis_service.py",
-    description: "Generates AI-powered summaries of the application and its security posture.",
+    description: "Heuristic + LLM analysis for false positives, severity adjustment, and summaries.",
     responsibilities: [
-      "Creates application overview explaining what the code does",
-      "Generates security analysis summarizing risks",
-      "Caches summaries in database for instant exports",
-      "Uses Gemini with optimized prompts",
-      "Handles context length limits gracefully",
+      "Heuristic patterns detect obvious false positives",
+      "Severity adjustment for context (auth, admin, internal)",
+      "Attack chain discovery from related findings",
+      "LLM analysis limited to MAX_FINDINGS=50",
+      "Background summary generation after scan completes",
     ],
     color: "#8b5cf6",
   },
   {
+    name: "Exploit Service",
+    file: "exploit_service.py",
+    description: "Generates exploit scenarios using templates and LLM.",
+    responsibilities: [
+      "16+ pre-built exploit templates for common vulns",
+      "Templates for SQLi, XSS, RCE, SSRF, XXE, etc.",
+      "LLM generates scenarios for novel vuln types",
+      "Includes attack steps, PoC outlines, impact",
+      "Provides remediation code examples",
+    ],
+    dependencies: ["ai_analysis_service"],
+    color: "#ef4444",
+  },
+  {
     name: "Export Service",
     file: "export_service.py",
-    description: "Generates professional security reports in multiple formats.",
+    description: "Generates security reports in Markdown, PDF, and DOCX formats.",
     responsibilities: [
-      "Exports to Markdown, PDF, and DOCX formats",
-      "Includes AI summaries and exploit scenarios",
-      "Generates severity breakdown tables",
-      "Adds CVSS scores and EPSS probabilities",
+      "Uses cached AI summaries for instant exports",
+      "Includes severity breakdown with charts",
+      "Adds CVSS scores, EPSS, KEV status",
       "Creates hyperlinks to CVE/CWE references",
+      "Generates professional PDF reports",
     ],
     color: "#059669",
   },
   {
     name: "SBOM Service",
     file: "sbom_service.py",
-    description: "Generates Software Bill of Materials in industry-standard formats.",
+    description: "Generates Software Bill of Materials in CycloneDX 1.5 format.",
     responsibilities: [
-      "Exports CycloneDX 1.5 format",
-      "Exports SPDX 2.3 format",
-      "Lists all detected dependencies",
+      "CycloneDX 1.5 JSON/XML export",
+      "Package URLs (purl) for all dependencies",
       "Includes license information when available",
       "Maps vulnerabilities to components",
+      "Compliant with industry standards",
     ],
     color: "#0891b2",
   },
   {
-    name: "WebSocket Service",
-    file: "websocket_service.py",
-    description: "Provides real-time scan progress updates to the frontend.",
+    name: "Deduplication Service",
+    file: "deduplication_service.py",
+    description: "Cross-scanner deduplication to eliminate redundant findings.",
     responsibilities: [
-      "Manages WebSocket connections per scan",
-      "Broadcasts phase transitions and progress",
-      "Uses Redis pub/sub for worker communication",
-      "Handles client disconnects gracefully",
-      "Supports project-level subscriptions",
-    ],
-    color: "#f97316",
-  },
-  {
-    name: "Webhook Service",
-    file: "webhook_service.py",
-    description: "Sends scan notifications to external services.",
-    responsibilities: [
-      "Supports Slack, Teams, Discord, and custom endpoints",
-      "Sends scan complete notifications with summary",
-      "Includes finding counts and risk score",
-      "Retries failed deliveries",
-      "Validates webhook URLs",
+      "Merges same file+line+type findings across scanners",
+      "Preserves scanner sources for audit trail",
+      "Takes severity from highest-confidence scanner",
+      "Tracks merge statistics",
+      "Reduces noise in final report",
     ],
     color: "#84cc16",
   },
 ];
 
 const languageScanners = [
-  { language: "Python", scanner: "Bandit", service: "bandit_service.py", detects: "SQL injection, shell injection, hardcoded passwords, weak crypto" },
+  { language: "Python", scanner: "Bandit", service: "bandit_service.py", detects: "eval/exec, shell injection, hardcoded passwords, weak crypto (MD5, SHA1)" },
   { language: "JavaScript/TypeScript", scanner: "ESLint Security", service: "eslint_service.py", detects: "XSS, eval injection, prototype pollution, regex DoS" },
   { language: "Java/Kotlin", scanner: "SpotBugs + FindSecBugs", service: "spotbugs_service.py", detects: "SQL injection, XXE, LDAP injection, Spring security issues" },
-  { language: "Go", scanner: "gosec", service: "gosec_service.py", detects: "SQL injection, command injection, path traversal, crypto issues" },
-  { language: "C/C++", scanner: "clang-tidy", service: "clangtidy_service.py", detects: "Buffer overflows, format strings, insecure functions, memory safety" },
-  { language: "All Languages", scanner: "Semgrep", service: "semgrep_service.py", detects: "30+ rulesets: OWASP Top 10, CWE Top 25, taint tracking" },
-  { language: "All Files", scanner: "Secret Scanner", service: "secret_service.py", detects: "50+ secret types: AWS, GCP, Azure, OpenAI, private keys" },
+  { language: "Go", scanner: "gosec", service: "gosec_service.py", detects: "SQL injection, command injection, path traversal, insecure TLS" },
+  { language: "C/C++", scanner: "clang-tidy", service: "clangtidy_service.py", detects: "Buffer overflows, format strings, memory safety, use-after-free" },
+  { language: "All Languages", scanner: "Semgrep", service: "semgrep_service.py", detects: "2000+ rules: OWASP Top 10, CWE Top 25, taint tracking" },
+  { language: "All Files", scanner: "Secret Scanner", service: "secret_service.py", detects: "50+ patterns: AWS, GCP, Azure, OpenAI, private keys, DB strings" },
+  { language: "Dockerfiles", scanner: "Trivy + Custom Rules", service: "docker_scan_service.py", detects: "Image vulns, running as root, exposed ports, secrets in args" },
+  { language: "Terraform/K8s/CF", scanner: "Checkov + tfsec", service: "iac_scan_service.py", detects: "Public S3, unencrypted storage, overly permissive IAM, missing policies" },
 ];
 
 const dockerServices = [
@@ -374,10 +428,13 @@ export default function ArchitecturePage() {
             { label: "React 18", color: "#61dafb" },
             { label: "FastAPI", color: "#009688" },
             { label: "PostgreSQL", color: "#336791" },
+            { label: "pgvector", color: "#336791" },
             { label: "Redis", color: "#dc382d" },
             { label: "Docker", color: "#2496ed" },
             { label: "Gemini AI", color: "#8b5cf6" },
-            { label: "WebSocket", color: "#f59e0b" },
+            { label: "Semgrep", color: "#10b981" },
+            { label: "Trivy", color: "#2496ed" },
+            { label: "Checkov", color: "#7c3aed" },
           ].map((tech) => (
             <Chip
               key={tech.label}
@@ -563,11 +620,15 @@ export default function ArchitecturePage() {
               { step: 2, action: "API creates ScanRun record", component: "Backend", detail: "Status: PENDING" },
               { step: 3, action: "Job enqueued to Redis", component: "Backend → Redis", detail: "RQ job with scan_run_id" },
               { step: 4, action: "Worker picks up job", component: "Worker", detail: "Starts 9-phase pipeline" },
-              { step: 5, action: "Progress updates broadcast", component: "Worker → Redis → Backend → WS", detail: "Real-time to browser" },
-              { step: 6, action: "Scanners execute in parallel", component: "Worker", detail: "Semgrep, Bandit, etc." },
-              { step: 7, action: "Results saved to database", component: "Worker → PostgreSQL", detail: "Findings, dependencies" },
-              { step: 8, action: "AI analysis runs (if enabled)", component: "Worker → Gemini", detail: "Exploit narratives" },
-              { step: 9, action: "Scan complete notification", component: "Worker", detail: "Status: COMPLETED, webhooks fired" },
+              { step: 5, action: "Code extracted & chunked", component: "Worker", detail: "Zip bomb + path traversal protection" },
+              { step: 6, action: "Embeddings generated (or reused)", component: "Worker → Gemini", detail: "768-dim vectors via gemini-embedding-001" },
+              { step: 7, action: "Parallel scan phases execute", component: "Worker", detail: "SAST + Docker + IaC + Deps concurrently" },
+              { step: 8, action: "Findings deduplicated", component: "Worker", detail: "Cross-scanner merge" },
+              { step: 9, action: "CVE lookup + enrichment", component: "Worker → OSV/NVD/EPSS/KEV", detail: "Parallel enrichment for all vulns" },
+              { step: 10, action: "Reachability analysis", component: "Worker", detail: "Import analysis for unused deps" },
+              { step: 11, action: "AI analysis (heuristics + LLM)", component: "Worker → Gemini", detail: "Top 50 findings to LLM" },
+              { step: 12, action: "Scan complete, webhooks fired", component: "Worker", detail: "Status: COMPLETED" },
+              { step: 13, action: "Background summary generation", component: "Worker → Gemini", detail: "Async after scan for instant exports" },
             ].map((item) => (
               <Box key={item.step} sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
                 <Chip
@@ -968,20 +1029,20 @@ async def run_scanners(project_path: str, languages: set[str]):
           The 9-Phase Scan Pipeline
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Every scan follows a deterministic 9-phase pipeline. Progress is broadcast via WebSocket at each phase transition.
+          The pipeline uses parallel execution where possible. Phases 1-3 are sequential, Phase 4 runs all scanning types concurrently, then phases 5-9 are sequential with parallel API calls.
         </Typography>
 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {[
-            { phase: 1, name: "Code Acquisition", desc: "Clone repo or extract ZIP archive to isolated directory", duration: "5-30s", service: "git_service / codebase_service" },
-            { phase: 2, name: "Codebase Intelligence", desc: "Detect languages, frameworks, count files and LOC", duration: "10-60s", service: "codebase_service" },
-            { phase: 3, name: "Dependency Parsing", desc: "Parse manifest files for 7 ecosystems", duration: "5-20s", service: "dependency_service" },
-            { phase: 4, name: "CVE Lookup", desc: "Query OSV.dev for known vulnerabilities in dependencies", duration: "10-60s", service: "cve_service" },
-            { phase: 5, name: "NVD Enrichment", desc: "Fetch CVSS vectors, CWE mappings from NIST", duration: "30-120s", service: "nvd_service" },
-            { phase: 6, name: "EPSS Scoring", desc: "Get exploitation probability for each CVE", duration: "5-15s", service: "epss_service" },
-            { phase: 7, name: "Static Analysis", desc: "Run Semgrep, Bandit, ESLint, gosec, etc.", duration: "60-300s", service: "*_service" },
-            { phase: 8, name: "Secret Detection", desc: "Scan for 50+ hardcoded secret types", duration: "10-30s", service: "secret_service" },
-            { phase: 9, name: "AI Analysis", desc: "Generate summaries and exploit narratives", duration: "30-120s", service: "exploit_service" },
+            { phase: 1, name: "Code Acquisition", desc: "Clone repo or extract archive with zip bomb + path traversal protection", duration: "5-30s", service: "git_service / codebase_service" },
+            { phase: 2, name: "Code Parsing & Chunking", desc: "Stream parse files, create semantic chunks (500 tokens max)", duration: "10-60s", service: "codebase_service" },
+            { phase: 3, name: "Embedding Generation", desc: "gemini-embedding-001 (768 dims), reuses unchanged embeddings", duration: "20-60s", service: "embedding_service" },
+            { phase: 4, name: "Parallel Scan Phases", desc: "SAST + Docker + IaC + Dependencies run concurrently via ThreadPoolExecutor", duration: "60-300s", service: "scan_service → all scanners" },
+            { phase: 5, name: "Cross-Scanner Deduplication", desc: "Merge same file+line+type findings from multiple scanners", duration: "2-5s", service: "deduplication_service" },
+            { phase: 6, name: "Transitive Dependency Analysis", desc: "Parse lock files to build full dependency trees", duration: "5-15s", service: "transitive_deps_service" },
+            { phase: 7, name: "CVE Lookup + Parallel Enrichment", desc: "OSV.dev → then NVD + EPSS + CISA KEV in parallel", duration: "30-90s", service: "cve_service → nvd/epss_service" },
+            { phase: 8, name: "Reachability Analysis", desc: "Check if vulnerable deps are actually imported/used", duration: "10-30s", service: "reachability_service" },
+            { phase: 9, name: "AI Analysis", desc: "Heuristics first, then LLM for top 50 findings + exploit templates", duration: "30-120s", service: "ai_analysis_service" },
           ].map((phase, i) => (
             <Paper
               key={phase.phase}
@@ -1004,20 +1065,21 @@ async def run_scanners(project_path: str, languages: set[str]):
                   width: 48,
                   height: 48,
                   borderRadius: "50%",
-                  bgcolor: alpha(theme.palette.primary.main, 0.15),
+                  bgcolor: phase.phase === 4 ? alpha("#10b981", 0.15) : alpha(theme.palette.primary.main, 0.15),
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
-                <Typography variant="h6" sx={{ fontWeight: 800, color: "primary.main" }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: phase.phase === 4 ? "#10b981" : "primary.main" }}>
                   {phase.phase}
                 </Typography>
               </Box>
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                   {phase.name}
+                  {phase.phase === 4 && <Chip label="PARALLEL" size="small" sx={{ ml: 1, bgcolor: "#10b981", color: "white", fontSize: "0.65rem" }} />}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   {phase.desc}
@@ -1059,7 +1121,7 @@ async def run_scanners(project_path: str, languages: set[str]):
             ✅ Scan Complete
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Risk score calculated, findings saved, webhooks fired. Report available for viewing and export.
+            Risk score calculated, findings saved, webhooks fired. AI summaries generate in background for instant report exports.
           </Typography>
         </Paper>
       </TabPanel>

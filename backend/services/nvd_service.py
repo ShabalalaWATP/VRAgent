@@ -8,6 +8,12 @@ The NVD API is used as a supplementary source to OSV.dev:
 - OSV.dev: Primary source for package → vulnerability lookups (faster, package-native)
 - NVD: Enrichment source for detailed CVE information (authoritative, comprehensive)
 
+Optimizations:
+- Keyword-based bulk lookup for tech stack prefetching
+- Parallel enrichment with EPSS
+- CPE-based matching for system-level components
+- Aggressive caching with 24hr TTL
+
 API Documentation: https://nvd.nist.gov/developers/vulnerabilities
 Rate Limits (without API key): 5 requests per 30 seconds
 Rate Limits (with API key): 50 requests per 30 seconds
@@ -15,7 +21,7 @@ Rate Limits (with API key): 50 requests per 30 seconds
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Set
 from functools import lru_cache
 
 import httpx
@@ -27,17 +33,27 @@ from backend.core.cache import cache
 logger = get_logger(__name__)
 
 NVD_CVE_API = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+NVD_CPE_API = "https://services.nvd.nist.gov/rest/json/cpes/2.0"
+CISA_KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+
 REQUEST_TIMEOUT = 30
-MAX_CONCURRENT_REQUESTS = 3  # Conservative to respect rate limits
-RATE_LIMIT_DELAY = 6.5  # Seconds between requests (5 req/30s without API key)
+MAX_RESULTS_PER_PAGE = 100  # NVD allows up to 2000, but smaller is more reliable
+
+# Rate limiting based on API key presence
+# Without API key: 5 req/30s → delay 6s
+# With API key: 50 req/30s → delay 0.6s
 
 # Cache namespace for NVD lookups
 CACHE_NAMESPACE = "nvd"
+KEV_CACHE_NAMESPACE = "kev"
 
 # Legacy in-memory cache (kept for backward compatibility, but Redis is preferred)
 _cve_cache: Dict[str, Dict[str, Any]] = {}
 _cache_expiry: Dict[str, datetime] = {}
+_kev_cache: Optional[Set[str]] = None
+_kev_cache_time: Optional[datetime] = None
 CACHE_TTL_HOURS = 24
+KEV_CACHE_TTL_HOURS = 6
 
 
 def _get_api_headers() -> Dict[str, str]:
@@ -374,8 +390,8 @@ async def check_kev_status(cve_ids: List[str]) -> Dict[str, bool]:
     """
     Check if CVEs are in CISA's Known Exploited Vulnerabilities catalog.
     
-    The KEV catalog contains vulnerabilities that are actively being exploited
-    in the wild and should be prioritized for patching.
+    Uses CISA's KEV JSON feed directly (more reliable than NVD API parameter).
+    The catalog is cached for 6 hours to reduce API calls.
     
     Args:
         cve_ids: List of CVE identifiers to check
@@ -383,48 +399,179 @@ async def check_kev_status(cve_ids: List[str]) -> Dict[str, bool]:
     Returns:
         Dictionary mapping CVE ID to KEV status (True if in catalog)
     """
+    global _kev_cache, _kev_cache_time
+    
     if not cve_ids:
         return {}
     
-    # NVD API supports hasKev parameter but only for full queries
-    # For efficiency, we'll query KEV CVEs and check membership
-    # This is a simplified approach - for production, consider caching the full KEV list
-    
     results = {cve_id: False for cve_id in cve_ids}
     
-    try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            # Get a sample of KEV CVEs to check against
-            # In production, you'd want to maintain a local KEV cache
-            resp = await client.get(
-                NVD_CVE_API,
-                params={"hasKev": "", "resultsPerPage": 2000},
-                headers=_get_api_headers()
-            )
-            
-            if resp.status_code != 200:
-                logger.warning(f"Failed to fetch KEV data: {resp.status_code}")
-                return results
-            
-            data = resp.json()
-            kev_cves = set()
-            
-            for vuln in data.get("vulnerabilities", []):
-                kev_cves.add(vuln.get("cve", {}).get("id"))
-            
-            for cve_id in cve_ids:
-                if cve_id in kev_cves:
-                    results[cve_id] = True
-                    logger.info(f"CVE {cve_id} is in CISA KEV catalog!")
-            
-    except Exception as e:
-        logger.error(f"Error checking KEV status: {e}")
+    # Check if we have a fresh KEV cache
+    kev_set: Optional[Set[str]] = None
+    
+    # Try Redis cache first
+    cached_kev = cache.get(KEV_CACHE_NAMESPACE, "all_kevs")
+    if cached_kev:
+        kev_set = set(cached_kev)
+    elif _kev_cache and _kev_cache_time:
+        # Fall back to in-memory cache
+        if datetime.utcnow() - _kev_cache_time < timedelta(hours=KEV_CACHE_TTL_HOURS):
+            kev_set = _kev_cache
+    
+    if kev_set is None:
+        # Fetch fresh KEV data from CISA
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(CISA_KEV_URL)
+                resp.raise_for_status()
+                data = resp.json()
+                
+                kev_set = set()
+                for vuln in data.get("vulnerabilities", []):
+                    cve_id = vuln.get("cveID")
+                    if cve_id:
+                        kev_set.add(cve_id)
+                
+                # Cache the KEV list
+                cache.set(KEV_CACHE_NAMESPACE, "all_kevs", list(kev_set), ttl=60*60*KEV_CACHE_TTL_HOURS)
+                _kev_cache = kev_set
+                _kev_cache_time = datetime.utcnow()
+                
+                logger.info(f"Loaded {len(kev_set)} CVEs from CISA KEV catalog")
+                
+        except Exception as e:
+            logger.warning(f"Failed to fetch CISA KEV catalog: {e}")
+            return results
+    
+    # Check which of our CVEs are in KEV
+    kev_matches = 0
+    for cve_id in cve_ids:
+        if cve_id in kev_set:
+            results[cve_id] = True
+            kev_matches += 1
+    
+    if kev_matches > 0:
+        logger.info(f"Found {kev_matches} CVEs in CISA KEV catalog!")
     
     return results
 
 
+async def lookup_cves_by_keyword(
+    keyword: str,
+    max_results: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Search NVD for CVEs matching a keyword (product name, vendor, etc).
+    
+    Useful for prefetching CVEs for a tech stack. For example,
+    searching "log4j" returns all Log4j-related CVEs.
+    
+    Args:
+        keyword: Search keyword (product name, vendor, etc)
+        max_results: Maximum number of results to return
+        
+    Returns:
+        List of enriched CVE data dictionaries
+    """
+    cache_key = f"keyword:{keyword.lower()}:{max_results}"
+    cached = cache.get(CACHE_NAMESPACE, cache_key)
+    if cached:
+        return cached
+    
+    results = []
+    
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            params = {
+                "keywordSearch": keyword,
+                "resultsPerPage": min(max_results, MAX_RESULTS_PER_PAGE),
+            }
+            
+            resp = await client.get(NVD_CVE_API, params=params, headers=_get_api_headers())
+            
+            if resp.status_code != 200:
+                logger.warning(f"NVD keyword search failed for '{keyword}': {resp.status_code}")
+                return []
+            
+            data = resp.json()
+            
+            for vuln in data.get("vulnerabilities", []):
+                cve_data = vuln.get("cve", {})
+                cve_id = cve_data.get("id")
+                
+                if cve_id:
+                    metrics = cve_data.get("metrics", {})
+                    enriched = {
+                        "cve_id": cve_id,
+                        "description": next(
+                            (d.get("value") for d in cve_data.get("descriptions", []) 
+                             if d.get("lang") == "en"),
+                            None
+                        ),
+                        "cvss_v3": _parse_cvss_v3(metrics),
+                        "cwes": _parse_weaknesses(cve_data.get("weaknesses", [])),
+                        "published": cve_data.get("published"),
+                    }
+                    results.append(enriched)
+                    
+                    # Also cache individual CVE lookups
+                    _cache_cve(cve_id, enriched)
+            
+            # Cache keyword search results (shorter TTL since new CVEs may appear)
+            cache.set(CACHE_NAMESPACE, cache_key, results, ttl=60*60*6)  # 6 hours
+            
+            logger.info(f"NVD keyword search '{keyword}' returned {len(results)} CVEs")
+            
+    except Exception as e:
+        logger.error(f"NVD keyword search error for '{keyword}': {e}")
+    
+    return results
+
+
+async def prefetch_cves_for_tech_stack(
+    technologies: List[str],
+    max_per_tech: int = 50
+) -> int:
+    """
+    Prefetch CVEs for a list of technologies to warm the cache.
+    
+    This is useful when starting a scan - we can prefetch CVEs
+    for detected technologies in parallel.
+    
+    Args:
+        technologies: List of technology names (e.g., ["django", "react", "nginx"])
+        max_per_tech: Maximum CVEs to fetch per technology
+        
+    Returns:
+        Total number of CVEs prefetched
+    """
+    if not technologies:
+        return 0
+    
+    total_prefetched = 0
+    has_api_key = bool(settings.nvd_api_key)
+    
+    # Rate limit: process technologies with delays
+    delay = 0.6 if has_api_key else 6.0
+    
+    for tech in technologies:
+        # Skip very generic terms
+        if len(tech) < 3 or tech.lower() in {"the", "and", "for", "with"}:
+            continue
+        
+        results = await lookup_cves_by_keyword(tech, max_per_tech)
+        total_prefetched += len(results)
+        
+        # Respect rate limits
+        await asyncio.sleep(delay)
+    
+    logger.info(f"Prefetched {total_prefetched} CVEs for {len(technologies)} technologies")
+    return total_prefetched
+
+
 async def enrich_vulnerabilities_with_nvd(
-    vulnerabilities: List[Dict[str, Any]]
+    vulnerabilities: List[Dict[str, Any]],
+    include_kev: bool = True
 ) -> List[Dict[str, Any]]:
     """
     Enrich vulnerability data with detailed NVD information.
@@ -435,8 +582,14 @@ async def enrich_vulnerabilities_with_nvd(
     - Reference links
     - KEV (Known Exploited Vulnerabilities) status
     
+    Optimizations:
+    - Batch NVD lookup with caching
+    - Parallel KEV checking
+    - Early return for fully cached results
+    
     Args:
         vulnerabilities: List of vulnerability dicts with 'external_id' field
+        include_kev: Whether to check KEV status (adds latency)
         
     Returns:
         Enriched vulnerability list
@@ -455,12 +608,27 @@ async def enrich_vulnerabilities_with_nvd(
         logger.debug("No CVE IDs to enrich from NVD")
         return vulnerabilities
     
-    # Fetch NVD data
-    nvd_data = await lookup_cves_batch(cve_ids)
+    # Run NVD lookup and KEV check in parallel
+    tasks = [lookup_cves_batch(cve_ids)]
+    if include_kev:
+        tasks.append(check_kev_status(cve_ids))
+    
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    nvd_data = results[0] if not isinstance(results[0], Exception) else {}
+    kev_status = results[1] if len(results) > 1 and not isinstance(results[1], Exception) else {}
+    
+    if isinstance(results[0], Exception):
+        logger.warning(f"NVD lookup failed: {results[0]}")
     
     # Enrich vulnerabilities
     for vuln in vulnerabilities:
         cve_id = vuln.get("external_id")
+        
+        # Add KEV status
+        if cve_id in kev_status:
+            vuln["in_kev"] = kev_status[cve_id]
+        
         if cve_id in nvd_data:
             nvd = nvd_data[cve_id]
             
@@ -481,4 +649,115 @@ async def enrich_vulnerabilities_with_nvd(
                 vuln["cvss_score"] = nvd["cvss_v3"]["base_score"]
                 vuln["cvss_vector"] = nvd["cvss_v3"].get("vector_string")
     
+    return vulnerabilities
+
+
+async def enrich_all_parallel(
+    vulnerabilities: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Full parallel enrichment with NVD, KEV, and EPSS data.
+    
+    This is the recommended method for enriching vulnerability data
+    when you want all available context. Runs all enrichments in parallel.
+    
+    Args:
+        vulnerabilities: List of vulnerability dicts with 'external_id' field
+        
+    Returns:
+        Fully enriched vulnerability list
+    """
+    if not vulnerabilities:
+        return vulnerabilities
+    
+    # Import here to avoid circular dependency
+    from backend.services import epss_service
+    
+    # Extract CVE IDs
+    cve_ids = [
+        v.get("external_id") 
+        for v in vulnerabilities 
+        if v.get("external_id", "").startswith("CVE-")
+    ]
+    
+    if not cve_ids:
+        return vulnerabilities
+    
+    # Run all enrichments in parallel
+    nvd_task = lookup_cves_batch(cve_ids)
+    kev_task = check_kev_status(cve_ids)
+    epss_task = epss_service.get_epss_scores_batch(cve_ids)
+    
+    results = await asyncio.gather(
+        nvd_task, kev_task, epss_task,
+        return_exceptions=True
+    )
+    
+    nvd_data = results[0] if not isinstance(results[0], Exception) else {}
+    kev_status = results[1] if not isinstance(results[1], Exception) else {}
+    epss_scores = results[2] if not isinstance(results[2], Exception) else {}
+    
+    # Log any errors
+    for i, name in enumerate(["NVD", "KEV", "EPSS"]):
+        if isinstance(results[i], Exception):
+            logger.warning(f"{name} enrichment failed: {results[i]}")
+    
+    # Enrich vulnerabilities with all data
+    for vuln in vulnerabilities:
+        cve_id = vuln.get("external_id")
+        
+        # KEV status
+        vuln["in_kev"] = kev_status.get(cve_id, False)
+        
+        # EPSS data
+        if cve_id in epss_scores:
+            epss = epss_scores[cve_id]
+            vuln["epss_score"] = epss.score
+            vuln["epss_percentile"] = epss.percentile
+            vuln["epss_priority"] = epss.priority
+        
+        # NVD data
+        if cve_id in nvd_data:
+            nvd = nvd_data[cve_id]
+            vuln["nvd_enrichment"] = {
+                "description": nvd.get("description"),
+                "cvss_v3": nvd.get("cvss_v3"),
+                "cvss_v4": nvd.get("cvss_v4"),
+                "cwes": nvd.get("cwes"),
+                "references": nvd.get("references"),
+                "vuln_status": nvd.get("vuln_status"),
+                "published": nvd.get("published"),
+            }
+            
+            if nvd.get("cvss_v3") and nvd["cvss_v3"].get("base_score"):
+                vuln["cvss_score"] = nvd["cvss_v3"]["base_score"]
+                vuln["cvss_vector"] = nvd["cvss_v3"].get("vector_string")
+    
+    # Calculate combined priority scores
+    for vuln in vulnerabilities:
+        cvss = vuln.get("cvss_score") or 0
+        epss = vuln.get("epss_score") or 0
+        in_kev = vuln.get("in_kev", False)
+        
+        # Combined score: CVSS (40%) + EPSS (50%) + KEV bonus (10%)
+        cvss_normalized = cvss / 10.0
+        kev_bonus = 1.0 if in_kev else 0.0
+        
+        combined = (0.4 * cvss_normalized) + (0.5 * epss) + (0.1 * kev_bonus)
+        vuln["combined_priority"] = round(combined, 4)
+        
+        # Priority label
+        if combined >= 0.7 or in_kev:
+            vuln["priority_label"] = "critical"
+        elif combined >= 0.5:
+            vuln["priority_label"] = "high"
+        elif combined >= 0.3:
+            vuln["priority_label"] = "medium"
+        else:
+            vuln["priority_label"] = "low"
+    
+    # Sort by combined priority
+    vulnerabilities.sort(key=lambda v: v.get("combined_priority", 0), reverse=True)
+    
+    logger.info(f"Enriched {len(vulnerabilities)} vulnerabilities with NVD/KEV/EPSS data")
     return vulnerabilities

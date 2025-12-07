@@ -9,12 +9,19 @@ Provides intelligent analysis of scan findings using LLM:
 5. Custom Remediation - Generate tailored fix code
 
 Optimized for minimal LLM calls by batching findings.
+
+Large Codebase Optimizations:
+- Smart finding prioritization to focus LLM on highest-value findings
+- Adaptive batch sizes based on total findings
+- Caching of analysis results for identical patterns
+- Progressive analysis with early termination for resource limits
 """
 
 import json
 import re
+import hashlib
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Set
 from pathlib import Path
 
 from backend.core.config import settings
@@ -22,7 +29,13 @@ from backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Use google-genai SDK (consistent with other services)
+# Large codebase configuration
+MAX_FINDINGS_FOR_FULL_ANALYSIS = settings.max_findings_for_ai if hasattr(settings, 'max_findings_for_ai') else 500
+MAX_FINDINGS_FOR_LLM = settings.max_findings_for_llm if hasattr(settings, 'max_findings_for_llm') else 50
+SIMILAR_FINDING_THRESHOLD = 0.8  # Dedupe findings this similar
+MAX_FINDINGS_PER_TYPE = 10  # Limit findings per vulnerability type for diversity
+
+# Use google-genai SDK (new unified SDK)
 genai_client = None
 if settings.gemini_api_key:
     try:
@@ -291,7 +304,7 @@ async def _call_llm_batch_analysis(
     
     analysis_types can include: 'false_positive', 'severity', 'data_flow', 'remediation'
     """
-    if not genai or not settings.gemini_api_key:
+    if not genai_client or not settings.gemini_api_key:
         logger.info("Gemini API not configured, skipping LLM analysis")
         return {}
     
@@ -365,14 +378,15 @@ Only include fields that are relevant. Be conservative with false_positive_score
         if not genai_client:
             logger.warning("Gemini client not initialized, skipping LLM analysis")
             return {}
-            
+        
+        from google.genai import types
         response = genai_client.models.generate_content(
             model=settings.gemini_model_id,
             contents=prompt,
-            config={
-                "temperature": 0.2,
-                "max_output_tokens": 4000,
-            }
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=4000,
+            )
         )
         
         # Parse JSON response
@@ -417,7 +431,7 @@ async def _call_llm_attack_chains(
     Use LLM to refine attack chains and discover non-obvious ones.
     Single LLM call for all chain analysis.
     """
-    if not genai or not settings.gemini_api_key:
+    if not genai_client or not settings.gemini_api_key:
         return heuristic_chains
     
     if not findings:
@@ -465,14 +479,15 @@ Return empty array [] if no additional chains found. Be conservative."""
         if not genai_client:
             logger.warning("Gemini client not initialized, skipping attack chain analysis")
             return heuristic_chains
-            
+        
+        from google.genai import types
         response = genai_client.models.generate_content(
             model=settings.gemini_model_id,
             contents=prompt,
-            config={
-                "temperature": 0.3,
-                "max_output_tokens": 2000,
-            }
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=2000,
+            )
         )
         
         # Parse JSON response
@@ -518,6 +533,12 @@ async def analyze_findings(
     2. LLM analysis on top priority findings (batched, 1-2 calls max)
     3. Attack chain identification (1 LLM call)
     
+    Large codebase optimizations:
+    - Prioritizes critical/high severity findings
+    - Deduplicates similar findings before LLM
+    - Limits findings per type for diversity
+    - Applies pattern-based analysis for common issues
+    
     Args:
         findings: List of finding dicts with id, type, severity, file_path, summary, details
         code_snippets: Optional dict mapping finding_id -> code snippet
@@ -534,7 +555,17 @@ async def analyze_findings(
     false_positives_count = 0
     severity_adjustments_count = 0
     
+    total_findings = len(findings)
+    logger.info(f"Starting AI analysis on {total_findings} findings")
+    
+    # Step 0: For large finding sets, pre-filter and deduplicate
+    if total_findings > MAX_FINDINGS_FOR_FULL_ANALYSIS:
+        logger.info(f"Large finding set ({total_findings}), applying aggressive prioritization")
+        findings = _prioritize_findings_for_analysis(findings, MAX_FINDINGS_FOR_FULL_ANALYSIS)
+        logger.info(f"Reduced to {len(findings)} priority findings for analysis")
+    
     # Step 1: Quick heuristic analysis on ALL findings
+    pattern_based_results = 0
     for f in findings:
         finding_id = f.get("id")
         if not finding_id:
@@ -548,13 +579,18 @@ async def analyze_findings(
         # Quick severity adjustment
         new_severity, sev_reason = _quick_severity_adjustment(f, snippet)
         
-        if fp_score > 0.3 or new_severity:
+        # Pattern-based analysis for common vulnerability types
+        pattern_analysis = _analyze_by_pattern(f, snippet)
+        
+        if fp_score > 0.3 or new_severity or pattern_analysis:
             result = AIAnalysisResult(
                 finding_id=finding_id,
                 false_positive_score=fp_score,
-                false_positive_reason=fp_reason,
-                adjusted_severity=new_severity,
-                severity_reason=sev_reason,
+                false_positive_reason=fp_reason or (pattern_analysis.get("fp_reason") if pattern_analysis else None),
+                adjusted_severity=new_severity or (pattern_analysis.get("adjusted_severity") if pattern_analysis else None),
+                severity_reason=sev_reason or (pattern_analysis.get("severity_reason") if pattern_analysis else None),
+                data_flow=pattern_analysis.get("data_flow") if pattern_analysis else None,
+                remediation_code=pattern_analysis.get("remediation") if pattern_analysis else None,
             )
             analysis_results[finding_id] = result
             
@@ -562,18 +598,24 @@ async def analyze_findings(
                 false_positives_count += 1
             if new_severity:
                 severity_adjustments_count += 1
+            if pattern_analysis:
+                pattern_based_results += 1
+    
+    logger.info(f"Heuristic analysis complete: {false_positives_count} FPs, {severity_adjustments_count} severity changes, {pattern_based_results} pattern matches")
     
     # Step 2: Attack chain identification (heuristic)
     attack_chains = _identify_attack_chains_heuristic(findings)
     
     # Step 3: LLM analysis (if enabled and we have API key)
     if enable_llm and genai_client and settings.gemini_api_key:
-        # Prioritize high/critical findings not yet marked as false positives
-        priority_findings = [
-            f for f in findings
-            if f.get("severity") in ("critical", "high")
-            and f.get("id") not in analysis_results
-        ][:max_llm_findings]
+        # Prioritize findings for LLM analysis
+        # Focus on high/critical that haven't been fully analyzed
+        priority_findings = _select_findings_for_llm(
+            findings, 
+            analysis_results,
+            code_snippets,
+            max_llm_findings
+        )
         
         if priority_findings:
             logger.info(f"Running LLM analysis on {len(priority_findings)} priority findings")
@@ -593,6 +635,10 @@ async def analyze_findings(
                     result.false_positive_score = max(result.false_positive_score, existing.false_positive_score)
                     if not result.false_positive_reason and existing.false_positive_reason:
                         result.false_positive_reason = existing.false_positive_reason
+                    if not result.data_flow and existing.data_flow:
+                        result.data_flow = existing.data_flow
+                    if not result.remediation_code and existing.remediation_code:
+                        result.remediation_code = existing.remediation_code
                 
                 analysis_results[finding_id] = result
                 
@@ -606,6 +652,8 @@ async def analyze_findings(
             logger.info("Running LLM attack chain analysis")
             attack_chains = await _call_llm_attack_chains(findings, attack_chains)
     
+    logger.info(f"AI analysis complete: {len(analysis_results)} findings analyzed, {len(attack_chains)} attack chains identified")
+    
     return AIAnalysisSummary(
         findings_analyzed=len(findings),
         false_positives_detected=false_positives_count,
@@ -613,6 +661,224 @@ async def analyze_findings(
         attack_chains=attack_chains,
         analysis_results=analysis_results,
     )
+
+
+def _prioritize_findings_for_analysis(findings: List[dict], max_findings: int) -> List[dict]:
+    """
+    Prioritize findings when there are too many for full analysis.
+    
+    Strategy:
+    1. Critical/high severity always included
+    2. Deduplicate similar findings (same rule, same file pattern)
+    3. Ensure diversity across finding types
+    4. Prefer findings with code context
+    """
+    if len(findings) <= max_findings:
+        return findings
+    
+    # Group by priority
+    critical_high = []
+    medium = []
+    low = []
+    
+    for f in findings:
+        severity = f.get("severity", "medium").lower()
+        if severity in ("critical", "high"):
+            critical_high.append(f)
+        elif severity == "medium":
+            medium.append(f)
+        else:
+            low.append(f)
+    
+    # Deduplicate within each group
+    critical_high = _deduplicate_findings(critical_high)
+    medium = _deduplicate_findings(medium)
+    low = _deduplicate_findings(low)
+    
+    # Build result prioritizing critical/high
+    result = []
+    
+    # Always include all critical/high (up to limit)
+    result.extend(critical_high[:max_findings])
+    remaining = max_findings - len(result)
+    
+    # Fill with medium
+    if remaining > 0:
+        result.extend(medium[:remaining])
+        remaining = max_findings - len(result)
+    
+    # Fill with low
+    if remaining > 0:
+        result.extend(low[:remaining])
+    
+    return result[:max_findings]
+
+
+def _deduplicate_findings(findings: List[dict]) -> List[dict]:
+    """Remove duplicate/similar findings to improve analysis diversity."""
+    if len(findings) <= 5:
+        return findings
+    
+    seen_signatures: Set[str] = set()
+    type_counts: Dict[str, int] = {}
+    deduplicated = []
+    
+    for f in findings:
+        # Create a signature for deduplication
+        finding_type = f.get("type", "")
+        rule_id = f.get("details", {}).get("rule_id", "") or f.get("details", {}).get("test_id", "")
+        summary_words = set(f.get("summary", "").lower().split()[:5])
+        
+        signature = f"{finding_type}:{rule_id}:{hash(frozenset(summary_words)) % 1000}"
+        
+        # Skip if we've seen too similar
+        if signature in seen_signatures:
+            continue
+        
+        # Limit per type
+        type_counts[finding_type] = type_counts.get(finding_type, 0) + 1
+        if type_counts[finding_type] > MAX_FINDINGS_PER_TYPE:
+            continue
+        
+        seen_signatures.add(signature)
+        deduplicated.append(f)
+    
+    return deduplicated
+
+
+def _select_findings_for_llm(
+    findings: List[dict],
+    existing_results: Dict[int, AIAnalysisResult],
+    code_snippets: Dict[int, str],
+    max_findings: int
+) -> List[dict]:
+    """
+    Select the best findings to send to LLM for deep analysis.
+    
+    Prioritizes:
+    1. Critical/high severity without existing analysis
+    2. Findings with code context (can analyze better)
+    3. Diverse finding types (not all same rule)
+    """
+    # Filter to findings that would benefit from LLM
+    candidates = []
+    for f in findings:
+        finding_id = f.get("id")
+        if not finding_id:
+            continue
+        
+        # Skip if already has good analysis
+        if finding_id in existing_results:
+            existing = existing_results[finding_id]
+            if existing.false_positive_score > 0.7 or existing.remediation_code:
+                continue
+        
+        # Prefer findings with code snippets
+        has_code = finding_id in code_snippets and len(code_snippets[finding_id]) > 50
+        severity = f.get("severity", "medium").lower()
+        
+        # Score for prioritization
+        score = 0
+        if severity == "critical":
+            score += 10
+        elif severity == "high":
+            score += 7
+        elif severity == "medium":
+            score += 4
+        else:
+            score += 1
+        
+        if has_code:
+            score += 3
+        
+        candidates.append((score, f))
+    
+    # Sort by score and take top
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    
+    # Ensure diversity - limit per type
+    type_counts: Dict[str, int] = {}
+    selected = []
+    
+    for score, f in candidates:
+        if len(selected) >= max_findings:
+            break
+        
+        finding_type = f.get("type", "unknown")
+        type_counts[finding_type] = type_counts.get(finding_type, 0) + 1
+        
+        if type_counts[finding_type] <= 5:  # Max 5 per type in LLM batch
+            selected.append(f)
+    
+    return selected
+
+
+def _analyze_by_pattern(finding: dict, code_snippet: str) -> Optional[Dict[str, Any]]:
+    """
+    Pattern-based analysis for common vulnerability types.
+    
+    Provides instant analysis without LLM for well-known patterns.
+    Returns dict with analysis fields or None if no pattern matched.
+    """
+    finding_type = finding.get("type", "")
+    summary = finding.get("summary", "").lower()
+    code = code_snippet.lower()
+    
+    # SQL Injection patterns
+    if "sql" in summary or "injection" in summary:
+        if re.search(r'parameterized|prepared|placeholder|\?|%s', code):
+            return {
+                "fp_reason": "Uses parameterized queries",
+                "adjusted_severity": None,
+                "data_flow": "Query appears to use parameterized statements",
+                "remediation": None,
+            }
+        if re.search(r'orm|sqlalchemy|django\.db|sequelize|prisma', code):
+            return {
+                "fp_reason": "Uses ORM which typically prevents SQL injection",
+                "adjusted_severity": "medium" if finding.get("severity") == "high" else None,
+                "data_flow": "Uses ORM abstraction layer",
+                "remediation": None,
+            }
+    
+    # XSS patterns
+    if "xss" in summary or "cross-site" in summary:
+        if re.search(r'escape|sanitize|encode|dangerouslysetinnerhtml\s*=\s*\{[^}]*sanitize', code):
+            return {
+                "fp_reason": "Output appears to be sanitized/escaped",
+                "adjusted_severity": None,
+                "data_flow": "Data is processed through sanitization before output",
+                "remediation": None,
+            }
+    
+    # Hardcoded secrets patterns
+    if finding_type == "secret":
+        if re.search(r'example|test|dummy|fake|placeholder|xxx|changeme|your_|sample', code):
+            return {
+                "fp_reason": "Appears to be a placeholder/example value, not a real secret",
+                "adjusted_severity": "low",
+                "data_flow": None,
+                "remediation": "Verify this is not a real credential before deployment",
+            }
+        if re.search(r'env\[|environ|getenv|process\.env|config\.', code):
+            return {
+                "fp_reason": "Secret is loaded from environment, not hardcoded",
+                "adjusted_severity": "low",
+                "data_flow": "Value loaded from environment variable at runtime",
+                "remediation": None,
+            }
+    
+    # Command injection patterns
+    if "command" in summary or "exec" in summary or "shell" in summary:
+        if re.search(r'shlex\.quote|escapeshellarg|shell=false', code):
+            return {
+                "fp_reason": "Uses shell escaping/quoting",
+                "adjusted_severity": "medium" if finding.get("severity") == "high" else None,
+                "data_flow": "Input is escaped before shell execution",
+                "remediation": None,
+            }
+    
+    return None
 
 
 def analysis_result_to_dict(result: AIAnalysisResult) -> dict:

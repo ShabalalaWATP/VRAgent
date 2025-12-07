@@ -68,7 +68,25 @@ export const api = {
   getAttackChains: (reportId: number) => request<AttackChain[]>(`/reports/${reportId}/attack-chains`),
   getAIInsights: (reportId: number) => request<AIInsights>(`/reports/${reportId}/ai-insights`),
   exportReport: (reportId: number, format: "markdown" | "pdf" | "docx") =>
-    fetch(`${API_URL}/reports/${reportId}/export/${format}`)
+    fetch(`${API_URL}/reports/${reportId}/export/${format}`),
+  chatAboutReport: async (
+    reportId: number,
+    message: string,
+    conversationHistory: ChatMessage[],
+    contextTab: "findings" | "exploitability" = "findings"
+  ): Promise<{ response: string; error?: string }> => {
+    const resp = await fetch(`${API_URL}/reports/${reportId}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        conversation_history: conversationHistory,
+        context_tab: contextTab,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
 };
 
 // Types mirrored from backend schemas (simplified)

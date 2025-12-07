@@ -560,10 +560,9 @@ async def analyze_nmap_with_ai(analysis_result: NmapAnalysisResult) -> Dict[str,
         return {"error": "AI analysis unavailable: GEMINI_API_KEY not configured"}
     
     try:
-        import google.generativeai as genai
+        from google import genai
         
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel(settings.gemini_model_id)
+        client = genai.Client(api_key=settings.gemini_api_key)
         
         # Build summary for AI
         findings_text = "\n".join(
@@ -726,7 +725,10 @@ IMPORTANT GUIDELINES:
 5. Focus on actionable recommendations
 6. Return ONLY valid JSON - no markdown, no explanations outside the JSON"""
 
-        response = await model.generate_content_async(prompt)
+        response = await client.aio.models.generate_content(
+            model=settings.gemini_model_id,
+            contents=prompt
+        )
         response_text = response.text.strip()
         
         # Clean up response

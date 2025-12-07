@@ -39,236 +39,285 @@ interface AIFeature {
 
 const aiFeatures: AIFeature[] = [
   {
-    id: "security_summary",
-    title: "Security Summary",
+    id: "false_positives",
+    title: "False Positive Detection",
+    icon: <VisibilityOffIcon />,
+    description:
+      "VRAgent uses a two-stage approach: fast heuristic pattern matching first, then LLM analysis for complex cases. This reduces noise without expensive API calls for obvious cases.",
+    prompt: `# Stage 1: Heuristic Patterns (runs first, no LLM needed)
+
+FALSE_POSITIVE_PATTERNS = [
+    # Test files - often contain intentional vulnerabilities for testing
+    r"test_.*\\.py$", r".*_test\\.py$", r".*\\.test\\.(js|ts)$",
+    r"__tests__/", r"spec/", r"tests/",
+    
+    # Mock/stub code - not production code
+    r"mock", r"stub", r"fake", r"fixture",
+    
+    # Suppression comments - developer acknowledged and accepted
+    r"# nosec", r"// NOSONAR", r"# pragma: no cover",
+    r"@SuppressWarnings", r"eslint-disable",
+    
+    # Example/template code
+    r"example", r"sample", r"demo", r"template",
+]
+
+# Stage 2: LLM Analysis (only for non-obvious findings)
+# Limited to MAX_FINDINGS_FOR_LLM = 50 most critical findings`,
+    exampleOutput: `## False Positive Analysis Results
+
+### Heuristic Detections (Instant, No LLM):
+| Finding | Pattern Matched | Status |
+|---------|-----------------|--------|
+| SQLi in test_db.py | test_.*\\.py$ | ✅ Likely FP |
+| XSS in mock_handler.ts | mock pattern | ✅ Likely FP |
+| Hardcoded key in example.py | example pattern | ✅ Likely FP |
+
+### LLM-Analyzed (Complex Cases):
+| Finding | Analysis | Confidence |
+|---------|----------|------------|
+| eval() in parser.py | Real issue - user input flows to eval | HIGH |
+| SQL in admin_query.py | POSSIBLE FP - parameterized query used | MEDIUM |
+
+### Summary:
+- 12 findings auto-filtered by heuristics
+- 8 findings sent to LLM for analysis
+- 3 confirmed false positives, 5 real issues`,
+    outputFormat: "Heuristic + LLM hybrid",
+    color: "#f59e0b",
+  },
+  {
+    id: "severity_adjustment",
+    title: "Severity Adjustment",
     icon: <SecurityIcon />,
     description:
-      "Generates an executive-level summary of all security findings, highlighting the most critical issues and overall risk posture. Perfect for presenting to stakeholders.",
-    prompt: `You are a senior red team security consultant writing a security assessment to help the blue team understand vulnerabilities from an attacker's perspective. Analyze these findings and provide:
+      "Context-aware severity adjustment based on code patterns. Findings in admin-only code, behind auth checks, or internal endpoints are automatically deprioritized.",
+    prompt: `# Severity Reduction Patterns in ai_analysis_service.py
 
-1. **Executive Summary** - 2-3 sentences on overall security posture
-2. **Critical Issues** - Top 3-5 most dangerous findings an attacker would target first
-3. **Attack Surface Analysis** - Key entry points and exposed functionality  
-4. **Risk Assessment** - Overall risk level (Critical/High/Medium/Low) with justification
-5. **Quick Wins** - Immediate actions that would reduce attack surface
+SEVERITY_REDUCTION_PATTERNS = [
+    # Authentication/authorization checks present
+    r"@login_required", r"@authenticated", r"isAuthenticated",
+    r"requireAuth", r"checkPermission", r"hasRole",
+    
+    # Admin-only functionality
+    r"@admin_only", r"@staff_required", r"role.*admin",
+    r"is_superuser", r"isAdmin",
+    
+    # Internal/private endpoints
+    r"internal", r"private", r"localhost",
+    r"127\\.0\\.0\\.1", r"0\\.0\\.0\\.0",
+    
+    # Debug/development only
+    r"DEBUG", r"development", r"if.*debug",
+]
 
-Focus on what an attacker would exploit first. Be specific about impact.
+# Severity escalation for:
+# - CISA KEV (Known Exploited Vulnerabilities) → always HIGH+
+# - EPSS > 0.7 (70%+ exploitation probability) → escalate to HIGH`,
+    exampleOutput: `## Severity Adjustments Applied
 
-FINDINGS DATA:
-{findings_json}`,
-    exampleOutput: `## Executive Summary
-This application has **HIGH** security risk with 3 critical SQL injection vulnerabilities and exposed AWS credentials. An attacker could achieve full database access within minutes.
+### Downgraded Findings:
+| Finding | Original | Adjusted | Reason |
+|---------|----------|----------|--------|
+| SQLi in admin_panel.py | HIGH | MEDIUM | @admin_only decorator |
+| XSS in debug_view.js | HIGH | LOW | DEBUG mode check |
+| SSRF in internal_api.py | HIGH | MEDIUM | localhost only |
 
-## Critical Issues (Attacker Priority)
-1. **SQL Injection in /api/users** - Direct database access, trivial to exploit
-2. **Hardcoded AWS Keys** - Full cloud infrastructure compromise
-3. **Command Injection in file upload** - Remote code execution possible
+### Escalated Findings:
+| Finding | Original | Adjusted | Reason |
+|---------|----------|----------|--------|
+| CVE-2024-1234 | MEDIUM | HIGH | In CISA KEV catalog |
+| CVE-2023-5678 | MEDIUM | HIGH | EPSS 0.89 (89% likely) |
 
-## Attack Surface Analysis
-- 12 API endpoints exposed, 4 with injectable parameters
-- Authentication bypass possible via JWT none algorithm
-- File upload accepts arbitrary extensions
-
-## Risk Assessment: CRITICAL
-Multiple chained vulnerabilities enable complete system takeover.
-
-## Quick Wins
-1. Parameterize SQL queries immediately
-2. Rotate and remove hardcoded credentials
-3. Implement input validation on all endpoints`,
-    outputFormat: "Markdown with sections",
+### Net Effect:
+- 5 findings downgraded (better context)
+- 2 findings escalated (real-world threat)`,
+    outputFormat: "Pattern-based adjustment",
     color: "#3b82f6",
   },
   {
-    id: "attack_vectors",
-    title: "Attack Vectors",
-    icon: <BugReportIcon />,
+    id: "attack_chains",
+    title: "Attack Chain Discovery",
+    icon: <LinkIcon />,
     description:
-      "Identifies specific attack paths and techniques an attacker could use to exploit vulnerabilities. Includes exploitation complexity and required access levels.",
-    prompt: `You are an offensive security expert analyzing vulnerabilities for attack potential. For these findings, identify:
+      "Combines related findings into exploitable attack chains. Uses heuristic grouping first, then LLM for narrative generation.",
+    prompt: `# Attack Chain Heuristics in ai_analysis_service.py
 
-1. **Primary Attack Vectors** - Most likely attack paths
-2. **Exploitation Complexity** - How difficult to exploit (Trivial/Easy/Moderate/Hard)
-3. **Required Access** - What attacker needs (None/Network/Authenticated/Local)
-4. **Potential Impact** - What attacker achieves (RCE/Data Access/Privilege Escalation/DoS)
-5. **Chaining Opportunities** - How vulnerabilities can be combined
+ATTACK_CHAIN_PATTERNS = {
+    "auth_bypass_to_rce": {
+        "entry": ["auth_bypass", "broken_auth", "jwt_none"],
+        "middle": ["privilege_escalation", "idor"],
+        "exit": ["command_injection", "code_execution", "rce"]
+    },
+    "sqli_to_data_breach": {
+        "entry": ["sql_injection"],
+        "exit": ["sensitive_data", "pii_exposure", "credential_theft"]
+    },
+    "ssrf_to_cloud_compromise": {
+        "entry": ["ssrf"],
+        "middle": ["metadata_access"],
+        "exit": ["cloud_credentials", "iam_escalation"]
+    },
+    "file_upload_to_rce": {
+        "entry": ["unrestricted_upload", "file_upload"],
+        "exit": ["webshell", "rce", "code_execution"]
+    }
+}
 
-Format as actionable attack paths. Be specific about techniques.
+# LLM generates narrative only after heuristics identify chains`,
+    exampleOutput: `## Attack Chains Discovered
 
-FINDINGS:
-{findings_json}`,
-    exampleOutput: `## Primary Attack Vectors
+### Chain 1: Authentication Bypass → RCE (CRITICAL)
+**Kill Chain Stages:** Initial Access → Execution
 
-### Vector 1: SQL Injection → Data Exfiltration
-- **Entry Point**: /api/search?q=
-- **Technique**: Union-based SQL injection
-- **Complexity**: Trivial (no WAF, error messages exposed)
-- **Impact**: Full database dump, credential theft
+1. **JWT None Algorithm** (auth_routes.py:45)
+   - Allows forging admin tokens without signature
+   
+2. **Admin File Upload** (admin_api.py:120)
+   - Admin endpoint accepts arbitrary file types
+   
+3. **Command Injection** (processor.py:88)
+   - Uploaded files processed with shell commands
 
-### Vector 2: File Upload → RCE
-- **Entry Point**: /upload endpoint
-- **Technique**: Upload PHP webshell, bypass extension filter
-- **Complexity**: Easy (known bypass techniques)
-- **Impact**: Remote code execution as www-data
+**Combined Impact:** Unauthenticated RCE
+**Exploitation Complexity:** LOW (public tools available)
 
-## Chaining Opportunity
-SQLi (creds) → Admin Login → File Upload → RCE → Privilege Escalation`,
-    outputFormat: "Attack path diagrams",
-    color: "#ef4444",
+---
+
+### Chain 2: SSRF → Cloud Takeover (HIGH)
+1. SSRF in webhook handler → 2. AWS metadata access → 3. IAM credential theft
+
+**Combined Impact:** Full AWS account compromise`,
+    outputFormat: "Chain diagram + narrative",
+    color: "#10b981",
   },
   {
     id: "exploit_scenarios",
     title: "Exploit Scenarios",
     icon: <AutoAwesomeIcon />,
     description:
-      "Creates detailed, step-by-step exploit scenarios showing how an attacker would compromise the system. Educational for defenders to understand attacker methodology.",
-    prompt: `You are a penetration tester creating detailed exploit scenarios. For each critical/high vulnerability, create a scenario with:
+      "Pre-built exploit templates for 16+ vulnerability types provide instant scenarios. LLM only called for novel or complex vulnerabilities.",
+    prompt: `# Exploit Templates in exploit_service.py (partial list)
 
-1. **Title** - Descriptive attack name
-2. **Narrative** - Story of how attack unfolds
-3. **Preconditions** - What attacker needs before starting
-4. **Step-by-Step Exploitation**:
-   - Reconnaissance steps
-   - Exploit preparation
-   - Execution steps
-   - Post-exploitation
-5. **Proof of Concept Outline** - Pseudocode or command structure
-6. **Impact Assessment** - What attacker gains
+EXPLOIT_TEMPLATES = {
+    "sql_injection": {
+        "title": "Database Takeover via SQL Injection",
+        "steps": [
+            "1. Identify injectable parameter",
+            "2. Determine database type via error messages",
+            "3. Extract schema using UNION or blind techniques",
+            "4. Dump sensitive tables (users, credentials)",
+            "5. Escalate to OS command execution if xp_cmdshell/INTO OUTFILE"
+        ],
+        "tools": ["sqlmap", "Burp Suite"],
+        "impact": "Data breach, credential theft, potential RCE"
+    },
+    "command_injection": { ... },
+    "xss_reflected": { ... },
+    "xss_stored": { ... },
+    "path_traversal": { ... },
+    "ssrf": { ... },
+    "xxe": { ... },
+    "deserialization": { ... },
+    "weak_crypto_md5": { ... },
+    "weak_crypto_sha1": { ... },
+    "hardcoded_secret": { ... },
+    "prototype_pollution": { ... },
+    "buffer_overflow": { ... },
+    # ... 16+ templates total
+}`,
+    exampleOutput: `## Exploit Scenario: SQL Injection in Search API
 
-Make it educational for defenders to understand attacker methodology.
+### Template-Generated (Instant):
+**Vulnerability:** SQL Injection in /api/search endpoint
+**File:** src/api/search.py:42
 
-VULNERABILITY:
-{finding_json}`,
-    exampleOutput: `# Exploit Scenario: Database Takeover via SQL Injection
+### Attack Steps:
+\`\`\`bash
+# 1. Confirm injection
+curl "https://target/api/search?q=test' OR '1'='1"
 
-## Narrative
-An external attacker discovers the search functionality accepts unsanitized input. Using automated tools, they extract the entire user database including password hashes.
+# 2. Enumerate with sqlmap
+sqlmap -u "https://target/api/search?q=test" --dbs
 
-## Preconditions
-- Network access to application
-- Basic SQL injection knowledge
-- SQLMap or similar tool
-
-## Step-by-Step Exploitation
-
-### 1. Reconnaissance
+# 3. Extract users table
+sqlmap -u "..." -D app -T users --dump
 \`\`\`
-curl "https://target.com/api/search?q=test'"
-# Error reveals: MySQL syntax error
-\`\`\`
 
-### 2. Enumerate Database
-\`\`\`
-sqlmap -u "https://target.com/api/search?q=test" --tables
-# Found: users, sessions, payments
-\`\`\`
+### Impact Assessment:
+- **Confidentiality:** Complete database access
+- **Integrity:** Data modification possible
+- **Availability:** DROP TABLE possible
 
-### 3. Extract Data
-\`\`\`
-sqlmap -u "..." -T users --dump
-# Retrieved: 5000 user records with bcrypt hashes
-\`\`\`
+### Remediation:
+\`\`\`python
+# VULNERABLE
+query = f"SELECT * FROM items WHERE name LIKE '%{search}%'"
 
-## Impact
-- Complete database compromise
-- User credential theft
-- Regulatory violations (GDPR, PCI-DSS)`,
-    outputFormat: "Detailed scenario with code",
+# SECURE
+query = "SELECT * FROM items WHERE name LIKE %s"
+cursor.execute(query, (f"%{search}%",))
+\`\`\``,
+    outputFormat: "Template + custom PoC",
     color: "#8b5cf6",
   },
   {
-    id: "false_positives",
-    title: "False Positive Analysis",
-    icon: <VisibilityOffIcon />,
+    id: "security_summary",
+    title: "Security Summary",
+    icon: <BugReportIcon />,
     description:
-      "Analyzes findings to identify likely false positives based on code context, helping you focus on real issues and save remediation time.",
-    prompt: `You are a security analyst reviewing scan results for false positives. Analyze each finding and assess:
+      "AI-generated executive summary and application overview. Generated in background after scan completes for instant report loading.",
+    prompt: `# Background Summary Generation (ai_analysis_service.py)
 
-1. **Likely False Positive** - Is this probably not a real issue?
-2. **Confidence** - How confident (High/Medium/Low)
-3. **Reasoning** - Why you think it's false positive or real
-4. **Verification Steps** - How to confirm either way
+# Summaries generated asynchronously after scan completes
+# Cached in database for instant export/viewing
 
-Consider:
-- Context of the code (test files, comments, dead code)
-- Common false positive patterns for this vulnerability type
-- Framework protections that might mitigate the issue
+async def generate_summaries_background(scan_run_id: int):
+    """Generate AI summaries in background worker."""
+    
+    # 1. Application Overview - what does this code do?
+    app_overview = await generate_app_overview(code_chunks)
+    
+    # 2. Security Summary - overall risk posture
+    security_summary = await generate_security_summary(
+        findings,
+        vulnerabilities,
+        attack_chains
+    )
+    
+    # 3. Cache in database
+    await save_summaries(scan_run_id, app_overview, security_summary)
+    
+    # Summaries ready for instant export/viewing`,
+    exampleOutput: `## Application Overview (AI-Generated)
 
-FINDINGS:
-{findings_json}`,
-    exampleOutput: `## False Positive Analysis
+This appears to be a **Node.js e-commerce API** built with Express.js and PostgreSQL. Key components include:
 
-### Finding: SQL Injection in test_database.py
-- **Assessment**: LIKELY FALSE POSITIVE
-- **Confidence**: High
-- **Reasoning**: File is in /tests/ directory, query is for test fixtures only
-- **Verification**: Confirm file is excluded from production build
+- **Authentication:** JWT-based auth with refresh tokens
+- **Payment Processing:** Stripe integration for payments
+- **File Storage:** AWS S3 for product images
+- **API Design:** RESTful endpoints under /api/v1
 
-### Finding: Hardcoded Password in config.example.py
-- **Assessment**: LIKELY FALSE POSITIVE  
-- **Confidence**: High
-- **Reasoning**: ".example" files are templates, real config uses env vars
-- **Verification**: Check .gitignore includes actual config files
+---
 
-### Finding: XSS in UserProfile component
-- **Assessment**: REAL ISSUE
-- **Confidence**: Medium
-- **Reasoning**: dangerouslySetInnerHTML used with user-controlled bio field
-- **Verification**: Test with XSS payload in bio field`,
-    outputFormat: "Analysis per finding",
-    color: "#f59e0b",
-  },
-  {
-    id: "attack_chains",
-    title: "Attack Chain Mapping",
-    icon: <LinkIcon />,
-    description:
-      "Identifies how multiple vulnerabilities can be chained together for maximum impact. Maps to the Cyber Kill Chain and shows combined exploitation paths.",
-    prompt: `You are an advanced threat analyst mapping attack chains. Analyze how these vulnerabilities could be combined:
+## Security Summary
 
-Create attack chains showing:
-1. **Chain Name** - Descriptive title
-2. **Kill Chain Stage Mapping** - Where each vuln fits in Lockheed Martin kill chain
-3. **Step Sequence** - Order of exploitation
-4. **Combined Impact** - What's achieved by chaining
-5. **Likelihood** - How likely an attacker would use this chain
+### Risk Level: HIGH
 
-Look for:
-- Initial access + privilege escalation combinations
-- Data access + exfiltration paths  
-- Persistence + lateral movement options
+**Critical Issues (Fix Immediately):**
+1. SQL Injection in product search - direct database compromise
+2. Hardcoded Stripe API key - financial data at risk
 
-VULNERABILITIES:
-{findings_json}`,
-    exampleOutput: `## Attack Chain: External to Domain Admin
+**High Priority:**
+3. JWT secret in source code - authentication bypass possible
+4. Missing rate limiting - DoS and brute force vulnerable
 
-### Chain Overview
-Combines 4 vulnerabilities for complete infrastructure compromise
-
-### Kill Chain Mapping
-| Stage | Vulnerability Used |
-|-------|-------------------|
-| Delivery | SQL Injection (initial access) |
-| Exploitation | Credential theft from DB |
-| Installation | File upload for webshell |
-| C2 | Reverse shell from webshell |
-| Actions | Lateral movement with stolen creds |
-
-### Step Sequence
-1. **SQLi** → Extract admin password hash
-2. **Crack hash** → Gain admin portal access  
-3. **File upload** → Deploy webshell
-4. **Pivot** → Use stolen creds on internal systems
-
-### Combined Impact
-- Initial: Web application access
-- Final: Complete domain compromise
-- Data at risk: All systems, all data
-
-### Likelihood: HIGH
-All vulns are easily exploitable with public tools`,
-    outputFormat: "Chain diagram and steps",
-    color: "#10b981",
+**Key Statistics:**
+- 23 total findings (3 Critical, 8 High, 12 Medium)
+- 45 dependencies with 7 known CVEs
+- 2 attack chains identified`,
+    outputFormat: "Cached summary",
+    color: "#ef4444",
   },
 ];
 
@@ -321,20 +370,21 @@ export default function AIAnalysisPage() {
               How AI Enhances Security Analysis
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3, lineHeight: 1.8 }}>
-              After traditional scanners identify vulnerabilities, VRAgent sends the findings to <strong>Google Gemini 2.0 Flash</strong> for advanced analysis. The AI provides context that automated scanners can't - understanding how vulnerabilities relate to each other, identifying likely false positives, and creating realistic attack scenarios from an attacker's perspective.
+              VRAgent uses a <strong>hybrid approach</strong> combining fast heuristic pattern matching with <strong>Google Gemini 2.0 Flash</strong> for complex analysis. Heuristics handle obvious cases instantly (test files, mock code, suppression comments), while LLM analysis is reserved for the <strong>top 50 most critical findings</strong> to optimize cost and speed.
             </Typography>
 
             <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
               <Typography variant="body2">
-                <strong>🔒 Privacy Note:</strong> Only vulnerability metadata is sent to the AI - not your actual source code. The AI sees finding types, severities, file paths, and descriptions, but never the code itself.
+                <strong>🔒 Privacy Note:</strong> Only vulnerability metadata is sent to the AI - not your actual source code. The AI sees finding types, severities, file paths, and code snippets, but full source files stay on your server.
               </Typography>
             </Alert>
 
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-              <Chip label="Google Gemini 2.0 Flash" sx={{ bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6", fontWeight: 600 }} />
-              <Chip label="5 Analysis Types" variant="outlined" />
-              <Chip label="Red Team Perspective" variant="outlined" />
-              <Chip label="Attack Chain Mapping" variant="outlined" />
+              <Chip label="Gemini 2.0 Flash" sx={{ bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6", fontWeight: 600 }} />
+              <Chip label="Heuristics First" variant="outlined" />
+              <Chip label="50 Finding Limit" variant="outlined" />
+              <Chip label="16+ Exploit Templates" variant="outlined" />
+              <Chip label="Background Generation" variant="outlined" />
             </Box>
           </Grid>
           <Grid item xs={12} md={4}>
@@ -342,10 +392,11 @@ export default function AIAnalysisPage() {
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>AI Analysis Flow</Typography>
               {[
                 { icon: "🔍", label: "Scanners find vulnerabilities" },
-                { icon: "📋", label: "Findings aggregated & normalized" },
-                { icon: "🧠", label: "Sent to Gemini AI" },
-                { icon: "✨", label: "AI generates insights" },
-                { icon: "📊", label: "Added to security report" },
+                { icon: "⚡", label: "Heuristics filter obvious FPs" },
+                { icon: "📊", label: "Top 50 findings selected" },
+                { icon: "🧠", label: "Gemini analyzes complex cases" },
+                { icon: "📝", label: "Templates generate exploits" },
+                { icon: "💾", label: "Summaries cached for export" },
               ].map((step, i) => (
                 <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
                   <Typography variant="h6">{step.icon}</Typography>
@@ -471,14 +522,14 @@ export default function AIAnalysisPage() {
       {/* Best Practices */}
       <Paper sx={{ p: 4, borderRadius: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-          💡 Getting the Most from AI Analysis
+          💡 How VRAgent AI Analysis Works
         </Typography>
         <Grid container spacing={3}>
           {[
-            { title: "Review Executive Summaries", desc: "Start with the AI-generated summary to quickly understand overall risk posture before diving into individual findings.", color: "#3b82f6" },
-            { title: "Validate Attack Chains", desc: "AI-identified attack chains show how vulnerabilities combine. Prioritize fixes that break multiple chains.", color: "#ef4444" },
-            { title: "Check False Positives", desc: "Review AI's false positive assessments before spending time on remediation. Verify with manual testing.", color: "#f59e0b" },
-            { title: "Use Exploit Scenarios", desc: "Share exploit scenarios with developers to help them understand real-world impact and motivate fixes.", color: "#10b981" },
+            { title: "Heuristics Run First", desc: "Pattern matching instantly filters test files, mock code, and suppressed findings - no LLM needed for obvious cases.", color: "#f59e0b" },
+            { title: "LLM for Top 50 Only", desc: "Only the 50 most critical findings go to Gemini AI. This balances thoroughness with API cost and speed.", color: "#3b82f6" },
+            { title: "16+ Exploit Templates", desc: "Pre-built templates for SQLi, XSS, RCE, and more provide instant exploit scenarios without waiting for LLM generation.", color: "#8b5cf6" },
+            { title: "Background Summary Generation", desc: "AI summaries generate after scan completes and are cached in the database for instant report exports.", color: "#10b981" },
           ].map((tip) => (
             <Grid item xs={12} md={6} key={tip.title}>
               <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha(tip.color, 0.05), border: `1px solid ${alpha(tip.color, 0.15)}`, height: "100%" }}>

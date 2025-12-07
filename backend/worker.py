@@ -6,7 +6,7 @@ import redis.exceptions
 from rq import Connection, Worker
 
 from backend.core.logging import get_logger
-from backend.tasks.jobs import exploit_queue, redis_conn, scan_queue
+from backend.tasks.jobs import exploit_queue, redis_conn, scan_queue, summary_queue
 
 logger = get_logger(__name__)
 
@@ -24,7 +24,7 @@ def run_worker():
     signal.signal(signal.SIGINT, handle_shutdown)
     
     logger.info("Starting VRAgent background worker...")
-    logger.info(f"Listening on queues: scans, exploitability")
+    logger.info(f"Listening on queues: scans, exploitability, summaries")
     
     max_retries = 5
     retry_delay = 5
@@ -33,7 +33,7 @@ def run_worker():
         try:
             with Connection(redis_conn):
                 worker = Worker(
-                    [scan_queue, exploit_queue],
+                    [scan_queue, exploit_queue, summary_queue],
                     default_worker_ttl=420,  # Worker heartbeat timeout
                     job_monitoring_interval=5,  # Check for jobs every 5 seconds
                 )

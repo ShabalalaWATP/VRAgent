@@ -303,9 +303,9 @@ def generate_pdf_report(markdown_content: str) -> bytes:
                 story.append(Paragraph(f"<b>{line[2:-2]}</b>", styles['CustomBody']))
             # List items
             elif line.startswith('- '):
-                text = line[2:].replace('**', '<b>').replace('`', '')
-                if text.count('<b>') % 2 == 1:
-                    text += '</b>'
+                # Convert markdown bold **text** to HTML <b>text</b>
+                text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', line[2:])
+                text = text.replace('`', '')
                 story.append(Paragraph(f"• {text}", styles['CustomBody']))
             # Table detection
             elif line.startswith('|') and i + 1 < len(lines) and lines[i + 1].startswith('|'):
@@ -336,10 +336,9 @@ def generate_pdf_report(markdown_content: str) -> bytes:
                 story.append(Paragraph(line[1:-1], styles['CustomCode']))
             # Regular text
             else:
-                text = line.replace('**', '<b>').replace('`', '')
-                # Fix unclosed tags
-                if text.count('<b>') > text.count('</b>'):
-                    text += '</b>' * (text.count('<b>') - text.count('</b>'))
+                # Convert markdown bold **text** to HTML <b>text</b>
+                text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', line)
+                text = text.replace('`', '')
                 if text.strip():
                     story.append(Paragraph(text, styles['CustomBody']))
             

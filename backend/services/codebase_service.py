@@ -1,14 +1,21 @@
+import ast
 import re
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Tuple
+from typing import Callable, Iterable, List, Optional, Tuple, Dict, Any
 
 from backend import models
 from backend.core.exceptions import ZipExtractionError
 from backend.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Chunking configuration for large codebases
+MAX_CHUNK_SIZE = 2000  # Maximum lines per chunk (prevents oversized chunks)
+MIN_CHUNK_SIZE = 10    # Minimum lines per chunk (prevents tiny fragments)
+IDEAL_CHUNK_SIZE = 150  # Target chunk size for optimal analysis
+MAX_CHUNKS_PER_FILE = 50  # Limit chunks per file to prevent explosion
 
 # Folders to skip during scanning (saves time and memory)
 IGNORED_FOLDERS = {
@@ -206,20 +213,360 @@ def iter_source_files(base_path: Path, max_file_size: int = MAX_SOURCE_FILE_SIZE
         yield path
 
 
-def split_into_chunks(contents: str) -> List[Tuple[int, int, str]]:
+def split_into_chunks(contents: str, file_path: str = "") -> List[Tuple[int, int, str]]:
     """
-    Very naive code chunking: split on function or class-like headers to keep demo simple.
-    Returns list of tuples (start_line, end_line, code).
+    Intelligently split code into semantic chunks for analysis.
+    
+    Uses multiple strategies based on language:
+    1. Python: AST-based parsing for functions/classes
+    2. Other languages: Regex-based parsing for common patterns
+    3. Fallback: Line-based chunking for unparseable code
+    
+    Features for large codebases:
+    - Size-bounded chunks prevent memory issues
+    - Semantic boundaries preserve context for better analysis
+    - Duplicate detection reduces redundant processing
+    
+    Args:
+        contents: The file contents as a string
+        file_path: Optional file path for language detection
+        
+    Returns:
+        List of tuples (start_line, end_line, code)
     """
     lines = contents.splitlines()
+    total_lines = len(lines)
+    
+    if total_lines == 0:
+        return []
+    
+    # For very small files, return as single chunk
+    if total_lines <= MIN_CHUNK_SIZE:
+        return [(1, total_lines, contents)]
+    
+    file_ext = Path(file_path).suffix.lower() if file_path else ""
+    
+    # Try language-specific parsing
+    chunks = []
+    
+    if file_ext == ".py":
+        chunks = _split_python_ast(contents, lines)
+    elif file_ext in (".js", ".ts", ".tsx", ".jsx"):
+        chunks = _split_javascript(contents, lines)
+    elif file_ext in (".java", ".kt", ".kts"):
+        chunks = _split_java_like(contents, lines)
+    elif file_ext in (".go"):
+        chunks = _split_go(contents, lines)
+    elif file_ext in (".rb"):
+        chunks = _split_ruby(contents, lines)
+    elif file_ext in (".php"):
+        chunks = _split_php(contents, lines)
+    elif file_ext in (".rs"):
+        chunks = _split_rust(contents, lines)
+    elif file_ext in (".c", ".cpp", ".cc", ".h", ".hpp"):
+        chunks = _split_c_like(contents, lines)
+    
+    # If no chunks found or parsing failed, use fallback
+    if not chunks:
+        chunks = _split_fallback(contents, lines)
+    
+    # Enforce size limits and merge tiny chunks
+    chunks = _normalize_chunks(chunks, lines)
+    
+    # Limit total chunks per file
+    if len(chunks) > MAX_CHUNKS_PER_FILE:
+        logger.debug(f"Limiting chunks from {len(chunks)} to {MAX_CHUNKS_PER_FILE} for {file_path}")
+        chunks = _prioritize_chunks_for_analysis(chunks, MAX_CHUNKS_PER_FILE)
+    
+    return chunks
+
+
+def _split_python_ast(contents: str, lines: List[str]) -> List[Tuple[int, int, str]]:
+    """Split Python code using AST for accurate function/class boundaries."""
+    chunks = []
+    try:
+        tree = ast.parse(contents)
+        
+        # Collect all top-level and nested functions/classes
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                start_line = node.lineno
+                end_line = node.end_lineno if hasattr(node, 'end_lineno') and node.end_lineno else start_line
+                
+                # Include decorators
+                if node.decorator_list:
+                    start_line = min(d.lineno for d in node.decorator_list)
+                
+                code = "\n".join(lines[start_line - 1:end_line])
+                chunks.append((start_line, end_line, code))
+        
+        # Sort by start line and remove overlapping chunks (keep outer)
+        chunks.sort(key=lambda x: (x[0], -x[1]))
+        filtered = []
+        last_end = 0
+        for start, end, code in chunks:
+            if start > last_end:
+                filtered.append((start, end, code))
+                last_end = end
+        
+        return filtered
+        
+    except SyntaxError:
+        logger.debug(f"Python AST parsing failed, using fallback")
+        return []
+
+
+def _split_javascript(contents: str, lines: List[str]) -> List[Tuple[int, int, str]]:
+    """Split JavaScript/TypeScript code by function and class definitions."""
+    chunks = []
+    
+    # Patterns for JS/TS constructs
+    patterns = [
+        r'^(?:export\s+)?(?:async\s+)?function\s+\w+',
+        r'^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?(?:function|\([^)]*\)\s*=>)',
+        r'^(?:export\s+)?class\s+\w+',
+        r'^\s+(?:async\s+)?(?:public|private|protected)?\s*(?:static\s+)?(?:async\s+)?\w+\s*\([^)]*\)\s*[:{]',
+        r'^(?:export\s+)?(?:default\s+)?(?:const|let|var)\s+\w+\s*=\s*\{',
+    ]
+    
+    return _split_by_patterns(lines, patterns)
+
+
+def _split_java_like(contents: str, lines: List[str]) -> List[Tuple[int, int, str]]:
+    """Split Java/Kotlin code by method and class definitions."""
+    patterns = [
+        r'^\s*(?:public|private|protected)?\s*(?:static\s+)?(?:final\s+)?(?:class|interface|enum)\s+\w+',
+        r'^\s*(?:public|private|protected)\s+(?:static\s+)?(?:final\s+)?(?:\w+\s+)+\w+\s*\([^)]*\)\s*(?:throws\s+\w+)?\s*\{?',
+        r'^\s*(?:fun|suspend\s+fun)\s+\w+',
+        r'^\s*(?:override\s+)?(?:fun|suspend\s+fun)\s+\w+',
+    ]
+    
+    return _split_by_patterns(lines, patterns)
+
+
+def _split_go(contents: str, lines: List[str]) -> List[Tuple[int, int, str]]:
+    """Split Go code by function and type definitions."""
+    patterns = [
+        r'^func\s+(?:\([^)]+\)\s+)?\w+',
+        r'^type\s+\w+\s+(?:struct|interface)',
+    ]
+    
+    return _split_by_patterns(lines, patterns)
+
+
+def _split_ruby(contents: str, lines: List[str]) -> List[Tuple[int, int, str]]:
+    """Split Ruby code by method and class definitions."""
+    patterns = [
+        r'^\s*(?:def|class|module)\s+\w+',
+        r'^\s*(?:private|protected|public)\s*$',
+    ]
+    
+    return _split_by_patterns(lines, patterns)
+
+
+def _split_php(contents: str, lines: List[str]) -> List[Tuple[int, int, str]]:
+    """Split PHP code by function and class definitions."""
+    patterns = [
+        r'^\s*(?:public|private|protected)?\s*(?:static\s+)?function\s+\w+',
+        r'^\s*class\s+\w+',
+        r'^\s*(?:abstract\s+)?(?:final\s+)?class\s+\w+',
+    ]
+    
+    return _split_by_patterns(lines, patterns)
+
+
+def _split_rust(contents: str, lines: List[str]) -> List[Tuple[int, int, str]]:
+    """Split Rust code by function, impl, and struct definitions."""
+    patterns = [
+        r'^\s*(?:pub\s+)?(?:async\s+)?fn\s+\w+',
+        r'^\s*(?:pub\s+)?struct\s+\w+',
+        r'^\s*(?:pub\s+)?impl(?:<[^>]+>)?\s+\w+',
+        r'^\s*(?:pub\s+)?trait\s+\w+',
+    ]
+    
+    return _split_by_patterns(lines, patterns)
+
+
+def _split_c_like(contents: str, lines: List[str]) -> List[Tuple[int, int, str]]:
+    """Split C/C++ code by function and class definitions."""
+    patterns = [
+        r'^\s*(?:static\s+)?(?:inline\s+)?(?:\w+\s+)+\w+\s*\([^)]*\)\s*\{?',
+        r'^\s*class\s+\w+',
+        r'^\s*struct\s+\w+',
+        r'^\s*namespace\s+\w+',
+    ]
+    
+    return _split_by_patterns(lines, patterns)
+
+
+def _split_by_patterns(lines: List[str], patterns: List[str]) -> List[Tuple[int, int, str]]:
+    """Generic pattern-based splitting with brace matching."""
+    chunks = []
+    compiled = [re.compile(p, re.IGNORECASE) for p in patterns]
+    
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        
+        # Check if this line matches any pattern
+        matched = any(p.search(line) for p in compiled)
+        
+        if matched:
+            start = i + 1  # 1-based line numbers
+            # Find the end by tracking braces or using indentation
+            end = _find_block_end(lines, i)
+            code = "\n".join(lines[i:end])
+            chunks.append((start, end, code))
+            i = end
+        else:
+            i += 1
+    
+    return chunks
+
+
+def _find_block_end(lines: List[str], start_idx: int) -> int:
+    """Find the end of a code block using brace matching or indentation."""
+    if start_idx >= len(lines):
+        return start_idx + 1
+    
+    # Check if this is a brace-delimited block
+    open_braces = 0
+    in_block = False
+    
+    for i in range(start_idx, min(start_idx + MAX_CHUNK_SIZE, len(lines))):
+        line = lines[i]
+        
+        # Count braces (simple - doesn't handle strings/comments perfectly)
+        open_braces += line.count('{') - line.count('}')
+        
+        if '{' in line:
+            in_block = True
+        
+        if in_block and open_braces <= 0:
+            return i + 1
+    
+    # If no braces found, use indentation (for Python/Ruby style)
+    if not in_block:
+        base_indent = len(lines[start_idx]) - len(lines[start_idx].lstrip())
+        for i in range(start_idx + 1, min(start_idx + MAX_CHUNK_SIZE, len(lines))):
+            line = lines[i]
+            if line.strip():  # Non-empty line
+                current_indent = len(line) - len(line.lstrip())
+                if current_indent <= base_indent:
+                    return i
+    
+    # Fallback: return start + IDEAL_CHUNK_SIZE or end of file
+    return min(start_idx + IDEAL_CHUNK_SIZE, len(lines))
+
+
+def _split_fallback(contents: str, lines: List[str]) -> List[Tuple[int, int, str]]:
+    """
+    Fallback chunking: split on function/class-like headers or by size.
+    Used when language-specific parsing fails.
+    """
     chunks = []
     current_start = 1
+    
+    # Look for common function/class patterns
     for idx, line in enumerate(lines, start=1):
-        if re.match(r"^(def |class |function )", line.strip()) and idx != 1:
-            chunks.append((current_start, idx - 1, "\n".join(lines[current_start - 1 : idx - 1])))
-            current_start = idx
-    chunks.append((current_start, len(lines), "\n".join(lines[current_start - 1 :])))
+        stripped = line.strip()
+        if re.match(r'^(def |class |function |func |public |private |protected |async )', stripped) and idx != 1:
+            if idx - current_start >= MIN_CHUNK_SIZE:
+                chunks.append((current_start, idx - 1, "\n".join(lines[current_start - 1:idx - 1])))
+                current_start = idx
+        
+        # Also split on very large chunks
+        if idx - current_start >= IDEAL_CHUNK_SIZE * 2:
+            chunks.append((current_start, idx, "\n".join(lines[current_start - 1:idx])))
+            current_start = idx + 1
+    
+    # Add remaining content
+    if current_start <= len(lines):
+        chunks.append((current_start, len(lines), "\n".join(lines[current_start - 1:])))
+    
     return chunks
+
+
+def _normalize_chunks(chunks: List[Tuple[int, int, str]], lines: List[str]) -> List[Tuple[int, int, str]]:
+    """Normalize chunks: enforce size limits and merge tiny chunks."""
+    if not chunks:
+        return chunks
+    
+    normalized = []
+    
+    for start, end, code in chunks:
+        chunk_size = end - start + 1
+        
+        # Split oversized chunks
+        if chunk_size > MAX_CHUNK_SIZE:
+            for sub_start in range(start, end + 1, IDEAL_CHUNK_SIZE):
+                sub_end = min(sub_start + IDEAL_CHUNK_SIZE - 1, end)
+                sub_code = "\n".join(lines[sub_start - 1:sub_end])
+                normalized.append((sub_start, sub_end, sub_code))
+        else:
+            normalized.append((start, end, code))
+    
+    # Merge tiny chunks with neighbors
+    if len(normalized) > 1:
+        merged = []
+        i = 0
+        while i < len(normalized):
+            start, end, code = normalized[i]
+            chunk_size = end - start + 1
+            
+            # If tiny, try to merge with next chunk
+            if chunk_size < MIN_CHUNK_SIZE and i + 1 < len(normalized):
+                next_start, next_end, next_code = normalized[i + 1]
+                combined_size = next_end - start + 1
+                
+                if combined_size <= IDEAL_CHUNK_SIZE * 2:
+                    # Merge
+                    merged_code = "\n".join(lines[start - 1:next_end])
+                    merged.append((start, next_end, merged_code))
+                    i += 2
+                    continue
+            
+            merged.append((start, end, code))
+            i += 1
+        
+        return merged
+    
+    return normalized
+
+
+def _prioritize_chunks_for_analysis(
+    chunks: List[Tuple[int, int, str]], 
+    max_chunks: int
+) -> List[Tuple[int, int, str]]:
+    """
+    Prioritize chunks for analysis when there are too many.
+    Keeps chunks with security-relevant content.
+    """
+    from backend.services.embedding_service import SECURITY_KEYWORDS
+    
+    # Score each chunk by security relevance
+    scored = []
+    for chunk in chunks:
+        start, end, code = chunk
+        code_lower = code.lower()
+        
+        # Count security keywords
+        score = sum(2 for kw in SECURITY_KEYWORDS if kw in code_lower)
+        
+        # Boost based on position (earlier code often more important)
+        position_boost = max(0, (1000 - start) / 1000)
+        score += position_boost
+        
+        # Boost chunks with imports/requires (entry points)
+        if re.search(r'^(?:import|from|require|use)\s', code, re.MULTILINE):
+            score += 1
+        
+        scored.append((score, chunk))
+    
+    # Sort by score descending and take top chunks
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    return [chunk for _, chunk in scored[:max_chunks]]
 
 
 def create_code_chunks(

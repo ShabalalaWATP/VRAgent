@@ -36,6 +36,8 @@ import {
   Collapse,
   Tabs,
   Tab,
+  Menu,
+  MenuItem,
 } from "@mui/material";
 import { Link } from "react-router-dom";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
@@ -71,6 +73,10 @@ import PersonIcon from "@mui/icons-material/Person";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import HistoryIcon from "@mui/icons-material/History";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import DownloadIcon from "@mui/icons-material/Download";
+import DescriptionIcon from "@mui/icons-material/Description";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import ArticleIcon from "@mui/icons-material/Article";
 import { useDropzone } from "react-dropzone";
 import ReactMarkdown from "react-markdown";
 import { 
@@ -86,6 +92,7 @@ import {
   deletePcapReport,
   SavedReportSummary,
   SavedReportDetail,
+  apiClient,
 } from "../api/client";
 
 // Severity colors
@@ -870,6 +877,10 @@ export default function PcapAnalyzerPage() {
   const [loadingReports, setLoadingReports] = useState(false);
   const [viewingReport, setViewingReport] = useState<SavedReportDetail | null>(null);
   const [loadingReportDetail, setLoadingReportDetail] = useState(false);
+  
+  // Export state
+  const [exportAnchorEl, setExportAnchorEl] = useState<null | HTMLElement>(null);
+  const [exportReportId, setExportReportId] = useState<number | null>(null);
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
@@ -880,7 +891,9 @@ export default function PcapAnalyzerPage() {
 
   // Handle sending chat message
   const handleSendMessage = async () => {
-    if (!chatInput.trim() || !results || chatLoading) return;
+    // Support both fresh results AND saved reports
+    const hasContext = results || viewingReport;
+    if (!chatInput.trim() || !hasContext || chatLoading) return;
 
     const userMessage: ChatMessage = { role: "user", content: chatInput.trim() };
     setChatMessages((prev) => [...prev, userMessage]);
@@ -889,18 +902,33 @@ export default function PcapAnalyzerPage() {
     setChatError(null);
 
     try {
-      // Get the first analysis for context (or combine if multiple)
-      const firstAnalysis = results.analyses[0];
-      const pcapContext = {
-        summary: firstAnalysis?.summary,
-        findings: firstAnalysis?.findings,
-        ai_analysis: firstAnalysis?.ai_analysis,
-      };
+      let pcapContext;
+      
+      if (results) {
+        // Fresh analysis results
+        const firstAnalysis = results.analyses[0];
+        pcapContext = {
+          summary: firstAnalysis?.summary,
+          findings: firstAnalysis?.findings,
+          ai_analysis: firstAnalysis?.ai_analysis,
+        };
+      } else if (viewingReport) {
+        // Saved report - reconstruct context from saved data
+        pcapContext = {
+          summary: {
+            total_packets: viewingReport.summary_data?.total_packets,
+            total_findings: viewingReport.summary_data?.total_findings,
+            ...viewingReport.summary_data?.summaries?.[0],
+          },
+          findings: viewingReport.findings_data,
+          ai_analysis: viewingReport.ai_report,
+        };
+      }
 
       const response = await chatAboutPcap({
         message: userMessage.content,
         conversation_history: chatMessages,
-        pcap_context: pcapContext,
+        pcap_context: pcapContext!,
       });
 
       if (response.error) {
@@ -966,6 +994,9 @@ export default function PcapAnalyzerPage() {
   // View a saved report
   const handleViewReport = async (reportId: number) => {
     setLoadingReportDetail(true);
+    // Clear chat when switching to a different report
+    setChatMessages([]);
+    setChatError(null);
     try {
       const detail = await getPcapReport(reportId);
       setViewingReport(detail);
@@ -986,6 +1017,7 @@ export default function PcapAnalyzerPage() {
       // Clear viewing if we deleted the one being viewed
       if (viewingReport?.id === reportId) {
         setViewingReport(null);
+        setChatMessages([]);
       }
     } catch (err: any) {
       setError(err.message || "Failed to delete report");
@@ -995,6 +1027,36 @@ export default function PcapAnalyzerPage() {
   // Go back from viewing a report
   const handleBackToReports = () => {
     setViewingReport(null);
+    setChatMessages([]);
+  };
+
+  // Export handlers
+  const handleExportClick = (event: React.MouseEvent<HTMLElement>, reportId: number) => {
+    setExportAnchorEl(event.currentTarget);
+    setExportReportId(reportId);
+  };
+
+  const handleExportClose = () => {
+    setExportAnchorEl(null);
+    setExportReportId(null);
+  };
+
+  const handleExport = async (format: "markdown" | "pdf" | "docx") => {
+    if (!exportReportId) return;
+    try {
+      const blob = await apiClient.exportNetworkReport(exportReportId, format);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pcap_report_${exportReportId}.${format === "markdown" ? "md" : format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message || "Export failed");
+    }
+    handleExportClose();
   };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -1214,6 +1276,57 @@ export default function PcapAnalyzerPage() {
       {/* Results */}
       {results && (
         <Box>
+          {/* Results Header with Export */}
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+            <Typography variant="h5" fontWeight={700}>
+              Analysis Results
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              {results.report_id && (
+                <>
+                  <Button
+                    startIcon={<DownloadIcon />}
+                    onClick={(e) => handleExportClick(e, results.report_id!)}
+                    variant="outlined"
+                  >
+                    Export
+                  </Button>
+                  <Menu
+                    anchorEl={exportAnchorEl}
+                    open={Boolean(exportAnchorEl) && exportReportId === results.report_id}
+                    onClose={handleExportClose}
+                  >
+                    <MenuItem onClick={() => handleExport("markdown")}>
+                      <ListItemIcon>
+                        <DescriptionIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>Markdown (.md)</ListItemText>
+                    </MenuItem>
+                    <MenuItem onClick={() => handleExport("pdf")}>
+                      <ListItemIcon>
+                        <PictureAsPdfIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>PDF (.pdf)</ListItemText>
+                    </MenuItem>
+                    <MenuItem onClick={() => handleExport("docx")}>
+                      <ListItemIcon>
+                        <ArticleIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>Word (.docx)</ListItemText>
+                    </MenuItem>
+                  </Menu>
+                </>
+              )}
+              <Button
+                onClick={() => {
+                  setResults(null);
+                  setFiles([]);
+                }}
+              >
+                New Analysis
+              </Button>
+            </Box>
+          </Box>
           {/* Summary Cards */}
           <Grid container spacing={3} sx={{ mb: 3 }}>
             <Grid item xs={12} sm={6} md={3}>
@@ -1625,13 +1738,47 @@ export default function PcapAnalyzerPage() {
           ) : viewingReport ? (
             // Viewing a single report
             <Box>
-              <Button
-                startIcon={<ExpandLessIcon />}
-                onClick={handleBackToReports}
-                sx={{ mb: 2 }}
-              >
-                Back to Reports
-              </Button>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                <Button
+                  startIcon={<ExpandLessIcon />}
+                  onClick={handleBackToReports}
+                >
+                  Back to Reports
+                </Button>
+                <Box sx={{ display: "flex", gap: 1 }}>
+                  <Button
+                    startIcon={<DownloadIcon />}
+                    onClick={(e) => handleExportClick(e, viewingReport.id)}
+                    variant="outlined"
+                  >
+                    Export
+                  </Button>
+                  <Menu
+                    anchorEl={exportAnchorEl}
+                    open={Boolean(exportAnchorEl)}
+                    onClose={handleExportClose}
+                  >
+                    <MenuItem onClick={() => handleExport("markdown")}>
+                      <ListItemIcon>
+                        <DescriptionIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>Markdown (.md)</ListItemText>
+                    </MenuItem>
+                    <MenuItem onClick={() => handleExport("pdf")}>
+                      <ListItemIcon>
+                        <PictureAsPdfIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>PDF (.pdf)</ListItemText>
+                    </MenuItem>
+                    <MenuItem onClick={() => handleExport("docx")}>
+                      <ListItemIcon>
+                        <ArticleIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>Word (.docx)</ListItemText>
+                    </MenuItem>
+                  </Menu>
+                </Box>
+              </Box>
               
               <Paper sx={{ p: 3, mb: 2 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
@@ -1812,6 +1959,15 @@ export default function PcapAnalyzerPage() {
                             <VisibilityIcon />
                           </IconButton>
                         </Tooltip>
+                        <Tooltip title="Export">
+                          <IconButton
+                            size="small"
+                            color="info"
+                            onClick={(e) => handleExportClick(e, report.id)}
+                          >
+                            <DownloadIcon />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="Delete Report">
                           <IconButton
                             size="small"
@@ -1828,11 +1984,28 @@ export default function PcapAnalyzerPage() {
               </Table>
             </TableContainer>
           )}
+
+          {/* Shared Export Menu for Reports List */}
+          <Menu
+            anchorEl={exportAnchorEl}
+            open={Boolean(exportAnchorEl)}
+            onClose={handleExportClose}
+          >
+            <MenuItem onClick={() => handleExport("markdown")}>
+              <DescriptionIcon sx={{ mr: 1 }} /> Markdown
+            </MenuItem>
+            <MenuItem onClick={() => handleExport("pdf")}>
+              <PictureAsPdfIcon sx={{ mr: 1 }} /> PDF
+            </MenuItem>
+            <MenuItem onClick={() => handleExport("docx")}>
+              <ArticleIcon sx={{ mr: 1 }} /> Word Document
+            </MenuItem>
+          </Menu>
         </Box>
       )}
 
-      {/* Chat Window - Only visible when results are available */}
-      {results && (
+      {/* Chat Window - Visible when results OR viewing a saved report */}
+      {(results || viewingReport) && (
         <Paper
           sx={{
             position: "fixed",

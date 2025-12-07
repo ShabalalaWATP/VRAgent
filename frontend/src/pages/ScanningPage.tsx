@@ -49,13 +49,14 @@ const scanPhases: ScanPhase[] = [
   {
     name: "Code Acquisition",
     description:
-      "Your code is securely retrieved and prepared for analysis. VRAgent supports multiple input methods for maximum flexibility.",
+      "Your code is securely retrieved and prepared for analysis with protection against archive-based attacks.",
     details: [
       "Git repositories are cloned using secure HTTPS or SSH protocols",
       "ZIP/TAR archives are extracted to an isolated sandbox directory",
-      "File permissions are validated to prevent path traversal attacks",
-      "Project structure is analyzed to detect multi-language repositories",
-      "Large binary files and media are automatically excluded from analysis",
+      "Zip bomb protection limits extraction to 500MB and 10,000 files max",
+      "Path traversal protection validates all extracted file paths",
+      "Streaming extraction handles large codebases efficiently",
+      "Binary files (images, executables, media) are automatically excluded",
     ],
     outputs: [
       "Project directory structure map",
@@ -68,183 +69,182 @@ const scanPhases: ScanPhase[] = [
     color: "#6366f1",
   },
   {
-    name: "Codebase Intelligence",
+    name: "Code Parsing & Chunking",
     description:
-      "Deep analysis of your codebase reveals its architecture, dependencies, and potential attack surface before scanning begins.",
+      "Source files are intelligently parsed and chunked for embedding generation and security-relevant prioritization.",
     details: [
-      "Counts total files, lines of code, and code complexity metrics",
-      "Identifies all programming languages and their distribution percentages",
-      "Detects frameworks (React, Django, Spring, Express, etc.)",
-      "Maps all dependency manifest files for comprehensive SCA",
-      "Identifies entry points (APIs, web routes, CLI handlers)",
-      "Calculates cyclomatic complexity for risk assessment",
+      "Files parsed with streaming for memory-efficient processing",
+      "Code split into semantic chunks (max 500 tokens per chunk)",
+      "Security-relevant code prioritized: authentication, crypto, database queries",
+      "Intelligent splitting respects function/class boundaries when possible",
+      "Chunks buffered and batch-inserted for database efficiency",
+      "Language detection determines which scanners to run",
     ],
-    tools: ["Custom AST parsers", "Language detection", "Dependency graph analyzer"],
+    tools: ["Custom streaming parser", "Chunk buffer (100 chunks)", "Batch database inserts"],
     outputs: [
+      "Code chunks with file/line references",
       "Language breakdown with percentages",
-      "Framework and library detection report",
-      "Entry point mapping for attack surface analysis",
-      "Code quality metrics baseline",
+      "Framework and library detection",
+      "Entry point mapping for attack surface",
     ],
     icon: <CodeIcon />,
     duration: "10-60 sec",
     color: "#8b5cf6",
   },
   {
-    name: "Dependency Analysis",
+    name: "Embedding Generation",
     description:
-      "Every third-party package is examined for known vulnerabilities using multiple authoritative databases.",
+      "Vector embeddings are generated for code chunks, enabling semantic search and AI-powered code understanding.",
     details: [
-      "Parses 15+ dependency formats (package.json, requirements.txt, pom.xml, Cargo.toml, go.mod, Gemfile, etc.)",
-      "Resolves transitive dependencies to find hidden vulnerabilities",
-      "Queries NVD (National Vulnerability Database) for CVE matches",
-      "Fetches EPSS scores to assess real-world exploitation likelihood",
-      "Checks exploit databases (ExploitDB, Metasploit) for weaponized vulnerabilities",
-      "Identifies packages with known malware or typosquatting risks",
+      "Uses Gemini gemini-embedding-001 model (768 dimensions)",
+      "Embeddings reused from previous scans when code unchanged",
+      "Content hash comparison enables smart embedding reuse",
+      "Security-relevant code chunks prioritized for embedding",
+      "Stored in PostgreSQL with pgvector for similarity search",
+      "Can be disabled via SKIP_EMBEDDINGS=true for faster scans",
     ],
-    tools: ["NVD API", "EPSS API", "OSV Database", "GitHub Advisory DB"],
+    tools: ["Gemini Embedding API", "pgvector extension", "Content hashing"],
     outputs: [
-      "Complete dependency tree with versions",
-      "CVE matches with full descriptions",
-      "CVSS severity scores (0.0-10.0)",
-      "EPSS exploitation probability percentages",
+      "768-dimension embeddings per chunk",
+      "Embedding reuse statistics",
+      "Vector-ready for semantic queries",
     ],
-    icon: <BugReportIcon />,
-    duration: "30-120 sec",
+    icon: <LayersIcon />,
+    duration: "20-60 sec",
     color: "#ec4899",
   },
   {
-    name: "SBOM Generation",
+    name: "Parallel Scan Phases",
     description:
-      "Creates a comprehensive Software Bill of Materials - your application's complete ingredient list for compliance and supply chain security.",
+      "SAST scanners, Docker scanning, IaC scanning, and dependency parsing all run concurrently using ThreadPoolExecutor.",
     details: [
-      "Lists every direct and transitive dependency with exact versions",
-      "Records package sources, checksums, and download URLs",
-      "Identifies open-source licenses (MIT, GPL, Apache, etc.)",
-      "Flags license compatibility issues for legal compliance",
-      "Creates machine-readable SBOM in CycloneDX and SPDX formats",
+      "7 SAST scanners run in parallel with configurable MAX_PARALLEL_SCANNERS",
+      "Docker scanning: Trivy for image vulns + custom Dockerfile linting rules",
+      "IaC scanning: Checkov and tfsec for Terraform, K8s, CloudFormation, ARM",
+      "Dependency parsing for 8 ecosystems runs concurrently",
+      "Each phase reports progress independently via ParallelPhaseTracker",
+      "Scanner availability checked before execution to skip unavailable tools",
     ],
-    tools: ["CycloneDX Generator", "SPDX Tools", "License Classifier"],
+    tools: ["Semgrep", "Bandit", "ESLint", "gosec", "SpotBugs", "clang-tidy", "Secrets", "Trivy", "Checkov", "tfsec"],
     outputs: [
-      "Complete component inventory",
-      "License compliance report",
-      "Dependency relationship graph",
-      "Exportable SBOM for audits",
-    ],
-    icon: <DescriptionIcon />,
-    duration: "15-45 sec",
-    color: "#f59e0b",
-  },
-  {
-    name: "Secret Detection",
-    description:
-      "Hunts for accidentally committed secrets, API keys, passwords, and sensitive credentials that could compromise your systems.",
-    details: [
-      "700+ regex patterns for API keys (AWS, GCP, Azure, Stripe, etc.)",
-      "Entropy analysis to detect high-randomness strings that may be secrets",
-      "Git history scanning to find secrets in previous commits",
-      "Environment variable and config file analysis",
-      "Private key and certificate detection (RSA, SSH, PGP)",
-      "Database connection string and password detection",
-    ],
-    tools: ["TruffleHog patterns", "GitLeaks rules", "Custom entropy scanner"],
-    outputs: [
-      "Secret findings with exact locations",
-      "Secret type classification",
-      "Confidence scores for each detection",
-      "Severity ratings and remediation guidance",
-    ],
-    icon: <VpnKeyIcon />,
-    duration: "20-90 sec",
-    color: "#ef4444",
-  },
-  {
-    name: "SAST Analysis",
-    description:
-      "Static Application Security Testing examines your source code for vulnerabilities without execution, using multiple specialized scanners.",
-    details: [
-      "Multi-scanner approach ensures comprehensive coverage",
-      "Language-specific rules for idiomatic vulnerability patterns",
-      "Taint analysis tracks untrusted data through code paths",
-      "Control flow analysis identifies logic vulnerabilities",
-      "Data flow analysis finds injection and exposure risks",
-      "Configuration analysis for framework security settings",
-    ],
-    tools: ["Semgrep", "Bandit", "ESLint Security", "GoSec", "SpotBugs", "Clang-Tidy"],
-    outputs: [
-      "Vulnerability findings with code locations",
-      "CWE classifications for each finding",
-      "Severity ratings (Critical/High/Medium/Low)",
-      "Remediation suggestions with secure alternatives",
+      "SAST findings from all applicable scanners",
+      "Docker vulnerability and misconfiguration findings",
+      "IaC security issues with framework detection",
+      "Dependency list with versions and ecosystems",
     ],
     icon: <SecurityIcon />,
     duration: "60-300 sec",
     color: "#10b981",
   },
   {
-    name: "Result Aggregation",
+    name: "Cross-Scanner Deduplication",
     description:
-      "All scanner outputs are unified, deduplicated, and normalized into a single coherent security report.",
+      "Findings from multiple scanners are deduplicated to eliminate redundant reports of the same vulnerability.",
     details: [
-      "Merges findings from all 6+ scanners into unified format",
-      "Intelligent deduplication removes redundant findings",
-      "Cross-references findings with CVE/CWE databases",
-      "Normalizes severity ratings across different scanner scales",
-      "Calculates composite risk scores for prioritization",
+      "Same file+line+type findings merged across scanners",
+      "Scanner sources preserved for audit trail",
+      "Severity taken from highest-confidence scanner",
+      "Duplicate count tracked in dedup_stats",
+      "Preserves unique findings while reducing noise",
     ],
     outputs: [
-      "Unified findings list with consistent schema",
-      "Severity distribution breakdown",
-      "Finding categories and counts",
-      "Risk score calculations",
+      "Deduplicated findings list",
+      "Merge statistics (X duplicates merged)",
+      "Unified severity ratings",
     ],
     icon: <AssessmentIcon />,
-    duration: "5-15 sec",
+    duration: "2-5 sec",
     color: "#0891b2",
   },
   {
-    name: "AI Analysis",
+    name: "Transitive Dependency Analysis",
     description:
-      "Google Gemini AI provides expert-level security analysis, identifying attack chains, false positives, and exploitation scenarios.",
+      "Parses lock files to build complete dependency trees, identifying vulnerable transitive dependencies.",
     details: [
-      "Generates executive security summary for stakeholders",
-      "Identifies multi-vulnerability attack chains",
-      "Creates realistic exploit scenarios from attacker's perspective",
-      "Detects likely false positives using code context",
-      "Maps findings to MITRE ATT&CK tactics and techniques",
-      "Provides detailed remediation guidance",
+      "Parses package-lock.json, yarn.lock, pnpm-lock.yaml for npm",
+      "Parses poetry.lock, Pipfile.lock for Python",
+      "Parses go.sum for Go module dependencies",
+      "Identifies which vulnerable packages are direct vs transitive",
+      "Calculates dependency depth for prioritization",
+      "Maps vulnerable paths from your code to the affected package",
     ],
-    tools: ["Google Gemini 2.0 Flash", "Custom security prompts"],
+    tools: ["Lock file parsers", "Dependency tree builder", "Path analyzer"],
     outputs: [
-      "Executive security summary",
-      "Attack vector analysis",
-      "Exploit development scenarios",
-      "False positive assessments",
-      "Attack chain mappings",
+      "Complete dependency tree per ecosystem",
+      "Direct vs transitive classification",
+      "Vulnerable dependency paths",
     ],
-    icon: <PsychologyIcon />,
-    duration: "30-90 sec",
-    color: "#7c3aed",
+    icon: <BugReportIcon />,
+    duration: "5-15 sec",
+    color: "#f59e0b",
   },
   {
-    name: "Report Generation",
+    name: "CVE Lookup & Enrichment",
     description:
-      "The final security report is compiled with all findings, visualizations, and AI insights in multiple export formats.",
+      "Dependencies are queried against multiple vulnerability databases, then enriched with detailed CVE information.",
     details: [
-      "Compiles all scan results into a structured report",
-      "Generates severity breakdown charts and visualizations",
-      "Includes AI-generated insights and recommendations",
-      "Creates executive summary for non-technical stakeholders",
-      "Supports multiple export formats (Markdown, PDF, DOCX)",
+      "Batch queries OSV.dev API (100 deps per request) for CVE/GHSA matches",
+      "Parallel enrichment fetches NVD, EPSS, and CISA KEV data simultaneously",
+      "NVD provides full CVSS v3/v4 vectors and CWE classifications",
+      "EPSS scores show real-world exploitation probability (0-100%)",
+      "CISA KEV (Known Exploited Vulnerabilities) flags actively exploited CVEs",
+      "KEV vulnerabilities automatically escalated to HIGH severity",
     ],
+    tools: ["OSV.dev API", "NVD API", "EPSS API", "CISA KEV"],
     outputs: [
-      "Complete security assessment report",
-      "Exportable documents in multiple formats",
-      "Visual dashboards and charts",
-      "Actionable remediation roadmap",
+      "CVE matches with descriptions",
+      "CVSS scores (0.0-10.0) with vectors",
+      "EPSS probability and percentile",
+      "KEV status for prioritization",
+      "Combined priority score",
+    ],
+    icon: <VpnKeyIcon />,
+    duration: "30-90 sec",
+    color: "#ef4444",
+  },
+  {
+    name: "Reachability Analysis",
+    description:
+      "Determines whether vulnerable dependencies are actually used in reachable code paths.",
+    details: [
+      "Analyzes import statements to find which packages are actually imported",
+      "Checks if vulnerable package functions are called in your code",
+      "Marks unreachable vulnerabilities for deprioritization",
+      "Reduces false positives from unused dependencies",
+      "Provides reachability summary (X reachable, Y unreachable)",
+    ],
+    tools: ["Import analyzer", "Call graph builder", "Reachability checker"],
+    outputs: [
+      "Reachability status per vulnerability",
+      "Import evidence for reachable vulns",
+      "Unreachable vuln count for filtering",
     ],
     icon: <DescriptionIcon />,
     duration: "10-30 sec",
+    color: "#7c3aed",
+  },
+  {
+    name: "AI Analysis & Report",
+    description:
+      "Google Gemini AI analyzes findings for false positives, attack chains, and generates exploit scenarios in the background.",
+    details: [
+      "Heuristic false positive detection runs first (test files, mock code, suppression comments)",
+      "Severity adjustment for context (auth checks, admin-only, internal endpoints)",
+      "Attack chain discovery combines related findings into exploitable paths",
+      "LLM analysis limited to MAX_FINDINGS=50 most critical vulnerabilities",
+      "AI summaries generated in background after scan completes",
+      "Pre-built exploit templates for 16+ vuln types (SQLi, XSS, RCE, etc.)",
+    ],
+    tools: ["Gemini 2.0 Flash", "Heuristic patterns", "Exploit templates"],
+    outputs: [
+      "Executive security summary",
+      "False positive assessments",
+      "Attack chain mappings",
+      "Exploit scenarios with PoC outlines",
+      "Remediation guidance",
+    ],
+    icon: <PsychologyIcon />,
+    duration: "30-120 sec",
     color: "#dc2626",
   },
 ];
@@ -252,10 +252,10 @@ const scanPhases: ScanPhase[] = [
 const scannerDetails = [
   {
     name: "Semgrep",
-    languages: ["Python", "JavaScript", "TypeScript", "Go", "Java", "Ruby", "PHP", "C", "C++", "C#", "Kotlin", "Rust"],
+    languages: ["Python", "JavaScript", "TypeScript", "Go", "Java", "Ruby", "PHP", "C", "C++", "C#", "Kotlin", "Rust", "30+ total"],
     description:
-      "Lightweight, fast, and powerful pattern-based static analysis. Uses a domain-specific language for writing security rules that feel like searching code.",
-    strengths: ["Speed", "Low false positives", "Easy custom rules", "CI/CD friendly"],
+      "VRAgent's primary SAST scanner. Lightweight semantic analysis with 2000+ security rules. Supports OWASP Top 10, CWE Top 25, and framework-specific patterns.",
+    strengths: ["30+ languages", "2000+ rules", "Taint tracking", "Low false positives", "SARIF output"],
     whatItFinds: [
       "SQL Injection (CWE-89)",
       "Cross-Site Scripting (CWE-79)",
@@ -263,8 +263,8 @@ const scannerDetails = [
       "Path Traversal (CWE-22)",
       "Insecure Deserialization (CWE-502)",
       "SSRF (CWE-918)",
-      "Hardcoded Secrets (CWE-798)",
       "XXE Injection (CWE-611)",
+      "Broken Authentication patterns",
     ],
     color: "#10b981",
   },
@@ -272,17 +272,17 @@ const scannerDetails = [
     name: "Bandit",
     languages: ["Python"],
     description:
-      "Python-specific security linter designed to find common security issues. Part of the OpenStack Security Project with extensive rule coverage.",
-    strengths: ["Python-specific", "Low overhead", "AST-based analysis", "Extensive rules"],
+      "Python-specific security linter with AST-based analysis. Excellent for detecting Python-idiomatic vulnerabilities like pickle deserialization and subprocess shell injection.",
+    strengths: ["Python-native AST", "Low overhead", "Confidence scoring", "Extensive rules"],
     whatItFinds: [
-      "Use of assert in production",
+      "eval() and exec() usage",
       "Hardcoded passwords",
-      "SQL injection via string formatting",
-      "Insecure hash functions (MD5, SHA1)",
-      "Subprocess shell injection",
-      "Pickle usage (insecure deserialization)",
+      "SQL via string formatting",
+      "Insecure hashlib (MD5, SHA1)",
+      "subprocess shell=True",
+      "Pickle deserialization",
       "Binding to 0.0.0.0",
-      "Use of eval() and exec()",
+      "Random without secrets module",
     ],
     color: "#3b82f6",
   },
@@ -290,35 +290,35 @@ const scannerDetails = [
     name: "ESLint Security",
     languages: ["JavaScript", "TypeScript", "JSX", "TSX"],
     description:
-      "Security-focused ESLint plugins combining eslint-plugin-security and eslint-plugin-no-unsanitized for comprehensive JavaScript/TypeScript analysis.",
-    strengths: ["Native JS/TS support", "Framework-aware", "React/Vue support", "IDE integration"],
+      "eslint-plugin-security for JavaScript/TypeScript. Detects DOM-based XSS, prototype pollution, and Node.js-specific vulnerabilities.",
+    strengths: ["Native JS/TS", "React support", "IDE integration", "Auto-fixable rules"],
     whatItFinds: [
-      "eval() and Function() usage",
+      "eval() and Function()",
       "Prototype pollution",
-      "Regular expression DoS (ReDoS)",
-      "Object injection attacks",
+      "Regular expression DoS",
+      "Object injection",
       "Non-literal require()",
       "Unsafe innerHTML (XSS)",
-      "document.write() usage",
-      "Insecure random generation",
+      "document.write()",
+      "Math.random() for security",
     ],
     color: "#f59e0b",
   },
   {
-    name: "GoSec",
+    name: "gosec",
     languages: ["Go"],
     description:
-      "Go Security Checker inspects Go source code by scanning the AST (Abstract Syntax Tree) for security problems using a set of rules.",
-    strengths: ["Go-specific", "AST analysis", "Fast scanning", "Low false positives"],
+      "Go Security Checker inspects Go source code by AST scanning. Excellent for detecting Go-specific issues like improper TLS configuration.",
+    strengths: ["Go-native AST", "Fast scanning", "Low false positives", "SARIF output"],
     whatItFinds: [
       "Hardcoded credentials",
       "SQL injection",
       "Command injection",
       "Directory traversal",
       "Weak cryptography",
-      "Insecure TLS configs",
+      "Insecure TLS (MinVersion)",
       "Integer overflow",
-      "SSRF vulnerabilities",
+      "File permission issues",
     ],
     color: "#06b6d4",
   },
@@ -326,26 +326,26 @@ const scannerDetails = [
     name: "SpotBugs + FindSecBugs",
     languages: ["Java", "Kotlin", "Scala", "Groovy"],
     description:
-      "SpotBugs static analysis tool with the FindSecBugs plugin provides comprehensive security analysis for JVM bytecode.",
-    strengths: ["Bytecode analysis", "Framework support", "300+ patterns", "Maven/Gradle integration"],
+      "SpotBugs with FindSecBugs plugin analyzes JVM bytecode for security issues. Detects Spring-specific vulnerabilities and OWASP risks.",
+    strengths: ["Bytecode analysis", "Spring support", "300+ patterns", "Maven/Gradle integration"],
     whatItFinds: [
       "SQL/LDAP/XPath Injection",
       "Command Injection",
       "XXE Vulnerabilities",
-      "Insecure cookie handling",
+      "Insecure cookies",
       "Weak cryptography",
       "Trust boundary violations",
-      "Predictable random generators",
-      "Spring security issues",
+      "Predictable randoms",
+      "Spring Security misconfigs",
     ],
     color: "#ef4444",
   },
   {
-    name: "Clang-Tidy",
+    name: "clang-tidy",
     languages: ["C", "C++", "Objective-C"],
     description:
-      "Clang-based C/C++ linter with security-focused checks including buffer overflows, memory safety, and undefined behavior detection.",
-    strengths: ["Compiler-integrated", "Deep analysis", "Memory safety", "Standards compliance"],
+      "Clang-based linter with security-focused checks. Critical for memory safety issues that can lead to RCE or information disclosure.",
+    strengths: ["Compiler-integrated", "Memory analysis", "Buffer checks", "Standards compliance"],
     whatItFinds: [
       "Buffer overflows (CWE-120)",
       "Format string vulnerabilities",
@@ -353,18 +353,72 @@ const scannerDetails = [
       "Use-after-free (CWE-416)",
       "Null pointer dereferences",
       "Memory leaks (CWE-401)",
-      "Unsafe string functions",
+      "Unsafe strcpy/sprintf",
       "Double-free vulnerabilities",
     ],
     color: "#8b5cf6",
   },
+  {
+    name: "Secret Scanner",
+    languages: ["All files"],
+    description:
+      "Custom regex-based scanner with 50+ patterns for API keys, tokens, and credentials. High-confidence patterns minimize false positives.",
+    strengths: ["50+ patterns", "Multi-cloud", "Private keys", "Database strings"],
+    whatItFinds: [
+      "AWS Access Keys & Secrets",
+      "Azure/GCP Service Keys",
+      "GitHub/GitLab Tokens",
+      "Slack/Discord Webhooks",
+      "Stripe/Twilio API Keys",
+      "OpenAI/Anthropic Keys",
+      "RSA/SSH/PGP Private Keys",
+      "Database Connection Strings",
+    ],
+    color: "#dc2626",
+  },
+  {
+    name: "Trivy (Docker)",
+    languages: ["Dockerfiles", "Container Images"],
+    description:
+      "Trivy scans Docker images for OS-level vulnerabilities. Combined with custom Dockerfile linting rules for misconfigurations.",
+    strengths: ["Image scanning", "OS vulns", "Config checks", "Fast scanning"],
+    whatItFinds: [
+      "Vulnerable base images",
+      "Outdated OS packages",
+      "Running as root",
+      "Exposed ports",
+      "Missing health checks",
+      "COPY vs ADD misuse",
+      "Secrets in build args",
+      "Unversioned base images",
+    ],
+    color: "#2496ed",
+  },
+  {
+    name: "Checkov + tfsec (IaC)",
+    languages: ["Terraform", "Kubernetes", "CloudFormation", "Helm", "ARM"],
+    description:
+      "Infrastructure as Code scanning for cloud misconfigurations. Detects issues in Terraform, K8s manifests, and cloud templates.",
+    strengths: ["Multi-framework", "Cloud-native", "Policy-as-code", "CIS benchmarks"],
+    whatItFinds: [
+      "Public S3 buckets",
+      "Unencrypted storage",
+      "Missing logging",
+      "Overly permissive IAM",
+      "K8s privileged containers",
+      "Missing network policies",
+      "Insecure TLS settings",
+      "Missing tags/labels",
+    ],
+    color: "#7c3aed",
+  },
 ];
 
 const scannerStats = [
-  { label: "Languages", value: "20+", icon: <CodeIcon /> },
-  { label: "Rules", value: "5,000+", icon: <BugReportIcon /> },
-  { label: "Secret Patterns", value: "700+", icon: <VpnKeyIcon /> },
-  { label: "CVE Database", value: "200K+", icon: <SecurityIcon /> },
+  { label: "Languages", value: "30+", icon: <CodeIcon /> },
+  { label: "SAST Rules", value: "2,500+", icon: <BugReportIcon /> },
+  { label: "Secret Patterns", value: "50+", icon: <VpnKeyIcon /> },
+  { label: "CVE Database", value: "250K+", icon: <SecurityIcon /> },
 ];
 
 export default function ScanningPage() {
@@ -432,7 +486,7 @@ export default function ScanningPage() {
           </Typography>
         </Box>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          When you initiate a scan, your code passes through <strong>9 distinct phases</strong>, each building on the previous to create a comprehensive security assessment. The entire process typically takes <strong>2-8 minutes</strong> depending on codebase size.
+          When you initiate a scan, your code passes through <strong>9 distinct phases</strong>, with SAST, Docker, IaC, and dependency scanning running in <strong>parallel</strong> for maximum performance. The entire process typically takes <strong>2-8 minutes</strong> depending on codebase size.
         </Typography>
         
         {/* Visual Pipeline */}
@@ -472,6 +526,9 @@ export default function ScanningPage() {
       <Paper sx={{ p: 4, mb: 5, borderRadius: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 4 }}>
           📊 The 9-Phase Scanning Pipeline
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Phases 1-3 run sequentially, then Phase 4 runs all scanning types in parallel (SAST, Docker, IaC, Dependencies), followed by sequential enrichment and AI analysis.
         </Typography>
 
         <Stepper orientation="vertical">
@@ -561,11 +618,11 @@ export default function ScanningPage() {
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
           <SecurityIcon sx={{ fontSize: 32, color: "primary.main" }} />
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            🛠️ SAST Scanner Arsenal
+            🛠️ Security Scanner Arsenal
           </Typography>
         </Box>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          VRAgent employs multiple specialized security scanners, each optimized for specific languages and vulnerability types. This multi-scanner approach ensures comprehensive coverage.
+          VRAgent employs 9 specialized security scanners covering SAST, secrets, Docker, and IaC. All scanners run in parallel using ThreadPoolExecutor with configurable concurrency.
         </Typography>
 
         {scannerDetails.map((scanner) => (

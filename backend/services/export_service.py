@@ -393,6 +393,7 @@ Write a detailed analysis (300-400 words) covering:
 
 Use markdown formatting with headers and bullet points. Be specific and technical."""
 
+        from google import genai
         client = genai.Client(api_key=settings.gemini_api_key)
         
         # Generate app summary

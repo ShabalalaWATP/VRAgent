@@ -878,10 +878,9 @@ async def analyze_pcap_with_ai(
         return {"error": "AI analysis unavailable: GEMINI_API_KEY not configured"}
     
     try:
-        import google.generativeai as genai
+        from google import genai
         
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel(settings.gemini_model_id)
+        client = genai.Client(api_key=settings.gemini_api_key)
         
         # Build concise summary for AI (avoid token limits)
         findings_text = "\n".join(
@@ -1118,7 +1117,10 @@ You MUST respond with a valid JSON object. Write all text fields as if you're wr
 
 Return ONLY valid JSON - no markdown code blocks, no explanations outside the JSON structure."""
 
-        response = await model.generate_content_async(prompt)
+        response = await client.aio.models.generate_content(
+            model=settings.gemini_model_id,
+            contents=prompt
+        )
         response_text = response.text.strip()
         
         # Clean up response - remove markdown code blocks if present
