@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -14,6 +14,7 @@ import {
   DialogTitle,
   Grid,
   IconButton,
+  InputAdornment,
   LinearProgress,
   Paper,
   Skeleton,
@@ -28,6 +29,8 @@ import {
   TableRow,
   TableSortLabel,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
   alpha,
@@ -179,6 +182,18 @@ const ExpandMoreIcon = () => (
 const ExpandLessIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z" />
+  </svg>
+);
+
+const SearchIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+  </svg>
+);
+
+const ClearIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
   </svg>
 );
 
@@ -542,12 +557,30 @@ interface TreeNodeProps {
   expandedFolders: Set<string>;
   onToggleFolder: (path: string) => void;
   onShowMetadata: (file: CodebaseFile) => void;
+  searchQuery?: string;
 }
 
-function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata }: TreeNodeProps) {
+function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata, searchQuery = "" }: TreeNodeProps) {
   const theme = useTheme();
   const isFolder = node.type === "folder";
   const isExpanded = isFolder && expandedFolders.has(node.path);
+  
+  // Highlight matching text
+  const highlightMatch = (text: string) => {
+    if (!searchQuery.trim()) return text;
+    const query = searchQuery.toLowerCase();
+    const index = text.toLowerCase().indexOf(query);
+    if (index === -1) return text;
+    return (
+      <>
+        {text.slice(0, index)}
+        <Box component="span" sx={{ bgcolor: alpha(theme.palette.warning.main, 0.4), borderRadius: 0.5, px: 0.25 }}>
+          {text.slice(index, index + query.length)}
+        </Box>
+        {text.slice(index + query.length)}
+      </>
+    );
+  };
   
   const getFindingsBadge = (findings: { critical: number; high: number; medium: number; low: number; total: number }) => {
     if (findings.critical > 0) return { color: theme.palette.error.main, count: findings.critical };
@@ -596,6 +629,7 @@ function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata
         </Box>
         <Typography 
           variant="body2" 
+          component="div"
           sx={{ 
             fontFamily: "monospace",
             fontSize: "0.8rem",
@@ -603,7 +637,7 @@ function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata
             fontWeight: isFolder ? 600 : 400,
           }}
         >
-          {node.name}
+          {highlightMatch(node.name)}
         </Typography>
         
         {badge && (
@@ -659,6 +693,7 @@ function TreeNode({ node, depth, expandedFolders, onToggleFolder, onShowMetadata
                 expandedFolders={expandedFolders}
                 onToggleFolder={onToggleFolder}
                 onShowMetadata={onShowMetadata}
+                searchQuery={searchQuery}
               />
             ))}
           </Box>
@@ -673,17 +708,149 @@ interface CodebaseMapViewProps {
   reportId: number;
 }
 
+// Severity filter type
+type SeverityFilter = "all" | "critical" | "high" | "medium" | "low";
+
 function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
   const theme = useTheme();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<CodebaseFile | null>(null);
   const [metadataOpen, setMetadataOpen] = useState(false);
+  
+  // Quick win states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
+  const [selectedLanguages, setSelectedLanguages] = useState<Set<string>>(new Set());
+  const [showStats, setShowStats] = useState(true);
 
   const codebaseQuery = useQuery({
     queryKey: ["codebase", reportId],
     queryFn: () => api.getCodebaseStructure(reportId),
     enabled: !!reportId,
   });
+
+  // Collect all files for filtering
+  const allFiles = useMemo(() => {
+    if (!codebaseQuery.data) return [];
+    const files: CodebaseFile[] = [];
+    const collectFiles = (nodes: CodebaseNode[]) => {
+      for (const node of nodes) {
+        if (node.type === "folder") {
+          collectFiles((node as CodebaseFolder).children);
+        } else {
+          files.push(node as CodebaseFile);
+        }
+      }
+    };
+    collectFiles(codebaseQuery.data.tree);
+    return files;
+  }, [codebaseQuery.data]);
+
+  // Calculate language statistics
+  const languageStats = useMemo(() => {
+    const stats: Record<string, { files: number; lines: number; findings: number }> = {};
+    for (const file of allFiles) {
+      const lang = file.language || "Unknown";
+      if (!stats[lang]) {
+        stats[lang] = { files: 0, lines: 0, findings: 0 };
+      }
+      stats[lang].files++;
+      stats[lang].lines += file.lines || 0;
+      stats[lang].findings += file.findings.total || 0;
+    }
+    return Object.entries(stats)
+      .map(([lang, data]) => ({ language: lang, ...data }))
+      .sort((a, b) => b.files - a.files);
+  }, [allFiles]);
+
+  // Fuzzy search filter
+  const matchesSearch = useCallback((node: CodebaseNode): boolean => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    // Match file/folder name or path
+    if (node.name.toLowerCase().includes(query)) return true;
+    if (node.path.toLowerCase().includes(query)) return true;
+    return false;
+  }, [searchQuery]);
+
+  // Severity filter
+  const matchesSeverity = useCallback((node: CodebaseNode): boolean => {
+    if (severityFilter === "all") return true;
+    const findings = node.findings;
+    switch (severityFilter) {
+      case "critical": return findings.critical > 0;
+      case "high": return findings.high > 0;
+      case "medium": return findings.medium > 0;
+      case "low": return findings.low > 0;
+      default: return true;
+    }
+  }, [severityFilter]);
+
+  // Language filter
+  const matchesLanguage = useCallback((node: CodebaseNode): boolean => {
+    if (selectedLanguages.size === 0) return true;
+    if (node.type === "folder") {
+      // Folder matches if any child matches
+      return (node as CodebaseFolder).children.some(child => matchesLanguage(child));
+    }
+    return selectedLanguages.has((node as CodebaseFile).language || "Unknown");
+  }, [selectedLanguages]);
+
+  // Filter tree recursively
+  const filterTree = useCallback((nodes: CodebaseNode[]): CodebaseNode[] => {
+    return nodes
+      .map(node => {
+        if (node.type === "folder") {
+          const folder = node as CodebaseFolder;
+          const filteredChildren = filterTree(folder.children);
+          // Include folder if it has matching children or matches search itself
+          if (filteredChildren.length > 0 || matchesSearch(node)) {
+            return {
+              ...folder,
+              children: filteredChildren,
+              file_count: filteredChildren.reduce((acc, c) => 
+                acc + (c.type === "folder" ? (c as CodebaseFolder).file_count : 1), 0
+              ),
+            } as CodebaseFolder;
+          }
+          return null;
+        }
+        // File: check all filters
+        if (matchesSearch(node) && matchesSeverity(node) && matchesLanguage(node)) {
+          return node;
+        }
+        return null;
+      })
+      .filter((node): node is CodebaseNode => node !== null);
+  }, [matchesSearch, matchesSeverity, matchesLanguage]);
+
+  // Filtered tree
+  const filteredTree = useMemo(() => {
+    if (!codebaseQuery.data) return [];
+    return filterTree(codebaseQuery.data.tree);
+  }, [codebaseQuery.data, filterTree]);
+
+  // Auto-expand folders when searching
+  useEffect(() => {
+    if (searchQuery.trim() && codebaseQuery.data) {
+      const foldersToExpand = new Set<string>();
+      const findMatchingPaths = (nodes: CodebaseNode[], parentPaths: string[] = []) => {
+        for (const node of nodes) {
+          const currentPaths = [...parentPaths, node.path];
+          if (node.type === "folder") {
+            findMatchingPaths((node as CodebaseFolder).children, currentPaths);
+          } else if (matchesSearch(node)) {
+            // Expand all parent folders
+            parentPaths.forEach(p => foldersToExpand.add(p));
+          }
+        }
+      };
+      findMatchingPaths(codebaseQuery.data.tree);
+      if (foldersToExpand.size > 0) {
+        setExpandedFolders(foldersToExpand);
+      }
+    }
+  }, [searchQuery, codebaseQuery.data, matchesSearch]);
 
   const handleToggleFolder = (path: string) => {
     setExpandedFolders((prev) => {
@@ -708,7 +875,7 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
         }
       }
     };
-    collectFolders(codebaseQuery.data.tree);
+    collectFolders(filteredTree);
     setExpandedFolders(allFolders);
   };
 
@@ -720,6 +887,26 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
     setSelectedFile(file);
     setMetadataOpen(true);
   };
+
+  const handleToggleLanguage = (lang: string) => {
+    setSelectedLanguages(prev => {
+      const next = new Set(prev);
+      if (next.has(lang)) {
+        next.delete(lang);
+      } else {
+        next.add(lang);
+      }
+      return next;
+    });
+  };
+
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setSeverityFilter("all");
+    setSelectedLanguages(new Set());
+  };
+
+  const hasActiveFilters = searchQuery.trim() || severityFilter !== "all" || selectedLanguages.size > 0;
 
   if (codebaseQuery.isLoading) {
     return (
@@ -755,7 +942,10 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
     );
   }
 
-  const { summary, tree } = codebaseQuery.data;
+  const { summary } = codebaseQuery.data;
+  const filteredFileCount = filteredTree.reduce((acc, node) => 
+    acc + (node.type === "folder" ? (node as CodebaseFolder).file_count : 1), 0
+  );
 
   return (
     <Box>
@@ -795,26 +985,275 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
         </Grid>
       </Grid>
 
-      {/* Language Tags */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-          Languages Detected
-        </Typography>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          {summary.languages.map((lang) => (
-            <Chip
-              key={lang}
-              label={lang}
+      {/* Language Statistics Dashboard (Quick Win #4) */}
+      <Paper
+        sx={{
+          p: 2,
+          mb: 3,
+          bgcolor: alpha(theme.palette.background.paper, 0.5),
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          borderRadius: 2,
+        }}
+      >
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" fontWeight={700}>
+            📊 Language Statistics
+          </Typography>
+          <Button 
+            size="small" 
+            onClick={() => setShowStats(!showStats)}
+            sx={{ textTransform: "none" }}
+          >
+            {showStats ? "Hide" : "Show"}
+          </Button>
+        </Stack>
+        
+        <Collapse in={showStats}>
+          <Grid container spacing={2}>
+            {languageStats.slice(0, 8).map(({ language, files, lines, findings }) => {
+              const isSelected = selectedLanguages.has(language);
+              const percentage = Math.round((files / summary.total_files) * 100);
+              return (
+                <Grid item xs={6} sm={4} md={3} key={language}>
+                  <Paper
+                    onClick={() => handleToggleLanguage(language)}
+                    sx={{
+                      p: 1.5,
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      border: `2px solid ${isSelected ? getLanguageColor(language, theme) : "transparent"}`,
+                      bgcolor: isSelected 
+                        ? alpha(getLanguageColor(language, theme), 0.1) 
+                        : alpha(theme.palette.background.default, 0.5),
+                      "&:hover": {
+                        bgcolor: alpha(getLanguageColor(language, theme), 0.15),
+                        transform: "translateY(-2px)",
+                      },
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: "50%",
+                          bgcolor: getLanguageColor(language, theme),
+                        }}
+                      />
+                      <Typography variant="body2" fontWeight={600} sx={{ flex: 1 }}>
+                        {language}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {percentage}%
+                      </Typography>
+                    </Stack>
+                    <Box sx={{ mb: 1 }}>
+                      <LinearProgress
+                        variant="determinate"
+                        value={percentage}
+                        sx={{
+                          height: 4,
+                          borderRadius: 2,
+                          bgcolor: alpha(getLanguageColor(language, theme), 0.2),
+                          "& .MuiLinearProgress-bar": {
+                            bgcolor: getLanguageColor(language, theme),
+                          },
+                        }}
+                      />
+                    </Box>
+                    <Stack direction="row" justifyContent="space-between">
+                      <Typography variant="caption" color="text.secondary">
+                        {files} files
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {lines.toLocaleString()} lines
+                      </Typography>
+                      {findings > 0 && (
+                        <Chip
+                          size="small"
+                          label={findings}
+                          sx={{
+                            height: 16,
+                            fontSize: "0.65rem",
+                            bgcolor: alpha(theme.palette.error.main, 0.15),
+                            color: theme.palette.error.main,
+                          }}
+                        />
+                      )}
+                    </Stack>
+                  </Paper>
+                </Grid>
+              );
+            })}
+          </Grid>
+          {languageStats.length > 8 && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+              +{languageStats.length - 8} more languages
+            </Typography>
+          )}
+        </Collapse>
+      </Paper>
+
+      {/* Search and Filters (Quick Wins #1, #2, #3) */}
+      <Paper
+        sx={{
+          p: 2,
+          mb: 3,
+          bgcolor: alpha(theme.palette.background.paper, 0.5),
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          borderRadius: 2,
+        }}
+      >
+        <Grid container spacing={2} alignItems="center">
+          {/* Fuzzy File Search (Quick Win #1) */}
+          <Grid item xs={12} md={5}>
+            <TextField
+              fullWidth
               size="small"
+              placeholder="Search files... (e.g., auth, .py, service)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchQuery("")}>
+                      <ClearIcon />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
               sx={{
-                bgcolor: alpha(getLanguageColor(lang, theme), 0.15),
-                color: getLanguageColor(lang, theme),
-                fontWeight: 600,
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: theme.palette.background.paper,
+                },
               }}
             />
-          ))}
-        </Stack>
-      </Box>
+          </Grid>
+
+          {/* Severity Filter (Quick Win #2) */}
+          <Grid item xs={12} md={5}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                Severity:
+              </Typography>
+              <ToggleButtonGroup
+                value={severityFilter}
+                exclusive
+                onChange={(_, value) => value && setSeverityFilter(value)}
+                size="small"
+                sx={{ flexWrap: "wrap" }}
+              >
+                <ToggleButton value="all" sx={{ px: 1.5, py: 0.5 }}>
+                  All
+                </ToggleButton>
+                <ToggleButton 
+                  value="critical" 
+                  sx={{ 
+                    px: 1.5, 
+                    py: 0.5,
+                    "&.Mui-selected": { 
+                      bgcolor: alpha(theme.palette.error.main, 0.15),
+                      color: theme.palette.error.main,
+                    },
+                  }}
+                >
+                  Critical
+                </ToggleButton>
+                <ToggleButton 
+                  value="high"
+                  sx={{ 
+                    px: 1.5, 
+                    py: 0.5,
+                    "&.Mui-selected": { 
+                      bgcolor: alpha("#f97316", 0.15),
+                      color: "#f97316",
+                    },
+                  }}
+                >
+                  High
+                </ToggleButton>
+                <ToggleButton 
+                  value="medium"
+                  sx={{ 
+                    px: 1.5, 
+                    py: 0.5,
+                    "&.Mui-selected": { 
+                      bgcolor: alpha(theme.palette.warning.main, 0.15),
+                      color: theme.palette.warning.main,
+                    },
+                  }}
+                >
+                  Medium
+                </ToggleButton>
+                <ToggleButton 
+                  value="low"
+                  sx={{ 
+                    px: 1.5, 
+                    py: 0.5,
+                    "&.Mui-selected": { 
+                      bgcolor: alpha(theme.palette.info.main, 0.15),
+                      color: theme.palette.info.main,
+                    },
+                  }}
+                >
+                  Low
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
+          </Grid>
+
+          {/* Clear Filters */}
+          <Grid item xs={12} md={2}>
+            {hasActiveFilters && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleClearFilters}
+                fullWidth
+                sx={{ textTransform: "none" }}
+              >
+                Clear Filters
+              </Button>
+            )}
+          </Grid>
+        </Grid>
+
+        {/* Language Filter Chips (Quick Win #3) */}
+        {selectedLanguages.size > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+              Filtered by language:
+            </Typography>
+            {Array.from(selectedLanguages).map(lang => (
+              <Chip
+                key={lang}
+                label={lang}
+                size="small"
+                onDelete={() => handleToggleLanguage(lang)}
+                sx={{
+                  mr: 0.5,
+                  mb: 0.5,
+                  bgcolor: alpha(getLanguageColor(lang, theme), 0.15),
+                  color: getLanguageColor(lang, theme),
+                  fontWeight: 600,
+                }}
+              />
+            ))}
+          </Box>
+        )}
+
+        {/* Filter Results Summary */}
+        {hasActiveFilters && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+            Showing {filteredFileCount} of {summary.total_files} files
+          </Typography>
+        )}
+      </Paper>
 
       {/* Tree Controls */}
       <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
@@ -837,16 +1276,32 @@ function CodebaseMapView({ reportId }: CodebaseMapViewProps) {
           overflow: "auto",
         }}
       >
-        {tree.map((node) => (
-          <TreeNode
-            key={node.path}
-            node={node}
-            depth={0}
-            expandedFolders={expandedFolders}
-            onToggleFolder={handleToggleFolder}
-            onShowMetadata={handleShowMetadata}
-          />
-        ))}
+        {filteredTree.length === 0 ? (
+          <Box sx={{ p: 3, textAlign: "center" }}>
+            <Typography color="text.secondary">
+              No files match the current filters.
+            </Typography>
+            <Button 
+              size="small" 
+              onClick={handleClearFilters}
+              sx={{ mt: 1, textTransform: "none" }}
+            >
+              Clear Filters
+            </Button>
+          </Box>
+        ) : (
+          filteredTree.map((node) => (
+            <TreeNode
+              key={node.path}
+              node={node}
+              depth={0}
+              expandedFolders={expandedFolders}
+              onToggleFolder={handleToggleFolder}
+              onShowMetadata={handleShowMetadata}
+              searchQuery={searchQuery}
+            />
+          ))
+        )}
       </Paper>
 
       {/* File Metadata Dialog */}
