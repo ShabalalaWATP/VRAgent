@@ -142,6 +142,15 @@ const networkCards: LearnCard[] = [
 // General security learning pages
 const securityCards: LearnCard[] = [
   {
+    title: "Cyber Threat Intelligence",
+    description: "Comprehensive guide to CTI: 70+ threat actors, attribution frameworks, tracking methods, and intelligence tradecraft.",
+    icon: <GpsFixedIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/cti",
+    color: "#dc2626",
+    tags: ["APT Groups", "Attribution", "STIX/TAXII"],
+    badge: "New",
+  },
+  {
     title: "Cyber Kill Chain",
     description: "Master the 7 phases of the Lockheed Martin Cyber Kill Chain. Understand how attackers operate.",
     icon: <LinkIcon sx={{ fontSize: 40 }} />,
@@ -410,7 +419,7 @@ export default function LearnHubPage() {
         }}
       >
         {[
-          { value: "20", label: "Learning Topics" },
+          { value: "21", label: "Learning Topics" },
           { value: "120+", label: "Glossary Terms" },
           { value: "200+", label: "Commands" },
           { value: "30+", label: "Attack Types" },

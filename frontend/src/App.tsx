@@ -50,6 +50,7 @@ import TracerouteAnalyzerPage from "./pages/TracerouteAnalyzerPage";
 import TracerouteGuidePage from "./pages/TracerouteGuidePage";
 import APITesterPage from "./pages/APITesterPage";
 import APITestingGuidePage from "./pages/APITestingGuidePage";
+import CyberThreatIntelPage from "./pages/CyberThreatIntelPage";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
 
@@ -372,6 +373,7 @@ function App() {
           <Route path="/learn/dns" element={<DNSGuidePage />} />
           <Route path="/learn/traceroute" element={<TracerouteGuidePage />} />
           <Route path="/learn/api-testing" element={<APITestingGuidePage />} />
+          <Route path="/learn/cti" element={<CyberThreatIntelPage />} />
         </Routes>
       </Container>
     </>
