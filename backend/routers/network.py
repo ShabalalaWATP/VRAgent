@@ -19,6 +19,7 @@ from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.models.models import NetworkAnalysisReport
 from backend.services import pcap_service, nmap_service, network_export_service
+from backend.services import ssl_scanner_service, protocol_decoder_service
 
 router = APIRouter(prefix="/network", tags=["network-analysis"])
 logger = get_logger(__name__)
@@ -154,6 +155,144 @@ class PacketCaptureRequest(BaseModel):
     capture_filter: Optional[str] = None
     profile: str = "all"
     title: Optional[str] = None
+
+
+# ============================================================================
+# SSL Scanner Models
+# ============================================================================
+
+class SSLScanTarget(BaseModel):
+    """A single SSL scan target."""
+    host: str
+    port: int = 443
+
+
+class SSLScanRequest(BaseModel):
+    """Request to scan SSL/TLS configuration of targets."""
+    targets: List[SSLScanTarget]
+    timeout: int = 10
+    include_ai: bool = True
+    title: Optional[str] = None
+
+
+class SSLCertificateResponse(BaseModel):
+    """Certificate information."""
+    subject: Optional[str] = None
+    issuer: Optional[str] = None
+    serial_number: Optional[str] = None
+    not_before: Optional[str] = None
+    not_after: Optional[str] = None
+    is_expired: bool = False
+    days_until_expiry: Optional[int] = None
+    is_self_signed: bool = False
+    signature_algorithm: Optional[str] = None
+    key_type: Optional[str] = None
+    key_size: Optional[int] = None
+    san: List[str] = []
+
+
+class SSLFindingResponse(BaseModel):
+    """An SSL/TLS security finding."""
+    severity: str
+    category: str
+    title: str
+    description: str
+    recommendation: Optional[str] = None
+    cve: Optional[str] = None
+
+
+class SSLScanResultResponse(BaseModel):
+    """Result for a single host."""
+    host: str
+    port: int
+    certificate: Optional[SSLCertificateResponse] = None
+    supported_protocols: List[str] = []
+    cipher_suites: List[str] = []
+    has_ssl: bool = False
+    error: Optional[str] = None
+    findings: List[SSLFindingResponse] = []
+    vulnerabilities: List[dict] = []  # Detected SSL/TLS vulnerabilities
+    chain_info: Optional[dict] = None  # Certificate chain validation info
+
+
+class SSLScanSummaryResponse(BaseModel):
+    """Summary of all SSL scans."""
+    total_hosts: int
+    hosts_with_ssl: int
+    expired_certs: int
+    self_signed_certs: int
+    weak_protocols: int
+    weak_ciphers: int
+    critical_findings: int
+    high_findings: int
+    total_vulnerabilities: int = 0
+    critical_vulnerabilities: int = 0
+    exploitable_vulnerabilities: int = 0
+    chain_issues: int = 0
+
+
+class SSLScanAnalysisResponse(BaseModel):
+    """Complete SSL scan analysis response."""
+    results: List[SSLScanResultResponse]
+    summary: SSLScanSummaryResponse
+    ai_analysis: Optional[Any] = None
+    report_id: Optional[int] = None
+
+
+# ============================================================================
+# Protocol Decoder Models
+# ============================================================================
+
+class ExtractedCredentialResponse(BaseModel):
+    """An extracted credential from network traffic."""
+    credential_type: str
+    protocol: str
+    source_ip: str
+    dest_ip: str
+    port: int
+    username: Optional[str] = None
+    password: Optional[str] = None
+    token: Optional[str] = None
+    context: Optional[str] = None
+    severity: str = "critical"
+
+
+class HTTPTransactionResponse(BaseModel):
+    """HTTP request/response info."""
+    request_method: str
+    request_uri: str
+    request_host: str
+    source_ip: str
+    dest_ip: str
+    has_credentials: bool = False
+    security_issues: List[str] = []
+
+
+class DNSQueryResponse(BaseModel):
+    """DNS query info."""
+    query_name: str
+    query_type: str
+    source_ip: str
+    dest_ip: str
+    answers: List[dict] = []
+    is_suspicious: bool = False
+    suspicion_reason: Optional[str] = None
+
+
+class ProtocolAnalysisResponse(BaseModel):
+    """Complete protocol analysis response."""
+    credentials: List[ExtractedCredentialResponse]
+    http_transactions: List[HTTPTransactionResponse]
+    dns_queries: List[DNSQueryResponse]
+    ftp_sessions: List[dict]
+    smtp_sessions: List[dict]
+    telnet_sessions: List[dict]
+    total_http_requests: int
+    total_dns_queries: int
+    cleartext_credentials_found: int
+    suspicious_dns_queries: int
+    protocol_stats: dict
+    ai_analysis: Optional[Any] = None
 
 
 # ============================================================================
@@ -871,6 +1010,11 @@ def export_report(
     Export a report to Markdown, PDF, or Word format.
     
     Supported formats: markdown, pdf, docx
+    
+    Handles different report types:
+    - PCAP analysis reports
+    - Nmap scan reports  
+    - SSL/TLS scan reports (with exploitation analysis)
     """
     report = db.query(NetworkAnalysisReport).filter(NetworkAnalysisReport.id == report_id).first()
     if not report:
@@ -879,14 +1023,24 @@ def export_report(
     if format not in ["markdown", "pdf", "docx"]:
         raise HTTPException(status_code=400, detail="Invalid format. Use: markdown, pdf, docx")
     
-    # Generate markdown first (used as base for all formats)
-    markdown_content = network_export_service.generate_markdown_report(
-        analysis_type=report.analysis_type,
-        title=report.title,
-        summary_data=report.summary_data or {},
-        findings_data=report.findings_data or [],
-        ai_report=report.ai_report,
-    )
+    # Generate markdown based on report type
+    if report.analysis_type == "ssl":
+        # SSL reports need special formatting with vulnerability and exploitation data
+        markdown_content = network_export_service.generate_ssl_markdown_report(
+            title=report.title,
+            summary_data=report.summary_data or {},
+            results_data=report.findings_data or [],  # SSL stores results in findings_data
+            ai_report=report.ai_report,
+        )
+    else:
+        # PCAP and Nmap reports use generic format
+        markdown_content = network_export_service.generate_markdown_report(
+            analysis_type=report.analysis_type,
+            title=report.title,
+            summary_data=report.summary_data or {},
+            findings_data=report.findings_data or [],
+            ai_report=report.ai_report,
+        )
     
     # Update export metadata
     report.last_exported_at = datetime.utcnow()
@@ -938,6 +1092,385 @@ def get_pcap_status():
         "message": "PCAP analysis ready" if available else "scapy not installed",
         "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
         "allowed_extensions": list(PCAP_EXTENSIONS),
+    }
+
+
+# ============================================================================
+# SSL Scanner Endpoints
+# ============================================================================
+
+@router.post("/ssl/scan", response_model=SSLScanAnalysisResponse)
+async def scan_ssl_hosts(
+    request: SSLScanRequest,
+    save_report: bool = Query(True, description="Save report to history"),
+    db: Session = Depends(get_db),
+):
+    """
+    Scan SSL/TLS configuration of one or more hosts.
+    
+    Checks for:
+    - Certificate validity and expiration
+    - Certificate chain validation
+    - Self-signed certificates
+    - Weak signature algorithms (SHA-1, MD5)
+    - Deprecated protocols (SSLv2, SSLv3, TLS 1.0, TLS 1.1)
+    - Weak cipher suites
+    - Key strength
+    - Known vulnerabilities (POODLE, BEAST, CRIME, Heartbleed, ROBOT, etc.)
+    
+    **Example targets:**
+    - `{"host": "example.com", "port": 443}`
+    - `{"host": "192.168.1.1", "port": 8443}`
+    """
+    # Convert request targets to tuples
+    targets = [(t.host, t.port) for t in request.targets]
+    
+    if not targets:
+        raise HTTPException(status_code=400, detail="No targets provided")
+    
+    if len(targets) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 targets per scan")
+    
+    logger.info(f"Starting SSL scan for {len(targets)} targets")
+    
+    # Run the scan
+    result = ssl_scanner_service.scan_multiple_hosts(targets, request.timeout)
+    
+    # AI analysis (exploitation-focused)
+    ai_analysis = None
+    if request.include_ai:
+        try:
+            ai_analysis = await ssl_scanner_service.analyze_ssl_with_ai(result)
+        except Exception as e:
+            logger.warning(f"AI analysis failed: {e}")
+    
+    # Convert to response
+    results = []
+    for r in result.results:
+        cert_response = None
+        if r.certificate:
+            # Handle subject/issuer which may be dict or string
+            subject = r.certificate.subject
+            if isinstance(subject, dict):
+                subject = subject.get("commonName", str(subject))
+            issuer = r.certificate.issuer
+            if isinstance(issuer, dict):
+                issuer = issuer.get("commonName", str(issuer))
+            
+            cert_response = SSLCertificateResponse(
+                subject=subject,
+                issuer=issuer,
+                serial_number=r.certificate.serial_number,
+                not_before=r.certificate.not_before,
+                not_after=r.certificate.not_after,
+                is_expired=r.certificate.is_expired,
+                days_until_expiry=r.certificate.days_until_expiry,
+                is_self_signed=r.certificate.is_self_signed,
+                signature_algorithm=r.certificate.signature_algorithm,
+                key_type=r.certificate.public_key_type,
+                key_size=r.certificate.public_key_bits,
+                san=r.certificate.san or [],
+            )
+        
+        findings = [
+            SSLFindingResponse(
+                severity=f.severity,
+                category=f.category,
+                title=f.title,
+                description=f.description,
+                recommendation=f.recommendation,
+                cve=f.cve_ids[0] if f.cve_ids else None,
+            )
+            for f in r.findings
+        ]
+        
+        # Convert vulnerabilities
+        vulnerabilities = [v.to_dict() for v in r.vulnerabilities] if r.vulnerabilities else []
+        
+        # Convert chain info
+        chain_info = r.chain_info.to_dict() if r.chain_info else None
+        
+        # Convert protocols_supported dict to list of supported protocol names
+        supported_protocols = [proto for proto, supported in r.protocols_supported.items() if supported]
+        
+        # Convert cipher_suites from list of dicts to list of strings
+        cipher_list = [c.get("name", str(c)) if isinstance(c, dict) else str(c) for c in r.cipher_suites]
+        
+        results.append(SSLScanResultResponse(
+            host=r.host,
+            port=r.port,
+            certificate=cert_response,
+            supported_protocols=supported_protocols,
+            cipher_suites=cipher_list,
+            has_ssl=r.is_ssl,
+            error=r.error,
+            findings=findings,
+            vulnerabilities=vulnerabilities,
+            chain_info=chain_info,
+        ))
+    
+    summary = SSLScanSummaryResponse(
+        total_hosts=result.summary.total_hosts,
+        hosts_with_ssl=result.summary.hosts_with_ssl,
+        expired_certs=result.summary.certificates_expired,
+        self_signed_certs=result.summary.self_signed_certs,
+        weak_protocols=result.summary.hosts_with_weak_protocols,
+        weak_ciphers=result.summary.hosts_with_weak_ciphers,
+        critical_findings=result.summary.critical_findings,
+        high_findings=result.summary.high_findings,
+        total_vulnerabilities=result.summary.total_vulnerabilities,
+        critical_vulnerabilities=result.summary.critical_vulnerabilities,
+        exploitable_vulnerabilities=result.summary.exploitable_vulnerabilities,
+        chain_issues=result.summary.chain_issues,
+    )
+    
+    # Save report
+    report_id = None
+    if save_report:
+        report_title = request.title or f"SSL Scan - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        targets_str = ", ".join(f"{t.host}:{t.port}" for t in request.targets[:10])
+        if len(request.targets) > 10:
+            targets_str += f" (+{len(request.targets) - 10} more)"
+        
+        # Calculate risk (factor in vulnerabilities)
+        risk_level = "Low"
+        risk_score = 0
+        if result.summary.critical_findings > 0 or result.summary.critical_vulnerabilities > 0:
+            risk_level = "Critical"
+            risk_score = 90
+        elif result.summary.high_findings > 0 or result.summary.exploitable_vulnerabilities > 0:
+            risk_level = "High"
+            risk_score = 70
+        elif result.summary.certificates_expired > 0 or result.summary.hosts_with_weak_protocols > 0:
+            risk_level = "Medium"
+            risk_score = 50
+        
+        db_report = NetworkAnalysisReport(
+            analysis_type="ssl",
+            title=report_title,
+            filename=targets_str,
+            risk_level=risk_level,
+            risk_score=risk_score,
+            summary_data={
+                "total_hosts": result.summary.total_hosts,
+                "hosts_with_ssl": result.summary.hosts_with_ssl,
+                "expired_certs": result.summary.certificates_expired,
+                "self_signed_certs": result.summary.self_signed_certs,
+                "weak_protocols": result.summary.hosts_with_weak_protocols,
+                "weak_ciphers": result.summary.hosts_with_weak_ciphers,
+                "total_vulnerabilities": result.summary.total_vulnerabilities,
+                "exploitable_vulnerabilities": result.summary.exploitable_vulnerabilities,
+            },
+            findings_data=[
+                {
+                    "host": r.host,
+                    "port": r.port,
+                    "findings": [f.to_dict() for f in r.findings],
+                    "vulnerabilities": [v.to_dict() for v in r.vulnerabilities] if r.vulnerabilities else [],
+                }
+                for r in result.results if r.findings or r.vulnerabilities
+            ],
+            ai_report=ai_analysis,
+        )
+        db.add(db_report)
+        db.commit()
+        db.refresh(db_report)
+        report_id = db_report.id
+    
+    logger.info(f"SSL scan completed: {len(results)} hosts scanned, {result.summary.critical_findings} critical findings, {result.summary.total_vulnerabilities} vulnerabilities")
+    
+    return SSLScanAnalysisResponse(
+        results=results,
+        summary=summary,
+        ai_analysis=ai_analysis,
+        report_id=report_id,
+    )
+
+
+@router.get("/ssl/scan-single")
+async def scan_ssl_single(
+    host: str = Query(..., description="Host to scan"),
+    port: int = Query(443, description="Port to scan"),
+    timeout: int = Query(10, ge=1, le=30, description="Timeout in seconds"),
+):
+    """
+    Quick SSL scan of a single host without saving to history.
+    
+    Returns certificate info and security findings.
+    """
+    result = ssl_scanner_service.scan_ssl_host(host, port, timeout)
+    
+    cert_response = None
+    if result.certificate:
+        cert_response = SSLCertificateResponse(
+            subject=result.certificate.subject,
+            issuer=result.certificate.issuer,
+            serial_number=result.certificate.serial_number,
+            not_before=result.certificate.not_before,
+            not_after=result.certificate.not_after,
+            is_expired=result.certificate.is_expired,
+            days_until_expiry=result.certificate.days_until_expiry,
+            is_self_signed=result.certificate.is_self_signed,
+            signature_algorithm=result.certificate.signature_algorithm,
+            key_type=result.certificate.key_type,
+            key_size=result.certificate.key_size,
+            san=result.certificate.san or [],
+        )
+    
+    findings = [
+        SSLFindingResponse(
+            severity=f.severity,
+            category=f.category,
+            title=f.title,
+            description=f.description,
+            recommendation=f.recommendation,
+            cve=f.cve,
+        )
+        for f in result.findings
+    ]
+    
+    return SSLScanResultResponse(
+        host=result.host,
+        port=result.port,
+        certificate=cert_response,
+        supported_protocols=result.supported_protocols,
+        cipher_suites=result.cipher_suites,
+        has_ssl=result.has_ssl,
+        error=result.error,
+        findings=findings,
+    )
+
+
+# ============================================================================
+# Protocol Decoder Endpoints
+# ============================================================================
+
+@router.post("/pcap/decode-protocols", response_model=ProtocolAnalysisResponse)
+async def decode_pcap_protocols(
+    file: UploadFile = File(..., description="PCAP file to analyze"),
+    include_ai: bool = Query(True, description="Include AI analysis"),
+    max_packets: int = Query(50000, ge=1000, le=100000, description="Maximum packets to analyze"),
+):
+    """
+    Deep protocol analysis of a PCAP file.
+    
+    Extracts:
+    - Cleartext credentials (HTTP Basic, FTP, Telnet, SMTP)
+    - HTTP transactions with security analysis
+    - DNS queries with suspicious pattern detection
+    - API keys and tokens
+    - Form submissions with sensitive data
+    
+    **Warning:** This analysis may extract sensitive credentials from the capture.
+    Ensure you have authorization to analyze this traffic.
+    """
+    if not protocol_decoder_service.PYSHARK_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Protocol decoding requires pyshark. Install with: pip install pyshark"
+        )
+    
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in PCAP_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Invalid file type: {file.filename}")
+    
+    tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_protocol_"))
+    tmp_path = tmp_dir / (file.filename or "upload.pcap")
+    
+    try:
+        # Save uploaded file
+        file_size = 0
+        with tmp_path.open("wb") as f:
+            while chunk := await file.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(status_code=400, detail="File too large")
+                f.write(chunk)
+        
+        logger.info(f"Starting protocol analysis of {file.filename}")
+        
+        # Run analysis
+        result = protocol_decoder_service.decode_protocols_from_pcap(str(tmp_path), max_packets)
+        
+        # AI analysis
+        ai_analysis = None
+        if include_ai:
+            try:
+                ai_analysis = protocol_decoder_service.analyze_protocols_with_ai(result)
+            except Exception as e:
+                logger.warning(f"AI analysis failed: {e}")
+        
+        # Convert to response
+        credentials = [
+            ExtractedCredentialResponse(
+                credential_type=c.credential_type,
+                protocol=c.protocol,
+                source_ip=c.source_ip,
+                dest_ip=c.dest_ip,
+                port=c.port,
+                username=c.username,
+                password=c.password[:3] + "***" if c.password and len(c.password) > 3 else c.password,  # Mask password
+                token=c.token[:10] + "..." if c.token and len(c.token) > 10 else c.token,  # Truncate token
+                context=c.context,
+                severity=c.severity,
+            )
+            for c in result.credentials
+        ]
+        
+        http_transactions = [
+            HTTPTransactionResponse(
+                request_method=h.request_method,
+                request_uri=h.request_uri[:200],
+                request_host=h.request_host,
+                source_ip=h.source_ip,
+                dest_ip=h.dest_ip,
+                has_credentials=h.has_credentials,
+                security_issues=h.security_issues,
+            )
+            for h in result.http_transactions[:100]  # Limit for response size
+        ]
+        
+        dns_queries = [
+            DNSQueryResponse(
+                query_name=d.query_name,
+                query_type=d.query_type,
+                source_ip=d.source_ip,
+                dest_ip=d.dest_ip,
+                answers=d.answers,
+                is_suspicious=d.is_suspicious,
+                suspicion_reason=d.suspicion_reason,
+            )
+            for d in result.dns_queries[:200]
+        ]
+        
+        logger.info(f"Protocol analysis completed: {len(credentials)} credentials found")
+        
+        return ProtocolAnalysisResponse(
+            credentials=credentials,
+            http_transactions=http_transactions,
+            dns_queries=dns_queries,
+            ftp_sessions=[s.to_dict() for s in result.ftp_sessions],
+            smtp_sessions=[s.to_dict() for s in result.smtp_sessions],
+            telnet_sessions=[s.to_dict() for s in result.telnet_sessions],
+            total_http_requests=result.total_http_requests,
+            total_dns_queries=result.total_dns_queries,
+            cleartext_credentials_found=result.cleartext_credentials_found,
+            suspicious_dns_queries=result.suspicious_dns_queries,
+            protocol_stats=result.protocol_stats,
+            ai_analysis=ai_analysis,
+        )
+        
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@router.get("/pcap/decoder-status")
+def get_decoder_status():
+    """Check if protocol decoding is available."""
+    return {
+        "available": protocol_decoder_service.PYSHARK_AVAILABLE,
+        "message": "Protocol decoder ready" if protocol_decoder_service.PYSHARK_AVAILABLE else "pyshark not installed",
+        "supported_protocols": ["HTTP", "DNS", "FTP", "SMTP", "Telnet"] if protocol_decoder_service.PYSHARK_AVAILABLE else [],
     }
 
 

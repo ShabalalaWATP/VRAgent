@@ -77,8 +77,10 @@ import DownloadIcon from "@mui/icons-material/Download";
 import DescriptionIcon from "@mui/icons-material/Description";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import ArticleIcon from "@mui/icons-material/Article";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import { useDropzone } from "react-dropzone";
 import ReactMarkdown from "react-markdown";
+import NetworkTopologyGraph, { TopologyNode, TopologyLink } from "../components/NetworkTopologyGraph";
 import { 
   analyzePcaps, 
   getPcapStatus, 
@@ -1530,6 +1532,21 @@ export default function PcapAnalyzerPage() {
                           )}
                         </Box>
                       </Paper>
+                    </Grid>
+                  )}
+
+                  {/* Network Topology Graph */}
+                  {analysis.summary.topology_nodes && analysis.summary.topology_nodes.length > 0 && (
+                    <Grid item xs={12}>
+                      <NetworkTopologyGraph
+                        nodes={analysis.summary.topology_nodes as TopologyNode[]}
+                        links={(analysis.summary.topology_links || []) as TopologyLink[]}
+                        title={`Network Topology - ${analysis.filename}`}
+                        height={450}
+                        onNodeClick={(node) => {
+                          console.log("Clicked node:", node);
+                        }}
+                      />
                     </Grid>
                   )}
 

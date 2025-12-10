@@ -26,6 +26,7 @@ rq==1.15.1
 reportlab==4.0.4
 python-docx==0.8.11
 markdown==3.4.4
+PyYAML>=6.0
 
 # Security scanning
 semgrep>=1.50.0
@@ -36,6 +37,13 @@ packaging>=23.0
 
 # PCAP analysis
 scapy>=2.5.0
+pyshark>=0.6
+
+# SSL/TLS scanning
+cryptography>=41.0
+
+# DNS reconnaissance
+dnspython>=2.4.0
 
 # Testing
 pytest==7.4.0

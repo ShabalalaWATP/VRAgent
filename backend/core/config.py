@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     gemini_model_id: str = Field("gemini-2.5-flash", validation_alias="GEMINI_MODEL_ID")
     environment: str = Field("development", validation_alias="ENVIRONMENT")
     
+    # Ollama settings for air-gapped environments
+    ollama_url: str = Field("http://localhost:11434", validation_alias="OLLAMA_URL")
+    ollama_model: str = Field("llama3.2", validation_alias="OLLAMA_MODEL")
+    use_ollama: bool = Field(False, validation_alias="USE_OLLAMA")
+    
     # NVD API key (optional - increases rate limits from 5/30s to 50/30s)
     # Get one at: https://nvd.nist.gov/developers/request-an-api-key
     nvd_api_key: str = Field("", validation_alias="NVD_API_KEY")

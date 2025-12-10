@@ -1,0 +1,277 @@
+{
+  "target": "192.168.1.1",
+  "target_type": "ip",
+  "discovered_services": [],
+  "discovered_endpoints": [
+    {
+      "path": "/",
+      "url": "http://192.168.1.1/",
+      "method": "GET",
+      "status_code": 200,
+      "content_type": "text/html",
+      "content_length": 18914,
+      "is_json": false,
+      "is_html": true,
+      "requires_auth": false,
+      "base_url": "http://192.168.1.1"
+    },
+    {
+      "path": "/",
+      "url": "https://192.168.1.1/",
+      "method": "GET",
+      "status_code": 200,
+      "content_type": "text/html",
+      "content_length": 18914,
+      "is_json": false,
+      "is_html": true,
+      "requires_auth": false,
+      "base_url": "https://192.168.1.1"
+    }
+  ],
+  "test_results": [
+    {
+      "base_url": "http://192.168.1.1",
+      "endpoints_tested": 1,
+      "security_score": 28,
+      "findings_count": 10
+    },
+    {
+      "base_url": "https://192.168.1.1",
+      "endpoints_tested": 1,
+      "security_score": 28,
+      "findings_count": 10
+    }
+  ],
+  "all_findings": [
+    {
+      "title": "Missing Security Header: Strict-Transport-Security",
+      "description": "HSTS - Forces HTTPS connections",
+      "severity": "medium",
+      "category": "headers",
+      "evidence": "Header 'Strict-Transport-Security' not present in response",
+      "remediation": "Add 'Strict-Transport-Security: max-age=31536000; includeSubDomains' header",
+      "cwe": "CWE-319",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API8:2023"
+    },
+    {
+      "title": "Missing Security Header: Referrer-Policy",
+      "description": "Controls referrer information sent with requests",
+      "severity": "low",
+      "category": "headers",
+      "evidence": "Header 'Referrer-Policy' not present in response",
+      "remediation": "Add 'Referrer-Policy: strict-origin-when-cross-origin' or more restrictive",
+      "cwe": "CWE-200",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API3:2023"
+    },
+    {
+      "title": "Missing Security Header: Permissions-Policy",
+      "description": "Controls browser features and APIs",
+      "severity": "low",
+      "category": "headers",
+      "evidence": "Header 'Permissions-Policy' not present in response",
+      "remediation": "Add Permissions-Policy header to restrict unnecessary browser features",
+      "cwe": "CWE-693",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API8:2023"
+    },
+    {
+      "title": "Information Disclosure: server",
+      "description": "Server version disclosure",
+      "severity": "low",
+      "category": "information_disclosure",
+      "evidence": "server: nginx",
+      "remediation": "Remove or obfuscate the 'server' header",
+      "cwe": "CWE-200",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API3:2023"
+    },
+    {
+      "title": "Endpoint Accessible Without Authentication",
+      "description": "API endpoint returns data without requiring authentication",
+      "severity": "high",
+      "category": "authentication",
+      "evidence": "HTTP 200 with 18914 bytes response",
+      "remediation": "Implement authentication for this endpoint",
+      "cwe": "CWE-306",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API2:2023"
+    },
+    {
+      "title": "No Rate Limiting Detected",
+      "description": "Endpoint accepted 20 requests without rate limiting",
+      "severity": "medium",
+      "category": "rate_limiting",
+      "evidence": "All 20 requests returned success status",
+      "remediation": "Implement rate limiting to prevent abuse and DoS attacks",
+      "cwe": "CWE-770",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API4:2023"
+    },
+    {
+      "title": "Dangerous HTTP Method Allowed: CONNECT",
+      "description": "HTTP CONNECT method is enabled on this endpoint",
+      "severity": "medium",
+      "category": "http_methods",
+      "evidence": "Allowed methods: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, CONNECT",
+      "remediation": "Disable CONNECT method if not required",
+      "cwe": "CWE-650",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API5:2023"
+    },
+    {
+      "title": "Dangerous HTTP Method Allowed: DELETE",
+      "description": "HTTP DELETE method is enabled on this endpoint",
+      "severity": "medium",
+      "category": "http_methods",
+      "evidence": "Allowed methods: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, CONNECT",
+      "remediation": "Disable DELETE method if not required",
+      "cwe": "CWE-650",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API5:2023"
+    },
+    {
+      "title": "Dangerous HTTP Method Allowed: PUT",
+      "description": "HTTP PUT method is enabled on this endpoint",
+      "severity": "medium",
+      "category": "http_methods",
+      "evidence": "Allowed methods: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, CONNECT",
+      "remediation": "Disable PUT method if not required",
+      "cwe": "CWE-650",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API5:2023"
+    },
+    {
+      "title": "Dangerous HTTP Method Allowed: PATCH",
+      "description": "HTTP PATCH method is enabled on this endpoint",
+      "severity": "medium",
+      "category": "http_methods",
+      "evidence": "Allowed methods: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, CONNECT",
+      "remediation": "Disable PATCH method if not required",
+      "cwe": "CWE-650",
+      "endpoint": "http://192.168.1.1/",
+      "owasp_api": "API5:2023"
+    },
+    {
+      "title": "Missing Security Header: Strict-Transport-Security",
+      "description": "HSTS - Forces HTTPS connections",
+      "severity": "medium",
+      "category": "headers",
+      "evidence": "Header 'Strict-Transport-Security' not present in response",
+      "remediation": "Add 'Strict-Transport-Security: max-age=31536000; includeSubDomains' header",
+      "cwe": "CWE-319",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API8:2023"
+    },
+    {
+      "title": "Missing Security Header: Referrer-Policy",
+      "description": "Controls referrer information sent with requests",
+      "severity": "low",
+      "category": "headers",
+      "evidence": "Header 'Referrer-Policy' not present in response",
+      "remediation": "Add 'Referrer-Policy: strict-origin-when-cross-origin' or more restrictive",
+      "cwe": "CWE-200",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API3:2023"
+    },
+    {
+      "title": "Missing Security Header: Permissions-Policy",
+      "description": "Controls browser features and APIs",
+      "severity": "low",
+      "category": "headers",
+      "evidence": "Header 'Permissions-Policy' not present in response",
+      "remediation": "Add Permissions-Policy header to restrict unnecessary browser features",
+      "cwe": "CWE-693",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API8:2023"
+    },
+    {
+      "title": "Information Disclosure: server",
+      "description": "Server version disclosure",
+      "severity": "low",
+      "category": "information_disclosure",
+      "evidence": "server: nginx",
+      "remediation": "Remove or obfuscate the 'server' header",
+      "cwe": "CWE-200",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API3:2023"
+    },
+    {
+      "title": "Endpoint Accessible Without Authentication",
+      "description": "API endpoint returns data without requiring authentication",
+      "severity": "high",
+      "category": "authentication",
+      "evidence": "HTTP 200 with 18914 bytes response",
+      "remediation": "Implement authentication for this endpoint",
+      "cwe": "CWE-306",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API2:2023"
+    },
+    {
+      "title": "No Rate Limiting Detected",
+      "description": "Endpoint accepted 20 requests without rate limiting",
+      "severity": "medium",
+      "category": "rate_limiting",
+      "evidence": "All 20 requests returned success status",
+      "remediation": "Implement rate limiting to prevent abuse and DoS attacks",
+      "cwe": "CWE-770",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API4:2023"
+    },
+    {
+      "title": "Dangerous HTTP Method Allowed: CONNECT",
+      "description": "HTTP CONNECT method is enabled on this endpoint",
+      "severity": "medium",
+      "category": "http_methods",
+      "evidence": "Allowed methods: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, CONNECT",
+      "remediation": "Disable CONNECT method if not required",
+      "cwe": "CWE-650",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API5:2023"
+    },
+    {
+      "title": "Dangerous HTTP Method Allowed: DELETE",
+      "description": "HTTP DELETE method is enabled on this endpoint",
+      "severity": "medium",
+      "category": "http_methods",
+      "evidence": "Allowed methods: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, CONNECT",
+      "remediation": "Disable DELETE method if not required",
+      "cwe": "CWE-650",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API5:2023"
+    },
+    {
+      "title": "Dangerous HTTP Method Allowed: PUT",
+      "description": "HTTP PUT method is enabled on this endpoint",
+      "severity": "medium",
+      "category": "http_methods",
+      "evidence": "Allowed methods: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, CONNECT",
+      "remediation": "Disable PUT method if not required",
+      "cwe": "CWE-650",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API5:2023"
+    },
+    {
+      "title": "Dangerous HTTP Method Allowed: PATCH",
+      "description": "HTTP PATCH method is enabled on this endpoint",
+      "severity": "medium",
+      "category": "http_methods",
+      "evidence": "Allowed methods: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, CONNECT",
+      "remediation": "Disable PATCH method if not required",
+      "cwe": "CWE-650",
+      "endpoint": "https://192.168.1.1/",
+      "owasp_api": "API5:2023"
+    }
+  ],
+  "total_findings": 20,
+  "critical_count": 0,
+  "high_count": 2,
+  "medium_count": 12,
+  "low_count": 6,
+  "info_count": 0,
+  "security_score": 0,
+  "ai_summary": "# 🔍 AI Auto-Test Security Report\n\n---\n\n## 📋 Target Information\n\n| Property | Value |\n|----------|-------|\n| **Target** | `192.168.1.1` |\n| **Type** | IP |\n| **Scan Duration** | 238.8 seconds |\n| **Endpoints Discovered** | 2 |\n| **Services Found** | 0 |\n\n## 🔗 Discovered Endpoints\n\n### Endpoint Statistics\n\n- **Total Discovered:** 2\n- **JSON API Endpoints:** 0\n- **Auth Required:** 0\n- **GraphQL Detected:** ❌ No\n\n### 📁 Other Endpoints\n\n- ✅ `/` → **200**\n- ✅ `/` → **200**\n\n---\n\n## 🛡️ Security Assessment\n\n### Security Score: 🔴 **0/100** (CRITICAL)\n\n```\n[░░░░░░░░░░] 0%\n```\n\n### 📊 Findings Summary\n\n**Total Findings:** 20\n\n| Severity | Count | Impact |\n|----------|-------|--------|\n| 🟠 **High** | **2** | Address urgently |\n| 🟡 **Medium** | **12** | Plan to fix soon |\n| 🔵 **Low** | **6** | Consider fixing |\n\n### 🚨 Top Security Issues\n\n**1. 🟠 [HIGH] Endpoint Accessible Without Authentication**\n   - *Endpoint:* `http://192.168.1.1/`\n   - *Details:* API endpoint returns data without requiring authentication\n\n**2. 🟠 [HIGH] Endpoint Accessible Without Authentication**\n   - *Endpoint:* `https://192.168.1.1/`\n   - *Details:* API endpoint returns data without requiring authentication\n\n**3. 🟡 [MEDIUM] Missing Security Header: Strict-Transport-Security**\n   - *Endpoint:* `http://192.168.1.1/`\n   - *Details:* HSTS - Forces HTTPS connections\n\n**4. 🟡 [MEDIUM] No Rate Limiting Detected**\n   - *Endpoint:* `http://192.168.1.1/`\n   - *Details:* Endpoint accepted 20 requests without rate limiting\n\n**5. 🟡 [MEDIUM] Dangerous HTTP Method Allowed: CONNECT**\n   - *Endpoint:* `http://192.168.1.1/`\n   - *Details:* HTTP CONNECT method is enabled on this endpoint\n\n**6. 🟡 [MEDIUM] Dangerous HTTP Method Allowed: DELETE**\n   - *Endpoint:* `http://192.168.1.1/`\n   - *Details:* HTTP DELETE method is enabled on this endpoint\n\n**7. 🟡 [MEDIUM] Dangerous HTTP Method Allowed: PUT**\n   - *Endpoint:* `http://192.168.1.1/`\n   - *Details:* HTTP PUT method is enabled on this endpoint\n\n---\n\n## 💡 Recommendations\n\n### 🟠 HIGH\n**2 high-severity issues** should be addressed urgently as part of your security roadmap.\n\n### ℹ️ INFO\n**Regular Testing** - Schedule periodic security scans to catch new vulnerabilities early.\n\n---\n\n*Report generated by VRAgent AI Auto-Test • For comprehensive security assessment, combine with manual penetration testing.*",
+  "scan_duration_seconds": 238.8260145187378,
+  "error": null
+}

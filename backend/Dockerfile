@@ -15,7 +15,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Install system dependencies including git for cloning repos,
 # Node.js for ESLint, Go for Gosec, clang-tidy for C/C++, nmap for network scanning, 
-# tshark for packet capture, and build tools
+# tshark for packet capture, traceroute for network path analysis, dnsutils for DNS queries, and build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -29,6 +29,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nmap \
     tshark \
     libcap2-bin \
+    traceroute \
+    iputils-ping \
+    dnsutils \
+    whois \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/* \

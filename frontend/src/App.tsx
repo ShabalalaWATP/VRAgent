@@ -42,6 +42,14 @@ import NmapAnalyzerPage from "./pages/NmapAnalyzerPage";
 import NetworkAnalysisGuidePage from "./pages/NetworkAnalysisGuidePage";
 import WiresharkGuidePage from "./pages/WiresharkGuidePage";
 import NmapGuidePage from "./pages/NmapGuidePage";
+import SSLTLSGuidePage from "./pages/SSLTLSGuidePage";
+import SSLScannerPage from "./pages/SSLScannerPage";
+import DNSAnalyzerPage from "./pages/DNSAnalyzerPage";
+import DNSGuidePage from "./pages/DNSGuidePage";
+import TracerouteAnalyzerPage from "./pages/TracerouteAnalyzerPage";
+import TracerouteGuidePage from "./pages/TracerouteGuidePage";
+import APITesterPage from "./pages/APITesterPage";
+import APITestingGuidePage from "./pages/APITestingGuidePage";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
 
@@ -334,6 +342,10 @@ function App() {
           <Route path="/network" element={<NetworkAnalysisHub />} />
           <Route path="/network/pcap" element={<PcapAnalyzerPage />} />
           <Route path="/network/nmap" element={<NmapAnalyzerPage />} />
+          <Route path="/network/ssl" element={<SSLScannerPage />} />
+          <Route path="/network/dns" element={<DNSAnalyzerPage />} />
+          <Route path="/network/traceroute" element={<TracerouteAnalyzerPage />} />
+          <Route path="/network/api-tester" element={<APITesterPage />} />
           <Route path="/pcap" element={<PcapAnalyzerPage />} />
           <Route path="/learn" element={<LearnHubPage />} />
           <Route path="/learn/scanning" element={<ScanningPage />} />
@@ -356,6 +368,10 @@ function App() {
           <Route path="/learn/network-hub" element={<NetworkAnalysisGuidePage />} />
           <Route path="/learn/wireshark" element={<WiresharkGuidePage />} />
           <Route path="/learn/nmap" element={<NmapGuidePage />} />
+          <Route path="/learn/ssl-tls" element={<SSLTLSGuidePage />} />
+          <Route path="/learn/dns" element={<DNSGuidePage />} />
+          <Route path="/learn/traceroute" element={<TracerouteGuidePage />} />
+          <Route path="/learn/api-testing" element={<APITestingGuidePage />} />
         </Routes>
       </Container>
     </>

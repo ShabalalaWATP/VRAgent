@@ -465,6 +465,26 @@ export type PcapSummary = {
   dns_queries: string[];
   http_hosts: string[];
   potential_issues: number;
+  // Network topology for visualization
+  topology_nodes?: Array<{
+    id: string;
+    ip: string;
+    type: "host" | "server" | "router" | "unknown";
+    services?: string[];
+    ports?: number[];
+    packets?: number;
+    bytes?: number;
+    riskLevel?: "critical" | "high" | "medium" | "low" | "none";
+  }>;
+  topology_links?: Array<{
+    source: string;
+    target: string;
+    protocol?: string;
+    port?: number;
+    packets?: number;
+    bytes?: number;
+    bidirectional?: boolean;
+  }>;
 };
 
 export type PcapAnalysisResponse = {
@@ -1122,6 +1142,1279 @@ export const apiClient = {
         context,
         analysis_type: analysisType,
       }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // SSL Scanner endpoints
+  scanSSL: async (request: {
+    targets: Array<{ host: string; port: number }>;
+    timeout?: number;
+    include_ai?: boolean;
+    title?: string;
+  }): Promise<any> => {
+    const resp = await fetch(`${API_URL}/network/ssl/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  scanSSLSingle: async (host: string, port: number = 443, timeout: number = 10): Promise<any> => {
+    const params = new URLSearchParams({
+      host,
+      port: String(port),
+      timeout: String(timeout),
+    });
+    const resp = await fetch(`${API_URL}/network/ssl/scan-single?${params}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Protocol Decoder endpoints
+  getDecoderStatus: async (): Promise<{
+    available: boolean;
+    message: string;
+    supported_protocols: string[];
+  }> => {
+    const resp = await fetch(`${API_URL}/network/pcap/decoder-status`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  decodeProtocols: async (file: File, includeAi: boolean = true, maxPackets: number = 50000): Promise<any> => {
+    const form = new FormData();
+    form.append("file", file);
+
+    const params = new URLSearchParams({
+      include_ai: String(includeAi),
+      max_packets: String(maxPackets),
+    });
+
+    const resp = await fetch(`${API_URL}/network/pcap/decode-protocols?${params}`, {
+      method: "POST",
+      body: form,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // DNS Reconnaissance Endpoints
+  // ============================================================================
+
+  getDnsStatus: async (): Promise<{
+    available: boolean;
+    dnspython_installed: boolean;
+    message: string;
+    features: Record<string, boolean>;
+  }> => {
+    const resp = await fetch(`${API_URL}/dns/status`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getDnsScanTypes: async (): Promise<DNSScanType[]> => {
+    const resp = await fetch(`${API_URL}/dns/scan-types`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  validateDomain: async (domain: string): Promise<{ valid: boolean; domain?: string; error?: string }> => {
+    const resp = await fetch(`${API_URL}/dns/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  runDnsScan: async (request: {
+    domain: string;
+    scan_type?: string;
+    custom_subdomains?: string[];
+    save_report?: boolean;
+    report_title?: string;
+    run_ai_analysis?: boolean;
+  }): Promise<DNSReconResult> => {
+    const resp = await fetch(`${API_URL}/dns/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  runDnsScanWithProgress: (
+    request: {
+      domain: string;
+      scan_type?: string;
+      custom_subdomains?: string[];
+      save_report?: boolean;
+      report_title?: string;
+      run_ai_analysis?: boolean;
+    },
+    onProgress: (phase: string, progress: number, message: string) => void,
+    onResult: (result: DNSReconResult) => void,
+    onError: (error: string) => void
+  ): AbortController => {
+    const controller = new AbortController();
+    
+    (async () => {
+      try {
+        const resp = await fetch(`${API_URL}/dns/scan/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+          signal: controller.signal,
+        });
+        
+        if (!resp.ok) {
+          onError(await resp.text());
+          return;
+        }
+        
+        const reader = resp.body?.getReader();
+        if (!reader) {
+          onError("No response body");
+          return;
+        }
+        
+        const decoder = new TextDecoder();
+        let buffer = "";
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+          
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === "progress") {
+                  onProgress(data.phase, data.progress, data.message);
+                } else if (data.type === "result") {
+                  onResult(data.data);
+                } else if (data.type === "error") {
+                  onError(data.error);
+                }
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          onError(err.message || "Stream failed");
+        }
+      }
+    })();
+    
+    return controller;
+  },
+
+  chatAboutDns: async (
+    message: string,
+    dnsContext: Record<string, any>,
+    conversationHistory?: Array<{ role: string; content: string }>
+  ): Promise<{ response: string; suggestions: string[] }> => {
+    const resp = await fetch(`${API_URL}/dns/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        dns_context: dnsContext,
+        conversation_history: conversationHistory,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getDnsReports: async (skip: number = 0, limit: number = 20): Promise<{ reports: SavedDNSReport[]; total: number }> => {
+    const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+    const resp = await fetch(`${API_URL}/dns/reports?${params}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getDnsReport: async (reportId: number): Promise<DNSReconResult> => {
+    const resp = await fetch(`${API_URL}/dns/reports/${reportId}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteDnsReport: async (reportId: number): Promise<void> => {
+    const resp = await fetch(`${API_URL}/dns/reports/${reportId}`, { method: "DELETE" });
+    if (!resp.ok) throw new Error(await resp.text());
+  },
+
+  // WHOIS Lookup Endpoints
+  getWhoisStatus: async (): Promise<{ available: boolean; message: string }> => {
+    const resp = await fetch(`${API_URL}/dns/whois/status`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  whoisDomain: async (domain: string): Promise<WhoisDomainResult> => {
+    const resp = await fetch(`${API_URL}/dns/whois/domain`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  whoisIP: async (ipAddress: string): Promise<WhoisIPResult> => {
+    const resp = await fetch(`${API_URL}/dns/whois/ip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ip_address: ipAddress }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Traceroute Visualization Endpoints
+  // ============================================================================
+
+  getTracerouteStatus: async (): Promise<TracerouteStatus> => {
+    const resp = await fetch(`${API_URL}/traceroute/status`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  validateTracerouteTarget: async (target: string): Promise<{ valid: boolean; target?: string; resolved_ip?: string; error?: string }> => {
+    const resp = await fetch(`${API_URL}/traceroute/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  runTraceroute: async (request: TracerouteRequest): Promise<TracerouteResponse> => {
+    const resp = await fetch(`${API_URL}/traceroute/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  runTracerouteStream: (
+    request: TracerouteRequest,
+    onHop: (hopNumber: number, rawLine: string) => void,
+    onComplete: (result: TracerouteResponse) => void,
+    onError: (error: string) => void
+  ): AbortController => {
+    const controller = new AbortController();
+    
+    (async () => {
+      try {
+        const resp = await fetch(`${API_URL}/traceroute/run/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+          signal: controller.signal,
+        });
+        
+        if (!resp.ok) {
+          onError(await resp.text());
+          return;
+        }
+        
+        const reader = resp.body?.getReader();
+        if (!reader) {
+          onError("No response body");
+          return;
+        }
+        
+        const decoder = new TextDecoder();
+        let buffer = "";
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+          
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === "hop") {
+                  onHop(data.number, data.raw);
+                } else if (data.type === "complete") {
+                  onComplete(data);
+                } else if (data.type === "error") {
+                  onError(data.message);
+                }
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          onError(err.message || "Stream failed");
+        }
+      }
+    })();
+    
+    return controller;
+  },
+
+  chatAboutTraceroute: async (
+    message: string,
+    tracerouteContext: Record<string, any>,
+    conversationHistory?: Array<{ role: string; content: string }>
+  ): Promise<{ response: string; error?: string }> => {
+    const resp = await fetch(`${API_URL}/traceroute/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        traceroute_context: tracerouteContext,
+        chat_history: conversationHistory,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getTracerouteReports: async (): Promise<TracerouteSavedReport[]> => {
+    const resp = await fetch(`${API_URL}/traceroute/reports`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getTracerouteReport: async (reportId: number): Promise<TracerouteReportDetail> => {
+    const resp = await fetch(`${API_URL}/traceroute/reports/${reportId}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteTracerouteReport: async (reportId: number): Promise<void> => {
+    const resp = await fetch(`${API_URL}/traceroute/reports/${reportId}`, {
+      method: "DELETE",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+  },
+};
+
+// ============================================================================
+// DNS Reconnaissance Types
+// ============================================================================
+
+export type DNSScanType = {
+  id: string;
+  name: string;
+  description: string;
+  record_types: string[];
+  subdomain_count: number;
+  check_security: boolean;
+  zone_transfer: boolean;
+  timeout: number;
+  estimated_time: string;
+};
+
+export type DNSRecord = {
+  record_type: string;
+  name: string;
+  value: string;
+  ttl?: number;
+  priority?: number;
+};
+
+export type SubdomainResult = {
+  subdomain: string;
+  full_domain: string;
+  ip_addresses: string[];
+  cname?: string;
+  status: string;
+};
+
+export type DNSSecurityAnalysis = {
+  has_spf: boolean;
+  spf_record?: string;
+  spf_issues: string[];
+  has_dmarc: boolean;
+  dmarc_record?: string;
+  dmarc_issues: string[];
+  has_dkim: boolean;
+  dkim_selectors_found: string[];
+  has_dnssec: boolean;
+  dnssec_details?: string;
+  has_caa: boolean;
+  caa_records: string[];
+  mail_security_score: number;
+  overall_issues: string[];
+  recommendations: string[];
+};
+
+export type DNSReconResult = {
+  domain: string;
+  scan_timestamp: string;
+  scan_duration_seconds: number;
+  records: DNSRecord[];
+  nameservers: string[];
+  mail_servers: Array<{ server: string; priority: number }>;
+  subdomains: SubdomainResult[];
+  zone_transfer_possible: boolean;
+  zone_transfer_data: string[];
+  security?: DNSSecurityAnalysis;
+  reverse_dns: Record<string, string>;
+  total_records: number;
+  total_subdomains: number;
+  unique_ips: string[];
+  ai_analysis?: any;
+  report_id?: number;
+};
+
+export type SavedDNSReport = {
+  id: number;
+  domain: string;
+  scan_type: string;
+  title?: string;
+  total_records: number;
+  total_subdomains: number;
+  zone_transfer_possible: boolean;
+  mail_security_score?: number;
+  created_at: string;
+};
+
+// WHOIS Types
+export type WhoisDomainResult = {
+  domain: string;
+  registrar?: string;
+  registrar_url?: string;
+  creation_date?: string;
+  expiration_date?: string;
+  updated_date?: string;
+  name_servers: string[];
+  status: string[];
+  registrant_name?: string;
+  registrant_organization?: string;
+  registrant_country?: string;
+  registrant_email?: string;
+  admin_email?: string;
+  tech_email?: string;
+  dnssec?: string;
+  raw_text: string;
+  error?: string;
+};
+
+export type WhoisIPResult = {
+  ip_address: string;
+  network_name?: string;
+  network_range?: string;
+  cidr?: string;
+  asn?: string;
+  asn_name?: string;
+  organization?: string;
+  country?: string;
+  registrar?: string;  // RIR (ARIN, RIPE, etc.)
+  registration_date?: string;
+  updated_date?: string;
+  abuse_contact?: string;
+  tech_contact?: string;
+  description: string[];
+  raw_text: string;
+  error?: string;
+};
+
+// ============================================================================
+// Traceroute Types
+// ============================================================================
+
+export type TracerouteStatus = {
+  available: boolean;
+  traceroute_installed: boolean;
+  platform: string;
+  message: string;
+  features: {
+    icmp_mode: boolean;
+    udp_mode: boolean;
+    custom_queries: boolean;
+    hostname_resolution: boolean;
+    mtr_available: boolean;
+  };
+};
+
+export type TracerouteRequest = {
+  target: string;
+  max_hops?: number;
+  timeout?: number;
+  queries?: number;
+  use_icmp?: boolean;
+  resolve_hostnames?: boolean;
+  save_report?: boolean;
+  report_title?: string;
+};
+
+export type TracerouteHop = {
+  hop_number: number;
+  ip_address?: string;
+  hostname?: string;
+  rtt_ms: number[];
+  avg_rtt_ms?: number;
+  packet_loss: number;
+  is_destination: boolean;
+  is_timeout: boolean;
+  asn?: string;
+  location?: string;
+};
+
+export type TracerouteResult = {
+  target: string;
+  target_ip?: string;
+  hops: TracerouteHop[];
+  total_hops: number;
+  completed: boolean;
+  start_time: string;
+  end_time: string;
+  duration_ms: number;
+  platform: string;
+  command_used: string;
+};
+
+export type TracerouteAIAnalysis = {
+  summary?: string;
+  network_segments?: Array<{
+    segment: string;
+    hops: string;
+    description: string;
+  }>;
+  performance_analysis?: {
+    overall_latency: string;
+    bottlenecks: string[];
+    packet_loss_concerns: string[];
+  };
+  security_observations?: Array<{
+    observation: string;
+    severity: string;
+    details: string;
+  }>;
+  recommendations?: string[];
+  risk_score?: number;
+  error?: string;
+  raw_analysis?: string;
+};
+
+export type TracerouteResponse = {
+  result: TracerouteResult;
+  ai_analysis: TracerouteAIAnalysis;
+  report_id?: number;
+};
+
+export type TracerouteSavedReport = {
+  id: number;
+  title: string;
+  filename: string;
+  risk_score: number;
+  total_findings: number;
+  created_at: string;
+  summary?: string;
+};
+
+export type TracerouteReportDetail = {
+  id: number;
+  title: string;
+  filename: string;
+  analysis_type: string;
+  risk_score: number;
+  total_findings: number;
+  summary?: string;
+  report_data: {
+    result: TracerouteResult;
+    ai_analysis: TracerouteAIAnalysis;
+  };
+  ai_report: TracerouteAIAnalysis;
+  created_at: string;
+};
+
+// ============================================================================
+// API Endpoint Tester Types
+// ============================================================================
+
+export type APITestSeverity = "critical" | "high" | "medium" | "low" | "info";
+
+export type APITestCategory = 
+  | "authentication" 
+  | "authorization" 
+  | "input_validation" 
+  | "rate_limiting" 
+  | "cors" 
+  | "headers" 
+  | "information_disclosure" 
+  | "http_methods" 
+  | "graphql" 
+  | "general";
+
+export type APITestFinding = {
+  title: string;
+  description: string;
+  severity: string;
+  category: string;
+  evidence: string;
+  remediation: string;
+  cwe?: string;
+  endpoint: string;
+  owasp_api?: string;  // OWASP API Security Top 10 mapping
+};
+
+export type APIEndpointResult = {
+  url: string;
+  method: string;
+  status_code?: number;
+  response_time_ms: number;
+  content_type?: string;
+  response_size: number;
+  headers: Record<string, string>;
+  findings: APITestFinding[];
+  error?: string;
+};
+
+export type APITestResult = {
+  base_url: string;
+  endpoints_tested: number;
+  total_findings: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  info_count: number;
+  test_duration_seconds: number;
+  endpoint_results: APIEndpointResult[];
+  all_findings: APITestFinding[];
+  security_score: number;
+  summary: string;
+  error?: string;
+  owasp_api_breakdown?: Record<string, number>;  // OWASP API findings breakdown
+};
+
+export type APIEndpointConfig = {
+  url: string;
+  method: string;
+  headers?: Record<string, string>;
+  params?: Record<string, string>;
+  body?: any;
+};
+
+export type APITestRequest = {
+  base_url: string;
+  endpoints: APIEndpointConfig[];
+  auth_type?: "none" | "basic" | "bearer" | "api_key";
+  auth_value?: string;
+  test_auth?: boolean;
+  test_cors?: boolean;
+  test_rate_limit?: boolean;
+  test_input_validation?: boolean;
+  test_methods?: boolean;
+  test_graphql?: boolean;
+  proxy_url?: string;  // HTTP/HTTPS proxy URL
+  timeout?: number;    // Request timeout in seconds
+};
+
+export type APIQuickScanRequest = {
+  url: string;
+  auth_header?: string;
+  proxy_url?: string;  // HTTP/HTTPS proxy URL
+};
+
+// WebSocket Testing Types
+export type WebSocketTestRequest = {
+  url: string;
+  auth_token?: string;
+  test_messages?: string[];
+  timeout?: number;
+  proxy_url?: string;
+};
+
+export type WebSocketFinding = {
+  title: string;
+  description: string;
+  severity: string;
+  category: string;
+  evidence: string;
+  remediation: string;
+  cwe?: string;
+  owasp_api?: string;
+};
+
+export type WebSocketTestResult = {
+  url: string;
+  connected: boolean;
+  connection_time_ms: number;
+  protocol?: string;
+  subprotocol?: string;
+  findings: WebSocketFinding[];
+  messages_sent: number;
+  messages_received: number;
+  error?: string;
+  test_duration_seconds: number;
+  security_score: number;
+  owasp_api_breakdown: Record<string, number>;
+};
+
+// OWASP API Security Top 10 Types
+export type OWASPAPICategory = {
+  name: string;
+  description: string;
+  url: string;
+};
+
+export type OWASPAPITop10 = {
+  version: string;
+  categories: Record<string, OWASPAPICategory>;
+};
+
+export type APITestAIAnalysis = {
+  analysis: string;
+  recommendations: string[];
+  test_result_summary: {
+    security_score: number;
+    total_findings: number;
+    critical_count: number;
+    high_count: number;
+  };
+};
+
+// Network Discovery Types
+export type DiscoveredService = {
+  ip: string;
+  port: number;
+  url: string;
+  status_code: number;
+  server?: string;
+  title?: string;
+  is_api: boolean;
+  api_indicators: string[];
+};
+
+export type NetworkDiscoveryResult = {
+  subnet: string;
+  total_hosts_scanned: number;
+  services_found: number;
+  api_services_found: number;
+  scan_duration_seconds: number;
+  services: DiscoveredService[];
+};
+
+export type NetworkDiscoveryRequest = {
+  subnet: string;
+  ports?: number[];
+  timeout?: number;
+  max_concurrent?: number;
+  max_hosts?: number;
+  overall_timeout?: number;
+};
+
+// Target Preset Types
+export type TargetPreset = {
+  id: string;
+  name: string;
+  description: string;
+  base_url: string;
+  endpoints: { method: string; path: string }[];
+  auth_type?: string;
+  auth_value?: string;
+  headers: Record<string, string>;
+  tags: string[];
+  is_default: boolean;
+};
+
+export type PresetCreateRequest = {
+  name: string;
+  description?: string;
+  base_url: string;
+  endpoints?: { method: string; path: string }[];
+  auth_type?: string;
+  auth_value?: string;
+  headers?: Record<string, string>;
+  tags?: string[];
+};
+
+// Batch Testing Types
+export type BatchTestTarget = {
+  url: string;
+  name?: string;
+  auth_type?: string;
+  auth_value?: string;
+};
+
+export type BatchTestRequest = {
+  targets: BatchTestTarget[];
+  test_options?: Record<string, boolean>;
+  proxy_url?: string;
+  max_concurrent?: number;
+};
+
+export type BatchTargetResult = {
+  target: string;
+  name?: string;
+  success: boolean;
+  error?: string;
+  security_score: number;
+  total_findings: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  findings: any[];
+};
+
+export type BatchTestResult = {
+  total_targets: number;
+  successful: number;
+  failed: number;
+  results: BatchTargetResult[];
+  total_findings: number;
+  critical_findings: number;
+  high_findings: number;
+  scan_duration_seconds: number;
+};
+
+// OpenAPI Import Types
+export type OpenAPIEndpoint = {
+  path: string;
+  method: string;
+  summary: string;
+  description: string;
+  parameters: Array<{
+    name: string;
+    in: string;
+    required: boolean;
+    type: string;
+  }>;
+  request_body?: {
+    content_type: string;
+    required: boolean;
+    schema: any;
+  };
+  security: string[];
+  tags: string[];
+};
+
+export type OpenAPIParseResult = {
+  title: string;
+  version: string;
+  base_url: string;
+  endpoints: OpenAPIEndpoint[];
+  security_schemes: Record<string, any>;
+  total_endpoints: number;
+  methods_breakdown: Record<string, number>;
+  tags: string[];
+  errors: string[];
+};
+
+export type OpenAPIImportRequest = {
+  spec_content?: string;
+  spec_url?: string;
+};
+
+// JWT Analyzer Types
+export type JWTFinding = {
+  title: string;
+  description: string;
+  severity: string;
+  cwe?: string;
+  evidence?: string;
+  remediation?: string;
+};
+
+export type JWTAnalysisResult = {
+  valid_structure: boolean;
+  header: Record<string, any>;
+  payload: Record<string, any>;
+  signature: string;
+  algorithm: string;
+  findings: JWTFinding[];
+  is_expired: boolean;
+  expiry_time: string | null;
+  issued_at: string | null;
+  issuer: string | null;
+  audience: string | null;
+  subject: string | null;
+  raw_parts: string[];
+};
+
+export type JWTAnalyzeRequest = {
+  token: string;
+  test_weak_secrets?: boolean;
+};
+
+// Export Report Types
+export type ExportFormat = "json" | "markdown" | "pdf" | "docx";
+
+export type ExportTestResultRequest = {
+  test_result: APITestResult;
+  format: ExportFormat;
+  title?: string;
+};
+
+export type ExportBatchResultRequest = {
+  batch_result: BatchTestResult;
+  format: ExportFormat;
+  title?: string;
+};
+
+export type ExportJWTResultRequest = {
+  jwt_result: JWTAnalysisResult;
+  format: ExportFormat;
+};
+
+export type ExportAutoTestResultRequest = {
+  auto_test_result: AIAutoTestResult;
+  format: ExportFormat;
+  title?: string;
+};
+
+export type ExportWebSocketResultRequest = {
+  websocket_result: WebSocketTestResult;
+  format: ExportFormat;
+  title?: string;
+};
+
+// Chat types for API Tester
+export type APITesterChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type APITesterChatRequest = {
+  message: string;
+  conversation_history: APITesterChatMessage[];
+  context: {
+    test_result?: APITestResult;
+    batch_result?: BatchTestResult;
+    jwt_result?: JWTAnalysisResult;
+    openapi_result?: OpenAPIParseResult;
+  };
+};
+
+export type APITesterChatResponse = {
+  response: string;
+  error?: string;
+};
+
+// AI Auto-Test types
+export type AIAutoTestRequest = {
+  target: string;
+  ports?: number[];
+  probe_endpoints?: boolean;
+  run_security_tests?: boolean;
+  max_endpoints?: number;
+  timeout?: number;
+  network_timeout?: number;  // For CIDR/network scans - lower = faster
+  max_concurrent?: number;   // Concurrent connections for network scans
+  proxy_url?: string;
+};
+
+export type AIAutoTestResult = {
+  target: string;
+  target_type: string;
+  discovered_services: Array<{
+    port: number;
+    scheme: string;
+    url: string;
+    status_code: number;
+    content_type: string;
+    server: string;
+  }>;
+  discovered_endpoints: Array<{
+    path: string;
+    url: string;
+    method: string;
+    status_code: number;
+    content_type: string;
+    is_json: boolean;
+    is_html: boolean;
+    requires_auth: boolean;
+  }>;
+  test_results: Array<{
+    base_url: string;
+    endpoints_tested: number;
+    security_score: number;
+    findings_count: number;
+  }>;
+  all_findings: APITestFinding[];
+  total_findings: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  info_count: number;
+  security_score: number;
+  ai_summary: string;
+  scan_duration_seconds: number;
+  error?: string;
+};
+
+// Add to apiClient object
+export const apiTester = {
+  // Run comprehensive API security test
+  testAPI: async (request: APITestRequest): Promise<APITestResult> => {
+    const resp = await fetch(`${API_URL}/api-tester/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Quick scan a single endpoint
+  quickScan: async (request: APIQuickScanRequest): Promise<APITestResult> => {
+    const resp = await fetch(`${API_URL}/api-tester/quick-scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get AI analysis of test results
+  analyzeResults: async (testResult: APITestResult): Promise<APITestAIAnalysis> => {
+    const resp = await fetch(`${API_URL}/api-tester/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ test_result: testResult }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get common test payloads
+  getPayloads: async (): Promise<Record<string, string[]>> => {
+    const resp = await fetch(`${API_URL}/api-tester/payloads`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get security headers reference
+  getSecurityHeadersInfo: async (): Promise<Record<string, { description: string; recommended: string }>> => {
+    const resp = await fetch(`${API_URL}/api-tester/security-headers`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Test WebSocket endpoint for security vulnerabilities
+  testWebSocket: async (request: WebSocketTestRequest): Promise<WebSocketTestResult> => {
+    const resp = await fetch(`${API_URL}/api-tester/websocket-test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get OWASP API Security Top 10 reference
+  getOWASPAPITop10: async (): Promise<OWASPAPITop10> => {
+    const resp = await fetch(`${API_URL}/api-tester/owasp-api-top10`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get WebSocket test payloads
+  getWebSocketPayloads: async (): Promise<Record<string, string[]>> => {
+    const resp = await fetch(`${API_URL}/api-tester/websocket-payloads`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Discover HTTP/API services on a network
+  discoverServices: async (request: NetworkDiscoveryRequest): Promise<NetworkDiscoveryResult> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), (request.overall_timeout || 120) * 1000 + 10000); // Add 10s buffer
+    
+    try {
+      const resp = await fetch(`${API_URL}/api-tester/discover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error(`Network discovery timed out after ${request.overall_timeout || 120}s`);
+      }
+      throw err;
+    }
+  },
+
+  // Get all target presets
+  getPresets: async (): Promise<TargetPreset[]> => {
+    const resp = await fetch(`${API_URL}/api-tester/presets`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Create a new target preset
+  createPreset: async (preset: PresetCreateRequest): Promise<TargetPreset> => {
+    const resp = await fetch(`${API_URL}/api-tester/presets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(preset),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a target preset
+  deletePreset: async (presetId: string): Promise<{ status: string; id: string }> => {
+    const resp = await fetch(`${API_URL}/api-tester/presets/${presetId}`, {
+      method: "DELETE",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Run batch test on multiple targets
+  batchTest: async (request: BatchTestRequest): Promise<BatchTestResult> => {
+    const resp = await fetch(`${API_URL}/api-tester/batch-test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Import OpenAPI/Swagger specification
+  importOpenAPI: async (request: OpenAPIImportRequest): Promise<OpenAPIParseResult> => {
+    const resp = await fetch(`${API_URL}/api-tester/import-openapi`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Analyze JWT token for security issues
+  analyzeJWT: async (request: JWTAnalyzeRequest): Promise<JWTAnalysisResult> => {
+    const resp = await fetch(`${API_URL}/api-tester/analyze-jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Export test result as JSON, Markdown, PDF, or Word
+  exportTestResult: async (request: ExportTestResultRequest): Promise<Blob | string> => {
+    const resp = await fetch(`${API_URL}/api-tester/export/test-result`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    // Return blob for binary formats, text for others
+    if (request.format === "pdf" || request.format === "docx") {
+      return resp.blob();
+    }
+    return resp.text();
+  },
+
+  // Export batch result as JSON, Markdown, PDF, or Word
+  exportBatchResult: async (request: ExportBatchResultRequest): Promise<Blob | string> => {
+    const resp = await fetch(`${API_URL}/api-tester/export/batch-result`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    if (request.format === "pdf" || request.format === "docx") {
+      return resp.blob();
+    }
+    return resp.text();
+  },
+
+  // Export JWT analysis result as JSON, Markdown, PDF, or Word
+  exportJWTResult: async (request: ExportJWTResultRequest): Promise<Blob | string> => {
+    const resp = await fetch(`${API_URL}/api-tester/export/jwt-result`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    if (request.format === "pdf" || request.format === "docx") {
+      return resp.blob();
+    }
+    return resp.text();
+  },
+
+  // Export AI Auto-Test result as JSON, Markdown, PDF, or Word
+  exportAutoTestResult: async (request: ExportAutoTestResultRequest): Promise<Blob | string> => {
+    const resp = await fetch(`${API_URL}/api-tester/export/auto-test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    if (request.format === "pdf" || request.format === "docx") {
+      return resp.blob();
+    }
+    return resp.text();
+  },
+
+  // Export WebSocket test result as JSON, Markdown, PDF, or Word
+  exportWebSocketResult: async (request: ExportWebSocketResultRequest): Promise<Blob | string> => {
+    const resp = await fetch(`${API_URL}/api-tester/export/websocket`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    if (request.format === "pdf" || request.format === "docx") {
+      return resp.blob();
+    }
+    return resp.text();
+  },
+
+  // Chat with AI about API security test results
+  chatAboutTests: async (request: APITesterChatRequest): Promise<APITesterChatResponse> => {
+    const resp = await fetch(`${API_URL}/api-tester/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // AI Auto-Test - Automated security testing for IPs, URLs, domains
+  aiAutoTest: async (request: AIAutoTestRequest): Promise<AIAutoTestResult> => {
+    const resp = await fetch(`${API_URL}/api-tester/auto-test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();

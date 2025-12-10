@@ -165,6 +165,9 @@ VRAgent includes a comprehensive **Security Learning Hub** with educational cont
 | **Network Analysis Hub Guide** | Complete guide to VRAgent's network security tools with use cases and workflows |
 | **Wireshark Essentials** | Beginner-friendly guide to packet analysis, display/capture filters, and security use cases |
 | **Nmap Essentials** | Comprehensive Nmap guide covering scan types, NSE scripts, timing, and real-world scenarios |
+| **SSL/TLS Security Guide** | SSL/TLS scanning, certificate validation, CVE detection, and cipher analysis |
+| **DNS Reconnaissance Guide** | Complete guide to DNS enumeration, record types, email security (SPF/DMARC/DKIM), and zone transfers |
+| **Traceroute Guide** | Network path analysis, latency interpretation, troubleshooting, and security implications |
 
 ### Reports & Exports
 - **Multiple Export Formats**: Generate professional reports in:
@@ -208,6 +211,13 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
 - **AI Chat**: Interactive chat to discuss scan results with Gemini AI
 - **Report Management**: Save, view, and delete scan reports
 - **Export Options**: Download reports as Markdown, PDF, or DOCX
+- **Interactive Network Graph**: Force-directed visualization of scan results
+  - Scanner node as central hub connected to discovered hosts
+  - Host nodes (squares) color-coded by risk level (green/blue/orange/red)
+  - Service/port nodes (circles) color-coded by type (web, database, remote access, mail)
+  - Interactive zoom, pan, and hover tooltips
+  - Legend showing node types and risk levels
+  - Works with both uploaded files and live scans
 
 #### PCAP Analyzer
 - **Live Packet Capture**: Capture network traffic directly (requires tshark)
@@ -222,6 +232,13 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
   - DNS queries and responses
   - HTTP requests and responses
   - Suspicious patterns detection
+- **Deep Protocol Decoding**: Advanced packet analysis with credential extraction
+  - HTTP transaction analysis (requests/responses, authentication headers)
+  - DNS query analysis with suspicious pattern detection (tunneling, DGA)
+  - FTP session reconstruction with command/response tracking
+  - SMTP session analysis with authentication extraction
+  - Telnet session decoding
+  - Generic credential extraction from TCP payloads
 - **AI-Powered Security Analysis**: Gemini AI analyzes traffic for:
   - Security threats and anomalies
   - Protocol-specific vulnerabilities
@@ -230,6 +247,183 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
   - Recommendations
 - **AI Chat**: Interactive chat to discuss PCAP analysis with Gemini AI
 - **Report Persistence**: Analysis reports saved to database for later retrieval
+
+#### SSL/TLS Scanner
+- **Multi-Target Scanning**: Scan multiple hosts simultaneously
+  - Hostname:port input (default port 443)
+  - Parallel scanning with configurable thread pool
+  - Timeout handling for unresponsive hosts
+- **Certificate Analysis**:
+  - Subject and issuer information
+  - Validity period with expiration warnings
+  - Subject Alternative Names (SANs)
+  - Public key algorithm and size
+  - Signature algorithm assessment
+  - Self-signed certificate detection
+- **Certificate Chain Validation**:
+  - Trust verification against 20+ root CAs (DigiCert, Let's Encrypt, GlobalSign, etc.)
+  - Chain completeness checking
+  - Intermediate certificate validation
+  - Self-signed detection with trust status
+- **Protocol Security**:
+  - Detection of deprecated protocols (SSLv2, SSLv3, TLS 1.0, TLS 1.1)
+  - Protocol version enumeration
+  - Secure protocol recommendations (TLS 1.2, TLS 1.3)
+- **Known Vulnerability Detection** (12 CVEs):
+  - POODLE (CVE-2014-3566) - SSL 3.0 padding oracle
+  - BEAST (CVE-2011-3389) - CBC cipher attack on TLS 1.0
+  - CRIME (CVE-2012-4929) - TLS compression attack
+  - BREACH (CVE-2013-3587) - HTTP compression attack
+  - Heartbleed (CVE-2014-0160) - OpenSSL memory disclosure
+  - FREAK (CVE-2015-0204) - Export cipher downgrade
+  - Logjam (CVE-2015-4000) - Diffie-Hellman export attack
+  - DROWN (CVE-2016-0800) - SSL 2.0 cross-protocol attack
+  - ROBOT (CVE-2017-13099) - RSA Bleichenbacher attack
+  - Lucky13 (CVE-2013-0169) - CBC timing attack
+  - Sweet32 (CVE-2016-2183) - 64-bit block cipher birthday attack
+  - ROCA (CVE-2017-15361) - Weak RSA key generation
+- **Cipher Suite Analysis**:
+  - Weak cipher detection (RC4, DES, 3DES, MD5, NULL, EXPORT)
+  - Perfect Forward Secrecy (PFS) support check
+  - AEAD cipher recommendations (AES-GCM, ChaCha20-Poly1305)
+  - Key exchange algorithm assessment
+- **Security Findings**:
+  - Severity-rated findings (Critical, High, Medium, Low, Info)
+  - CVE references with CVSS scores
+  - Detailed remediation recommendations
+- **AI-Powered Exploitation Analysis**: Gemini AI generates offensive security reports
+  - Attack scenario generation
+  - Tool recommendations (testssl.sh, sslscan, Nmap NSE, OpenSSL)
+  - Exploitation steps and PoC guidance
+  - Real-world impact assessment
+  - Evasion techniques for penetration testing
+- **Export Functionality**:
+  - Markdown export for documentation
+  - PDF reports for clients/stakeholders
+  - Word (DOCX) for editable reports
+- **Summary Statistics**: Aggregate risk scoring across all scanned hosts
+- **Learning Resources**: Comprehensive SSL/TLS Security Guide at `/learn/ssl-tls`
+
+#### DNS Reconnaissance
+- **Domain Enumeration**: Comprehensive DNS record discovery
+  - Multiple scan types: Quick, Standard, Comprehensive, Full
+  - Query all record types: A, AAAA, MX, NS, TXT, SOA, CNAME, SRV, CAA, PTR
+  - Subdomain enumeration with customizable wordlists (50-500 subdomains)
+  - Zone transfer (AXFR) vulnerability testing
+  - Reverse DNS lookups
+- **WHOIS Lookup**: Domain and IP ownership information
+  - Domain WHOIS: Registrar, registration dates, name servers, status codes
+  - IP WHOIS: Network name, CIDR, ASN, organization, abuse contact
+  - Raw WHOIS data with parsed key fields
+  - Copy to clipboard functionality
+- **Email Security Analysis**:
+  - SPF record validation and scoring
+  - DMARC policy analysis
+  - DKIM selector detection
+  - DNSSEC status checking
+  - Mail security score (0-100) with recommendations
+- **Visual Network Graph**: Interactive force-directed graph visualization
+  - Domain, subdomains, IPs, nameservers, mail servers displayed
+  - Color-coded nodes by type (domain, subdomain, IP, CNAME)
+  - Zoom, pan, and hover tooltips
+  - Shows relationships between DNS entities
+- **Real-Time Progress**: Server-Sent Events (SSE) streaming
+  - Phase-by-phase progress indicators
+  - Percentage completion for each phase
+  - Cancel button to abort long-running scans
+- **Copy to Clipboard**: One-click copying
+  - Copy individual records, IPs, subdomains
+  - "Copy All" buttons for bulk export
+  - Snackbar confirmation feedback
+- **AI-Powered Analysis**: Gemini AI security assessment
+  - Executive summary of DNS posture
+  - Key findings with severity ratings
+  - Attack surface analysis
+  - Recommended next steps
+- **AI Chat**: Interactive chat to discuss DNS findings with Gemini AI
+- **Report Management**: Save, view, and delete DNS scan reports
+- **Learning Resources**: Comprehensive DNS Reconnaissance Guide at `/learn/dns`
+
+#### Traceroute Visualization
+- **Cross-Platform Support**: Works on Windows (tracert) and Linux/macOS (traceroute)
+  - Automatic platform detection
+  - Configurable max hops (1-64)
+  - Optional hostname resolution
+  - Adjustable timeout settings
+- **Path Analysis**:
+  - Hop-by-hop visualization with latency coloring
+  - Round-trip time (RTT) measurements (3 probes per hop)
+  - Packet loss percentage calculation
+  - Timeout detection and display
+  - Destination reached confirmation
+- **Interactive Visualizations**:
+  - **Path Visualization**: Sequential hop display with color-coded latency
+  - **Network Graph**: D3.js force-directed topology showing route
+  - **Latency Chart**: Bar chart of RTT per hop
+  - **Raw Data Table**: Detailed hop statistics
+- **AI-Powered Analysis**: Gemini AI generates:
+  - Route summary and assessment
+  - Latency bottleneck identification
+  - Packet loss analysis and causes
+  - Security observations (public IPs, routing anomalies)
+  - Performance recommendations
+- **AI Chat**: Interactive chat to discuss traceroute findings
+- **Quick Targets**: Pre-configured targets (Google DNS, Cloudflare, etc.)
+- **Export Functionality**: Copy results to clipboard
+- **Report Management**: Save, view, and delete traceroute reports
+- **Learning Resources**: Comprehensive Traceroute Guide at `/learn/traceroute`
+
+#### API Endpoint Tester
+- **9 Specialized Testing Modes** (organized in tabs):
+  - **AI Auto-Test**: Automated CIDR network scanning - discovers and tests all HTTP services in a network range
+  - **Network Discovery**: Scan IP ranges/subnets to find live HTTP/API services
+  - **Test Builder**: Manual single-endpoint security testing with full request configuration
+  - **OpenAPI Import**: Import Swagger/OpenAPI specs to test all documented endpoints
+  - **Batch Testing**: Test multiple endpoints simultaneously with aggregate scoring
+  - **WebSocket Testing**: Dedicated WebSocket security tests (XSS, CSWSH, auth bypass)
+  - **JWT Testing**: Token analysis, algorithm confusion, claim validation
+  - **Results Tab**: Unified view of all test results with multi-format export
+  - **AI Analysis**: AI-powered exploitation guidance and remediation advice
+- **CIDR Network Scanning**: 
+  - Supports networks up to /16 with configurable max hosts
+  - Automatic HTTP service discovery on common ports (80, 443, 8080, 8443, 3000, 5000, 8000)
+  - Configurable overall timeout and per-host timeout to prevent crashes
+  - Concurrent connection control for performance tuning
+- **Comprehensive Security Tests**:
+  - Security header analysis (8 headers: CSP, HSTS, X-Frame-Options, etc.)
+  - CORS misconfiguration detection (origin reflection, wildcard, credentials)
+  - Authentication bypass testing (method tampering, missing auth)
+  - Rate limiting detection (20 rapid requests test)
+  - Input validation (SQL injection, XSS, command injection, path traversal)
+  - HTTP method enumeration (dangerous methods: PUT, DELETE, TRACE)
+  - Sensitive data exposure (API keys, tokens, passwords, emails, IPs)
+  - Error handling analysis (verbose errors, stack traces, debug info)
+  - GraphQL introspection testing (schema exposure, batch queries)
+- **Multi-Format Export**: All result types exportable as JSON, Markdown, PDF, or DOCX
+- **Authentication Support**: Bearer Token, Basic Auth, API Key (header/query)
+- **Security Scoring**: 0-100 score based on findings severity
+- **Air-Gapped Ready**: All core features work without internet (only AI Analysis requires Gemini API)
+- **Learning Resources**: Comprehensive API Endpoint Tester Guide at `/learn/api-testing`
+
+#### Network Topology Graph
+- **D3.js Visualization**: Interactive force-directed network graph
+  - Zoom and pan controls
+  - Draggable nodes with physics simulation
+  - Toggle labels on/off
+  - Adjustable link strength
+- **Node Types**: Visual differentiation by shape
+  - Circles for hosts
+  - Rectangles for routers/switches
+  - Diamonds for services
+- **Risk Visualization**: Color-coded by risk level
+  - Red for critical risk
+  - Orange for high risk
+  - Yellow for medium risk
+  - Green for low/no risk
+- **Interactive Features**:
+  - Hover tooltips with node details
+  - Click handlers for detailed inspection
+  - Dynamic graph updates
 
 ## 🏗️ Architecture
 
@@ -1108,11 +1302,40 @@ The frontend will be available at http://localhost:5173
 | `GET` | `/network/pcap/interfaces` | List network interfaces |
 | `POST` | `/network/pcap/validate-filter` | Validate BPF filter |
 | `GET` | `/network/pcap/status` | Check capture status |
+| `POST` | `/network/pcap/decode-protocols` | Deep protocol analysis (credentials, HTTP, DNS, etc.) |
+| `GET` | `/network/pcap/decoder-status` | Check pyshark availability |
+| `POST` | `/network/ssl/scan` | Scan multiple SSL/TLS targets |
+| `GET` | `/network/ssl/scan-single` | Quick single host SSL scan |
 | `GET` | `/network/reports` | List saved network reports |
 | `GET` | `/network/reports/{id}` | Get specific report |
 | `DELETE` | `/network/reports/{id}` | Delete a report |
 | `GET` | `/network/reports/{id}/export/{format}` | Export report (markdown/pdf/docx) |
 | `POST` | `/network/chat` | Chat with AI about analysis results |
+| `GET` | `/dns/scan-types` | List available DNS scan types |
+| `POST` | `/dns/scan` | Run DNS reconnaissance scan |
+| `POST` | `/dns/scan/stream` | Run DNS scan with SSE progress streaming |
+| `POST` | `/dns/validate` | Validate domain name |
+| `GET` | `/dns/whois/status` | Check WHOIS command availability |
+| `POST` | `/dns/whois/domain` | WHOIS lookup for domain name |
+| `POST` | `/dns/whois/ip` | WHOIS lookup for IP address |
+| `GET` | `/dns/reports` | List saved DNS reports |
+| `GET` | `/dns/reports/{id}` | Get specific DNS report |
+| `DELETE` | `/dns/reports/{id}` | Delete a DNS report |
+| `POST` | `/dns/chat` | Chat with AI about DNS findings |
+| `POST` | `/api-tester/test` | Run comprehensive API security test |
+| `POST` | `/api-tester/quick-scan` | Quick single endpoint security scan |
+| `POST` | `/api-tester/auto-test` | AI Auto-Test with CIDR network scanning |
+| `POST` | `/api-tester/network-discovery` | Discover HTTP services in IP range |
+| `POST` | `/api-tester/batch-test` | Test multiple endpoints simultaneously |
+| `POST` | `/api-tester/websocket-test` | WebSocket security testing |
+| `POST` | `/api-tester/analyze` | AI analysis of API test results |
+| `POST` | `/api-tester/export/test-result` | Export test results (JSON/MD/PDF/DOCX) |
+| `POST` | `/api-tester/export/batch-result` | Export batch test results |
+| `POST` | `/api-tester/export/auto-test-result` | Export AI Auto-Test results |
+| `POST` | `/api-tester/export/jwt-result` | Export JWT analysis results |
+| `POST` | `/api-tester/export/websocket` | Export WebSocket test results |
+| `GET` | `/api-tester/payloads` | Get test payloads reference |
+| `GET` | `/api-tester/security-headers` | Get security headers reference |
 
 Full interactive documentation available at `/docs` when running the backend.
 
@@ -1189,6 +1412,7 @@ VRAgent/
 │   │   ├── nvd_service.py            # NVD CVE enrichment
 │   │   ├── pcap_service.py           # PCAP analysis & capture
 │   │   ├── project_service.py        # Project management
+│   │   ├── protocol_decoder_service.py # Deep protocol analysis for PCAP
 │   │   ├── reachability_service.py   # Call graph & reachability analysis
 │   │   ├── report_service.py         # Report creation
 │   │   ├── sbom_service.py           # SBOM generation (CycloneDX/SPDX)
@@ -1196,6 +1420,7 @@ VRAgent/
 │   │   ├── secret_service.py         # Secret detection
 │   │   ├── semgrep_service.py        # Multi-language SAST (Semgrep)
 │   │   ├── spotbugs_service.py       # Java/Kotlin scanning (SpotBugs)
+│   │   ├── ssl_scanner_service.py    # SSL/TLS security scanning
 │   │   ├── transitive_deps_service.py # Transitive dependency analysis
 │   │   ├── webhook_service.py        # Webhook notifications
 │   │   └── websocket_service.py      # Real-time updates
@@ -1230,11 +1455,17 @@ VRAgent/
             ├── ProjectListPage.tsx      # Project listing
             ├── ProjectDetailPage.tsx    # Project details & scans
             ├── ReportDetailPage.tsx     # Scan report view
-            ├── NetworkAnalysisHub.tsx   # Network tools hub
+            ├── NetworkAnalysisHub.tsx   # Network tools hub (5 tools)
             ├── NmapAnalyzerPage.tsx     # Nmap scanning & analysis
             ├── PcapAnalyzerPage.tsx     # PCAP capture & analysis
+            ├── SSLScannerPage.tsx       # SSL/TLS security scanning
+            ├── DNSAnalyzerPage.tsx      # DNS reconnaissance & enumeration
+            ├── TracerouteAnalyzerPage.tsx # Traceroute visualization
             ├── LearnHubPage.tsx         # Security learning hub
-            └── [Learning Pages]         # Educational content (17 topics)
+            └── [Learning Pages]         # Educational content (22 topics)
+        └── components/
+            ├── NetworkTopologyGraph.tsx # D3.js network visualization
+            └── [Other Components]       # Form components, progress indicators
 ```
 
 ## ⚙️ Configuration
@@ -1529,7 +1760,217 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📋 Changelog
 
-### December 7, 2025 (Latest)
+### December 9, 2025 (Latest)
+
+#### API Endpoint Tester - Major Enhancement
+
+**9 Specialized Testing Tabs:**
+- Tab reorganization for better workflow organization
+- New AI Auto-Test tab with CIDR network scanning capabilities
+- Dedicated JWT Testing tab for token security analysis
+- Unified Results tab with multi-format export support
+- All tabs now support export to JSON, Markdown, PDF, and DOCX
+
+**AI Auto-Test with CIDR Network Scanning:**
+- Enter a CIDR range (e.g., 192.168.1.0/24) for automated discovery
+- Supports networks up to /16 (65,536 hosts)
+- Configurable max_hosts limit to control scan scope
+- Overall timeout and per-host timeout settings to prevent crashes
+- Concurrent connection control for performance tuning
+- Automatic HTTP service discovery on common ports
+- Batch security testing of all discovered services
+
+**Network Discovery Improvements:**
+- Fixed timeout handling to prevent crashes on large scans
+- Added max_hosts parameter (default: 256)
+- Added overall_timeout parameter (default: 300 seconds)
+- Better error handling for unreachable hosts
+- Progress indication during discovery
+
+**JWT Testing Tab:**
+- Token decoding with header and payload display
+- Algorithm analysis (detects weak algorithms like none, HS256)
+- Claim validation (exp, iat, nbf, iss, aud)
+- Signature verification guidance
+- Export JWT analysis results
+
+**WebSocket Testing Enhancements:**
+- Added export buttons for WebSocket test results
+- Export to JSON, Markdown, PDF, or DOCX formats
+- Full backend support with WebSocket-specific export functions
+
+**Results Tab Improvements:**
+- Fixed bug where AI Auto-Test results weren't displayed
+- Now shows results from whichever test was run (Auto-Test, Test Builder, etc.)
+- Added "No Results Yet" placeholder when no tests have been run
+- Export buttons for all result types
+
+**Updated API Endpoints:**
+- `POST /api-tester/auto-test` - AI Auto-Test with CIDR support
+- `POST /api-tester/network-discovery` - Network discovery with timeout params
+- `POST /api-tester/export/websocket` - Export WebSocket results
+- `POST /api-tester/export/jwt-result` - Export JWT analysis
+
+---
+
+#### WHOIS Lookup - New Feature in DNS Reconnaissance
+
+**Domain WHOIS Lookup:**
+- Registrar and registration URL
+- Creation, expiration, and update dates
+- Name servers with copy functionality
+- Domain status codes (clientTransferProhibited, etc.)
+- Registrant organization and country (when not privacy-protected)
+- DNSSEC signing status
+- Raw WHOIS data toggle
+
+**IP WHOIS Lookup:**
+- Network name and CIDR range
+- ASN (Autonomous System Number) and ASN name
+- Organization that owns the IP block
+- Country of registration
+- Regional Internet Registry (ARIN, RIPE, APNIC, LACNIC, AFRINIC)
+- Abuse contact email for incident reporting
+- Raw WHOIS data toggle
+
+**Backend Implementation:**
+- New `is_whois_available()` function checks system `whois` command
+- `WhoisDomainResult` and `WhoisIPResult` dataclasses for structured data
+- `run_whois_domain()` and `run_whois_ip()` functions with regex parsing
+- Docker container updated with `whois` package installed
+
+**API Endpoints:**
+- `GET /dns/whois/status` - Check WHOIS availability
+- `POST /dns/whois/domain` - Domain WHOIS lookup
+- `POST /dns/whois/ip` - IP address WHOIS lookup
+
+**Frontend UI:**
+- New "WHOIS Lookup" tab in DNS Reconnaissance page
+- Toggle between Domain and IP lookup modes
+- Quick lookup suggestions (google.com, 8.8.8.8, etc.)
+- Parsed results displayed in organized cards
+- Color-coded sections for different data types
+- Raw WHOIS data accordion
+- Copy to clipboard functionality
+
+**Documentation Updates:**
+- DNS Guide page updated with WHOIS section
+- Network Analysis Hub guide updated
+- README API reference updated
+
+---
+
+### December 8, 2025
+
+#### SSL/TLS Scanner - Major Enhancement
+
+**Certificate Chain Validation:**
+- Trust verification against 20+ root CAs (DigiCert, Let's Encrypt, GlobalSign, Amazon Trust Services, etc.)
+- Chain completeness checking and intermediate certificate validation
+- Self-signed detection with explicit trust status reporting
+
+**Known Vulnerability Detection (12 CVEs):**
+- POODLE (CVE-2014-3566) - SSL 3.0 padding oracle attack
+- BEAST (CVE-2011-3389) - CBC cipher attack on TLS 1.0
+- CRIME (CVE-2012-4929) - TLS compression vulnerability
+- BREACH (CVE-2013-3587) - HTTP compression attack
+- Heartbleed (CVE-2014-0160) - OpenSSL memory disclosure
+- FREAK (CVE-2015-0204) - Export cipher downgrade attack
+- Logjam (CVE-2015-4000) - Diffie-Hellman export vulnerability
+- DROWN (CVE-2016-0800) - SSL 2.0 cross-protocol attack
+- ROBOT (CVE-2017-13099) - RSA Bleichenbacher oracle
+- Lucky13 (CVE-2013-0169) - CBC timing side-channel
+- Sweet32 (CVE-2016-2183) - 64-bit block cipher birthday attack
+- ROCA (CVE-2017-15361) - Weak RSA key generation in Infineon chips
+
+**AI Exploitation Analysis:**
+- Offensive security-focused AI reports with attack scenarios
+- Tool recommendations (testssl.sh, sslscan, Nmap NSE, OpenSSL, Metasploit)
+- Step-by-step exploitation guidance for penetration testers
+- Real-world impact assessment and evasion techniques
+
+**Export Functionality:**
+- Markdown export for documentation and wikis
+- PDF reports for client deliverables
+- Word (DOCX) export for editable reports
+- Includes certificate details, vulnerabilities, chain validation, and AI analysis
+
+**New Learning Page:**
+- Comprehensive SSL/TLS Security Guide at `/learn/ssl-tls`
+- Explains all 12 CVEs with full descriptions and mitigations
+- Protocol version security assessment (SSL 2.0-TLS 1.3)
+- Cipher suite analysis categories and best practices
+- Remediation guidance and industry recommendations
+
+**Frontend Enhancements:**
+- Vulnerability detection table with severity chips and CVE/CVSS info
+- Certificate chain validation display with trust status
+- Tabbed AI analysis interface for organized viewing
+- Export dropdown with format selection
+
+---
+
+### December 8, 2025
+
+#### Network Analysis Hub - New Features
+
+**SSL/TLS Scanner:**
+- New dedicated SSL/TLS security scanner accessible from Network Analysis Hub
+- **Multi-Target Scanning**: Scan multiple hosts simultaneously with parallel execution
+- **Certificate Analysis**:
+  - Subject, issuer, validity period with expiration warnings
+  - Subject Alternative Names (SANs)
+  - Key size and algorithm assessment
+  - Self-signed certificate detection
+- **Protocol Security**:
+  - Detects deprecated protocols (SSLv2, SSLv3, TLS 1.0, TLS 1.1)
+  - Known vulnerability flagging (POODLE, BEAST, DROWN, FREAK, CRIME)
+- **Cipher Suite Analysis**:
+  - Weak cipher detection (RC4, DES, 3DES, MD5, NULL, EXPORT)
+  - Perfect Forward Secrecy (PFS) support check
+- **Complete Frontend UI**: Full-featured SSL Scanner page at `/network/ssl`
+- **AI Analysis**: Gemini AI generates comprehensive security reports
+
+**Deep Protocol Decoders for PCAP:**
+- New `protocol_decoder_service.py` with pyshark integration
+- **Credential Extraction**:
+  - HTTP Basic Authentication decoding
+  - FTP credentials (USER/PASS commands)
+  - SMTP authentication
+  - Telnet session credentials
+  - Generic API key/token extraction from TCP payloads
+- **HTTP Transaction Analysis**:
+  - Request/response pairing
+  - Security header analysis
+  - Sensitive form field detection
+  - API endpoint cataloging
+- **DNS Query Analysis**:
+  - Suspicious pattern detection (tunneling, DGA domains)
+  - Unusual TLD flagging
+  - High-entropy subdomain detection
+- **Protocol Reconstruction**: FTP, SMTP, Telnet session analysis
+
+**Network Topology Graph:**
+- New D3.js-powered interactive network visualization component
+- **Force-Directed Layout**: Physics-based node positioning
+- **Interactive Controls**:
+  - Zoom and pan
+  - Draggable nodes
+  - Toggle labels on/off
+  - Adjustable link strength
+- **Visual Indicators**:
+  - Node shapes by type (circle/rect/diamond)
+  - Risk-based coloring (red/orange/yellow/green)
+  - Hover tooltips with details
+- Reusable component for PCAP and Nmap analyzer pages
+
+**New Dependencies:**
+- Backend: `cryptography>=41.0`, `pyshark>=0.6`
+- Frontend: `d3@^7.8.5`, `@types/d3@^7.4.3`
+
+---
+
+### December 7, 2025
 
 #### Codebase Map Enhancements
 

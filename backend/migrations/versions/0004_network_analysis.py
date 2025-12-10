@@ -1,7 +1,7 @@
 """Add network_analysis_reports table
 
-Revision ID: 0004_network_analysis
-Revises: 0003_nullable_finding_id
+Revision ID: 0004
+Revises: 0003
 Create Date: 2025-01-15 12:00:00.000000
 """
 from alembic import op
@@ -9,8 +9,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
 # revision identifiers, used by Alembic.
-revision = '0004_network_analysis'
-down_revision = '0003_nullable_finding_id'
+revision = '0004'
+down_revision = '0003'
 branch_labels = None
 depends_on = None
 

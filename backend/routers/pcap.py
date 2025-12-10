@@ -55,6 +55,9 @@ class PcapSummaryResponse(BaseModel):
     dns_queries: List[str]
     http_hosts: List[str]
     potential_issues: int
+    # Network topology for visualization
+    topology_nodes: List[dict] = []
+    topology_links: List[dict] = []
 
 
 class PcapAnalysisResponse(BaseModel):
@@ -213,6 +216,8 @@ async def analyze_pcaps(
                     dns_queries=result.summary.dns_queries,
                     http_hosts=result.summary.http_hosts,
                     potential_issues=result.summary.potential_issues,
+                    topology_nodes=result.summary.topology_nodes,
+                    topology_links=result.summary.topology_links,
                 ),
                 findings=[
                     PcapFindingResponse(

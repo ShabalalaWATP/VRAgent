@@ -563,6 +563,24 @@ export default function NmapGuidePage() {
             or run new scans from the interface!
           </Typography>
         </Paper>
+
+        {/* Network Graph Feature Highlight */}
+        <Paper
+          sx={{
+            p: 2,
+            mt: 2,
+            borderRadius: 2,
+            bgcolor: alpha("#06b6d4", 0.05),
+            border: `1px solid ${alpha("#06b6d4", 0.2)}`,
+          }}
+        >
+          <Typography variant="body2">
+            <strong>🕸️ Network Graph Visualization:</strong> VRAgent includes an interactive force-directed 
+            network graph that visualizes your scan results. See discovered hosts as nodes connected to the 
+            scanner, with services branching from each host. Nodes are color-coded by risk level (hosts) and 
+            service type (ports). Perfect for understanding network topology and identifying high-risk systems!
+          </Typography>
+        </Paper>
       </Paper>
 
       {/* Getting Started - Stepper */}
@@ -1077,9 +1095,9 @@ export default function NmapGuidePage() {
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
           Ready to Scan?
         </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: "auto" }}>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 600, mx: "auto" }}>
           Run Nmap scans directly from VRAgent or upload existing XML files for AI-powered 
-          security analysis and vulnerability insights!
+          security analysis, interactive network graph visualization, and vulnerability insights!
         </Typography>
         <Box sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
           <Button

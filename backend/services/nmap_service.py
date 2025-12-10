@@ -759,30 +759,31 @@ IMPORTANT GUIDELINES:
 # Available scan types with descriptions - ordered from least to most intensive
 # Each scan type includes an estimated time range for a single host
 # Timeouts are generous to handle slow/distant hosts
+# Network ranges multiply time significantly - /24 can take 10-50x longer
 SCAN_TYPES = {
     "ping": {
         "name": "Ping Sweep",
-        "description": "Host discovery only - no port scanning",
-        "args": ["-sn", "-T4"],
-        "timeout": 120,
+        "description": "Host discovery only - no port scanning. Fast for finding live hosts.",
+        "args": ["-sn", "-T5", "--min-hostgroup", "64", "--max-retries", "1"],
+        "timeout": 600,  # 10 minutes for network ranges
         "requires_root": False,
-        "estimated_time": "5-30 sec",
+        "estimated_time": "5-30 sec (single) / 2-10 min (network)",
         "intensity": 1,
     },
     "quick": {
         "name": "Quick Scan",
         "description": "Top 100 ports, no service detection",
-        "args": ["-T4", "-F", "--top-ports", "100"],
-        "timeout": 300,
+        "args": ["-T5", "-F", "--top-ports", "100", "--min-hostgroup", "32"],
+        "timeout": 900,  # 15 minutes
         "requires_root": False,
-        "estimated_time": "30-60 sec",
+        "estimated_time": "30-60 sec (single) / 5-15 min (network)",
         "intensity": 2,
     },
     "stealth": {
         "name": "Stealth SYN Scan",
         "description": "SYN scan - fast and less detectable",
         "args": ["-sS", "-T4", "--top-ports", "1000"],
-        "timeout": 600,
+        "timeout": 900,
         "requires_root": False,
         "estimated_time": "1-3 min",
         "intensity": 3,
@@ -791,9 +792,9 @@ SCAN_TYPES = {
         "name": "Basic Scan",
         "description": "Top 1000 ports with service detection",
         "args": ["-sV", "-sC", "-T4", "--top-ports", "1000"],
-        "timeout": 900,
+        "timeout": 1800,  # 30 minutes
         "requires_root": False,
-        "estimated_time": "3-10 min",
+        "estimated_time": "3-10 min (single) / 15-45 min (network)",
         "intensity": 4,
     },
     "version": {
@@ -1029,10 +1030,28 @@ def run_nmap_scan(
     cmd.append(target)
     
     command_str = " ".join(cmd)
-    logger.info(f"Running Nmap scan: {command_str}")
+    
+    # Calculate dynamic timeout based on target size
+    base_timeout = scan_config["timeout"]
+    timeout = base_timeout
+    
+    # Check if target is a CIDR range and increase timeout accordingly
+    if "/" in target:
+        try:
+            network = ipaddress.ip_network(target, strict=False)
+            num_hosts = network.num_addresses
+            # For /24 (256 hosts), multiply by 2
+            # For /16 (65536 hosts), cap at a reasonable max
+            if num_hosts > 1:
+                multiplier = min(num_hosts / 128, 10)  # Max 10x base timeout
+                timeout = int(base_timeout * max(1, multiplier))
+                logger.info(f"Network range {target} has {num_hosts} hosts, timeout adjusted to {timeout}s (base: {base_timeout}s)")
+        except ValueError:
+            pass  # Not a valid CIDR, use base timeout
+    
+    logger.info(f"Running Nmap scan: {command_str} (timeout: {timeout}s)")
     
     try:
-        timeout = scan_config["timeout"]
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -1063,7 +1082,7 @@ def run_nmap_scan(
         return output_file, command_str, None
         
     except subprocess.TimeoutExpired:
-        return None, command_str, f"Scan timed out after {scan_config['timeout']} seconds. Try a quicker scan type."
+        return None, command_str, f"Scan timed out after {timeout} seconds. For network ranges, consider using 'ping' sweep first to find live hosts, then scan specific IPs."
     except PermissionError as e:
         logger.error(f"Permission error running nmap: {e}")
         return None, command_str, "Permission denied. The server needs root privileges for nmap scans."

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -39,6 +39,7 @@ import {
   FormHelperText,
   LinearProgress,
   Collapse,
+  Snackbar,
 } from "@mui/material";
 import { Link, useSearchParams } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
@@ -54,6 +55,7 @@ import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import ArticleIcon from "@mui/icons-material/Article";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import HubIcon from "@mui/icons-material/Hub";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import ShieldIcon from "@mui/icons-material/Shield";
 import BugReportIcon from "@mui/icons-material/BugReport";
@@ -68,7 +70,10 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import HistoryIcon from "@mui/icons-material/History";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import TerminalIcon from "@mui/icons-material/Terminal";
 import ReactMarkdown from "react-markdown";
+import ForceGraph2D from "react-force-graph-2d";
 import { apiClient, NmapAnalysisResult, NmapScanType, ChatMessage, SavedNetworkReport } from "../api/client";
 
 // Structured Report Section Component (similar to PCAP)
@@ -374,6 +379,291 @@ const StructuredReportSection: React.FC<{ aiReport: any }> = ({ aiReport }) => {
   );
 };
 
+// Network Graph Component for Nmap visualization
+function NmapNetworkGraph({ result }: { result: NmapAnalysisResult }) {
+  const theme = useTheme();
+  const graphRef = useRef<any>();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
+
+  // Update dimensions on resize
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const { width } = containerRef.current.getBoundingClientRect();
+        setDimensions({ width: width || 800, height: 500 });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener("resize", updateDimensions);
+    return () => window.removeEventListener("resize", updateDimensions);
+  }, []);
+
+  // Build graph data from Nmap results
+  const graphData = useMemo(() => {
+    const nodes: Array<{ id: string; name: string; type: string; color: string; size: number; ports?: number }> = [];
+    const links: Array<{ source: string; target: string; label?: string }> = [];
+    const nodeSet = new Set<string>();
+
+    // Add scanner as central node
+    const scannerId = "scanner:nmap";
+    nodes.push({
+      id: scannerId,
+      name: "Scanner",
+      type: "scanner",
+      color: "#7c3aed",
+      size: 25,
+    });
+    nodeSet.add(scannerId);
+
+    // Process each analysis (each file/scan)
+    result.analyses.forEach((analysis) => {
+      if (!analysis.hosts) return;
+
+      analysis.hosts.forEach((host: any) => {
+        const hostId = `host:${host.ip}`;
+        const portCount = host.ports?.length || 0;
+
+        // Determine host risk level based on ports/services
+        let hostColor = "#10b981"; // Green for low risk
+        let hostSize = 15;
+
+        if (portCount > 10) {
+          hostColor = "#dc2626"; // Red for many ports
+          hostSize = 22;
+        } else if (portCount > 5) {
+          hostColor = "#f59e0b"; // Orange for medium
+          hostSize = 18;
+        } else if (portCount > 0) {
+          hostColor = "#3b82f6"; // Blue for some ports
+          hostSize = 16;
+        }
+
+        // Check for high-risk services
+        const hasHighRiskService = host.ports?.some((p: any) =>
+          ["ssh", "telnet", "ftp", "rdp", "smb", "vnc", "mysql", "mssql", "postgres"].includes(
+            p.service?.toLowerCase()
+          )
+        );
+        if (hasHighRiskService) {
+          hostColor = "#ea580c";
+          hostSize = Math.max(hostSize, 18);
+        }
+
+        if (!nodeSet.has(hostId)) {
+          nodes.push({
+            id: hostId,
+            name: host.hostname || host.ip,
+            type: "host",
+            color: hostColor,
+            size: hostSize,
+            ports: portCount,
+          });
+          nodeSet.add(hostId);
+          links.push({ source: scannerId, target: hostId });
+        }
+
+        // Add port/service nodes for hosts with ports (limit per host for performance)
+        if (host.ports && host.ports.length > 0) {
+          const portsToShow = host.ports.slice(0, 10); // Limit to 10 ports per host
+          portsToShow.forEach((port: any) => {
+            const serviceLabel = port.service || `port-${port.port}`;
+            const portId = `service:${host.ip}:${port.port}`;
+
+            // Determine service color based on risk
+            let serviceColor = "#6b7280"; // Default gray
+            const serviceName = port.service?.toLowerCase() || "";
+
+            if (["ssh", "telnet", "ftp"].includes(serviceName)) {
+              serviceColor = "#dc2626"; // Red - Remote access
+            } else if (["http", "https"].includes(serviceName)) {
+              serviceColor = "#3b82f6"; // Blue - Web
+            } else if (["mysql", "mssql", "postgres", "oracle", "mongodb"].includes(serviceName)) {
+              serviceColor = "#f59e0b"; // Orange - Databases
+            } else if (["smb", "netbios", "rdp", "vnc"].includes(serviceName)) {
+              serviceColor = "#ea580c"; // Dark orange - Windows/Remote
+            } else if (["smtp", "pop3", "imap"].includes(serviceName)) {
+              serviceColor = "#8b5cf6"; // Purple - Mail
+            } else if (["dns", "domain"].includes(serviceName)) {
+              serviceColor = "#06b6d4"; // Cyan - DNS
+            }
+
+            if (!nodeSet.has(portId)) {
+              nodes.push({
+                id: portId,
+                name: `${port.port}/${serviceLabel}`,
+                type: "service",
+                color: serviceColor,
+                size: 8,
+              });
+              nodeSet.add(portId);
+            }
+            links.push({
+              source: hostId,
+              target: portId,
+              label: port.state || "open",
+            });
+          });
+        }
+      });
+    });
+
+    return { nodes, links };
+  }, [result]);
+
+  // Zoom to fit on load
+  useEffect(() => {
+    if (graphRef.current && graphData.nodes.length > 0) {
+      setTimeout(() => {
+        graphRef.current?.zoomToFit(400, 50);
+      }, 500);
+    }
+  }, [graphData, dimensions]);
+
+  return (
+    <Box
+      ref={containerRef}
+      sx={{
+        height: 500,
+        border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+        borderRadius: 2,
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      {dimensions.width > 0 && (
+        <ForceGraph2D
+          ref={graphRef}
+          graphData={graphData}
+          nodeLabel={(node: any) => {
+            if (node.type === "host") {
+              return `${node.name}${node.ports ? ` (${node.ports} ports)` : ""}`;
+            }
+            return `${node.type}: ${node.name}`;
+          }}
+          nodeColor={(node: any) => node.color}
+          nodeVal={(node: any) => node.size}
+          linkColor={() => alpha(theme.palette.text.primary, 0.2)}
+          linkWidth={1}
+          linkDirectionalParticles={1}
+          linkDirectionalParticleWidth={2}
+          nodeCanvasObject={(node: any, ctx, globalScale) => {
+            const label = node.name.length > 15 ? node.name.slice(0, 13) + "..." : node.name;
+            const fontSize = Math.max(10 / globalScale, 3);
+            ctx.font = `${fontSize}px Sans-Serif`;
+
+            // Draw node
+            ctx.beginPath();
+            if (node.type === "scanner") {
+              // Draw star for scanner
+              const spikes = 5;
+              const outerRadius = node.size / 2;
+              const innerRadius = outerRadius / 2;
+              let rot = (Math.PI / 2) * 3;
+              const step = Math.PI / spikes;
+
+              ctx.moveTo(node.x, node.y - outerRadius);
+              for (let i = 0; i < spikes; i++) {
+                ctx.lineTo(
+                  node.x + Math.cos(rot) * outerRadius,
+                  node.y + Math.sin(rot) * outerRadius
+                );
+                rot += step;
+                ctx.lineTo(
+                  node.x + Math.cos(rot) * innerRadius,
+                  node.y + Math.sin(rot) * innerRadius
+                );
+                rot += step;
+              }
+              ctx.lineTo(node.x, node.y - outerRadius);
+              ctx.closePath();
+            } else if (node.type === "host") {
+              // Draw square for hosts
+              const size = node.size / 2;
+              ctx.rect(node.x - size, node.y - size, size * 2, size * 2);
+            } else {
+              // Draw circle for services
+              ctx.arc(node.x, node.y, node.size / 2, 0, 2 * Math.PI);
+            }
+            ctx.fillStyle = node.color;
+            ctx.fill();
+
+            // Draw label
+            ctx.fillStyle = theme.palette.text.primary;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            ctx.fillText(label, node.x, node.y + node.size / 2 + 2);
+          }}
+          backgroundColor="transparent"
+          width={dimensions.width}
+          height={dimensions.height}
+        />
+      )}
+
+      {/* Legend */}
+      <Box
+        sx={{
+          position: "absolute",
+          bottom: 16,
+          left: 16,
+          display: "flex",
+          gap: 2,
+          flexWrap: "wrap",
+          bgcolor: alpha(theme.palette.background.paper, 0.9),
+          p: 1.5,
+          borderRadius: 1,
+          maxWidth: "calc(100% - 32px)",
+        }}
+      >
+        {[
+          { type: "Scanner", color: "#7c3aed", shape: "star" },
+          { type: "Host (Low Risk)", color: "#10b981", shape: "square" },
+          { type: "Host (Medium)", color: "#3b82f6", shape: "square" },
+          { type: "Host (High Risk)", color: "#dc2626", shape: "square" },
+          { type: "Web Service", color: "#3b82f6", shape: "circle" },
+          { type: "Database", color: "#f59e0b", shape: "circle" },
+          { type: "Remote Access", color: "#dc2626", shape: "circle" },
+          { type: "Mail", color: "#8b5cf6", shape: "circle" },
+        ].map((item) => (
+          <Box key={item.type} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Box
+              sx={{
+                width: 12,
+                height: 12,
+                borderRadius: item.shape === "circle" ? "50%" : item.shape === "square" ? "2px" : "50%",
+                bgcolor: item.color,
+                transform: item.shape === "star" ? "rotate(45deg)" : "none",
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {item.type}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+
+      {/* Node count indicator */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          bgcolor: alpha(theme.palette.background.paper, 0.9),
+          px: 2,
+          py: 1,
+          borderRadius: 1,
+        }}
+      >
+        <Typography variant="caption" color="text.secondary">
+          {graphData.nodes.filter((n) => n.type === "host").length} hosts •{" "}
+          {graphData.nodes.filter((n) => n.type === "service").length} services
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
 const NmapAnalyzerPage: React.FC = () => {
   const theme = useTheme();
   const [searchParams] = useSearchParams();
@@ -409,6 +699,102 @@ const NmapAnalyzerPage: React.FC = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Graph state
+  const [showGraph, setShowGraph] = useState(false);
+
+  // Command Builder state
+  const [cmdTarget, setCmdTarget] = useState("");
+  const [cmdScanType, setCmdScanType] = useState("basic");
+  const [cmdPorts, setCmdPorts] = useState("");
+  const [cmdOutputFormat, setCmdOutputFormat] = useState("xml");
+  const [cmdAdditionalFlags, setCmdAdditionalFlags] = useState("");
+  const [copySnackbarOpen, setCopySnackbarOpen] = useState(false);
+
+  // Command builder scan type options (defined as constant outside of render cycle)
+  const cmdScanTypes = useMemo(() => [
+    { id: "ping", name: "Ping Sweep (Host Discovery)", flags: "-sn", description: "Find live hosts without port scan" },
+    { id: "basic", name: "Basic Scan", flags: "", description: "Default top 1000 TCP ports" },
+    { id: "quick", name: "Quick Scan", flags: "-T4 -F", description: "Fast scan of top 100 ports" },
+    { id: "version", name: "Service Version Detection", flags: "-sV", description: "Detect service versions" },
+    { id: "default-scripts", name: "Default Scripts", flags: "-sC", description: "Run default NSE scripts" },
+    { id: "standard", name: "Standard (Version + Scripts)", flags: "-sV -sC", description: "Recommended for most scans" },
+    { id: "os", name: "OS Detection", flags: "-O", description: "Detect operating system (requires root)" },
+    { id: "aggressive", name: "Aggressive Scan", flags: "-A", description: "OS + Version + Scripts + Traceroute" },
+    { id: "full", name: "Full Port Scan", flags: "-p-", description: "Scan all 65535 ports (slow)" },
+    { id: "full-version", name: "Full + Version Detection", flags: "-p- -sV", description: "All ports with version detection" },
+    { id: "vuln", name: "Vulnerability Scan", flags: "--script vuln", description: "Run vulnerability detection scripts" },
+    { id: "stealth", name: "Stealth SYN Scan", flags: "-sS", description: "Half-open scan (requires root)" },
+    { id: "udp", name: "UDP Scan", flags: "-sU", description: "Scan UDP ports (slow, requires root)" },
+    { id: "comprehensive", name: "Comprehensive", flags: "-sV -sC -O --script vuln", description: "Full security assessment" },
+  ], []);
+
+  // Generate filename from target
+  const generateFilename = useCallback((target: string, format: string) => {
+    if (!target) return `scan.${format}`;
+    // Sanitize target for filename
+    const sanitized = target
+      .replace(/\//g, "-")
+      .replace(/\./g, "-")
+      .replace(/:/g, "-")
+      .replace(/\s+/g, "_")
+      .replace(/[^a-zA-Z0-9\-_]/g, "");
+    const timestamp = new Date().toISOString().slice(0, 10);
+    return `nmap-${sanitized}-${timestamp}.${format}`;
+  }, []);
+
+  // Build the full nmap command
+  const buildNmapCommand = useMemo(() => {
+    if (!cmdTarget.trim()) return "";
+    
+    const parts = ["nmap"];
+    const scanTypeObj = cmdScanTypes.find(t => t.id === cmdScanType);
+    
+    // Add scan type flags
+    if (scanTypeObj?.flags) {
+      parts.push(scanTypeObj.flags);
+    }
+    
+    // Add custom ports
+    if (cmdPorts.trim()) {
+      parts.push(`-p ${cmdPorts.trim()}`);
+    }
+    
+    // Add additional flags
+    if (cmdAdditionalFlags.trim()) {
+      parts.push(cmdAdditionalFlags.trim());
+    }
+    
+    // Add output format
+    const filename = generateFilename(cmdTarget.trim(), cmdOutputFormat);
+    switch (cmdOutputFormat) {
+      case "xml":
+        parts.push(`-oX ${filename}`);
+        break;
+      case "normal":
+        parts.push(`-oN ${filename.replace(/\.\w+$/, ".nmap")}`);
+        break;
+      case "grepable":
+        parts.push(`-oG ${filename.replace(/\.\w+$/, ".gnmap")}`);
+        break;
+      case "all":
+        parts.push(`-oA ${filename.replace(/\.\w+$/, "")}`);
+        break;
+    }
+    
+    // Add target
+    parts.push(cmdTarget.trim());
+    
+    return parts.join(" ");
+  }, [cmdTarget, cmdScanType, cmdPorts, cmdOutputFormat, cmdAdditionalFlags, cmdScanTypes, generateFilename]);
+
+  // Copy command to clipboard
+  const handleCopyCommand = useCallback(async () => {
+    if (buildNmapCommand) {
+      await navigator.clipboard.writeText(buildNmapCommand);
+      setCopySnackbarOpen(true);
+    }
+  }, [buildNmapCommand]);
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
@@ -888,6 +1274,21 @@ const NmapAnalyzerPage: React.FC = () => {
                       </Alert>
                     )}
 
+                    {/* Network Range Warning */}
+                    {target.includes('/') && targetValid && (
+                      <Alert severity="warning" sx={{ mt: 2 }}>
+                        <Typography variant="body2">
+                          <strong>⚠️ Network Range Detected:</strong> Scanning multiple hosts takes significantly longer.
+                          {target.includes('/24') && ' A /24 network (256 hosts) can take 5-30+ minutes.'}
+                          {target.includes('/16') && ' A /16 network is very large - consider using Ping Sweep first.'}
+                          <br />
+                          <Typography component="span" variant="caption">
+                            💡 Tip: Start with <strong>Ping Sweep</strong> to find live hosts, then scan specific IPs.
+                          </Typography>
+                        </Typography>
+                      </Alert>
+                    )}
+
                     {/* Run Scan Button */}
                     <Button
                       variant="contained"
@@ -976,11 +1377,235 @@ const NmapAnalyzerPage: React.FC = () => {
                   </Box>
                 )}
 
-                <Alert severity="info" sx={{ mt: 3 }}>
+                {/* Nmap Command Builder */}
+                <Paper
+                  sx={{
+                    mt: 4,
+                    p: 3,
+                    borderRadius: 2,
+                    background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.05)} 0%, ${alpha("#06b6d4", 0.05)} 100%)`,
+                    border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+                    <TerminalIcon sx={{ color: "#8b5cf6", fontSize: 28 }} />
+                    <Box>
+                      <Typography variant="h6" fontWeight={700}>
+                        Nmap Command Builder
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Build your nmap command and copy it to run in terminal, then upload the results
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Grid container spacing={2}>
+                    {/* Target Input */}
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Target (IP, Range, or Hostname)"
+                        placeholder="192.168.1.1, 192.168.1.0/24, or example.com"
+                        value={cmdTarget}
+                        onChange={(e) => setCmdTarget(e.target.value)}
+                        helperText="Single IP, CIDR range (/24, /16), or hostname"
+                        InputProps={{
+                          sx: { fontFamily: "monospace" },
+                        }}
+                      />
+                    </Grid>
+
+                    {/* Scan Type */}
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Scan Type</InputLabel>
+                        <Select
+                          value={cmdScanType}
+                          label="Scan Type"
+                          onChange={(e) => setCmdScanType(e.target.value)}
+                        >
+                          {cmdScanTypes.map((type) => (
+                            <MenuItem key={type.id} value={type.id}>
+                              <Box>
+                                <Typography variant="body2" fontWeight={500}>
+                                  {type.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {type.flags || "default"} • {type.description}
+                                </Typography>
+                              </Box>
+                            </MenuItem>
+                          ))}
+                        </Select>
+                        <FormHelperText>
+                          {cmdScanTypes.find(t => t.id === cmdScanType)?.description}
+                        </FormHelperText>
+                      </FormControl>
+                    </Grid>
+
+                    {/* Custom Ports */}
+                    <Grid item xs={12} md={4}>
+                      <TextField
+                        fullWidth
+                        label="Ports (optional)"
+                        placeholder="22,80,443 or 1-1000"
+                        value={cmdPorts}
+                        onChange={(e) => setCmdPorts(e.target.value)}
+                        helperText="Specific ports or range to scan"
+                        InputProps={{
+                          sx: { fontFamily: "monospace" },
+                        }}
+                      />
+                    </Grid>
+
+                    {/* Output Format */}
+                    <Grid item xs={12} md={4}>
+                      <FormControl fullWidth>
+                        <InputLabel>Output Format</InputLabel>
+                        <Select
+                          value={cmdOutputFormat}
+                          label="Output Format"
+                          onChange={(e) => setCmdOutputFormat(e.target.value)}
+                        >
+                          <MenuItem value="xml">
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>XML (-oX)</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Best for VRAgent import
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                          <MenuItem value="normal">
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>Normal (-oN)</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Human-readable text format
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                          <MenuItem value="grepable">
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>Grepable (-oG)</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Easy to parse with grep/awk
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                          <MenuItem value="all">
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>All Formats (-oA)</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Saves .xml, .nmap, .gnmap
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                        </Select>
+                        <FormHelperText>
+                          XML recommended for VRAgent analysis
+                        </FormHelperText>
+                      </FormControl>
+                    </Grid>
+
+                    {/* Additional Flags */}
+                    <Grid item xs={12} md={4}>
+                      <TextField
+                        fullWidth
+                        label="Additional Flags (optional)"
+                        placeholder="-T4 --open"
+                        value={cmdAdditionalFlags}
+                        onChange={(e) => setCmdAdditionalFlags(e.target.value)}
+                        helperText="Extra nmap options"
+                        InputProps={{
+                          sx: { fontFamily: "monospace" },
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+
+                  {/* Generated Command */}
+                  {cmdTarget.trim() && (
+                    <Box sx={{ mt: 3 }}>
+                      <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <TerminalIcon fontSize="small" />
+                        Generated Command:
+                      </Typography>
+                      <Paper
+                        sx={{
+                          p: 2,
+                          bgcolor: "#1e1e1e",
+                          borderRadius: 1,
+                          position: "relative",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <Typography
+                          component="code"
+                          sx={{
+                            fontFamily: "monospace",
+                            fontSize: "0.9rem",
+                            color: "#22d3ee",
+                            wordBreak: "break-all",
+                            display: "block",
+                            pr: 6,
+                          }}
+                        >
+                          {buildNmapCommand}
+                        </Typography>
+                        <Tooltip title="Copy to clipboard">
+                          <IconButton
+                            onClick={handleCopyCommand}
+                            sx={{
+                              position: "absolute",
+                              top: 8,
+                              right: 8,
+                              color: "#a78bfa",
+                              "&:hover": {
+                                bgcolor: alpha("#8b5cf6", 0.2),
+                              },
+                            }}
+                          >
+                            <ContentCopyIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Paper>
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+                        💡 Run this command in your terminal, then upload the output file above
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Quick Examples */}
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                      Quick Examples (click to use):
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      {[
+                        { label: "192.168.1.1", target: "192.168.1.1" },
+                        { label: "192.168.1.0/24", target: "192.168.1.0/24" },
+                        { label: "10.0.0.0/24", target: "10.0.0.0/24" },
+                        { label: "scanme.nmap.org", target: "scanme.nmap.org" },
+                      ].map((example) => (
+                        <Chip
+                          key={example.label}
+                          label={example.label}
+                          size="small"
+                          onClick={() => setCmdTarget(example.target)}
+                          sx={{
+                            fontFamily: "monospace",
+                            cursor: "pointer",
+                            "&:hover": { bgcolor: alpha("#8b5cf6", 0.2) },
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                </Paper>
+
+                <Alert severity="info" sx={{ mt: 3 }} icon={<LightbulbIcon />}>
                   <Typography variant="body2">
-                    <strong>Tip:</strong> Export Nmap scans with XML output for best results:
-                    <br />
-                    <code>nmap -sV -sC -oX scan_result.xml target</code>
+                    <strong>Pro Tip:</strong> Use the command builder above to generate commands with proper output filenames.
+                    XML format (<code>-oX</code>) provides the most detailed analysis in VRAgent!
                   </Typography>
                 </Alert>
               </Box>
@@ -1253,6 +1878,25 @@ const NmapAnalyzerPage: React.FC = () => {
                   </>
                 )}
               </Grid>
+
+              {/* Network Graph Toggle */}
+              {result.analyses.some((a) => a.hosts && a.hosts.length > 0) && (
+                <Box sx={{ mt: 3 }}>
+                  <Button
+                    startIcon={<AccountTreeIcon />}
+                    variant={showGraph ? "contained" : "outlined"}
+                    onClick={() => setShowGraph(!showGraph)}
+                    sx={{ mb: 2 }}
+                  >
+                    {showGraph ? "Hide Network Graph" : "Show Network Graph"}
+                  </Button>
+                  {showGraph && (
+                    <Box sx={{ mb: 3 }}>
+                      <NmapNetworkGraph result={result} />
+                    </Box>
+                  )}
+                </Box>
+              )}
             </CardContent>
           </Card>
 
@@ -1626,6 +2270,15 @@ const NmapAnalyzerPage: React.FC = () => {
           </Collapse>
         </Paper>
       )}
+
+      {/* Copy Snackbar */}
+      <Snackbar
+        open={copySnackbarOpen}
+        autoHideDuration={2000}
+        onClose={() => setCopySnackbarOpen(false)}
+        message="Command copied to clipboard!"
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
     </Box>
   );
 };

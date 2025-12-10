@@ -63,6 +63,9 @@ class PcapSummary:
     dns_queries: List[str] = field(default_factory=list)
     http_hosts: List[str] = field(default_factory=list)
     potential_issues: int = 0
+    # Network topology data for visualization
+    topology_nodes: List[Dict[str, Any]] = field(default_factory=list)
+    topology_links: List[Dict[str, Any]] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -472,6 +475,9 @@ def analyze_pcap(file_path: Path, max_packets: int = 100000) -> PcapAnalysisResu
     # Calculate duration
     duration = _get_capture_duration(packets)
     
+    # Build network topology data for visualization
+    topology_nodes, topology_links = _build_network_topology(packets, ip_stats, findings)
+    
     # Build summary
     summary = PcapSummary(
         total_packets=len(packets),
@@ -481,6 +487,8 @@ def analyze_pcap(file_path: Path, max_packets: int = 100000) -> PcapAnalysisResu
         dns_queries=dns_queries[:100],  # Limit to 100
         http_hosts=http_hosts[:100],
         potential_issues=len(findings),
+        topology_nodes=topology_nodes,
+        topology_links=topology_links,
     )
     
     # Extract conversations
@@ -567,6 +575,159 @@ def _get_protocol(pkt) -> str:
     if IP in pkt:
         return "IP"
     return "Other"
+
+
+def _build_network_topology(
+    packets: List, 
+    ip_stats: Dict[str, Dict[str, int]], 
+    findings: List[PcapFinding]
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Build network topology data for visualization.
+    Returns (nodes, links) suitable for D3.js force-directed graph.
+    """
+    from collections import defaultdict
+    
+    # Track connections between IPs
+    connections: Dict[Tuple[str, str], Dict[str, Any]] = defaultdict(
+        lambda: {"packets": 0, "bytes": 0, "protocols": set(), "ports": set()}
+    )
+    
+    # Track services/ports seen on each IP
+    ip_ports: Dict[str, set] = defaultdict(set)
+    ip_protocols: Dict[str, set] = defaultdict(set)
+    
+    # Find IPs with findings (for risk level)
+    risky_ips: Dict[str, str] = {}  # ip -> highest severity
+    severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
+    for finding in findings:
+        for ip in [finding.source_ip, finding.dest_ip]:
+            if ip:
+                current = risky_ips.get(ip, "none")
+                current_rank = severity_order.get(current, -1)
+                finding_rank = severity_order.get(finding.severity.lower(), 0)
+                if finding_rank > current_rank:
+                    risky_ips[ip] = finding.severity.lower()
+    
+    # Process packets to build connections
+    for pkt in packets:
+        if IP in pkt:
+            src = pkt[IP].src
+            dst = pkt[IP].dst
+            
+            # Create ordered tuple for connection (smaller IP first for consistency)
+            conn_key = (min(src, dst), max(src, dst))
+            
+            # Get packet size
+            pkt_size = len(pkt)
+            
+            connections[conn_key]["packets"] += 1
+            connections[conn_key]["bytes"] += pkt_size
+            
+            # Track protocol
+            proto = _get_protocol(pkt)
+            connections[conn_key]["protocols"].add(proto)
+            ip_protocols[src].add(proto)
+            ip_protocols[dst].add(proto)
+            
+            # Track ports
+            if TCP in pkt:
+                ip_ports[dst].add(pkt[TCP].dport)
+                ip_ports[src].add(pkt[TCP].sport)
+                connections[conn_key]["ports"].add(pkt[TCP].dport)
+            elif UDP in pkt:
+                ip_ports[dst].add(pkt[UDP].dport)
+                ip_ports[src].add(pkt[UDP].sport)
+                connections[conn_key]["ports"].add(pkt[UDP].dport)
+    
+    # Build nodes list
+    nodes: List[Dict[str, Any]] = []
+    for ip, stats in ip_stats.items():
+        # Determine node type based on ports and behavior
+        ports = ip_ports.get(ip, set())
+        protocols = ip_protocols.get(ip, set())
+        
+        node_type = "host"  # default
+        if any(p in ports for p in [80, 443, 8080, 8443]):
+            node_type = "server"
+        elif any(p in ports for p in [22, 3389]):
+            if stats["packets"] > 100:  # receiving many connections
+                node_type = "server"
+        elif any(p in ports for p in [53, 67, 68]):
+            node_type = "router"  # DNS/DHCP often on routers
+        
+        # Determine services from ports
+        services = []
+        port_to_service = {
+            22: "SSH", 80: "HTTP", 443: "HTTPS", 21: "FTP", 23: "Telnet",
+            25: "SMTP", 53: "DNS", 110: "POP3", 143: "IMAP", 3389: "RDP",
+            3306: "MySQL", 5432: "PostgreSQL", 6379: "Redis", 27017: "MongoDB",
+            8080: "HTTP-Alt", 8443: "HTTPS-Alt", 445: "SMB", 139: "NetBIOS"
+        }
+        for port in sorted(ports)[:10]:  # Limit to 10 services
+            if port in port_to_service:
+                services.append(port_to_service[port])
+        
+        nodes.append({
+            "id": ip,
+            "ip": ip,
+            "type": node_type,
+            "services": services,
+            "ports": sorted(list(ports))[:20],  # Limit to 20 ports
+            "packets": stats["packets"],
+            "bytes": stats["bytes"],
+            "riskLevel": risky_ips.get(ip, "none"),
+        })
+    
+    # Build links list
+    links: List[Dict[str, Any]] = []
+    for (src, dst), data in connections.items():
+        # Determine primary protocol
+        proto = "TCP"  # default
+        if "HTTP" in data["protocols"]:
+            proto = "HTTP"
+        elif "HTTPS/TLS" in data["protocols"]:
+            proto = "HTTPS"
+        elif "DNS" in data["protocols"]:
+            proto = "DNS"
+        elif "SSH" in data["protocols"]:
+            proto = "SSH"
+        elif data["protocols"]:
+            proto = list(data["protocols"])[0]
+        
+        # Get primary port
+        port = None
+        if data["ports"]:
+            common_ports = [80, 443, 22, 53, 21, 25, 3389, 3306, 5432]
+            for cp in common_ports:
+                if cp in data["ports"]:
+                    port = cp
+                    break
+            if port is None:
+                port = min(data["ports"])
+        
+        links.append({
+            "source": src,
+            "target": dst,
+            "protocol": proto,
+            "port": port,
+            "packets": data["packets"],
+            "bytes": data["bytes"],
+            "bidirectional": True,  # We're aggregating both directions
+        })
+    
+    # Limit to top connections by packet count (for performance)
+    links = sorted(links, key=lambda x: x["packets"], reverse=True)[:100]
+    
+    # Only include nodes that are part of the top connections
+    linked_ips = set()
+    for link in links:
+        linked_ips.add(link["source"])
+        linked_ips.add(link["target"])
+    nodes = [n for n in nodes if n["ip"] in linked_ips]
+    
+    logger.info(f"Built topology: {len(nodes)} nodes, {len(links)} links")
+    return nodes, links
 
 
 def _check_packet_security(pkt, packet_num: int) -> List[PcapFinding]:

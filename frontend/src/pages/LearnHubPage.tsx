@@ -32,6 +32,8 @@ import ApiIcon from "@mui/icons-material/Api";
 import MemoryIcon from "@mui/icons-material/Memory";
 import HubIcon from "@mui/icons-material/Hub";
 import WifiIcon from "@mui/icons-material/Wifi";
+import DnsIcon from "@mui/icons-material/Dns";
+import RouteIcon from "@mui/icons-material/Route";
 
 interface LearnCard {
   title: string;
@@ -76,12 +78,12 @@ const appCards: LearnCard[] = [
 const networkCards: LearnCard[] = [
   {
     title: "Network Analysis Hub",
-    description: "Learn what the Network Analysis Hub does: Nmap scanning, PCAP analysis, and AI-powered insights.",
+    description: "Learn what the Network Analysis Hub does: 6 tools including Nmap, PCAP, SSL, DNS, Traceroute, and API Tester.",
     icon: <HubIcon sx={{ fontSize: 40 }} />,
     path: "/learn/network-hub",
     color: "#0ea5e9",
-    tags: ["Nmap", "PCAP", "AI Chat"],
-    badge: "New",
+    tags: ["Nmap", "PCAP", "API Tester"],
+    badge: "Updated",
   },
   {
     title: "Wireshark Essentials",
@@ -98,6 +100,42 @@ const networkCards: LearnCard[] = [
     path: "/learn/nmap",
     color: "#8b5cf6",
     tags: ["Port Scanning", "NSE", "Discovery"],
+  },
+  {
+    title: "SSL/TLS Security Guide",
+    description: "Understand SSL/TLS scanning: 12 CVE checks, certificate chain validation, cipher analysis, and AI exploitation.",
+    icon: <LockIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/ssl-tls",
+    color: "#10b981",
+    tags: ["Certificates", "Vulnerabilities", "Ciphers"],
+    badge: "New",
+  },
+  {
+    title: "DNS Reconnaissance Guide",
+    description: "Learn DNS enumeration, subdomain discovery, zone transfers, and email security analysis (SPF, DMARC, DKIM).",
+    icon: <DnsIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/dns",
+    color: "#f59e0b",
+    tags: ["DNS", "Subdomains", "Email Security"],
+    badge: "New",
+  },
+  {
+    title: "Traceroute Guide",
+    description: "Master network path analysis: hop-by-hop diagnostics, latency interpretation, troubleshooting, and security implications.",
+    icon: <RouteIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/traceroute",
+    color: "#ec4899",
+    tags: ["Path Analysis", "Latency", "Troubleshooting"],
+    badge: "New",
+  },
+  {
+    title: "API Endpoint Tester Guide",
+    description: "Master VRAgent's API security testing: AI Auto-Test with CIDR scanning, JWT/WebSocket testing, batch operations, and multi-format exports.",
+    icon: <ApiIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/api-testing",
+    color: "#22c55e",
+    tags: ["CIDR Scanning", "JWT", "WebSocket"],
+    badge: "Updated",
   },
 ];
 

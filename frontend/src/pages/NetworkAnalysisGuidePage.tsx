@@ -44,6 +44,10 @@ import TimelineIcon from "@mui/icons-material/Timeline";
 import SpeedIcon from "@mui/icons-material/Speed";
 import WarningIcon from "@mui/icons-material/Warning";
 import GppGoodIcon from "@mui/icons-material/GppGood";
+import LockIcon from "@mui/icons-material/Lock";
+import DnsIcon from "@mui/icons-material/Dns";
+import RouteIcon from "@mui/icons-material/Route";
+import ApiIcon from "@mui/icons-material/Api";
 
 // Animations
 const float = keyframes`
@@ -66,6 +70,21 @@ export default function NetworkAnalysisGuidePage() {
   const navigate = useNavigate();
 
   const features = [
+    {
+      title: "API Endpoint Tester",
+      icon: <ApiIcon sx={{ fontSize: 32 }} />,
+      color: "#22c55e",
+      gradient: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+      description: "Comprehensive API security testing with 7 specialized modes including AI-powered network scanning.",
+      capabilities: [
+        "AI Auto-Test: CIDR network scanning with automatic service discovery",
+        "Network Discovery: Scan subnets to find HTTP/API services",
+        "WebSocket & JWT security testing",
+        "Batch testing for multiple endpoints",
+        "Export results as JSON, Markdown, PDF, or DOCX",
+      ],
+      link: "/network/api-tester",
+    },
     {
       title: "Nmap Scanner & Analyzer",
       icon: <RadarIcon sx={{ fontSize: 32 }} />,
@@ -97,10 +116,55 @@ export default function NetworkAnalysisGuidePage() {
       link: "/network/pcap",
     },
     {
-      title: "AI Security Analysis",
-      icon: <SmartToyIcon sx={{ fontSize: 32 }} />,
+      title: "SSL/TLS Scanner",
+      icon: <LockIcon sx={{ fontSize: 32 }} />,
       color: "#10b981",
       gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+      description: "Certificate validation, vulnerability detection, and cipher analysis.",
+      capabilities: [
+        "Certificate chain validation against 20+ root CAs",
+        "12 CVE vulnerability checks (Heartbleed, POODLE, BEAST, etc.)",
+        "Weak cipher and protocol detection",
+        "Perfect Forward Secrecy (PFS) verification",
+        "AI-generated exploitation guidance",
+      ],
+      link: "/network/ssl",
+    },
+    {
+      title: "DNS Reconnaissance",
+      icon: <DnsIcon sx={{ fontSize: 32 }} />,
+      color: "#f59e0b",
+      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      description: "Comprehensive DNS enumeration, WHOIS lookup, and email security analysis.",
+      capabilities: [
+        "All DNS record types (A, AAAA, MX, TXT, NS, SOA, etc.)",
+        "WHOIS lookup for domains and IP addresses",
+        "Subdomain enumeration with customizable wordlists",
+        "Email security analysis (SPF, DMARC, DKIM)",
+        "Zone transfer vulnerability testing",
+      ],
+      link: "/network/dns",
+    },
+    {
+      title: "Traceroute Visualization",
+      icon: <RouteIcon sx={{ fontSize: 32 }} />,
+      color: "#ec4899",
+      gradient: "linear-gradient(135deg, #ec4899 0%, #db2777 100%)",
+      description: "Network path analysis with latency visualization and AI insights.",
+      capabilities: [
+        "Cross-platform support (Windows tracert, Linux/macOS traceroute)",
+        "Hop-by-hop latency and packet loss analysis",
+        "Interactive path and network graph visualizations",
+        "AI-powered bottleneck and routing analysis",
+        "Quick targets for common DNS and CDN endpoints",
+      ],
+      link: "/network/traceroute",
+    },
+    {
+      title: "AI Security Analysis",
+      icon: <SmartToyIcon sx={{ fontSize: 32 }} />,
+      color: "#3b82f6",
+      gradient: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
       description: "Google Gemini AI transforms raw network data into actionable intelligence.",
       capabilities: [
         "Executive summary with key findings",
@@ -134,7 +198,7 @@ export default function NetworkAnalysisGuidePage() {
       description: "All your network analysis reports saved and organized in one place.",
       capabilities: [
         "Automatic save of all scan results to database",
-        "Filter reports by type (Nmap, PCAP)",
+        "Filter reports by type (Nmap, PCAP, SSL, DNS, Traceroute)",
         "View historical scans and track changes over time",
         "Quick access to view or delete reports",
         "Export reports in multiple formats",
@@ -160,12 +224,12 @@ export default function NetworkAnalysisGuidePage() {
   const workflowSteps = [
     {
       label: "Choose Your Analysis Type",
-      description: "Select Nmap Analyzer for port/service scanning or PCAP Analyzer for traffic analysis. Each tool is optimized for its specific use case.",
+      description: "Select from 5 specialized tools: Nmap for port scanning, PCAP for traffic analysis, SSL/TLS for certificate security, DNS for domain reconnaissance, or Traceroute for path analysis.",
       icon: <HubIcon />,
     },
     {
       label: "Provide Input Data",
-      description: "For Nmap: Enter a target IP/hostname or upload existing scan files. For PCAP: Upload your packet capture file from Wireshark or tcpdump.",
+      description: "Enter targets (IPs, domains, hostnames) or upload existing files. Each tool has quick-start options and pre-configured targets.",
       icon: <CloudUploadIcon />,
     },
     {
@@ -372,10 +436,10 @@ export default function NetworkAnalysisGuidePage() {
       {/* Key Stats */}
       <Grid container spacing={3} sx={{ mb: 5 }}>
         {[
-          { value: "2", label: "Analysis Tools", icon: <HubIcon />, color: "#0ea5e9" },
-          { value: "5+", label: "Scan Types", icon: <RadarIcon />, color: "#8b5cf6" },
+          { value: "6", label: "Analysis Tools", icon: <HubIcon />, color: "#0ea5e9" },
+          { value: "7", label: "API Test Modes", icon: <ApiIcon />, color: "#22c55e" },
           { value: "AI", label: "Powered Analysis", icon: <SmartToyIcon />, color: "#10b981" },
-          { value: "3", label: "Export Formats", icon: <DownloadIcon />, color: "#f59e0b" },
+          { value: "4", label: "Export Formats", icon: <DownloadIcon />, color: "#f59e0b" },
         ].map((stat, idx) => (
           <Grid item xs={6} md={3} key={idx}>
             <Paper

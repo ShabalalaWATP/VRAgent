@@ -173,11 +173,12 @@ class ExploitScenario(Base):
 
 
 class NetworkAnalysisReport(Base):
-    """Stores PCAP and Nmap analysis reports."""
+    """Stores network analysis reports (PCAP, Nmap, DNS, etc.)."""
     __tablename__ = "network_analysis_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    analysis_type = Column(String, nullable=False)  # 'pcap' or 'nmap'
+    analysis_type = Column(String, nullable=False)  # 'pcap', 'nmap', 'dns'
+    report_type = Column(String, nullable=True)  # Alternative categorization (dns, pcap, nmap)
     title = Column(String, nullable=False)
     filename = Column(String, nullable=True)  # Original uploaded filename(s)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -194,6 +195,9 @@ class NetworkAnalysisReport(Base):
     
     # AI Analysis - structured report
     ai_report = Column(JSON, nullable=True)  # Full structured AI report
+    
+    # Generic report data (for DNS and other report types)
+    report_data = Column(JSON, nullable=True)  # Flexible data storage
     
     # Export metadata
     last_exported_at = Column(DateTime(timezone=True), nullable=True)

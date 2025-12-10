@@ -6,7 +6,7 @@ from backend.core.config import settings
 from backend.core.database import Base, engine
 from backend.core.exceptions import VRAgentError
 from backend.core.logging import get_logger
-from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network
+from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester
 from backend import models  # noqa: F401  # ensure models are registered
 
 logger = get_logger(__name__)
@@ -75,6 +75,9 @@ app.include_router(webhooks.router, prefix="/projects", tags=["webhooks"])
 app.include_router(websocket.router, tags=["websocket"])
 app.include_router(pcap.router, tags=["pcap"])
 app.include_router(network.router, tags=["network-analysis"])
+app.include_router(dns.router, tags=["dns-reconnaissance"])
+app.include_router(traceroute.router, tags=["traceroute-visualization"])
+app.include_router(api_tester.router, tags=["api-tester"])
 
 
 @app.get("/health")

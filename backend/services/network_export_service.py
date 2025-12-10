@@ -1,17 +1,327 @@
 """
 Network Analysis Export Service for VRAgent.
 
-Exports PCAP and Nmap analysis reports to Markdown, PDF, and Word formats.
+Exports PCAP, Nmap, and SSL analysis reports to Markdown, PDF, and Word formats.
 """
 
 import io
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# ============================================================================
+# SSL REPORT GENERATION
+# ============================================================================
+
+def generate_ssl_markdown_report(
+    title: str,
+    summary_data: Dict[str, Any],
+    results_data: List[Dict[str, Any]],
+    ai_report: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Generate a Markdown report from SSL scan data with exploitation focus."""
+    
+    lines = []
+    
+    # Header
+    lines.append(f"# 🔒 {title}")
+    lines.append(f"\n**Analysis Type:** SSL/TLS Security Assessment")
+    lines.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("")
+    
+    # Risk Overview
+    if ai_report and "structured_report" in ai_report:
+        report = ai_report["structured_report"]
+        risk_level = report.get("overall_risk_level", "Unknown")
+        risk_score = report.get("risk_score", "N/A")
+        
+        lines.append("---")
+        lines.append(f"\n## 🎯 Risk Assessment")
+        lines.append(f"\n**Overall Risk Level:** {risk_level}")
+        lines.append(f"**Risk Score:** {risk_score}/100")
+        
+        if report.get("executive_summary"):
+            lines.append(f"\n{report['executive_summary']}")
+        lines.append("")
+    
+    # Summary Statistics
+    lines.append("---")
+    lines.append("\n## 📊 Scan Summary")
+    lines.append("")
+    lines.append(f"- **Total Hosts Scanned:** {summary_data.get('total_hosts', 0)}")
+    lines.append(f"- **Hosts with SSL/TLS:** {summary_data.get('hosts_with_ssl', 0)}")
+    lines.append(f"- **Expired Certificates:** {summary_data.get('expired_certs', 0)}")
+    lines.append(f"- **Self-Signed Certificates:** {summary_data.get('self_signed_certs', 0)}")
+    lines.append(f"- **Hosts with Weak Protocols:** {summary_data.get('weak_protocols', 0)}")
+    lines.append(f"- **Hosts with Weak Ciphers:** {summary_data.get('weak_ciphers', 0)}")
+    lines.append("")
+    
+    # Vulnerability Summary
+    if summary_data.get('total_vulnerabilities', 0) > 0:
+        lines.append("### ⚠️ Vulnerability Statistics")
+        lines.append(f"- **Total Vulnerabilities:** {summary_data.get('total_vulnerabilities', 0)}")
+        lines.append(f"- **Critical Vulnerabilities:** {summary_data.get('critical_vulnerabilities', 0)}")
+        lines.append(f"- **Exploitable Vulnerabilities:** {summary_data.get('exploitable_vulnerabilities', 0)}")
+        lines.append(f"- **Certificate Chain Issues:** {summary_data.get('chain_issues', 0)}")
+        lines.append("")
+    
+    # Vulnerability Details (grouped by severity)
+    all_vulns = []
+    for result in results_data:
+        host = result.get('host', 'Unknown')
+        port = result.get('port', 443)
+        for vuln in result.get('vulnerabilities', []):
+            vuln['target'] = f"{host}:{port}"
+            all_vulns.append(vuln)
+    
+    if all_vulns:
+        lines.append("---")
+        lines.append("\n## 🔴 Detected Vulnerabilities")
+        lines.append("")
+        
+        # Group by severity
+        by_severity = {"critical": [], "high": [], "medium": [], "low": []}
+        for v in all_vulns:
+            sev = v.get("severity", "low").lower()
+            if sev in by_severity:
+                by_severity[sev].append(v)
+        
+        for severity in ["critical", "high", "medium", "low"]:
+            vulns = by_severity[severity]
+            if vulns:
+                emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}[severity]
+                lines.append(f"\n### {emoji} {severity.upper()} ({len(vulns)})")
+                lines.append("")
+                lines.append("| Vulnerability | CVE | CVSS | Target | Exploit Difficulty |")
+                lines.append("|---------------|-----|------|--------|-------------------|")
+                for v in vulns:
+                    name = v.get('name', v.get('vuln_id', 'Unknown'))
+                    cve = v.get('cve', 'N/A')
+                    cvss = v.get('cvss', 'N/A')
+                    target = v.get('target', 'Unknown')
+                    exploit = v.get('exploit_difficulty', 'Unknown')
+                    lines.append(f"| {name} | {cve} | {cvss} | {target} | {exploit} |")
+                lines.append("")
+                
+                # Details for each vulnerability
+                for v in vulns:
+                    name = v.get('name', v.get('vuln_id', 'Unknown'))
+                    lines.append(f"#### {name}")
+                    lines.append(f"\n{v.get('description', 'No description available.')}")
+                    if v.get('affected'):
+                        lines.append(f"\n**Affected:** {v.get('affected')}")
+                    if v.get('evidence'):
+                        lines.append(f"\n**Evidence:** `{v.get('evidence')}`")
+                    if v.get('is_exploitable'):
+                        lines.append(f"\n⚠️ **This vulnerability is considered exploitable**")
+                    lines.append("")
+    
+    # Certificate Chain Issues
+    chain_issues = []
+    for result in results_data:
+        chain_info = result.get('chain_info', {})
+        if chain_info and chain_info.get('chain_errors'):
+            chain_issues.append({
+                'target': f"{result.get('host', 'Unknown')}:{result.get('port', 443)}",
+                'chain_info': chain_info
+            })
+    
+    if chain_issues:
+        lines.append("---")
+        lines.append("\n## 🔗 Certificate Chain Issues")
+        lines.append("")
+        for issue in chain_issues:
+            lines.append(f"### {issue['target']}")
+            ci = issue['chain_info']
+            lines.append(f"- **Chain Length:** {ci.get('chain_length', 'N/A')}")
+            lines.append(f"- **Is Complete:** {'✅ Yes' if ci.get('is_complete') else '❌ No'}")
+            lines.append(f"- **Is Trusted:** {'✅ Yes' if ci.get('is_trusted') else '❌ No'}")
+            if ci.get('root_ca'):
+                lines.append(f"- **Root CA:** {ci.get('root_ca')}")
+            if ci.get('chain_errors'):
+                lines.append("\n**Chain Errors:**")
+                for err in ci['chain_errors']:
+                    lines.append(f"- ⚠️ {err}")
+            lines.append("")
+    
+    # Detailed Host Results
+    lines.append("---")
+    lines.append("\n## 🖥️ Host Details")
+    lines.append("")
+    
+    for result in results_data:
+        host = result.get('host', 'Unknown')
+        port = result.get('port', 443)
+        has_ssl = result.get('has_ssl', False)
+        error = result.get('error')
+        
+        lines.append(f"### {host}:{port}")
+        
+        if error:
+            lines.append(f"\n**Error:** {error}")
+            lines.append("")
+            continue
+        
+        if not has_ssl:
+            lines.append("\n**Status:** No SSL/TLS detected")
+            lines.append("")
+            continue
+        
+        # Certificate Info
+        cert = result.get('certificate', {})
+        if cert:
+            lines.append("\n**Certificate:**")
+            lines.append(f"- **Subject:** {cert.get('subject', 'N/A')}")
+            lines.append(f"- **Issuer:** {cert.get('issuer', 'N/A')}")
+            lines.append(f"- **Valid From:** {cert.get('not_before', 'N/A')}")
+            lines.append(f"- **Valid Until:** {cert.get('not_after', 'N/A')}")
+            lines.append(f"- **Days Until Expiry:** {cert.get('days_until_expiry', 'N/A')}")
+            lines.append(f"- **Is Expired:** {'⚠️ Yes' if cert.get('is_expired') else '✅ No'}")
+            lines.append(f"- **Is Self-Signed:** {'⚠️ Yes' if cert.get('is_self_signed') else '✅ No'}")
+            lines.append(f"- **Signature Algorithm:** {cert.get('signature_algorithm', 'N/A')}")
+            lines.append(f"- **Key Type:** {cert.get('key_type', 'N/A')}")
+            lines.append(f"- **Key Size:** {cert.get('key_size', 'N/A')} bits")
+            if cert.get('san'):
+                lines.append(f"- **SANs:** {', '.join(cert['san'][:10])}")
+        
+        # Supported Protocols
+        protocols = result.get('supported_protocols', [])
+        if protocols:
+            lines.append(f"\n**Supported Protocols:** {', '.join(protocols)}")
+            # Highlight weak protocols
+            weak = [p for p in protocols if p in ['SSLv2', 'SSLv3', 'TLSv1.0', 'TLSv1.1']]
+            if weak:
+                lines.append(f"\n⚠️ **Weak Protocols Detected:** {', '.join(weak)}")
+        
+        # Cipher Suites
+        ciphers = result.get('cipher_suites', [])
+        if ciphers:
+            lines.append(f"\n**Cipher Suites ({len(ciphers)} total):**")
+            for cipher in ciphers[:10]:
+                lines.append(f"- `{cipher}`")
+            if len(ciphers) > 10:
+                lines.append(f"- ... and {len(ciphers) - 10} more")
+        
+        # Security Findings
+        findings = result.get('findings', [])
+        if findings:
+            lines.append(f"\n**Security Findings ({len(findings)}):**")
+            for f in findings[:10]:
+                sev = f.get('severity', 'info').upper()
+                title = f.get('title', 'Unknown')
+                lines.append(f"- [{sev}] {title}")
+            if len(findings) > 10:
+                lines.append(f"- ... and {len(findings) - 10} more")
+        
+        lines.append("")
+    
+    # AI Exploitation Analysis
+    if ai_report and "structured_report" in ai_report:
+        report = ai_report["structured_report"]
+        
+        # Exploitation Scenarios
+        if report.get("exploitation_scenarios"):
+            lines.append("---")
+            lines.append("\n## 💀 Exploitation Scenarios")
+            lines.append("")
+            lines.append("> ⚠️ **OFFENSIVE SECURITY ANALYSIS** - For authorized penetration testing only")
+            lines.append("")
+            
+            for i, scenario in enumerate(report["exploitation_scenarios"], 1):
+                lines.append(f"### Scenario {i}: {scenario.get('attack_name', 'Unknown Attack')}")
+                lines.append(f"\n**Target Vulnerability:** {scenario.get('target_vulnerability', 'N/A')}")
+                lines.append(f"\n**Exploit Difficulty:** {scenario.get('exploit_difficulty', 'N/A')}")
+                lines.append(f"\n**Required Tools:** {scenario.get('required_tools', 'N/A')}")
+                lines.append(f"\n**Potential Impact:** {scenario.get('potential_impact', 'N/A')}")
+                
+                if scenario.get('attack_steps'):
+                    lines.append("\n**Attack Steps:**")
+                    for step in scenario['attack_steps']:
+                        lines.append(f"1. {step}")
+                
+                if scenario.get('example_commands'):
+                    lines.append("\n**Example Commands:**")
+                    lines.append("```bash")
+                    for cmd in scenario['example_commands']:
+                        lines.append(cmd)
+                    lines.append("```")
+                
+                if scenario.get('indicators_of_compromise'):
+                    lines.append("\n**Indicators of Compromise:**")
+                    for ioc in scenario['indicators_of_compromise']:
+                        lines.append(f"- {ioc}")
+                
+                lines.append("")
+        
+        # High-Value Targets
+        if report.get("high_value_targets"):
+            lines.append("---")
+            lines.append("\n## 🎯 High-Value Targets")
+            lines.append("")
+            lines.append("| Host | Risk Level | Weaknesses | Attack Priority |")
+            lines.append("|------|------------|------------|-----------------|")
+            for target in report["high_value_targets"]:
+                host = target.get('host', 'Unknown')
+                risk = target.get('risk_level', 'N/A')
+                weaknesses = ', '.join(target.get('weaknesses', [])[:3])
+                priority = target.get('attack_priority', 'N/A')
+                lines.append(f"| {host} | {risk} | {weaknesses} | {priority} |")
+            lines.append("")
+            
+            for target in report["high_value_targets"]:
+                lines.append(f"### {target.get('host', 'Unknown')}")
+                lines.append(f"\n**Why High Value:** {target.get('why_high_value', 'N/A')}")
+                lines.append(f"\n**Recommended Attack Vector:** {target.get('recommended_attack_vector', 'N/A')}")
+                lines.append("")
+        
+        # Lateral Movement
+        if report.get("lateral_movement_opportunities"):
+            lines.append("---")
+            lines.append("\n## 🔀 Lateral Movement Opportunities")
+            lines.append("")
+            for opp in report["lateral_movement_opportunities"]:
+                lines.append(f"- **{opp.get('from_host', 'N/A')} → {opp.get('to_host', 'N/A')}:** {opp.get('technique', 'N/A')}")
+            lines.append("")
+        
+        # Tool Recommendations
+        if report.get("tool_recommendations"):
+            lines.append("---")
+            lines.append("\n## 🛠️ Recommended Tools")
+            lines.append("")
+            lines.append("| Tool | Purpose | Target |")
+            lines.append("|------|---------|--------|")
+            for tool in report["tool_recommendations"]:
+                name = tool.get('tool_name', 'Unknown')
+                purpose = tool.get('purpose', 'N/A')
+                target = tool.get('target_host', 'All')
+                lines.append(f"| {name} | {purpose} | {target} |")
+            lines.append("")
+    
+    # Footer
+    lines.append("---")
+    lines.append(f"\n*Report generated by VRAgent SSL/TLS Security Scanner*")
+    lines.append(f"*{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
+    lines.append("\n> ⚠️ This report is intended for authorized security testing only.")
+    lines.append("> Unauthorized access to computer systems is illegal.")
+    
+    return "\n".join(lines)
+
+
+def generate_ssl_pdf_report(markdown_content: str) -> bytes:
+    """Generate PDF from SSL markdown content."""
+    # Use the generic PDF generator which handles the markdown format
+    return generate_pdf_report(markdown_content)
+
+
+def generate_ssl_docx_report(markdown_content: str) -> bytes:
+    """Generate Word document from SSL markdown content."""
+    # Use the generic Word generator which handles the markdown format
+    return generate_docx_report(markdown_content)
 
 
 def generate_markdown_report(
