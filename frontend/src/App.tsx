@@ -12,47 +12,51 @@ import {
   keyframes,
   Chip,
   Button,
+  CircularProgress,
 } from "@mui/material";
 import { Routes, Route, Link } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { useThemeMode } from "./theme/ThemeProvider";
-import ProjectListPage from "./pages/ProjectListPage";
-import ProjectDetailPage from "./pages/ProjectDetailPage";
-import ReportDetailPage from "./pages/ReportDetailPage";
-import LearnHubPage from "./pages/LearnHubPage";
-import ScanningPage from "./pages/ScanningPage";
-import AIAnalysisPage from "./pages/AIAnalysisPage";
-import KillChainPage from "./pages/KillChainPage";
-import MitreAttackPage from "./pages/MitreAttackPage";
-import GlossaryPage from "./pages/GlossaryPage";
-import OwaspTop10Page from "./pages/OwaspTop10Page";
-import CveCweCvssPage from "./pages/CveCweCvssPage";
-import CommandsPage from "./pages/CommandsPage";
-import PentestGuidePage from "./pages/PentestGuidePage";
-import OwaspMobilePage from "./pages/OwaspMobilePage";
-import AuthCryptoGuidePage from "./pages/AuthCryptoGuidePage";
-import DataSecretsPage from "./pages/DataSecretsPage";
-import FuzzingGuidePage from "./pages/FuzzingGuidePage";
-import ArchitecturePage from "./pages/ArchitecturePage";
-import ApiSecurityPage from "./pages/ApiSecurityPage";
-import ReverseEngineeringPage from "./pages/ReverseEngineeringPage";
-import MobilePentestPage from "./pages/MobilePentestPage";
-import PcapAnalyzerPage from "./pages/PcapAnalyzerPage";
-import NetworkAnalysisHub from "./pages/NetworkAnalysisHub";
-import NmapAnalyzerPage from "./pages/NmapAnalyzerPage";
-import NetworkAnalysisGuidePage from "./pages/NetworkAnalysisGuidePage";
-import WiresharkGuidePage from "./pages/WiresharkGuidePage";
-import NmapGuidePage from "./pages/NmapGuidePage";
-import SSLTLSGuidePage from "./pages/SSLTLSGuidePage";
-import SSLScannerPage from "./pages/SSLScannerPage";
-import DNSAnalyzerPage from "./pages/DNSAnalyzerPage";
-import DNSGuidePage from "./pages/DNSGuidePage";
-import TracerouteAnalyzerPage from "./pages/TracerouteAnalyzerPage";
-import TracerouteGuidePage from "./pages/TracerouteGuidePage";
-import APITesterPage from "./pages/APITesterPage";
-import APITestingGuidePage from "./pages/APITestingGuidePage";
-import CyberThreatIntelPage from "./pages/CyberThreatIntelPage";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
+
+// Lazy load all pages
+const ProjectListPage = lazy(() => import("./pages/ProjectListPage"));
+const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
+const ReportDetailPage = lazy(() => import("./pages/ReportDetailPage"));
+const LearnHubPage = lazy(() => import("./pages/LearnHubPage"));
+const ScanningPage = lazy(() => import("./pages/ScanningPage"));
+const AIAnalysisPage = lazy(() => import("./pages/AIAnalysisPage"));
+const KillChainPage = lazy(() => import("./pages/KillChainPage"));
+const MitreAttackPage = lazy(() => import("./pages/MitreAttackPage"));
+const GlossaryPage = lazy(() => import("./pages/GlossaryPage"));
+const OwaspTop10Page = lazy(() => import("./pages/OwaspTop10Page"));
+const CveCweCvssPage = lazy(() => import("./pages/CveCweCvssPage"));
+const CommandsPage = lazy(() => import("./pages/CommandsPage"));
+const PentestGuidePage = lazy(() => import("./pages/PentestGuidePage"));
+const OwaspMobilePage = lazy(() => import("./pages/OwaspMobilePage"));
+const AuthCryptoGuidePage = lazy(() => import("./pages/AuthCryptoGuidePage"));
+const DataSecretsPage = lazy(() => import("./pages/DataSecretsPage"));
+const FuzzingGuidePage = lazy(() => import("./pages/FuzzingGuidePage"));
+const ArchitecturePage = lazy(() => import("./pages/ArchitecturePage"));
+const ApiSecurityPage = lazy(() => import("./pages/ApiSecurityPage"));
+const ReverseEngineeringPage = lazy(() => import("./pages/ReverseEngineeringPage"));
+const MobilePentestPage = lazy(() => import("./pages/MobilePentestPage"));
+const PcapAnalyzerPage = lazy(() => import("./pages/PcapAnalyzerPage"));
+const NetworkAnalysisHub = lazy(() => import("./pages/NetworkAnalysisHub"));
+const NmapAnalyzerPage = lazy(() => import("./pages/NmapAnalyzerPage"));
+const NetworkAnalysisGuidePage = lazy(() => import("./pages/NetworkAnalysisGuidePage"));
+const WiresharkGuidePage = lazy(() => import("./pages/WiresharkGuidePage"));
+const NmapGuidePage = lazy(() => import("./pages/NmapGuidePage"));
+const SSLTLSGuidePage = lazy(() => import("./pages/SSLTLSGuidePage"));
+const SSLScannerPage = lazy(() => import("./pages/SSLScannerPage"));
+const DNSAnalyzerPage = lazy(() => import("./pages/DNSAnalyzerPage"));
+const DNSGuidePage = lazy(() => import("./pages/DNSGuidePage"));
+const TracerouteAnalyzerPage = lazy(() => import("./pages/TracerouteAnalyzerPage"));
+const TracerouteGuidePage = lazy(() => import("./pages/TracerouteGuidePage"));
+const APITesterPage = lazy(() => import("./pages/APITesterPage"));
+const APITestingGuidePage = lazy(() => import("./pages/APITestingGuidePage"));
+const CyberThreatIntelPage = lazy(() => import("./pages/CyberThreatIntelPage"));
 
 // Animations
 const pulse = keyframes`
@@ -336,45 +340,51 @@ function App() {
       </AppBar>
 
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Routes>
-          <Route path="/" element={<ProjectListPage />} />
-          <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-          <Route path="/reports/:reportId" element={<ReportDetailPage />} />
-          <Route path="/network" element={<NetworkAnalysisHub />} />
-          <Route path="/network/pcap" element={<PcapAnalyzerPage />} />
-          <Route path="/network/nmap" element={<NmapAnalyzerPage />} />
-          <Route path="/network/ssl" element={<SSLScannerPage />} />
-          <Route path="/network/dns" element={<DNSAnalyzerPage />} />
-          <Route path="/network/traceroute" element={<TracerouteAnalyzerPage />} />
-          <Route path="/network/api-tester" element={<APITesterPage />} />
-          <Route path="/pcap" element={<PcapAnalyzerPage />} />
-          <Route path="/learn" element={<LearnHubPage />} />
-          <Route path="/learn/scanning" element={<ScanningPage />} />
-          <Route path="/learn/ai-analysis" element={<AIAnalysisPage />} />
-          <Route path="/learn/kill-chain" element={<KillChainPage />} />
-          <Route path="/learn/mitre-attack" element={<MitreAttackPage />} />
-          <Route path="/learn/glossary" element={<GlossaryPage />} />
-          <Route path="/learn/owasp" element={<OwaspTop10Page />} />
-          <Route path="/learn/cve-cwe-cvss" element={<CveCweCvssPage />} />
-          <Route path="/learn/commands" element={<CommandsPage />} />
-          <Route path="/learn/pentest-guide" element={<PentestGuidePage />} />
-          <Route path="/learn/owasp-mobile" element={<OwaspMobilePage />} />
-          <Route path="/learn/auth-crypto" element={<AuthCryptoGuidePage />} />
-          <Route path="/learn/data-secrets" element={<DataSecretsPage />} />
-          <Route path="/learn/fuzzing" element={<FuzzingGuidePage />} />
-          <Route path="/learn/architecture" element={<ArchitecturePage />} />
-          <Route path="/learn/api-security" element={<ApiSecurityPage />} />
-          <Route path="/learn/reverse-engineering" element={<ReverseEngineeringPage />} />
-          <Route path="/learn/mobile-pentest" element={<MobilePentestPage />} />
-          <Route path="/learn/network-hub" element={<NetworkAnalysisGuidePage />} />
-          <Route path="/learn/wireshark" element={<WiresharkGuidePage />} />
-          <Route path="/learn/nmap" element={<NmapGuidePage />} />
-          <Route path="/learn/ssl-tls" element={<SSLTLSGuidePage />} />
-          <Route path="/learn/dns" element={<DNSGuidePage />} />
-          <Route path="/learn/traceroute" element={<TracerouteGuidePage />} />
-          <Route path="/learn/api-testing" element={<APITestingGuidePage />} />
-          <Route path="/learn/cti" element={<CyberThreatIntelPage />} />
-        </Routes>
+        <Suspense fallback={
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+            <CircularProgress />
+          </Box>
+        }>
+          <Routes>
+            <Route path="/" element={<ProjectListPage />} />
+            <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+            <Route path="/reports/:reportId" element={<ReportDetailPage />} />
+            <Route path="/network" element={<NetworkAnalysisHub />} />
+            <Route path="/network/pcap" element={<PcapAnalyzerPage />} />
+            <Route path="/network/nmap" element={<NmapAnalyzerPage />} />
+            <Route path="/network/ssl" element={<SSLScannerPage />} />
+            <Route path="/network/dns" element={<DNSAnalyzerPage />} />
+            <Route path="/network/traceroute" element={<TracerouteAnalyzerPage />} />
+            <Route path="/network/api-tester" element={<APITesterPage />} />
+            <Route path="/pcap" element={<PcapAnalyzerPage />} />
+            <Route path="/learn" element={<LearnHubPage />} />
+            <Route path="/learn/scanning" element={<ScanningPage />} />
+            <Route path="/learn/ai-analysis" element={<AIAnalysisPage />} />
+            <Route path="/learn/kill-chain" element={<KillChainPage />} />
+            <Route path="/learn/mitre-attack" element={<MitreAttackPage />} />
+            <Route path="/learn/glossary" element={<GlossaryPage />} />
+            <Route path="/learn/owasp" element={<OwaspTop10Page />} />
+            <Route path="/learn/cve-cwe-cvss" element={<CveCweCvssPage />} />
+            <Route path="/learn/commands" element={<CommandsPage />} />
+            <Route path="/learn/pentest-guide" element={<PentestGuidePage />} />
+            <Route path="/learn/owasp-mobile" element={<OwaspMobilePage />} />
+            <Route path="/learn/auth-crypto" element={<AuthCryptoGuidePage />} />
+            <Route path="/learn/data-secrets" element={<DataSecretsPage />} />
+            <Route path="/learn/fuzzing" element={<FuzzingGuidePage />} />
+            <Route path="/learn/architecture" element={<ArchitecturePage />} />
+            <Route path="/learn/api-security" element={<ApiSecurityPage />} />
+            <Route path="/learn/reverse-engineering" element={<ReverseEngineeringPage />} />
+            <Route path="/learn/mobile-pentest" element={<MobilePentestPage />} />
+            <Route path="/learn/network-hub" element={<NetworkAnalysisGuidePage />} />
+            <Route path="/learn/wireshark" element={<WiresharkGuidePage />} />
+            <Route path="/learn/nmap" element={<NmapGuidePage />} />
+            <Route path="/learn/ssl-tls" element={<SSLTLSGuidePage />} />
+            <Route path="/learn/dns" element={<DNSGuidePage />} />
+            <Route path="/learn/traceroute" element={<TracerouteGuidePage />} />
+            <Route path="/learn/api-testing" element={<APITestingGuidePage />} />
+            <Route path="/learn/cti" element={<CyberThreatIntelPage />} />
+          </Routes>
+        </Suspense>
       </Container>
     </>
   );

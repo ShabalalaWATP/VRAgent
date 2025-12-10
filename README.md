@@ -158,6 +158,7 @@ VRAgent includes a comprehensive **Security Learning Hub** with educational cont
 | **Reverse Engineering** | Binary analysis and malware techniques |
 | **Security Glossary** | 100+ security terms and definitions |
 | **Security Commands** | Essential CLI tools (nmap, burp, metasploit, etc.) |
+| **Cyber Threat Intelligence** | Threat actors, CTI methodology, tracking tools, and intelligence frameworks |
 
 #### Network Analysis Learning Pages
 | Topic | Description |
