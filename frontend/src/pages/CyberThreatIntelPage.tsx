@@ -62,8 +62,26 @@ const actorCategories: ActorCategory[] = [
     color: "#3b82f6",
     description: "Intelligence agencies and cyber commands from NATO/Five Eyes nations",
     actors: [
-      { name: "Equation Group", aliases: ["EQGRP", "Longhorn"], origin: "USA (NSA/TAO)", type: "Intelligence", targets: ["Global"], description: "NSA's elite hacking unit, creators of Stuxnet components" },
-      { name: "Tailored Access Operations (TAO)", aliases: ["Office of TAO"], origin: "USA (NSA)", type: "Intelligence", targets: ["Global"], description: "NSA's offensive cyber operations unit" },
+      { 
+        name: "Equation Group", 
+        aliases: ["EQGRP", "Longhorn"], 
+        origin: "USA (NSA/TAO)", 
+        type: "Intelligence", 
+        targets: ["Global Governments", "Telecom", "Encryption"], 
+        description: "NSA's elite hacking unit, creators of Stuxnet components.",
+        notableCampaigns: ["Stuxnet (Centrifuges)", "Duqu", "Flame"],
+        ttps: ["Zero-day exploits", "Firmware persistence", "Air-gap jumping"]
+      },
+      { 
+        name: "Tailored Access Operations (TAO)", 
+        aliases: ["Office of TAO"], 
+        origin: "USA (NSA)", 
+        type: "Intelligence", 
+        targets: ["Global"], 
+        description: "NSA's offensive cyber operations unit.",
+        notableCampaigns: ["Shadow Brokers Leaks (Victim)", "Quantum Insert"],
+        ttps: ["Supply chain interdiction", "Hardware implants", "QUANTUM suite"]
+      },
       { name: "CIA Special Activities Center", aliases: ["SAC", "Vault 7"], origin: "USA (CIA)", type: "Intelligence", targets: ["Global"], description: "CIA's covert cyber operations division" },
       { name: "USCYBERCOM", aliases: ["Cyber National Mission Force"], origin: "USA", type: "Military", targets: ["State Actors"], description: "Unified combatant command for cyberspace operations" },
       { name: "National Cyber Force (NCF)", aliases: [], origin: "UK (GCHQ/MOD)", type: "Military/Intelligence", targets: ["State Actors", "Terrorists"], description: "UK's offensive cyber capability, joint GCHQ-MOD" },
@@ -84,10 +102,46 @@ const actorCategories: ActorCategory[] = [
     color: "#dc2626",
     description: "Russian intelligence services and military cyber units",
     actors: [
-      { name: "APT28", aliases: ["Fancy Bear", "Sofacy", "Sednit", "STRONTIUM", "Forest Blizzard"], origin: "Russia (GRU)", type: "Military Intelligence", targets: ["NATO", "Ukraine", "Elections"], description: "GRU Unit 26165, responsible for DNC hack, Olympic attacks" },
-      { name: "APT29", aliases: ["Cozy Bear", "The Dukes", "NOBELIUM", "Midnight Blizzard"], origin: "Russia (SVR)", type: "Intelligence", targets: ["Government", "Think Tanks"], description: "SVR foreign intelligence, SolarWinds supply chain attack" },
-      { name: "Sandworm", aliases: ["Voodoo Bear", "IRIDIUM", "Seashell Blizzard", "Unit 74455"], origin: "Russia (GRU)", type: "Military Intelligence", targets: ["Ukraine", "Infrastructure"], description: "GRU Unit 74455, NotPetya, Ukraine power grid attacks" },
-      { name: "Turla", aliases: ["Snake", "Venomous Bear", "KRYPTON", "Secret Blizzard"], origin: "Russia (FSB)", type: "Intelligence", targets: ["Government", "Military"], description: "FSB Center 16, one of most sophisticated Russian APTs" },
+      { 
+        name: "APT28", 
+        aliases: ["Fancy Bear", "Sofacy", "Sednit", "STRONTIUM", "Forest Blizzard"], 
+        origin: "Russia (GRU)", 
+        type: "Military Intelligence", 
+        targets: ["NATO", "Ukraine", "Elections"], 
+        description: "GRU Unit 26165, responsible for DNC hack, Olympic attacks.",
+        notableCampaigns: ["DNC Hack (2016)", "Olympic Destroyer", "Bundestag Hack"],
+        ttps: ["X-Agent", "X-Tunnel", "Credential Harvesting", "VPNFilter"]
+      },
+      { 
+        name: "APT29", 
+        aliases: ["Cozy Bear", "The Dukes", "NOBELIUM", "Midnight Blizzard"], 
+        origin: "Russia (SVR)", 
+        type: "Intelligence", 
+        targets: ["Government", "Think Tanks"], 
+        description: "SVR foreign intelligence, SolarWinds supply chain attack.",
+        notableCampaigns: ["SolarWinds (Sunburst)", "DNC Hack (2016)", "COVID-19 Vaccine Theft"],
+        ttps: ["Supply Chain Compromise", "Cloud Persistence", "Token Theft"]
+      },
+      { 
+        name: "Sandworm", 
+        aliases: ["Voodoo Bear", "IRIDIUM", "Seashell Blizzard", "Unit 74455"], 
+        origin: "Russia (GRU)", 
+        type: "Military Intelligence", 
+        targets: ["Ukraine", "Infrastructure"], 
+        description: "GRU Unit 74455, NotPetya, Ukraine power grid attacks.",
+        notableCampaigns: ["NotPetya", "Ukraine Power Grid (2015/2016)", "Olympic Destroyer"],
+        ttps: ["Destructive Malware (Wiper)", "Living off the Land", "Industroyer"]
+      },
+      { 
+        name: "Turla", 
+        aliases: ["Snake", "Venomous Bear", "KRYPTON", "Secret Blizzard"], 
+        origin: "Russia (FSB)", 
+        type: "Intelligence", 
+        targets: ["Government", "Military"], 
+        description: "FSB Center 16, one of most sophisticated Russian APTs.",
+        notableCampaigns: ["Agent.btz", "Moonlight Maze", "Satellite Hijacking"],
+        ttps: ["Satellite C2", "Rootkits", "Watering Holes"]
+      },
       { name: "Gamaredon", aliases: ["Primitive Bear", "ACTINIUM", "Aqua Blizzard"], origin: "Russia (FSB)", type: "Intelligence", targets: ["Ukraine"], description: "FSB-linked, focused on Ukrainian government" },
       { name: "Star Blizzard", aliases: ["SEABORGIUM", "Callisto", "Cold River"], origin: "Russia (FSB)", type: "Intelligence", targets: ["NATO", "UK", "NGOs"], description: "Credential phishing campaigns against Western targets" },
       { name: "Ember Bear", aliases: ["UAC-0056", "Lorec53"], origin: "Russia (GRU)", type: "Military Intelligence", targets: ["Ukraine", "NATO"], description: "GRU-linked destructive attacks on Ukraine" },
@@ -100,11 +154,47 @@ const actorCategories: ActorCategory[] = [
     color: "#ef4444",
     description: "PLA, MSS, and affiliated Chinese cyber operations",
     actors: [
-      { name: "APT1", aliases: ["Comment Crew", "Unit 61398"], origin: "China (PLA)", type: "Military", targets: ["US Defense", "Industry"], description: "PLA Unit 61398, first APT publicly attributed by Mandiant" },
-      { name: "APT10", aliases: ["Stone Panda", "menuPass", "Red Apollo"], origin: "China (MSS)", type: "Intelligence", targets: ["MSPs", "Healthcare"], description: "MSS Tianjin bureau, Operation Cloud Hopper" },
+      { 
+        name: "APT1", 
+        aliases: ["Comment Crew", "Unit 61398"], 
+        origin: "China (PLA)", 
+        type: "Military", 
+        targets: ["US Defense", "Industry"], 
+        description: "PLA Unit 61398, first APT publicly attributed by Mandiant.",
+        notableCampaigns: ["Operation Aurora", "Shady RAT"],
+        ttps: ["Spearphishing", "Custom Backdoors", "Pass-the-Hash"]
+      },
+      { 
+        name: "APT10", 
+        aliases: ["Stone Panda", "menuPass", "Red Apollo"], 
+        origin: "China (MSS)", 
+        type: "Intelligence", 
+        targets: ["MSPs", "Healthcare"], 
+        description: "MSS Tianjin bureau, Operation Cloud Hopper.",
+        notableCampaigns: ["Operation Cloud Hopper", "Visallo"],
+        ttps: ["MSP Compromise", "DLL Side-Loading", "Quasar RAT"]
+      },
       { name: "APT40", aliases: ["Leviathan", "TEMP.Periscope", "Gingham Typhoon"], origin: "China (MSS)", type: "Intelligence", targets: ["Maritime", "Defense"], description: "MSS Hainan, maritime and naval intelligence" },
-      { name: "APT41", aliases: ["Winnti", "Wicked Panda", "Brass Typhoon"], origin: "China (MSS)", type: "Intelligence/Criminal", targets: ["Gaming", "Tech", "Healthcare"], description: "Dual espionage and financially motivated operations" },
-      { name: "Volt Typhoon", aliases: ["VANGUARD PANDA", "Bronze Silhouette"], origin: "China", type: "State", targets: ["US Critical Infrastructure"], description: "Pre-positioning for infrastructure disruption" },
+      { 
+        name: "APT41", 
+        aliases: ["Winnti", "Wicked Panda", "Brass Typhoon"], 
+        origin: "China (MSS)", 
+        type: "Intelligence/Criminal", 
+        targets: ["Gaming", "Tech", "Healthcare"], 
+        description: "Dual espionage and financially motivated operations.",
+        notableCampaigns: ["Supply Chain Attacks (CCleaner)", "Game Currency Theft"],
+        ttps: ["Software Supply Chain", "Bootkits", "ShadowPad"]
+      },
+      { 
+        name: "Volt Typhoon", 
+        aliases: ["VANGUARD PANDA", "Bronze Silhouette"], 
+        origin: "China", 
+        type: "State", 
+        targets: ["US Critical Infrastructure"], 
+        description: "Pre-positioning for infrastructure disruption.",
+        notableCampaigns: ["Guam Infrastructure", "US Ports"],
+        ttps: ["Living off the Land (LOTL)", "SOHO Router Exploitation", "Web Shells"]
+      },
       { name: "Salt Typhoon", aliases: [], origin: "China", type: "State", targets: ["Telecom", "ISPs"], description: "2024 telecom intrusions, access to wiretap systems" },
       { name: "Flax Typhoon", aliases: ["Ethereal Panda"], origin: "China", type: "State", targets: ["Taiwan", "US"], description: "Taiwan-focused, IoT botnet operations" },
       { name: "Mustang Panda", aliases: ["Bronze President", "RedDelta"], origin: "China", type: "State", targets: ["Southeast Asia", "EU"], description: "Southeast Asian government espionage" },
@@ -118,8 +208,26 @@ const actorCategories: ActorCategory[] = [
     color: "#a855f7",
     description: "RGB and affiliated DPRK cyber operations",
     actors: [
-      { name: "Lazarus Group", aliases: ["HIDDEN COBRA", "Zinc", "Diamond Sleet"], origin: "DPRK (RGB)", type: "State", targets: ["Finance", "Crypto", "Defense"], description: "Sony hack, WannaCry, $2B+ crypto theft" },
-      { name: "APT38", aliases: ["BlueNoroff", "Stardust Chollima"], origin: "DPRK (RGB)", type: "State", targets: ["Banks", "SWIFT"], description: "Financial theft unit, Bangladesh Bank heist" },
+      { 
+        name: "Lazarus Group", 
+        aliases: ["HIDDEN COBRA", "Zinc", "Diamond Sleet"], 
+        origin: "DPRK (RGB)", 
+        type: "State", 
+        targets: ["Finance", "Crypto", "Defense"], 
+        description: "Sony hack, WannaCry, $2B+ crypto theft.",
+        notableCampaigns: ["WannaCry Ransomware", "Sony Pictures Hack", "Harmony Bridge Theft"],
+        ttps: ["SMB Exploits", "Man-in-the-Middle", "Trojanized Applications"]
+      },
+      { 
+        name: "APT38", 
+        aliases: ["BlueNoroff", "Stardust Chollima"], 
+        origin: "DPRK (RGB)", 
+        type: "State", 
+        targets: ["Banks", "SWIFT"], 
+        description: "Financial theft unit, Bangladesh Bank heist.",
+        notableCampaigns: ["Bangladesh Bank Heist", "ATM Cashouts"],
+        ttps: ["SWIFT Manipulation", "File Deletion (Wiping)", "Custom Malware"]
+      },
       { name: "Kimsuky", aliases: ["Velvet Chollima", "Emerald Sleet", "APT43"], origin: "DPRK (RGB)", type: "State", targets: ["Think Tanks", "Nuclear"], description: "Intelligence gathering on foreign policy" },
       { name: "Andariel", aliases: ["Silent Chollima", "Onyx Sleet"], origin: "DPRK (RGB)", type: "State", targets: ["Defense", "Aerospace"], description: "Defense sector espionage and ransomware" },
       { name: "Bureau 121", aliases: [], origin: "DPRK", type: "State", targets: ["South Korea", "US"], description: "Primary cyber warfare unit, 6000+ operators" },
@@ -133,7 +241,16 @@ const actorCategories: ActorCategory[] = [
     color: "#f59e0b",
     description: "IRGC and MOIS affiliated cyber operations",
     actors: [
-      { name: "APT33", aliases: ["Elfin", "Refined Kitten", "Peach Sandstorm"], origin: "Iran (IRGC)", type: "State", targets: ["Aviation", "Energy", "Saudi"], description: "Shamoon destructive attacks, aerospace espionage" },
+      { 
+        name: "APT33", 
+        aliases: ["Elfin", "Refined Kitten", "Peach Sandstorm"], 
+        origin: "Iran (IRGC)", 
+        type: "State", 
+        targets: ["Aviation", "Energy", "Saudi"], 
+        description: "Shamoon destructive attacks, aerospace espionage.",
+        notableCampaigns: ["Shamoon 2.0", "StoneDrill"],
+        ttps: ["Disk Wipers", "Password Spraying", "Web Shells"]
+      },
       { name: "APT34", aliases: ["OilRig", "Helix Kitten", "Hazel Sandstorm"], origin: "Iran (MOIS)", type: "Intelligence", targets: ["Middle East", "Finance"], description: "Middle Eastern government and financial sector" },
       { name: "APT35", aliases: ["Charming Kitten", "Phosphorus", "Mint Sandstorm"], origin: "Iran (IRGC)", type: "State", targets: ["Dissidents", "Media", "US"], description: "Social engineering, journalist targeting" },
       { name: "APT39", aliases: ["Chafer", "Cotton Sandstorm"], origin: "Iran (MOIS)", type: "Intelligence", targets: ["Telecom", "Travel"], description: "Telecom and travel industry surveillance" },
@@ -149,10 +266,46 @@ const actorCategories: ActorCategory[] = [
     color: "#6366f1",
     description: "Financially motivated ransomware and eCrime groups",
     actors: [
-      { name: "LockBit", aliases: ["LockBit 3.0", "LockBit Black"], origin: "Russia-linked", type: "Ransomware", targets: ["Global", "Healthcare", "Government"], description: "Largest RaaS operation 2022-2024, disrupted Feb 2024" },
-      { name: "BlackCat/ALPHV", aliases: ["Noberus"], origin: "Russia-linked", type: "Ransomware", targets: ["Healthcare", "Finance"], description: "Rust-based ransomware, Change Healthcare attack" },
-      { name: "Cl0p", aliases: ["TA505", "FIN11"], origin: "Russia-linked", type: "Ransomware", targets: ["File Transfer"], description: "MOVEit, GoAnywhere mass exploitation campaigns" },
-      { name: "Scattered Spider", aliases: ["Octo Tempest", "UNC3944", "0ktapus"], origin: "US/UK", type: "eCrime", targets: ["Telecom", "Tech", "Casinos"], description: "Social engineering experts, MGM/Caesars attacks" },
+      { 
+        name: "LockBit", 
+        aliases: ["LockBit 3.0", "LockBit Black"], 
+        origin: "Russia-linked", 
+        type: "Ransomware", 
+        targets: ["Global", "Healthcare", "Government"], 
+        description: "Largest RaaS operation 2022-2024, disrupted Feb 2024.",
+        notableCampaigns: ["Royal Mail", "Boeing", "ICBC"],
+        ttps: ["Double Extortion", "Affiliate Model", "Stealbit"]
+      },
+      { 
+        name: "BlackCat/ALPHV", 
+        aliases: ["Noberus"], 
+        origin: "Russia-linked", 
+        type: "Ransomware", 
+        targets: ["Healthcare", "Finance"], 
+        description: "Rust-based ransomware, Change Healthcare attack.",
+        notableCampaigns: ["Change Healthcare", "MGM Resorts"],
+        ttps: ["Rust Payload", "Triple Extortion", "Access Brokers"]
+      },
+      { 
+        name: "Cl0p", 
+        aliases: ["TA505", "FIN11"], 
+        origin: "Russia-linked", 
+        type: "Ransomware", 
+        targets: ["File Transfer"], 
+        description: "MOVEit, GoAnywhere mass exploitation campaigns.",
+        notableCampaigns: ["MOVEit Transfer", "GoAnywhere MFT", "Accellion"],
+        ttps: ["Zero-day Exploitation", "Mass Extortion", "Web Shells"]
+      },
+      { 
+        name: "Scattered Spider", 
+        aliases: ["Octo Tempest", "UNC3944", "0ktapus"], 
+        origin: "US/UK", 
+        type: "eCrime", 
+        targets: ["Telecom", "Tech", "Casinos"], 
+        description: "Social engineering experts, MGM/Caesars attacks.",
+        notableCampaigns: ["MGM Resorts", "Caesars Entertainment", "Okta"],
+        ttps: ["SIM Swapping", "Help Desk Social Engineering", "BYOVD"]
+      },
       { name: "FIN7", aliases: ["Carbanak", "Carbon Spider"], origin: "Russia", type: "eCrime", targets: ["Retail", "Hospitality"], description: "Carbanak banking trojan, point-of-sale malware" },
       { name: "Evil Corp", aliases: ["Indrik Spider", "Dridex"], origin: "Russia", type: "eCrime", targets: ["Finance", "Global"], description: "Dridex, WastedLocker, sanctioned by US Treasury" },
       { name: "REvil", aliases: ["Sodinokibi", "Pinchy Spider"], origin: "Russia", type: "Ransomware", targets: ["MSPs", "Supply Chain"], description: "Kaseya attack, $70M ransom demands, disrupted 2022" },
@@ -254,6 +407,21 @@ const ctiMethodology = [
   },
 ];
 
+const tlpLevels = [
+  { level: "TLP:RED", color: "#dc2626", desc: "Not for disclosure, restricted to participants only." },
+  { level: "TLP:AMBER", color: "#f59e0b", desc: "Limited disclosure, restricted to organization and clients." },
+  { level: "TLP:AMBER+STRICT", color: "#d97706", desc: "Restricted to organization only." },
+  { level: "TLP:GREEN", color: "#10b981", desc: "Limited disclosure, community wide." },
+  { level: "TLP:CLEAR", color: "#9ca3af", desc: "Unlimited disclosure, public information." },
+];
+
+const biases = [
+  { name: "Confirmation Bias", desc: "Seeking information that supports pre-existing beliefs." },
+  { name: "Anchoring", desc: "Relying too heavily on the first piece of information offered." },
+  { name: "Mirror Imaging", desc: "Assuming the adversary thinks and acts like you do." },
+  { name: "Availability Heuristic", desc: "Overestimating the importance of information that is easy to recall." },
+];
+
 // Tracking methodology
 const trackingMethods = [
   { method: "Infrastructure Tracking", description: "Monitor domain registrations, SSL certificates, IP ranges, hosting patterns", tools: "PassiveTotal, DomainTools, Shodan, Censys" },
@@ -262,6 +430,14 @@ const trackingMethods = [
   { method: "Actor Tracking", description: "Build profiles on threat actors, TTPs, tooling preferences", tools: "MITRE ATT&CK, Threat Actor Libraries, MISP Galaxies" },
   { method: "Vulnerability Tracking", description: "Track exploitation of CVEs, PoC releases, in-the-wild exploitation", tools: "VulnDB, KEV Catalog, Exploit-DB, NVD" },
   { method: "Underground Monitoring", description: "Monitor dark web forums, ransomware blogs, leak sites", tools: "Tor, Flare, DarkOwl, Intel471" },
+];
+
+const pivotTechniques = [
+  { name: "Email Address", pivots: ["Domain Registration", "Social Media", "GitHub/Forums", "Breach Data"] },
+  { name: "IP Address", pivots: ["Passive DNS (Domains)", "SSL Certificates", "Open Ports/Services", "Geo-location"] },
+  { name: "Domain Name", pivots: ["Whois Data", "Subdomains", "Associated Emails", "File Downloads"] },
+  { name: "SSL Certificate", pivots: ["Subject/Issuer Name", "Serial Number", "JARM Fingerprint", "Other Domains"] },
+  { name: "Malware Hash", pivots: ["Imphash", "Rich Header", "String Reuse", "Compilation Time"] },
 ];
 
 export default function CyberThreatIntelPage() {
@@ -459,6 +635,18 @@ export default function CyberThreatIntelPage() {
                         <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.8rem", lineHeight: 1.5 }}>
                           {actor.description}
                         </Typography>
+                        {actor.notableCampaigns && (
+                          <Box sx={{ mt: 1.5 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, display: "block", fontSize: "0.7rem", color: "text.primary" }}>Notable Campaigns:</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.7rem" }}>{actor.notableCampaigns.join(", ")}</Typography>
+                          </Box>
+                        )}
+                        {actor.ttps && (
+                          <Box sx={{ mt: 1 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, display: "block", fontSize: "0.7rem", color: "text.primary" }}>Key TTPs:</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.7rem" }}>{actor.ttps.join(", ")}</Typography>
+                          </Box>
+                        )}
                       </Paper>
                     </Grid>
                   ))}
@@ -569,6 +757,36 @@ export default function CyberThreatIntelPage() {
               </Grid>
             </Grid>
           </Paper>
+
+          {/* TLP & Biases */}
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", borderRadius: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🚦 Traffic Light Protocol (TLP)</Typography>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  {tlpLevels.map((tlp) => (
+                    <Box key={tlp.level} sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Chip label={tlp.level} size="small" sx={{ bgcolor: tlp.color, color: tlp.level === "TLP:CLEAR" ? "black" : "white", fontWeight: 700, minWidth: 100 }} />
+                      <Typography variant="caption" color="text.secondary">{tlp.desc}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", borderRadius: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🧠 Cognitive Biases in Analysis</Typography>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  {biases.map((bias) => (
+                    <Box key={bias.name}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "error.main" }}>{bias.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">{bias.desc}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
         </>
       )}
 
@@ -604,6 +822,25 @@ export default function CyberThreatIntelPage() {
               </TableBody>
             </Table>
           </TableContainer>
+
+          {/* Pivot Searching */}
+          <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🔍 Pivot Searching Techniques</Typography>
+            <Grid container spacing={2}>
+              {pivotTechniques.map((tech) => (
+                <Grid item xs={12} sm={6} md={4} key={tech.name}>
+                  <Box sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "primary.main", mb: 1 }}>{tech.name}</Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {tech.pivots.map((p) => (
+                        <Chip key={p} label={p} size="small" sx={{ fontSize: "0.65rem" }} />
+                      ))}
+                    </Box>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
 
           {/* Key Platforms */}
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>🛠️ CTI Platforms & Resources</Typography>
