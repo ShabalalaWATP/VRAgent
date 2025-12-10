@@ -159,6 +159,7 @@ VRAgent includes a comprehensive **Security Learning Hub** with educational cont
 | **Security Glossary** | 100+ security terms and definitions |
 | **Security Commands** | Essential CLI tools (nmap, burp, metasploit, etc.) |
 | **Cyber Threat Intelligence** | Threat actors, CTI methodology, tracking tools, and intelligence frameworks |
+| **Lateral Movement** | Windows/Linux pivoting, LOLBins, credential attacks, cloud pivoting, evasion techniques, and tools reference |
 
 #### Network Analysis Learning Pages
 | Topic | Description |
@@ -374,6 +375,29 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
 - **Report Management**: Save, view, and delete traceroute reports
 - **Learning Resources**: Comprehensive Traceroute Guide at `/learn/traceroute`
 
+#### MITM Workbench
+- **AI-Powered Natural Language Rule Creation**: Create interception rules using plain English
+  - Describe what you want in plain language: "Block all analytics requests" or "Add 2 second delay to API calls"
+  - AI parses descriptions and generates proper MITM rules automatically
+  - Pattern-based fallback when AI is unavailable
+  - One-click application to active proxy
+  - Example suggestions for common security tests
+- **Real-Time AI Suggestions**: AI analyzes your traffic and suggests security tests
+  - Automatic detection of auth headers, JSON APIs, cookies, admin paths
+  - Categorized suggestions (security, performance, debug, learning)
+  - Priority-based recommendations (high/medium/low)
+  - Quick-apply buttons to instantly create suggested rules
+  - Traffic analysis summary showing patterns detected
+- **Beginner-Friendly Features**:
+  - Interactive traffic flow visualization
+  - Proxy health check panel with diagnostics
+  - Pre-built test scenarios with learning points
+  - Welcome banner with quick tips
+- **Traffic Interception & Modification**: Capture and modify HTTP/HTTPS traffic
+- **Rule-Based Automation**: Create custom rules for automatic traffic modification
+- **AI Security Analysis**: Gemini-powered analysis of captured traffic
+- **Export Options**: Generate reports in Markdown, PDF, or Word format
+
 #### API Endpoint Tester
 - **9 Specialized Testing Modes** (organized in tabs):
   - **AI Auto-Test**: Automated CIDR network scanning - discovers and tests all HTTP services in a network range
@@ -478,12 +502,41 @@ docker-compose up -d
 
 # Run database migrations
 docker-compose exec backend alembic upgrade head
+
+# Create the first admin user (REQUIRED for multi-user setup)
+docker-compose exec backend python -m backend.scripts.create_admin \
+  --email admin@example.com \
+  --username admin \
+  --password YourSecurePassword123
 ```
 
 The application will be available at:
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs
+
+### Authentication & User Management
+
+VRAgent supports multi-user authentication with role-based access control:
+
+- **Login**: Users authenticate at `/login` with username and password
+- **Account Requests**: New users can request accounts at `/register` (requires admin approval)
+- **Admin Panel**: Administrators can manage users at `/admin`:
+  - Approve or reject account requests
+  - Create new users directly
+  - Suspend or reactivate accounts
+  - Change user roles (user/admin)
+  - Reset user passwords
+
+**Environment Variables for Authentication:**
+```env
+# Add these to your .env file
+SECRET_KEY=your-secure-random-key-change-in-production
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+```
+
+> ⚠️ **Important**: Always change `SECRET_KEY` in production! Use a long random string.
 
 ### Docker Services
 
@@ -494,6 +547,175 @@ The application will be available at:
 | `worker` | - | Background job processor - healthcheck enabled |
 | `db` | 5432 | PostgreSQL with pgvector - healthcheck enabled |
 | `redis` | 6379 | Redis for job queuing & WebSocket pub/sub - healthcheck enabled |
+
+---
+
+## 🏢 Multi-User Production Deployment (20+ Users)
+
+For deploying VRAgent as a shared server for teams or organizations, use the production Docker Compose configuration with enhanced scalability.
+
+### Production Features
+
+| Feature | Description |
+|---------|-------------|
+| **12 Concurrent Scans** | 12 worker replicas process scans simultaneously |
+| **Connection Pooling** | PostgreSQL pool (30 connections) for concurrent users |
+| **Rate Limiting** | Protects API from abuse (100 req/min authenticated) |
+| **Memory Limits** | Container resource limits prevent OOM crashes |
+| **Port 80** | Standard HTTP - users access via IP address directly |
+
+### Quick Production Setup
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/ShabalalaWATP/VRAgent.git
+cd VRAgent
+
+# 2. Create production environment file
+cat > .env << 'EOF'
+# Required
+POSTGRES_PASSWORD=your_secure_db_password_here
+SECRET_KEY=your_32_char_random_secret_key_here
+
+# AI Features (recommended)
+GEMINI_API_KEY=your_gemini_key
+NVD_API_KEY=your_nvd_key
+
+# Optional tuning
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=7
+EOF
+
+# 3. Start with production config (12 workers)
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# 4. Run database migrations
+docker-compose -f docker-compose.prod.yml exec backend alembic upgrade head
+
+# 5. Create the first admin user
+docker-compose -f docker-compose.prod.yml exec backend python -c "
+from backend.services.auth_service import AuthService
+from backend.core.database import SessionLocal
+db = SessionLocal()
+auth = AuthService(db)
+auth.create_user(
+    email='admin@yourcompany.com',
+    username='admin',
+    password='YourSecurePassword123!',
+    first_name='Admin',
+    last_name='User',
+    role='admin',
+    status='active'
+)
+db.commit()
+print('Admin user created!')
+"
+```
+
+### Access the Server
+
+Once running, users access VRAgent by typing your server's IP address in their browser:
+
+```
+http://YOUR_SERVER_IP
+```
+
+No port number needed - the production config serves on standard port 80.
+
+### Scaling Workers
+
+Adjust the number of concurrent scans based on your server resources:
+
+```bash
+# Scale to 6 workers (lighter load)
+docker-compose -f docker-compose.prod.yml up -d --scale worker=6
+
+# Scale to 12 workers (default production)
+docker-compose -f docker-compose.prod.yml up -d --scale worker=12
+
+# Scale to 20 workers (heavy usage, needs 40GB+ RAM)
+docker-compose -f docker-compose.prod.yml up -d --scale worker=20
+```
+
+### Resource Requirements
+
+| Users | Workers | RAM | CPU | Concurrent Scans |
+|-------|---------|-----|-----|------------------|
+| 1-10 | 2-3 | 8GB | 4 cores | 2-3 |
+| 10-25 | 6-8 | 16GB | 8 cores | 6-8 |
+| 25-50 | 12 | 32GB | 16 cores | 12 |
+| 50+ | 16-20 | 64GB | 32 cores | 16-20 |
+
+### Production vs Development Config
+
+| Setting | Development (`docker-compose.yml`) | Production (`docker-compose.prod.yml`) |
+|---------|-----------------------------------|---------------------------------------|
+| Workers | 1 | 12 (scalable) |
+| Frontend Port | 3000 | 80 |
+| DB Connections | Default | Pooled (30 max) |
+| Memory Limits | None | Per-container limits |
+| Rate Limiting | Disabled | Available (enable via env) |
+| API Docs | Enabled | Disabled |
+
+### Enable Rate Limiting
+
+To protect the API from abuse in production:
+
+```bash
+# Add to your .env file
+ENABLE_RATE_LIMITING=true
+```
+
+Rate limits:
+- **Authenticated users**: 100 requests/minute
+- **Unauthenticated**: 20 requests/minute  
+- **Scan endpoints**: 5 scans/minute per user
+- **Exploitability analysis**: 10 requests/minute
+
+### Firewall Configuration
+
+Ensure these ports are open on your server:
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 80 | TCP | HTTP (user access) |
+| 443 | TCP | HTTPS (if using SSL) |
+
+### Production Commands
+
+```bash
+# Start production stack
+docker-compose -f docker-compose.prod.yml up -d
+
+# View logs
+docker-compose -f docker-compose.prod.yml logs -f
+
+# Check service health
+docker-compose -f docker-compose.prod.yml ps
+
+# Restart all services
+docker-compose -f docker-compose.prod.yml restart
+
+# Stop everything
+docker-compose -f docker-compose.prod.yml down
+
+# Update and restart
+git pull
+docker-compose -f docker-compose.prod.yml up -d --build
+docker-compose -f docker-compose.prod.yml exec backend alembic upgrade head
+```
+
+### Adding HTTPS (Optional)
+
+For production deployments, it's recommended to add SSL. You can:
+
+1. **Use a reverse proxy** (nginx, Traefik, Caddy) in front of VRAgent
+2. **Use Cloudflare** for SSL termination
+3. **Add Let's Encrypt** to the nginx container
+
+Contact your system administrator or let me know if you need help configuring HTTPS.
+
+---
 
 ## 🪟 Complete Windows 11 Setup Guide (Beginner-Friendly)
 
@@ -1323,6 +1545,8 @@ The frontend will be available at http://localhost:5173
 | `GET` | `/dns/reports/{id}` | Get specific DNS report |
 | `DELETE` | `/dns/reports/{id}` | Delete a DNS report |
 | `POST` | `/dns/chat` | Chat with AI about DNS findings |
+| `POST` | `/mitm/ai/create-rule` | Create MITM rule from natural language |
+| `GET` | `/mitm/proxies/{proxy_id}/ai-suggestions` | Get AI suggestions based on traffic |
 | `POST` | `/api-tester/test` | Run comprehensive API security test |
 | `POST` | `/api-tester/quick-scan` | Quick single endpoint security scan |
 | `POST` | `/api-tester/auto-test` | AI Auto-Test with CIDR network scanning |
@@ -1761,7 +1985,54 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📋 Changelog
 
-### December 9, 2025 (Latest)
+### December 10, 2025 (Latest)
+
+#### MITM Workbench - AI-Powered Enhancements
+
+**Natural Language Rule Creation:**
+- New AI-powered rule creation from plain English descriptions
+- Supports commands like:
+  - "Block all requests to analytics.google.com"
+  - "Add a 2 second delay to all API responses"
+  - "Remove the Authorization header from all requests"
+  - "Replace all prices with $0.00"
+  - "Add X-Debug-Mode: true header"
+- Pattern-based fallback when Gemini AI is unavailable
+- Auto-apply option to instantly add rules to proxy
+- Clickable example suggestions in the UI
+
+**Real-Time AI Suggestions:**
+- AI analyzes captured traffic and suggests security tests
+- Automatic detection of:
+  - Authentication headers (Bearer tokens, Basic auth)
+  - JSON API endpoints
+  - CORS configurations
+  - Cookies and session tokens
+  - Admin/sensitive paths
+  - Form submissions
+- Categorized suggestions: Security, Performance, Debug, Learning
+- Priority levels: High, Medium, Low
+- Quick-apply buttons for instant rule creation
+- Traffic analysis summary panel
+
+**Backend Implementation:**
+- New `create_rule_from_natural_language()` function in mitm_service.py
+- New `get_ai_traffic_suggestions()` function for traffic analysis
+- Pattern matching fallback for common rule types
+- Two new API endpoints:
+  - `POST /mitm/ai/create-rule` - Natural language rule creation
+  - `GET /mitm/proxies/{proxy_id}/ai-suggestions` - AI suggestions
+
+**Frontend UI:**
+- Natural Language input panel with AI icon
+- Rule creation result display with interpretation
+- AI Suggestions panel with categorized cards
+- Traffic summary showing detected patterns
+- Example chips for quick input
+
+---
+
+### December 9, 2025
 
 #### API Endpoint Tester - Major Enhancement
 

@@ -9,17 +9,25 @@ from backend import models
 from backend.schemas import ProjectCreate
 
 
-def list_projects(db: Session) -> List[models.Project]:
-    return db.query(models.Project).order_by(models.Project.created_at.desc()).all()
+def list_projects(db: Session, owner_id: Optional[int] = None) -> List[models.Project]:
+    """List projects, optionally filtered by owner."""
+    query = db.query(models.Project)
+    if owner_id is not None:
+        query = query.filter(models.Project.owner_id == owner_id)
+    return query.order_by(models.Project.created_at.desc()).all()
 
 
 def get_project(db: Session, project_id: int) -> Optional[models.Project]:
     return db.query(models.Project).filter(models.Project.id == project_id).first()
 
 
-def create_project(db: Session, project_in: ProjectCreate) -> models.Project:
+def create_project(db: Session, project_in: ProjectCreate, owner_id: Optional[int] = None) -> models.Project:
+    """Create a new project with optional owner."""
     project = models.Project(
-        name=project_in.name, description=project_in.description, git_url=project_in.git_url
+        name=project_in.name,
+        description=project_in.description,
+        git_url=project_in.git_url,
+        owner_id=owner_id,
     )
     db.add(project)
     db.commit()

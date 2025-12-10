@@ -17,6 +17,9 @@ import {
 import { Routes, Route, Link } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { useThemeMode } from "./theme/ThemeProvider";
+import { useAuth } from "./contexts/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import UserMenu from "./components/UserMenu";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
 
@@ -57,6 +60,20 @@ const TracerouteGuidePage = lazy(() => import("./pages/TracerouteGuidePage"));
 const APITesterPage = lazy(() => import("./pages/APITesterPage"));
 const APITestingGuidePage = lazy(() => import("./pages/APITestingGuidePage"));
 const CyberThreatIntelPage = lazy(() => import("./pages/CyberThreatIntelPage"));
+const FuzzingPage = lazy(() => import("./pages/FuzzingPage"));
+const FuzzingToolGuidePage = lazy(() => import("./pages/FuzzingToolGuidePage"));
+const MITMWorkbenchPage = lazy(() => import("./pages/MITMWorkbenchPage"));
+const MITMGuidePage = lazy(() => import("./pages/MITMGuidePage"));
+const VulnHuntrPage = lazy(() => import("./pages/VulnHuntrPage"));
+const DigitalForensicsPage = lazy(() => import("./pages/DigitalForensicsPage"));
+const OSINTReconPage = lazy(() => import("./pages/OSINTReconPage"));
+const LateralMovementPage = lazy(() => import("./pages/LateralMovementPage"));
+
+// Auth pages
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
 // Animations
 const pulse = keyframes`
@@ -101,7 +118,28 @@ const GitHubIcon = () => (
 
 function App() {
   const { mode, toggleTheme } = useThemeMode();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const theme = useTheme();
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <>
+        <CssBaseline />
+        <Box
+          sx={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: theme.palette.background.default,
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      </>
+    );
+  }
 
   return (
     <>
@@ -197,73 +235,77 @@ function App() {
 
           <Box sx={{ flexGrow: 1 }} />
 
-          {/* Action Buttons */}
+          {/* Action Buttons - Only show when authenticated */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Tooltip title="Projects - Manage your codebases">
-              <Button
-                component={Link}
-                to="/"
-                startIcon={<Box component="span" sx={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" /></svg></Box>}
-                variant="contained"
-                size="medium"
-                sx={{
-                  background: `linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)`,
-                  color: "white",
-                  fontWeight: 700,
-                  px: 2.5,
-                  py: 1,
-                  borderRadius: 2,
-                  textTransform: "none",
-                  fontSize: "0.95rem",
-                  boxShadow: `0 4px 15px ${alpha("#059669", 0.4)}, 0 0 20px ${alpha("#059669", 0.2)}`,
-                  border: `1px solid ${alpha("#10b981", 0.5)}`,
-                  "&:hover": {
-                    background: `linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%)`,
-                    boxShadow: `0 6px 25px ${alpha("#059669", 0.5)}, 0 0 30px ${alpha("#059669", 0.3)}`,
-                    transform: "translateY(-2px)",
-                  },
-                  "&:active": {
-                    transform: "translateY(0)",
-                  },
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Projects
-              </Button>
-            </Tooltip>
-            
-            <Tooltip title="Network Analysis - PCAP & Nmap Security Analysis">
-              <Button
-                component={Link}
-                to="/network"
-                startIcon={<HubIcon sx={{ fontSize: "1.3rem !important" }} />}
-                variant="contained"
-                size="medium"
-                sx={{
-                  background: `linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%)`,
-                  color: "white",
-                  fontWeight: 700,
-                  px: 2.5,
-                  py: 1,
-                  borderRadius: 2,
-                  textTransform: "none",
-                  fontSize: "0.95rem",
-                  boxShadow: `0 4px 15px ${alpha("#0891b2", 0.4)}, 0 0 20px ${alpha("#0891b2", 0.2)}`,
-                  border: `1px solid ${alpha("#06b6d4", 0.5)}`,
-                  "&:hover": {
-                    background: `linear-gradient(135deg, #0891b2 0%, #0e7490 50%, #155e75 100%)`,
-                    boxShadow: `0 6px 25px ${alpha("#0891b2", 0.5)}, 0 0 30px ${alpha("#0891b2", 0.3)}`,
-                    transform: "translateY(-2px)",
-                  },
-                  "&:active": {
-                    transform: "translateY(0)",
-                  },
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Network Analysis
-              </Button>
-            </Tooltip>
+            {isAuthenticated && (
+              <>
+                <Tooltip title="Projects - Manage your codebases">
+                  <Button
+                    component={Link}
+                    to="/"
+                    startIcon={<Box component="span" sx={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" /></svg></Box>}
+                    variant="contained"
+                    size="medium"
+                    sx={{
+                      background: `linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)`,
+                      color: "white",
+                      fontWeight: 700,
+                      px: 2.5,
+                      py: 1,
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontSize: "0.95rem",
+                      boxShadow: `0 4px 15px ${alpha("#059669", 0.4)}, 0 0 20px ${alpha("#059669", 0.2)}`,
+                      border: `1px solid ${alpha("#10b981", 0.5)}`,
+                      "&:hover": {
+                        background: `linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%)`,
+                        boxShadow: `0 6px 25px ${alpha("#059669", 0.5)}, 0 0 30px ${alpha("#059669", 0.3)}`,
+                        transform: "translateY(-2px)",
+                      },
+                      "&:active": {
+                        transform: "translateY(0)",
+                      },
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    Projects
+                  </Button>
+                </Tooltip>
+                
+                <Tooltip title="Network Analysis - PCAP & Nmap Security Analysis">
+                  <Button
+                    component={Link}
+                    to="/network"
+                    startIcon={<HubIcon sx={{ fontSize: "1.3rem !important" }} />}
+                    variant="contained"
+                    size="medium"
+                    sx={{
+                      background: `linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%)`,
+                      color: "white",
+                      fontWeight: 700,
+                      px: 2.5,
+                      py: 1,
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontSize: "0.95rem",
+                      boxShadow: `0 4px 15px ${alpha("#0891b2", 0.4)}, 0 0 20px ${alpha("#0891b2", 0.2)}`,
+                      border: `1px solid ${alpha("#06b6d4", 0.5)}`,
+                      "&:hover": {
+                        background: `linear-gradient(135deg, #0891b2 0%, #0e7490 50%, #155e75 100%)`,
+                        boxShadow: `0 6px 25px ${alpha("#0891b2", 0.5)}, 0 0 30px ${alpha("#0891b2", 0.3)}`,
+                        transform: "translateY(-2px)",
+                      },
+                      "&:active": {
+                        transform: "translateY(0)",
+                      },
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    Network Analysis
+                  </Button>
+                </Tooltip>
+              </>
+            )}
             
             <Tooltip title="Security Learning Hub - Tutorials, Guides & Reference">
               <Button
@@ -335,6 +377,9 @@ function App() {
                 {mode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
               </IconButton>
             </Tooltip>
+
+            {/* User Menu */}
+            <UserMenu />
           </Box>
         </Toolbar>
       </AppBar>
@@ -346,18 +391,99 @@ function App() {
           </Box>
         }>
           <Routes>
-            <Route path="/" element={<ProjectListPage />} />
-            <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-            <Route path="/reports/:reportId" element={<ReportDetailPage />} />
-            <Route path="/network" element={<NetworkAnalysisHub />} />
-            <Route path="/network/pcap" element={<PcapAnalyzerPage />} />
-            <Route path="/network/nmap" element={<NmapAnalyzerPage />} />
-            <Route path="/network/ssl" element={<SSLScannerPage />} />
-            <Route path="/network/dns" element={<DNSAnalyzerPage />} />
-            <Route path="/network/traceroute" element={<TracerouteAnalyzerPage />} />
-            <Route path="/network/api-tester" element={<APITesterPage />} />
-            <Route path="/pcap" element={<PcapAnalyzerPage />} />
+            {/* Public Auth Routes */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            
+            {/* Admin Route */}
+            <Route path="/admin" element={
+              <ProtectedRoute requireAdmin>
+                <AdminPage />
+              </ProtectedRoute>
+            } />
+            
+            {/* Profile Route */}
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            } />
+            
+            {/* Protected Routes */}
+            <Route path="/" element={
+              <ProtectedRoute>
+                <ProjectListPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/projects/:projectId" element={
+              <ProtectedRoute>
+                <ProjectDetailPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/reports/:reportId" element={
+              <ProtectedRoute>
+                <ReportDetailPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network" element={
+              <ProtectedRoute>
+                <NetworkAnalysisHub />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/pcap" element={
+              <ProtectedRoute>
+                <PcapAnalyzerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/nmap" element={
+              <ProtectedRoute>
+                <NmapAnalyzerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/ssl" element={
+              <ProtectedRoute>
+                <SSLScannerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/dns" element={
+              <ProtectedRoute>
+                <DNSAnalyzerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/traceroute" element={
+              <ProtectedRoute>
+                <TracerouteAnalyzerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/api-tester" element={
+              <ProtectedRoute>
+                <APITesterPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/fuzzer" element={
+              <ProtectedRoute>
+                <FuzzingPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/mitm" element={
+              <ProtectedRoute>
+                <MITMWorkbenchPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/vulnhuntr" element={
+              <ProtectedRoute>
+                <VulnHuntrPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/pcap" element={
+              <ProtectedRoute>
+                <PcapAnalyzerPage />
+              </ProtectedRoute>
+            } />
+            
+            {/* Public Learn Routes - No authentication required */}
             <Route path="/learn" element={<LearnHubPage />} />
+            <Route path="/learn/mitm" element={<MITMGuidePage />} />
             <Route path="/learn/scanning" element={<ScanningPage />} />
             <Route path="/learn/ai-analysis" element={<AIAnalysisPage />} />
             <Route path="/learn/kill-chain" element={<KillChainPage />} />
@@ -383,6 +509,10 @@ function App() {
             <Route path="/learn/traceroute" element={<TracerouteGuidePage />} />
             <Route path="/learn/api-testing" element={<APITestingGuidePage />} />
             <Route path="/learn/cti" element={<CyberThreatIntelPage />} />
+            <Route path="/learn/fuzzing-tool" element={<FuzzingToolGuidePage />} />
+            <Route path="/learn/digital-forensics" element={<DigitalForensicsPage />} />
+            <Route path="/learn/osint" element={<OSINTReconPage />} />
+            <Route path="/learn/lateral-movement" element={<LateralMovementPage />} />
           </Routes>
         </Suspense>
       </Container>

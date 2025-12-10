@@ -1,12 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import os
 
 from backend.core.config import settings
 from backend.core.database import Base, engine
 from backend.core.exceptions import VRAgentError
 from backend.core.logging import get_logger
-from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester
+from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin
 from backend import models  # noqa: F401  # ensure models are registered
 
 logger = get_logger(__name__)
@@ -14,6 +15,9 @@ logger = get_logger(__name__)
 # Create tables for demo; in production use Alembic migrations only.
 if settings.environment == "development":
     Base.metadata.create_all(bind=engine)
+
+# Enable rate limiting in production
+ENABLE_RATE_LIMITING = os.getenv("ENABLE_RATE_LIMITING", "false").lower() == "true"
 
 app = FastAPI(
     title="AI Agent Vulnerability Research API",
@@ -36,6 +40,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add rate limiting middleware in production
+if ENABLE_RATE_LIMITING:
+    from backend.core.rate_limit import RateLimitMiddleware
+    app.add_middleware(RateLimitMiddleware, default_limit=100, window_seconds=60)
+    logger.info("Rate limiting middleware enabled")
 
 
 # Global exception handlers
@@ -66,6 +76,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
+app.include_router(auth.router, tags=["authentication"])
+app.include_router(admin.router, tags=["admin"])
 app.include_router(projects.router, prefix="/projects", tags=["projects"])
 app.include_router(scans.router, prefix="/projects", tags=["scans"])
 app.include_router(reports.router, prefix="/projects/{project_id}/reports", tags=["reports"])
@@ -78,6 +90,9 @@ app.include_router(network.router, tags=["network-analysis"])
 app.include_router(dns.router, tags=["dns-reconnaissance"])
 app.include_router(traceroute.router, tags=["traceroute-visualization"])
 app.include_router(api_tester.router, tags=["api-tester"])
+app.include_router(fuzzing.router, tags=["security-fuzzer"])
+app.include_router(mitm.router, tags=["mitm-workbench"])
+app.include_router(vulnhuntr.router, tags=["vulnhuntr"])
 
 
 @app.get("/health")

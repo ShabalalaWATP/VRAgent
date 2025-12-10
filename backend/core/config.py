@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     gemini_model_id: str = Field("gemini-2.5-flash", validation_alias="GEMINI_MODEL_ID")
     environment: str = Field("development", validation_alias="ENVIRONMENT")
     
+    # Authentication settings
+    secret_key: str = Field("vragent-change-this-in-production-2024", validation_alias="SECRET_KEY")
+    access_token_expire_minutes: int = Field(30, validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+    refresh_token_expire_days: int = Field(7, validation_alias="REFRESH_TOKEN_EXPIRE_DAYS")
+    
     # Ollama settings for air-gapped environments
     ollama_url: str = Field("http://localhost:11434", validation_alias="OLLAMA_URL")
     ollama_model: str = Field("llama3.2", validation_alias="OLLAMA_MODEL")

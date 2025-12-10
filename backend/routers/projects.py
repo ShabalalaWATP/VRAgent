@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from backend.core.database import get_db
 from backend.core.logging import get_logger
+from backend.core.auth import get_current_active_user
+from backend.models.models import User
 from backend.schemas import Project, ProjectCreate, UploadResponse
 from backend.services import project_service
 from backend.services import git_service
@@ -32,31 +34,56 @@ class CloneResponse(BaseModel):
 
 
 @router.get("", response_model=list[Project])
-def list_projects(db: Session = Depends(get_db)):
-    return project_service.list_projects(db)
+def list_projects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """List all projects belonging to the current user."""
+    return project_service.list_projects(db, owner_id=current_user.id)
 
 
 @router.post("", response_model=Project)
-def create_project(project_in: ProjectCreate, db: Session = Depends(get_db)):
-    return project_service.create_project(db, project_in)
+def create_project(
+    project_in: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Create a new project for the current user."""
+    return project_service.create_project(db, project_in, owner_id=current_user.id)
 
 
 @router.get("/{project_id}", response_model=Project)
-def get_project(project_id: int, db: Session = Depends(get_db)):
+def get_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get a specific project (must belong to current user)."""
     project = project_service.get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    # Check ownership
+    if project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this project")
     return project
 
 
 @router.delete("/{project_id}")
-def delete_project(project_id: int, db: Session = Depends(get_db)):
+def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
     """Delete a project and all associated data (reports, findings, code chunks, etc.)."""
     from backend import models
     
     project = project_service.get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check ownership
+    if project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this project")
     
     # Get all scan runs for this project
     scan_runs = db.query(models.ScanRun).filter(models.ScanRun.project_id == project_id).all()
@@ -94,11 +121,18 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{project_id}/upload", response_model=UploadResponse)
 async def upload_project_code(
-    project_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)
+    project_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     project = project_service.get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check ownership
+    if project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to upload to this project")
 
     if not file.filename.endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only zip uploads are supported")
@@ -114,7 +148,8 @@ async def upload_project_code(
 async def clone_repository(
     project_id: int, 
     clone_request: CloneRequest, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Clone a GitHub/GitLab repository and prepare it for scanning.
@@ -125,6 +160,10 @@ async def clone_repository(
     project = project_service.get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check ownership
+    if project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to clone to this project")
     
     try:
         # Clone the repository

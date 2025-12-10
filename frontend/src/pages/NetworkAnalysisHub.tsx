@@ -345,13 +345,15 @@ const NetworkAnalysisHub: React.FC = () => {
         />
       </Box>
 
-      {/* Tool Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      {/* Tool Cards - 4x2 Grid */}
+      <Grid container spacing={2} sx={{ mb: 4 }}>
         {/* PCAP Analyzer */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card
             sx={{
               height: "100%",
+              display: "flex",
+              flexDirection: "column",
               background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.1)} 0%, ${alpha("#0891b2", 0.05)} 100%)`,
               border: `1px solid ${alpha("#06b6d4", 0.3)}`,
               transition: "all 0.3s ease",
@@ -361,23 +363,24 @@ const NetworkAnalysisHub: React.FC = () => {
               },
             }}
           >
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
                 <Box
                   sx={{
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 48,
                     borderRadius: 2,
                     background: `linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  <NetworkCheckIcon sx={{ fontSize: 32, color: "white" }} />
+                  <NetworkCheckIcon sx={{ fontSize: 28, color: "white" }} />
                 </Box>
                 <Box>
-                  <Typography variant="h6" fontWeight={700}>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
                     PCAP Analyzer
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -385,11 +388,11 @@ const NetworkAnalysisHub: React.FC = () => {
                   </Typography>
                 </Box>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, minHeight: 60 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
                 Upload .pcap files from Wireshark or tcpdump. Analyzes protocols, detects suspicious
                 traffic patterns and credential exposure.
               </Typography>
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
                 <Chip label=".pcap" size="small" variant="outlined" />
                 <Chip label=".pcapng" size="small" variant="outlined" />
               </Box>
@@ -399,6 +402,7 @@ const NetworkAnalysisHub: React.FC = () => {
                 variant="contained"
                 fullWidth
                 sx={{
+                  mt: "auto",
                   background: `linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)`,
                   "&:hover": {
                     background: `linear-gradient(135deg, #0891b2 0%, #0e7490 100%)`,
@@ -412,10 +416,12 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* Nmap Analyzer */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card
             sx={{
               height: "100%",
+              display: "flex",
+              flexDirection: "column",
               background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.1)} 0%, ${alpha("#7c3aed", 0.05)} 100%)`,
               border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
               transition: "all 0.3s ease",
@@ -425,23 +431,24 @@ const NetworkAnalysisHub: React.FC = () => {
               },
             }}
           >
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
                 <Box
                   sx={{
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 48,
                     borderRadius: 2,
                     background: `linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  <RadarIcon sx={{ fontSize: 32, color: "white" }} />
+                  <RadarIcon sx={{ fontSize: 28, color: "white" }} />
                 </Box>
                 <Box>
-                  <Typography variant="h6" fontWeight={700}>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
                     Nmap Analyzer
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -449,11 +456,11 @@ const NetworkAnalysisHub: React.FC = () => {
                   </Typography>
                 </Box>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, minHeight: 60 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
                 Upload Nmap scan outputs. Identifies open ports, vulnerable services, and provides
                 prioritized remediation recommendations.
               </Typography>
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
                 <Chip label=".xml" size="small" variant="outlined" />
                 <Chip label=".nmap" size="small" variant="outlined" />
               </Box>
@@ -463,6 +470,7 @@ const NetworkAnalysisHub: React.FC = () => {
                 variant="contained"
                 fullWidth
                 sx={{
+                  mt: "auto",
                   background: `linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)`,
                   "&:hover": {
                     background: `linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)`,
@@ -476,10 +484,12 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* SSL/TLS Scanner */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card
             sx={{
               height: "100%",
+              display: "flex",
+              flexDirection: "column",
               background: `linear-gradient(135deg, ${alpha("#10b981", 0.1)} 0%, ${alpha("#059669", 0.05)} 100%)`,
               border: `1px solid ${alpha("#10b981", 0.3)}`,
               transition: "all 0.3s ease",
@@ -489,23 +499,24 @@ const NetworkAnalysisHub: React.FC = () => {
               },
             }}
           >
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
                 <Box
                   sx={{
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 48,
                     borderRadius: 2,
                     background: `linear-gradient(135deg, #10b981 0%, #059669 100%)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  <LockIcon sx={{ fontSize: 32, color: "white" }} />
+                  <LockIcon sx={{ fontSize: 28, color: "white" }} />
                 </Box>
                 <Box>
-                  <Typography variant="h6" fontWeight={700}>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
                     SSL/TLS Scanner
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -513,11 +524,11 @@ const NetworkAnalysisHub: React.FC = () => {
                   </Typography>
                 </Box>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, minHeight: 60 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
                 Scan SSL/TLS configuration of any host. Checks certificate validity, protocol support,
                 cipher strength, and known vulnerabilities.
               </Typography>
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
                 <Chip label="TLS 1.2/1.3" size="small" variant="outlined" />
                 <Chip label="Certs" size="small" variant="outlined" />
               </Box>
@@ -527,6 +538,7 @@ const NetworkAnalysisHub: React.FC = () => {
                 variant="contained"
                 fullWidth
                 sx={{
+                  mt: "auto",
                   background: `linear-gradient(135deg, #10b981 0%, #059669 100%)`,
                   "&:hover": {
                     background: `linear-gradient(135deg, #059669 0%, #047857 100%)`,
@@ -540,10 +552,12 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* DNS Reconnaissance */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card
             sx={{
               height: "100%",
+              display: "flex",
+              flexDirection: "column",
               background: `linear-gradient(135deg, ${alpha("#f59e0b", 0.1)} 0%, ${alpha("#d97706", 0.05)} 100%)`,
               border: `1px solid ${alpha("#f59e0b", 0.3)}`,
               transition: "all 0.3s ease",
@@ -553,23 +567,24 @@ const NetworkAnalysisHub: React.FC = () => {
               },
             }}
           >
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
                 <Box
                   sx={{
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 48,
                     borderRadius: 2,
                     background: `linear-gradient(135deg, #f59e0b 0%, #d97706 100%)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  <DnsIcon sx={{ fontSize: 32, color: "white" }} />
+                  <DnsIcon sx={{ fontSize: 28, color: "white" }} />
                 </Box>
                 <Box>
-                  <Typography variant="h6" fontWeight={700}>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
                     DNS Reconnaissance
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -577,11 +592,11 @@ const NetworkAnalysisHub: React.FC = () => {
                   </Typography>
                 </Box>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, minHeight: 60 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
                 Enumerate DNS records, discover subdomains, test zone transfers, and analyze email
                 security (SPF, DMARC, DKIM).
               </Typography>
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
                 <Chip label="A/AAAA/MX" size="small" variant="outlined" />
                 <Chip label="Subdomains" size="small" variant="outlined" />
               </Box>
@@ -591,6 +606,7 @@ const NetworkAnalysisHub: React.FC = () => {
                 variant="contained"
                 fullWidth
                 sx={{
+                  mt: "auto",
                   background: `linear-gradient(135deg, #f59e0b 0%, #d97706 100%)`,
                   "&:hover": {
                     background: `linear-gradient(135deg, #d97706 0%, #b45309 100%)`,
@@ -604,10 +620,12 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* Traceroute Visualization */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card
             sx={{
               height: "100%",
+              display: "flex",
+              flexDirection: "column",
               background: `linear-gradient(135deg, ${alpha("#ec4899", 0.1)} 0%, ${alpha("#db2777", 0.05)} 100%)`,
               border: `1px solid ${alpha("#ec4899", 0.3)}`,
               transition: "all 0.3s ease",
@@ -617,23 +635,24 @@ const NetworkAnalysisHub: React.FC = () => {
               },
             }}
           >
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
                 <Box
                   sx={{
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 48,
                     borderRadius: 2,
                     background: `linear-gradient(135deg, #ec4899 0%, #db2777 100%)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  <HubIcon sx={{ fontSize: 32, color: "white" }} />
+                  <HubIcon sx={{ fontSize: 28, color: "white" }} />
                 </Box>
                 <Box>
-                  <Typography variant="h6" fontWeight={700}>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
                     Traceroute
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -641,11 +660,11 @@ const NetworkAnalysisHub: React.FC = () => {
                   </Typography>
                 </Box>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, minHeight: 60 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
                 Visualize network paths, identify routing bottlenecks, measure hop-by-hop latency, and
                 analyze packet loss along routes.
               </Typography>
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
                 <Chip label="Path Viz" size="small" variant="outlined" />
                 <Chip label="Latency" size="small" variant="outlined" />
               </Box>
@@ -655,6 +674,7 @@ const NetworkAnalysisHub: React.FC = () => {
                 variant="contained"
                 fullWidth
                 sx={{
+                  mt: "auto",
                   background: `linear-gradient(135deg, #ec4899 0%, #db2777 100%)`,
                   "&:hover": {
                     background: `linear-gradient(135deg, #db2777 0%, #be185d 100%)`,
@@ -668,10 +688,12 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* API Endpoint Tester */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card
             sx={{
               height: "100%",
+              display: "flex",
+              flexDirection: "column",
               background: `linear-gradient(135deg, ${alpha("#3b82f6", 0.1)} 0%, ${alpha("#2563eb", 0.05)} 100%)`,
               border: `1px solid ${alpha("#3b82f6", 0.3)}`,
               transition: "all 0.3s ease",
@@ -681,23 +703,24 @@ const NetworkAnalysisHub: React.FC = () => {
               },
             }}
           >
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
                 <Box
                   sx={{
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 48,
                     borderRadius: 2,
                     background: `linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  <ApiIcon sx={{ fontSize: 32, color: "white" }} />
+                  <ApiIcon sx={{ fontSize: 28, color: "white" }} />
                 </Box>
                 <Box>
-                  <Typography variant="h6" fontWeight={700}>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
                     API Tester
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -705,11 +728,11 @@ const NetworkAnalysisHub: React.FC = () => {
                   </Typography>
                 </Box>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, minHeight: 60 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
                 Test REST API endpoints for security vulnerabilities. Checks authentication, CORS, 
                 rate limiting, input validation, and security headers.
               </Typography>
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
                 <Chip label="Auth" size="small" variant="outlined" />
                 <Chip label="CORS" size="small" variant="outlined" />
                 <Chip label="SQLi/XSS" size="small" variant="outlined" />
@@ -720,6 +743,7 @@ const NetworkAnalysisHub: React.FC = () => {
                 variant="contained"
                 fullWidth
                 sx={{
+                  mt: "auto",
                   background: `linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)`,
                   "&:hover": {
                     background: `linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)`,
@@ -731,6 +755,239 @@ const NetworkAnalysisHub: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Security Fuzzer */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card
+            sx={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              background: `linear-gradient(135deg, ${alpha("#f97316", 0.1)} 0%, ${alpha("#ea580c", 0.05)} 100%)`,
+              border: `1px solid ${alpha("#f97316", 0.3)}`,
+              transition: "all 0.3s ease",
+              "&:hover": {
+                transform: "translateY(-4px)",
+                boxShadow: `0 8px 30px ${alpha("#f97316", 0.3)}`,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 2,
+                    background: `linear-gradient(135deg, #f97316 0%, #ea580c 100%)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                    <path d="M14 12h-4v-2h4m0 6h-4v-2h4m6-6h-2.81a5.985 5.985 0 0 0-1.82-1.96L17 4.41 15.59 3l-2.17 2.17a6.002 6.002 0 0 0-2.83 0L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8z"/>
+                  </svg>
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                    Security Fuzzer
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Payload Injection Testing
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
+                Advanced fuzzing tool with multiple attack modes (Sniper, Battering Ram, Pitchfork, Cluster Bomb). 
+                Built-in wordlists for SQLi, XSS, LFI, and more.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+                <Chip label="SQLi/XSS" size="small" variant="outlined" />
+                <Chip label="LFI/RFI" size="small" variant="outlined" />
+                <Chip label="Intruder" size="small" variant="outlined" />
+              </Box>
+              <Button
+                component={Link}
+                to="/network/fuzzer"
+                variant="contained"
+                fullWidth
+                sx={{
+                  mt: "auto",
+                  background: `linear-gradient(135deg, #f97316 0%, #ea580c 100%)`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #ea580c 0%, #c2410c 100%)`,
+                  },
+                }}
+              >
+                Open Fuzzer
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* MITM Workbench */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card
+            sx={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              background: `linear-gradient(135deg, ${alpha("#eab308", 0.1)} 0%, ${alpha("#ca8a04", 0.05)} 100%)`,
+              border: `1px solid ${alpha("#eab308", 0.3)}`,
+              transition: "all 0.3s ease",
+              "&:hover": {
+                transform: "translateY(-4px)",
+                boxShadow: `0 8px 30px ${alpha("#eab308", 0.3)}`,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 2,
+                    background: `linear-gradient(135deg, #eab308 0%, #ca8a04 100%)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                    <path d="M7.5 21H2V9h5.5v12zm7.25-18h-5.5v18h5.5V3zM22 11h-5.5v10H22V11z"/>
+                  </svg>
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                    MITM Workbench
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Traffic Interception
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
+                Man-in-the-Middle proxy for intercepting, inspecting, and modifying HTTP/HTTPS traffic 
+                between application components. Supports rule-based auto-modification.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+                <Chip label="HTTP Proxy" size="small" variant="outlined" />
+                <Chip label="Intercept" size="small" variant="outlined" />
+                <Chip label="Modify" size="small" variant="outlined" />
+              </Box>
+              <Box sx={{ mt: "auto" }}>
+                <Chip
+                  component={Link}
+                  to="/learn/mitm"
+                  icon={<MenuBookIcon sx={{ fontSize: 14 }} />}
+                  label="Learn MITM →"
+                  clickable
+                  size="small"
+                  sx={{
+                    mb: 1.5,
+                    background: alpha("#eab308", 0.1),
+                    border: `1px solid ${alpha("#eab308", 0.3)}`,
+                    color: "#eab308",
+                    fontWeight: 500,
+                    "&:hover": {
+                      background: alpha("#eab308", 0.2),
+                    },
+                  }}
+                />
+                <Button
+                  component={Link}
+                  to="/network/mitm"
+                  variant="contained"
+                  fullWidth
+                  sx={{
+                    background: `linear-gradient(135deg, #eab308 0%, #ca8a04 100%)`,
+                    "&:hover": {
+                      background: `linear-gradient(135deg, #ca8a04 0%, #a16207 100%)`,
+                    },
+                  }}
+                >
+                  Open MITM Workbench
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* VulnHuntr - LLM-Powered Vulnerability Hunter */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card
+            sx={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              background: `linear-gradient(135deg, ${alpha("#dc2626", 0.1)} 0%, ${alpha("#991b1b", 0.05)} 100%)`,
+              border: `1px solid ${alpha("#dc2626", 0.3)}`,
+              transition: "all 0.3s ease",
+              "&:hover": {
+                transform: "translateY(-4px)",
+                boxShadow: `0 8px 30px ${alpha("#dc2626", 0.3)}`,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 2,
+                    background: `linear-gradient(135deg, #dc2626 0%, #991b1b 100%)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                  </svg>
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                    VulnHuntr
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    LLM Vulnerability Hunting
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
+                AI-powered vulnerability hunter that traces user input through call chains 
+                to identify remotely exploitable vulnerabilities like XSS, SQLi, LFI, RCE, and SSRF.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+                <Chip label="Data Flow" size="small" variant="outlined" />
+                <Chip label="LLM Analysis" size="small" variant="outlined" />
+                <Chip label="Call Chain" size="small" variant="outlined" />
+              </Box>
+              <Box sx={{ mt: "auto" }}>
+                <Button
+                  component={Link}
+                  to="/network/vulnhuntr"
+                  variant="contained"
+                  fullWidth
+                  sx={{
+                    background: `linear-gradient(135deg, #dc2626 0%, #991b1b 100%)`,
+                    "&:hover": {
+                      background: `linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%)`,
+                    },
+                  }}
+                >
+                  Open VulnHuntr
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
 
       {/* Tabs for Reports and Ports Glossary */}
@@ -739,8 +996,31 @@ const NetworkAnalysisHub: React.FC = () => {
           <Tab label="Saved Reports" />
           <Tab 
             label="Network Ports Glossary" 
-            icon={<PortableWifiOffIcon sx={{ fontSize: 18 }} />} 
+            icon={<PortableWifiOffIcon sx={{ fontSize: 22 }} />} 
             iconPosition="start"
+            sx={{
+              fontSize: "1.1rem",
+              fontWeight: 700,
+              px: 3,
+              py: 1.5,
+              minHeight: 56,
+              background: activeTab === 1 
+                ? "linear-gradient(135deg, rgba(6, 182, 212, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%)" 
+                : "linear-gradient(135deg, rgba(6, 182, 212, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)",
+              borderRadius: "12px 12px 0 0",
+              border: "1px solid",
+              borderColor: activeTab === 1 ? "rgba(6, 182, 212, 0.4)" : "rgba(6, 182, 212, 0.2)",
+              borderBottom: "none",
+              mr: 1,
+              transition: "all 0.3s ease",
+              "&:hover": {
+                background: "linear-gradient(135deg, rgba(6, 182, 212, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%)",
+                borderColor: "rgba(6, 182, 212, 0.5)",
+              },
+              "& .MuiTab-iconWrapper": {
+                color: "#06b6d4",
+              },
+            }}
           />
         </Tabs>
       </Box>

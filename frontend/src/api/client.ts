@@ -1,10 +1,44 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
+const ACCESS_TOKEN_KEY = "vragent_access_token";
+
+// Get auth headers
+function getAuthHeaders(): HeadersInit {
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(getAuthHeaders());
+  
+  // Merge any additional headers from options
+  if (options?.headers) {
+    const optHeaders = new Headers(options.headers);
+    optHeaders.forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
+
   const resp = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options
+    ...options,
+    headers,
   });
+  
+  // Handle 401 - redirect to login
+  if (resp.status === 401) {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem("vragent_refresh_token");
+    if (!window.location.pathname.includes("/login")) {
+      window.location.href = "/login";
+    }
+    throw new Error("Unauthorized");
+  }
+  
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(text || resp.statusText);
@@ -15,10 +49,21 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export async function uploadZip(projectId: number, file: File) {
   const form = new FormData();
   form.append("file", file);
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const headers: HeadersInit = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   const resp = await fetch(`${API_URL}/projects/${projectId}/upload`, {
     method: "POST",
+    headers,
     body: form
   });
+  if (resp.status === 401) {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
   if (!resp.ok) {
     throw new Error(await resp.text());
   }
@@ -30,11 +75,21 @@ export async function cloneRepository(
   repoUrl: string, 
   branch?: string
 ): Promise<CloneResponse> {
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   const resp = await fetch(`${API_URL}/projects/${projectId}/clone`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ repo_url: repoUrl, branch })
   });
+  if (resp.status === 401) {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(text || resp.statusText);
@@ -1518,6 +1573,159 @@ export const apiClient = {
     });
     if (!resp.ok) throw new Error(await resp.text());
   },
+
+  // ============================================================================
+  // VulnHuntr API Methods
+  // ============================================================================
+  
+  vulnhuntrGetPatterns: async (): Promise<VulnHuntrPatterns> => {
+    const resp = await fetch(`${API_URL}/vulnhuntr/patterns`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  vulnhuntrAnalyze: async (request: VulnHuntrRequest): Promise<VulnHuntrResponse> => {
+    const resp = await fetch(`${API_URL}/vulnhuntr/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  vulnhuntrQuickScan: async (code: string, filename: string = "snippet.py", language: string = "python"): Promise<VulnHuntrQuickResponse> => {
+    const resp = await fetch(`${API_URL}/vulnhuntr/quick-scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, filename, language }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  vulnhuntrGetResults: async (scanId: string): Promise<VulnHuntrResult> => {
+    const resp = await fetch(`${API_URL}/vulnhuntr/results/${scanId}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  vulnhuntrDownloadMarkdown: async (scanId: string): Promise<Blob> => {
+    const resp = await fetch(`${API_URL}/vulnhuntr/results/${scanId}/markdown`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+};
+
+// ============================================================================
+// VulnHuntr Types
+// ============================================================================
+
+export type VulnHuntrSourcePoint = {
+  file_path: string;
+  line_number: number;
+  code_snippet: string;
+  source_type: string;
+  variable_name: string;
+  confidence: number;
+};
+
+export type VulnHuntrSinkPoint = {
+  file_path: string;
+  line_number: number;
+  code_snippet: string;
+  sink_type: string;
+  function_name: string;
+  vulnerability_type: string;
+  severity: string;
+};
+
+export type VulnHuntrCallChainNode = {
+  file_path: string;
+  line_number: number;
+  function_name: string;
+  code_snippet: string;
+  data_variable: string;
+  transformation: string;
+};
+
+export type VulnHuntrLlmAnalysis = {
+  is_false_positive: boolean;
+  confidence: number;
+  description: string;
+  exploit_scenario: string;
+  remediation: string;
+  sanitization_bypass?: string;
+};
+
+export type VulnHuntrVulnerabilityFlow = {
+  id: string;
+  source: VulnHuntrSourcePoint;
+  sink: VulnHuntrSinkPoint;
+  call_chain: VulnHuntrCallChainNode[];
+  vulnerability_type: string;
+  severity: string;
+  confidence: number;
+  description: string;
+  remediation: string;
+  cwe_id: string;
+  owasp_category: string;
+  llm_analysis?: VulnHuntrLlmAnalysis;
+};
+
+export type VulnHuntrRequest = {
+  project_path: string;
+  file_extensions?: string[];
+  max_files?: number;
+  deep_analysis?: boolean;
+};
+
+export type VulnHuntrResponse = {
+  success: boolean;
+  scan_id: string;
+  total_files_scanned: number;
+  sources_found: number;
+  sinks_found: number;
+  vulnerabilities_count: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  scan_duration_seconds: number;
+  vulnerabilities: VulnHuntrVulnerabilityFlow[];
+  statistics: Record<string, unknown>;
+};
+
+export type VulnHuntrQuickResponse = {
+  success: boolean;
+  vulnerabilities_count: number;
+  sources_found: number;
+  sinks_found: number;
+  vulnerabilities: VulnHuntrVulnerabilityFlow[];
+};
+
+export type VulnHuntrSinkInfo = {
+  patterns_count: number;
+  vulnerability_type: string;
+  cwe: string;
+  severity: string;
+};
+
+export type VulnHuntrPatterns = {
+  sources: Record<string, number>;
+  sinks: Record<string, VulnHuntrSinkInfo>;
+  vulnerability_types: string[];
+};
+
+export type VulnHuntrResult = {
+  scan_id: string;
+  project_path: string;
+  timestamp: string;
+  total_files_scanned: number;
+  sources_found: number;
+  sinks_found: number;
+  vulnerabilities: VulnHuntrVulnerabilityFlow[];
+  statistics: Record<string, unknown>;
 };
 
 // ============================================================================
@@ -2420,3 +2628,1063 @@ export const apiTester = {
     return resp.json();
   },
 };
+
+// ===== Security Fuzzer API =====
+
+export interface FuzzerConfig {
+  target_url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: string;
+  positions: string[];
+  payloads: string[][];
+  attack_mode: "sniper" | "batteringram" | "pitchfork" | "clusterbomb";
+  threads: number;
+  delay: number;
+  timeout: number;
+  follow_redirects: boolean;
+  match_codes: number[];
+  filter_codes: number[];
+  match_regex: string;
+  proxy_url?: string;
+}
+
+export interface FuzzerResponse {
+  id: string;
+  payload: string;
+  status_code: number;
+  response_length: number;
+  response_time: number;
+  content_type: string;
+  headers: Record<string, string>;
+  body: string;
+  timestamp: string;
+  error?: string;
+  interesting: boolean;
+  flags: string[];
+}
+
+export interface FuzzerFinding {
+  type: string;
+  severity: string;
+  description: string;
+  payload: string;
+  evidence: string[];
+  recommendation: string;
+  response_id: string;
+}
+
+export interface FuzzerStats {
+  total_requests: number;
+  success_count: number;
+  error_count: number;
+  interesting_count: number;
+  avg_response_time: number;
+  start_time?: string;
+  end_time?: string;
+  requests_per_second: number;
+}
+
+export interface FuzzerResult {
+  config: FuzzerConfig;
+  responses: FuzzerResponse[];
+  findings: FuzzerFinding[];
+  stats: FuzzerStats;
+}
+
+export interface WordlistInfo {
+  name: string;
+  description: string;
+  count: number;
+}
+
+export interface Wordlist {
+  name: string;
+  description: string;
+  payloads: string[];
+}
+
+export const fuzzer = {
+  // Run a complete fuzzing session
+  run: async (config: FuzzerConfig): Promise<FuzzerResult> => {
+    const resp = await fetch(`${API_URL}/fuzzer/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Stream fuzzing results via Server-Sent Events
+  stream: (config: FuzzerConfig, onMessage: (event: any) => void, onError?: (err: any) => void): EventSource | null => {
+    // We'll use fetch with streaming instead of EventSource since we need POST
+    const controller = new AbortController();
+    
+    fetch(`${API_URL}/fuzzer/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error("No response body");
+        }
+        
+        const decoder = new TextDecoder();
+        let buffer = "";
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+          
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                onMessage(data);
+              } catch (e) {
+                console.error("Failed to parse SSE data:", e);
+              }
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") {
+          onError?.(err);
+        }
+      });
+    
+    // Return an object with abort method to cancel the stream
+    return { close: () => controller.abort() } as any;
+  },
+
+  // Get available wordlists
+  getWordlists: async (): Promise<Record<string, WordlistInfo>> => {
+    const resp = await fetch(`${API_URL}/fuzzer/wordlists`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a specific wordlist
+  getWordlist: async (id: string): Promise<Wordlist> => {
+    const resp = await fetch(`${API_URL}/fuzzer/wordlists/${id}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Export fuzzing results
+  exportResults: async (result: FuzzerResult, format: "json" | "markdown"): Promise<{ content: string; filename: string; mime_type: string }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ result, format }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // WebSocket connection for real-time fuzzing
+  connectWebSocket: (onMessage: (event: any) => void, onError?: (err: any) => void): WebSocket => {
+    const wsUrl = API_URL.replace(/^http/, "ws") + "/fuzzer/ws";
+    const ws = new WebSocket(wsUrl);
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        onMessage(data);
+      } catch (e) {
+        console.error("Failed to parse WebSocket message:", e);
+      }
+    };
+    
+    ws.onerror = (err) => {
+      onError?.(err);
+    };
+    
+    return ws;
+  },
+
+  // ===== Advanced Fuzzing Features =====
+
+  // Encode payloads using various encoding schemes
+  encode: async (
+    payloads: string[],
+    encodings: string[] = ["url"],
+    chain: boolean = false
+  ): Promise<{ encoded: Record<string, any>; available_encodings: string[] }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/encode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payloads, encodings, chain }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Generate payloads using various generators
+  generate: async (
+    generatorType: string,
+    params: Record<string, any>
+  ): Promise<{ payloads: string[]; count: number; generator_type: string }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ generator_type: generatorType, params }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Mutate payloads for bypass attempts
+  mutate: async (
+    payloads: string[],
+    mutationTypes: string[] = ["case", "encoding"]
+  ): Promise<{ mutations: Record<string, string[]>; total_variants: number }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/mutate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payloads, mutation_types: mutationTypes }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Grep/search response content
+  grep: async (
+    content: string,
+    rules: Array<{ name: string; pattern: string; is_regex?: boolean; case_sensitive?: boolean }> = [],
+    useCommonRules: boolean = true
+  ): Promise<{ matches: any[]; match_count: number; extracted: Record<string, string[]> }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/grep`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, rules, use_common_rules: useCommonRules }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Cluster similar responses
+  cluster: async (
+    responses: FuzzerResponse[],
+    similarityThreshold: number = 0.85
+  ): Promise<{ clusters: any[]; total_clusters: number; anomalous_responses: string[] }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/cluster`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ responses, similarity_threshold: similarityThreshold }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Comprehensive response analysis
+  analyze: async (
+    responses: FuzzerResponse[],
+    options: {
+      detectWaf?: boolean;
+      detectRateLimit?: boolean;
+      discoverParams?: boolean;
+      clusterResponses?: boolean;
+      extractData?: boolean;
+    } = {}
+  ): Promise<{
+    waf_detection?: { detected: boolean; waf_type: string | null; confidence: number; indicators: string[]; bypass_suggestions: string[] };
+    rate_limiting?: { detected: boolean; limit_type: string | null; threshold: number | null; indicators: string[] };
+    discovered_parameters?: Array<{ name: string; source: string; param_type: string }>;
+    discovered_endpoints?: string[];
+    clustering?: { clusters: any[]; total_clusters: number; anomalous_responses: string[] };
+    extracted_data?: Record<string, string[]>;
+    statistics?: { unique_status_codes: number[]; avg_response_time: number; avg_response_length: number; error_count: number; interesting_count: number };
+  }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        responses,
+        detect_waf: options.detectWaf ?? true,
+        detect_rate_limit: options.detectRateLimit ?? true,
+        discover_params: options.discoverParams ?? true,
+        cluster_responses: options.clusterResponses ?? true,
+        extract_data: options.extractData ?? true,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get available encoding types
+  getEncodings: async (): Promise<{ encodings: Array<{ value: string; name: string }> }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/encodings`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get available transformation types
+  getTransformations: async (): Promise<{ transformations: Array<{ value: string; name: string }> }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/transformations`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get available payload generators
+  getGenerators: async (): Promise<{ generators: Array<{ type: string; description: string; params: Record<string, string>; example: Record<string, any> }> }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/generators`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // Session Management
+  // ==========================================================================
+
+  // Create a new fuzzing session
+  createSession: async (data: {
+    name: string;
+    description?: string;
+    target_url: string;
+    method?: string;
+    config?: Record<string, any>;
+    tags?: string[];
+  }): Promise<{ id: number; name: string; target_url: string; status: string; created_at: string; message: string }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List fuzzing sessions
+  listSessions: async (params: {
+    page?: number;
+    page_size?: number;
+    status?: string;
+    search?: string;
+  } = {}): Promise<{
+    sessions: Array<{
+      id: number;
+      name: string;
+      description?: string;
+      target_url: string;
+      method: string;
+      status: string;
+      created_at: string;
+      updated_at: string;
+      started_at?: string;
+      finished_at?: string;
+      total_requests: number;
+      success_count: number;
+      error_count: number;
+      interesting_count: number;
+      avg_response_time?: number;
+      tags: string[];
+      findings_count: number;
+    }>;
+    total: number;
+    page: number;
+    page_size: number;
+  }> => {
+    const queryParams = new URLSearchParams();
+    if (params.page) queryParams.append("page", params.page.toString());
+    if (params.page_size) queryParams.append("page_size", params.page_size.toString());
+    if (params.status) queryParams.append("status", params.status);
+    if (params.search) queryParams.append("search", params.search);
+    
+    const resp = await fetch(`${API_URL}/fuzzer/sessions?${queryParams}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a specific session
+  getSession: async (sessionId: number): Promise<{
+    id: number;
+    name: string;
+    description?: string;
+    target_url: string;
+    method: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    started_at?: string;
+    finished_at?: string;
+    config: Record<string, any>;
+    total_requests: number;
+    success_count: number;
+    error_count: number;
+    interesting_count: number;
+    avg_response_time?: number;
+    results?: any[];
+    findings?: any[];
+    analysis?: any;
+    tags: string[];
+  }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update a session
+  updateSession: async (sessionId: number, data: {
+    name?: string;
+    description?: string;
+    status?: string;
+    results?: any[];
+    findings?: any[];
+    analysis?: any;
+    tags?: string[];
+    total_requests?: number;
+    success_count?: number;
+    error_count?: number;
+    interesting_count?: number;
+    avg_response_time?: number;
+  }): Promise<{ id: number; name: string; status: string; message: string }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a session
+  deleteSession: async (sessionId: number): Promise<{ message: string; id: number }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}`, {
+      method: "DELETE",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Duplicate a session
+  duplicateSession: async (sessionId: number): Promise<{ id: number; name: string; message: string }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}/duplicate`, {
+      method: "POST",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Analyze a saved session
+  analyzeSession: async (sessionId: number): Promise<{
+    session_id: number;
+    analysis: any;
+    message: string;
+  }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}/auto-analyze`, {
+      method: "POST",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // Smart Detection
+  // ==========================================================================
+
+  // Detect vulnerabilities in responses
+  detectVulnerabilities: async (
+    responses: FuzzerResponse[],
+    baselineResponse?: FuzzerResponse
+  ): Promise<{
+    findings: Array<{
+      id: string;
+      vuln_type: string;
+      severity: string;
+      confidence: number;
+      title: string;
+      description: string;
+      evidence: string[];
+      payload: string;
+      response_id: string;
+      indicators: string[];
+      recommendation: string;
+      false_positive_likelihood: string;
+    }>;
+    total: number;
+    by_severity: Record<string, number>;
+    by_type: Record<string, number>;
+  }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/smart-detect/vulnerabilities`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ responses, baseline_response: baselineResponse }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Detect anomalies in responses
+  detectAnomalies: async (
+    responses: FuzzerResponse[],
+    sensitivity: number = 2.0
+  ): Promise<{
+    anomalies: Array<{
+      response_id: string;
+      anomaly_type: string;
+      score: number;
+      baseline_value: any;
+      actual_value: any;
+      deviation: number;
+      description: string;
+    }>;
+    total: number;
+    by_type: Record<string, number>;
+    most_anomalous: string[];
+  }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/smart-detect/anomalies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ responses, sensitivity }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Perform differential analysis
+  differentialAnalysis: async (
+    baselineResponse: FuzzerResponse,
+    testResponses: FuzzerResponse[]
+  ): Promise<{
+    results: Array<{
+      response_id: string;
+      payload: string;
+      differences: Array<{ type: string; baseline: any; current: any; difference_percent?: number }>;
+      similarity_score: number;
+      potentially_interesting: boolean;
+    }>;
+    total: number;
+    interesting_count: number;
+    most_different: string[];
+  }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/smart-detect/differential`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseline_response: baselineResponse, test_responses: testResponses }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Categorize responses
+  categorizeResponses: async (responses: FuzzerResponse[]): Promise<{
+    categories: Record<string, string[]>;
+    summary: Record<string, number>;
+  }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/smart-detect/categorize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ responses }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Comprehensive auto-analysis
+  autoAnalyze: async (
+    responses: FuzzerResponse[],
+    options: {
+      detect_vulnerabilities?: boolean;
+      detect_anomalies?: boolean;
+      categorize?: boolean;
+      differential?: boolean;
+      baseline_index?: number;
+    } = {}
+  ): Promise<{
+    responses_analyzed: number;
+    vulnerabilities?: {
+      findings: any[];
+      total: number;
+      by_severity: Record<string, number>;
+    };
+    anomalies?: {
+      items: any[];
+      total: number;
+      by_type: Record<string, number>;
+    };
+    categories?: {
+      groups: Record<string, string[]>;
+      summary: Record<string, number>;
+    };
+    differential?: {
+      results: any[];
+      interesting_count: number;
+    };
+    summary: {
+      risk_score: number;
+      risk_level: string;
+      findings_count: number;
+      anomalies_count: number;
+      interesting_count: number;
+    };
+  }> => {
+    const resp = await fetch(`${API_URL}/fuzzer/smart-detect/auto-analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        responses,
+        detect_vulnerabilities: options.detect_vulnerabilities ?? true,
+        detect_anomalies: options.detect_anomalies ?? true,
+        categorize: options.categorize ?? true,
+        differential: options.differential ?? false,
+        baseline_index: options.baseline_index ?? 0,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+// ============================================================================
+// MITM Workbench Types and API
+// ============================================================================
+
+export interface MITMProxyConfig {
+  proxy_id: string;
+  listen_host: string;
+  listen_port: number;
+  target_host: string;
+  target_port: number;
+  mode: 'passthrough' | 'intercept' | 'auto_modify';
+  tls_enabled: boolean;
+}
+
+export interface MITMProxyStats {
+  requests: number;
+  responses: number;
+  bytes_sent: number;
+  bytes_received: number;
+  errors: number;
+  rules_applied: number;
+}
+
+export interface MITMProxy {
+  id: string;
+  listen_host: string;
+  listen_port: number;
+  target_host: string;
+  target_port: number;
+  mode: 'passthrough' | 'intercept' | 'auto_modify';
+  tls_enabled: boolean;
+  running: boolean;
+  stats: MITMProxyStats;
+}
+
+export interface MITMTrafficRequest {
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export interface MITMTrafficResponse {
+  status_code: number;
+  status_text: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export interface MITMTrafficEntry {
+  id: string;
+  timestamp: string;
+  request: MITMTrafficRequest;
+  response?: MITMTrafficResponse;
+  duration_ms: number;
+  modified: boolean;
+  rules_applied: string[];
+}
+
+export interface MITMRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  match_direction: 'request' | 'response' | 'both';
+  match_host?: string;
+  match_path?: string;
+  match_method?: string;
+  match_content_type?: string;
+  match_status_code?: number;
+  action: 'modify' | 'drop' | 'delay';
+  modify_headers?: Record<string, string>;
+  remove_headers?: string[];
+  body_find_replace?: Record<string, string>;
+  delay_ms?: number;
+}
+
+export interface MITMPresetRule {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export const mitmClient = {
+  // Create a new MITM proxy instance
+  createProxy: async (config: MITMProxyConfig): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List all MITM proxy instances
+  listProxies: async (): Promise<MITMProxy[]> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get status and stats for a proxy
+  getProxyStatus: async (proxyId: string): Promise<MITMProxy> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Start a proxy
+  startProxy: async (proxyId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/start`, {
+      method: "POST",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Stop a proxy
+  stopProxy: async (proxyId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/stop`, {
+      method: "POST",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a proxy
+  deleteProxy: async (proxyId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}`, {
+      method: "DELETE",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Set proxy interception mode
+  setProxyMode: async (proxyId: string, mode: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/mode?mode=${mode}`, {
+      method: "PUT",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get intercepted traffic for a proxy
+  getTraffic: async (proxyId: string, limit: number = 100, offset: number = 0): Promise<{ entries: MITMTrafficEntry[] }> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/traffic?limit=${limit}&offset=${offset}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Clear traffic log for a proxy
+  clearTraffic: async (proxyId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/traffic`, {
+      method: "DELETE",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Add an interception rule to a proxy
+  addRule: async (proxyId: string, rule: Partial<MITMRule>): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rule),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get all rules for a proxy
+  getRules: async (proxyId: string): Promise<MITMRule[]> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Remove a rule from a proxy
+  removeRule: async (proxyId: string, ruleId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules/${ruleId}`, {
+      method: "DELETE",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Enable/disable a rule
+  toggleRule: async (proxyId: string, ruleId: string, enabled: boolean): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules/${ruleId}/toggle?enabled=${enabled}`, {
+      method: "PUT",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get available preset rules
+  getPresets: async (): Promise<MITMPresetRule[]> => {
+    const resp = await fetch(`${API_URL}/mitm/presets`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Apply a preset rule to a proxy
+  applyPreset: async (proxyId: string, presetId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/presets/${presetId}`, {
+      method: "POST",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // AI-powered traffic analysis
+  analyzeTraffic: async (proxyId: string): Promise<MITMAnalysisResult> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/analyze`, {
+      method: "POST",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Export analysis report
+  exportReport: async (proxyId: string, format: 'markdown' | 'pdf' | 'docx'): Promise<Blob> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/export/${format}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  // Get guided setup information
+  getGuidedSetup: async (): Promise<MITMGuidedSetup> => {
+    const resp = await fetch(`${API_URL}/mitm/guided-setup`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+// MITM Analysis Types
+export interface MITMAnalysisFinding {
+  severity: string;
+  category: string;
+  title: string;
+  description: string;
+  evidence: string;
+  recommendation: string;
+}
+
+export interface MITMAnalysisResult {
+  summary: string;
+  risk_score: number;
+  risk_level: string;
+  findings: MITMAnalysisFinding[];
+  recommendations: string[];
+  ai_analysis?: string;
+  traffic_analyzed: number;
+  rules_active: number;
+}
+
+export interface MITMGuidedStep {
+  step: number;
+  title: string;
+  description: string;
+  tips?: string[];
+  icon?: string;
+  fields?: Record<string, string>;
+  modes?: Array<{ name: string; description: string; use_case: string }>;
+  examples?: Array<{ type: string; instructions: string }>;
+  presets?: Array<{ name: string; description: string }>;
+  checks?: string[];
+  formats?: Array<{ format: string; description: string }>;
+}
+
+export interface MITMGuidedSetup {
+  title: string;
+  description: string;
+  difficulty: string;
+  estimated_time: string;
+  steps: MITMGuidedStep[];
+  common_use_cases: Array<{
+    title: string;
+    description: string;
+    steps: string[];
+  }>;
+  troubleshooting: Array<{
+    issue: string;
+    solutions: string[];
+  }>;
+}
+
+// Test Scenarios for Beginners
+export interface MITMTestScenario {
+  id: string;
+  name: string;
+  description: string;
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  category: string;
+  icon: string;
+  estimated_time: string;
+  rules: Partial<MITMRule>[];
+  what_to_look_for: string[];
+  learning_points: string[];
+}
+
+export interface MITMScenarioResult {
+  message: string;
+  scenario: MITMTestScenario;
+  rules_added: number;
+  mode: string;
+  next_steps: string[];
+}
+
+// Health Check Types
+export interface MITMHealthCheck {
+  name: string;
+  status: 'pass' | 'fail' | 'info' | 'warning';
+  message: string;
+}
+
+export interface MITMProxyHealth {
+  proxy_id: string;
+  status: 'healthy' | 'warning' | 'error';
+  checks: MITMHealthCheck[];
+  recommendations: string[];
+}
+
+// Add new methods to mitmClient
+Object.assign(mitmClient, {
+  // Get all test scenarios
+  getTestScenarios: async (): Promise<MITMTestScenario[]> => {
+    const resp = await fetch(`${API_URL}/mitm/test-scenarios`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a specific test scenario
+  getTestScenario: async (scenarioId: string): Promise<MITMTestScenario> => {
+    const resp = await fetch(`${API_URL}/mitm/test-scenarios/${scenarioId}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Run a test scenario on a proxy
+  runTestScenario: async (proxyId: string, scenarioId: string): Promise<MITMScenarioResult> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/run-scenario/${scenarioId}`, {
+      method: "POST",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Check proxy health
+  checkProxyHealth: async (proxyId: string): Promise<MITMProxyHealth> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/health`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+});
+
+// ============================================================================
+// Natural Language Rule Creation Types
+// ============================================================================
+
+export interface NaturalLanguageRuleRequest {
+  description: string;
+  proxy_id?: string;  // If provided, auto-apply to proxy
+}
+
+export interface NaturalLanguageRuleResponse {
+  success: boolean;
+  rule?: Partial<MITMRule>;
+  interpretation: string;
+  applied: boolean;
+  error?: string;
+}
+
+// ============================================================================
+// AI Suggestions Types
+// ============================================================================
+
+export interface AISuggestion {
+  id: string;
+  title: string;
+  description: string;
+  category: 'security' | 'performance' | 'debug' | 'learning';
+  priority: 'high' | 'medium' | 'low';
+  rule?: Partial<MITMRule>;
+  natural_language: string;
+}
+
+export interface AISuggestionsResponse {
+  proxy_id: string;
+  suggestions: AISuggestion[];
+  traffic_summary: {
+    total_requests: number;
+    unique_hosts: string[];
+    unique_paths: string[];
+    auth_detected: boolean;
+    json_apis: boolean;
+    has_cookies: boolean;
+  };
+  generated_at: string;
+}
+
+// Add Natural Language and AI Suggestions methods
+Object.assign(mitmClient, {
+  // Create a rule from natural language description
+  createRuleFromNaturalLanguage: async (
+    description: string,
+    proxyId?: string
+  ): Promise<NaturalLanguageRuleResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/ai/create-rule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description, proxy_id: proxyId }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get AI-generated suggestions based on traffic patterns
+  getAISuggestions: async (proxyId: string): Promise<AISuggestionsResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/ai-suggestions`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+});
+
+// TypeScript interface extension for mitmClient
+declare module './client' {
+  interface MITMClientExtended {
+    createRuleFromNaturalLanguage: (
+      description: string,
+      proxyId?: string
+    ) => Promise<NaturalLanguageRuleResponse>;
+    getAISuggestions: (proxyId: string) => Promise<AISuggestionsResponse>;
+    getTestScenarios: () => Promise<MITMTestScenario[]>;
+    getTestScenario: (scenarioId: string) => Promise<MITMTestScenario>;
+    runTestScenario: (proxyId: string, scenarioId: string) => Promise<MITMScenarioResult>;
+    checkProxyHealth: (proxyId: string) => Promise<MITMProxyHealth>;
+  }
+}

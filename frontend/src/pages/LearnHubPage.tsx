@@ -28,12 +28,14 @@ import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
 import RadarIcon from "@mui/icons-material/Radar";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
+import SearchIcon from "@mui/icons-material/Search";
 import ApiIcon from "@mui/icons-material/Api";
 import MemoryIcon from "@mui/icons-material/Memory";
 import HubIcon from "@mui/icons-material/Hub";
 import WifiIcon from "@mui/icons-material/Wifi";
 import DnsIcon from "@mui/icons-material/Dns";
 import RouteIcon from "@mui/icons-material/Route";
+import TravelExploreIcon from "@mui/icons-material/TravelExplore";
 
 interface LearnCard {
   title: string;
@@ -137,6 +139,24 @@ const networkCards: LearnCard[] = [
     tags: ["CIDR Scanning", "JWT", "WebSocket"],
     badge: "Updated",
   },
+  {
+    title: "VRAgent Fuzzer Guide",
+    description: "Complete guide to VRAgent's Fuzzing Tool: Smart Detection, session management, payload modes, and vulnerability analysis.",
+    icon: <RadarIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/fuzzing-tool",
+    color: "#f97316",
+    tags: ["Smart Detection", "Sessions", "Payloads"],
+    badge: "New",
+  },
+  {
+    title: "MITM Workbench Guide",
+    description: "Master VRAgent's MITM Proxy: traffic interception, AI-powered rule creation, request modification, and security testing.",
+    icon: <HubIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/mitm",
+    color: "#ef4444",
+    tags: ["Proxy", "Interception", "AI Rules"],
+    badge: "New",
+  },
 ];
 
 // General security learning pages
@@ -239,12 +259,39 @@ const securityCards: LearnCard[] = [
     tags: ["Binary", "Malware", "Ghidra"],
   },
   {
+    title: "Digital Forensics",
+    description: "Evidence acquisition, disk imaging, memory analysis, timeline creation, and Windows artifacts.",
+    icon: <SearchIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/digital-forensics",
+    color: "#14b8a6",
+    tags: ["DFIR", "Memory", "Timeline"],
+    badge: "New",
+  },
+  {
     title: "Mobile App Pentesting",
     description: "Android & iOS security testing. Frida, SSL pinning bypass, data storage analysis.",
     icon: <PhoneAndroidIcon sx={{ fontSize: 40 }} />,
     path: "/learn/mobile-pentest",
     color: "#10b981",
     tags: ["Android", "iOS", "Frida"],
+    badge: "New",
+  },
+  {
+    title: "OSINT & Reconnaissance",
+    description: "Open source intelligence gathering: subdomain enumeration, email discovery, Google dorks, and OSINT tools.",
+    icon: <TravelExploreIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/osint",
+    color: "#f97316",
+    tags: ["Passive Recon", "Subdomains", "Shodan"],
+    badge: "New",
+  },
+  {
+    title: "Lateral Movement",
+    description: "Techniques for network pivoting: Windows protocols, LOLBins, credential attacks, and evasion.",
+    icon: <AccountTreeIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/lateral-movement",
+    color: "#ef4444",
+    tags: ["LOLBins", "PtH", "WinRM"],
     badge: "New",
   },
 ];
@@ -419,7 +466,7 @@ export default function LearnHubPage() {
         }}
       >
         {[
-          { value: "21", label: "Learning Topics" },
+          { value: "22", label: "Learning Topics" },
           { value: "120+", label: "Glossary Terms" },
           { value: "200+", label: "Commands" },
           { value: "30+", label: "Attack Types" },
@@ -484,7 +531,7 @@ export default function LearnHubPage() {
           </Typography>
         </Paper>
         
-        <CardGrid cards={networkCards} columns={{ xs: 12, sm: 6, md: 4, lg: 4 }} />
+        <CardGrid cards={networkCards} columns={{ xs: 12, sm: 6, md: 3, lg: 3 }} />
       </Box>
 
       <Divider sx={{ my: 5 }} />
@@ -511,7 +558,7 @@ export default function LearnHubPage() {
           </Typography>
         </Paper>
         
-        <CardGrid cards={securityCards} />
+        <CardGrid cards={securityCards} columns={{ xs: 12, sm: 6, md: 3, lg: 3 }} />
       </Box>
 
       <Divider sx={{ my: 5 }} />

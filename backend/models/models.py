@@ -23,8 +23,15 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, nullable=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="user")  # 'user' or 'admin'
+    status = Column(String, nullable=False, default="pending")  # 'pending', 'approved', 'suspended'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_login = Column(DateTime(timezone=True), nullable=True)
 
     projects = relationship("Project", back_populates="owner")
 
@@ -202,3 +209,43 @@ class NetworkAnalysisReport(Base):
     # Export metadata
     last_exported_at = Column(DateTime(timezone=True), nullable=True)
     export_formats = Column(JSON, nullable=True)  # List of formats exported
+
+
+class FuzzingSession(Base):
+    """Stores fuzzing session data including config, results, and analysis."""
+    __tablename__ = "fuzzing_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    target_url = Column(String, nullable=False, index=True)
+    method = Column(String, nullable=False, default="GET")
+    status = Column(String, nullable=False, default="created", index=True)  # created, running, paused, completed, failed
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Configuration stored as JSON
+    config = Column(JSON, nullable=True)
+    
+    # Statistics
+    total_requests = Column(Integer, default=0)
+    success_count = Column(Integer, default=0)
+    error_count = Column(Integer, default=0)
+    interesting_count = Column(Integer, default=0)
+    avg_response_time = Column(Float, nullable=True)
+    
+    # Results stored as JSON
+    results = Column(JSON, nullable=True)
+    
+    # Findings from smart detection
+    findings = Column(JSON, nullable=True)
+    
+    # Analysis results (WAF, rate limiting, etc.)
+    analysis = Column(JSON, nullable=True)
+    
+    # Tags for organization
+    tags = Column(JSON, nullable=True)
+
