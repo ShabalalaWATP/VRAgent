@@ -12,11 +12,13 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControlLabel,
   Grid,
   IconButton,
   Paper,
   Skeleton,
   Stack,
+  Switch,
   Tab,
   Tabs,
   Table,
@@ -39,8 +41,16 @@ import { useState } from "react";
 import UploadCodeForm from "../components/UploadCodeForm";
 import CloneRepoForm from "../components/CloneRepoForm";
 import ScanProgress from "../components/ScanProgress";
+import ProjectNetworkTab from "../components/ProjectNetworkTab";
+import ProjectNotesTab from "../components/ProjectNotesTab";
+import ProjectReverseTab from "../components/ProjectReverseTab";
 import { api } from "../api/client";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
+import PsychologyIcon from "@mui/icons-material/Psychology";
+import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
+import SecurityIcon from "@mui/icons-material/Security";
+import CommentIcon from "@mui/icons-material/Comment";
+import BuildIcon from "@mui/icons-material/Build";
 
 // Animations
 const float = keyframes`
@@ -244,6 +254,8 @@ export default function ProjectDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<{ id: number; date: string } | null>(null);
   const [scanCompleteSnackbar, setScanCompleteSnackbar] = useState(false);
+  const [includeAgenticScan, setIncludeAgenticScan] = useState(false);
+  const [mainTab, setMainTab] = useState<"security" | "network" | "reverse" | "notes">("security");
 
   const projectQuery = useQuery({
     queryKey: ["project", id],
@@ -258,7 +270,7 @@ export default function ProjectDetailPage() {
   });
 
   const scanMutation = useMutation({
-    mutationFn: () => api.triggerScan(id),
+    mutationFn: () => api.triggerScan(id, { includeAgentic: includeAgenticScan }),
     onSuccess: (data) => {
       if (data?.id) {
         setActiveScanId(data.id);
@@ -445,8 +457,61 @@ export default function ProjectDetailPage() {
         </Card>
       )}
 
-      {/* Actions Grid */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      {/* Main Feature Tabs */}
+      <Box sx={{ mb: 3 }}>
+        <Tabs
+          value={mainTab}
+          onChange={(_, v) => setMainTab(v)}
+          sx={{
+            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            "& .MuiTabs-indicator": {
+              height: 3,
+              borderRadius: "3px 3px 0 0",
+              background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+            },
+            "& .MuiTab-root": {
+              textTransform: "none",
+              fontWeight: 600,
+              fontSize: "1rem",
+              minHeight: 56,
+              "&.Mui-selected": {
+                color: theme.palette.primary.main,
+              },
+            },
+          }}
+        >
+          <Tab 
+            icon={<SecurityIcon />} 
+            iconPosition="start" 
+            label="Security Scanning" 
+            value="security" 
+          />
+          <Tab 
+            icon={<NetworkCheckIcon />} 
+            iconPosition="start" 
+            label="Network Analysis" 
+            value="network" 
+          />
+          <Tab 
+            icon={<BuildIcon />} 
+            iconPosition="start" 
+            label="Reverse Engineering" 
+            value="reverse" 
+          />
+          <Tab 
+            icon={<CommentIcon />} 
+            iconPosition="start" 
+            label="Notes & Tracking" 
+            value="notes" 
+          />
+        </Tabs>
+      </Box>
+
+      {/* Security Scanning Tab Content */}
+      {mainTab === "security" && (
+        <>
+          {/* Actions Grid */}
+          <Grid container spacing={3} sx={{ mb: 4 }}>
         {/* Code Source Section */}
         <Grid item xs={12} lg={7}>
           <CodeSourceCard 
@@ -531,6 +596,55 @@ export default function ProjectDetailPage() {
                     ? "⚡ Scan in progress..." 
                     : "🔍 Start New Scan"}
               </Button>
+
+              {/* Agentic AI Scan Toggle */}
+              <Box
+                sx={{
+                  mt: 2,
+                  p: 2,
+                  borderRadius: 2,
+                  background: includeAgenticScan 
+                    ? alpha("#8b5cf6", 0.1) 
+                    : alpha(theme.palette.action.hover, 0.3),
+                  border: `1px solid ${includeAgenticScan ? alpha("#8b5cf6", 0.3) : alpha(theme.palette.divider, 0.5)}`,
+                  transition: "all 0.3s ease",
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={includeAgenticScan}
+                      onChange={(e) => setIncludeAgenticScan(e.target.checked)}
+                      disabled={scanMutation.isPending || activeScanId !== null}
+                      sx={{
+                        "& .MuiSwitch-switchBase.Mui-checked": {
+                          color: "#8b5cf6",
+                          "&:hover": {
+                            backgroundColor: alpha("#8b5cf6", 0.08),
+                          },
+                        },
+                        "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                          backgroundColor: "#8b5cf6",
+                        },
+                      }}
+                    />
+                  }
+                  label={
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <PsychologyIcon sx={{ color: includeAgenticScan ? "#8b5cf6" : "text.secondary", fontSize: 20 }} />
+                      <Box>
+                        <Typography variant="body2" fontWeight={600} color={includeAgenticScan ? "#8b5cf6" : "text.primary"}>
+                          Agentic AI Deep Scan
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          LLM-powered code flow analysis (slower, more thorough)
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  }
+                  sx={{ m: 0, width: "100%" }}
+                />
+              </Box>
 
               {scanMutation.isError && (
                 <Alert severity="error" sx={{ mt: 2 }}>
@@ -939,6 +1053,29 @@ export default function ProjectDetailPage() {
           </Alert>
         </Snackbar>
       </Box>
+        </>
+      )}
+
+      {/* Network Analysis Tab Content */}
+      {mainTab === "network" && projectQuery.data && (
+        <ProjectNetworkTab 
+          projectId={id} 
+          projectName={projectQuery.data.name} 
+        />
+      )}
+
+      {/* Reverse Engineering Tab Content */}
+      {mainTab === "reverse" && projectQuery.data && (
+        <ProjectReverseTab 
+          projectId={id} 
+          projectName={projectQuery.data.name} 
+        />
+      )}
+
+      {/* Notes & Tracking Tab Content */}
+      {mainTab === "notes" && (
+        <ProjectNotesTab projectId={id} />
+      )}
     </Box>
   );
 }

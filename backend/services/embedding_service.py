@@ -1,8 +1,10 @@
+import asyncio
 import hashlib
 import json
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor
 
 from backend.core.config import settings
 from backend.core.exceptions import GeminiAPIError
@@ -20,6 +22,10 @@ EMBEDDING_DIM = 768  # Can be 256, 512, 768, 1536, or 3072
 MAX_EMBEDDING_BATCH_SIZE = 100  # Max texts per API call
 MAX_TEXT_LENGTH = 4000  # Truncate to reduce tokens (saves ~50% vs 8000)
 EMBEDDING_CACHE_DIR = Path("/tmp/vragent_embedding_cache")
+
+# Performance settings
+PARALLEL_EMBEDDING_WORKERS = 4  # Concurrent API calls for speed
+EMBEDDING_TIMEOUT = 30  # Seconds per embedding request
 
 # Large codebase handling
 ADAPTIVE_EMBEDDING_THRESHOLD = 1000  # Start adaptive mode above this many chunks
@@ -285,40 +291,51 @@ async def embed_texts(texts: List[str], use_cache: bool = True) -> List[List[flo
     if not texts_to_embed:
         return [results[i] for i in range(len(texts))]
     
-    # Use Google GenAI SDK (new unified SDK)
+    # Use Google GenAI SDK (new unified SDK) with PARALLEL batch processing
     try:
         from google import genai
         from google.genai import types
         
         client = genai.Client(api_key=settings.gemini_api_key)
         
-        # Process in batches to avoid API limits
-        for batch_start in range(0, len(texts_to_embed), MAX_EMBEDDING_BATCH_SIZE):
-            batch = texts_to_embed[batch_start:batch_start + MAX_EMBEDDING_BATCH_SIZE]
-            
-            for idx, text_hash, text in batch:
-                try:
-                    response = client.models.embed_content(
-                        model=EMBEDDING_MODEL,
-                        contents=text,
-                        config=types.EmbedContentConfig(
-                            output_dimensionality=EMBEDDING_DIM
-                        )
+        def embed_single(item: Tuple[int, str, str]) -> Tuple[int, str, List[float]]:
+            """Embed a single text item - designed for parallel execution."""
+            idx, text_hash, text = item
+            try:
+                response = client.models.embed_content(
+                    model=EMBEDDING_MODEL,
+                    contents=text,
+                    config=types.EmbedContentConfig(
+                        output_dimensionality=EMBEDDING_DIM
                     )
-                    # Handle response - embeddings is a list
-                    if response and response.embeddings:
-                        embedding = list(response.embeddings[0].values)
-                    else:
-                        embedding = [0.0] * EMBEDDING_DIM
-                    results[idx] = embedding
-                    
-                    # Cache the result
-                    if use_cache and embedding:
-                        _save_to_cache(text_hash, embedding)
-                        
-                except Exception as e:
-                    logger.warning(f"Failed to embed text {idx}: {e}")
-                    results[idx] = [0.0] * EMBEDDING_DIM
+                )
+                if response and response.embeddings:
+                    embedding = list(response.embeddings[0].values)
+                else:
+                    embedding = [0.0] * EMBEDDING_DIM
+                return idx, text_hash, embedding
+            except Exception as e:
+                logger.debug(f"Failed to embed text {idx}: {e}")
+                return idx, text_hash, [0.0] * EMBEDDING_DIM
+        
+        # Process in parallel batches for MUCH faster embedding
+        import time
+        start_time = time.time()
+        
+        # Use ThreadPoolExecutor for parallel API calls
+        with ThreadPoolExecutor(max_workers=PARALLEL_EMBEDDING_WORKERS) as executor:
+            # Submit all embedding tasks
+            futures = list(executor.map(embed_single, texts_to_embed, timeout=EMBEDDING_TIMEOUT * len(texts_to_embed)))
+            
+            for idx, text_hash, embedding in futures:
+                results[idx] = embedding
+                # Cache the result
+                if use_cache and embedding and any(v != 0.0 for v in embedding[:5]):
+                    _save_to_cache(text_hash, embedding)
+        
+        elapsed = time.time() - start_time
+        rate = len(texts_to_embed) / elapsed if elapsed > 0 else 0
+        logger.info(f"Parallel embedding: {len(texts_to_embed)} texts in {elapsed:.1f}s ({rate:.1f}/s)")
                     
     except ImportError:
         logger.error("google-genai package not installed. Run: pip install google-genai")
@@ -336,7 +353,7 @@ async def embed_texts(texts: List[str], use_cache: bool = True) -> List[List[flo
             results[i] = [0.0] * EMBEDDING_DIM
     
     api_calls = len(texts_to_embed)
-    logger.info(f"Generated {len(texts_to_embed)} embeddings via {api_calls} API call(s)")
+    logger.info(f"Generated {len(texts_to_embed)} embeddings via parallel API calls")
     
     return [results[i] for i in range(len(texts))]
 

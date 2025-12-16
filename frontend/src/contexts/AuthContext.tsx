@@ -159,6 +159,21 @@ export function AuthProvider({ children }: Props) {
     initAuth();
   }, [fetchCurrentUser, refreshAuth]);
 
+  // Auto-refresh token before it expires (every 20 minutes for 30-min tokens)
+  useEffect(() => {
+    if (!user) return;
+
+    const refreshInterval = setInterval(async () => {
+      console.log("[Auth] Auto-refreshing token...");
+      const success = await refreshAuth();
+      if (!success) {
+        console.warn("[Auth] Auto-refresh failed, user will need to re-login");
+      }
+    }, 20 * 60 * 1000); // 20 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [user, refreshAuth]);
+
   // Login
   const login = async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {

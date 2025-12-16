@@ -7,6 +7,7 @@ Provides intelligent analysis of scan findings using LLM:
 3. Severity Adjustment - Re-assess severity based on context
 4. Attack Chain Discovery - Find chained vulnerabilities
 5. Custom Remediation - Generate tailored fix code
+6. Agentic Corroboration - Cross-reference SAST findings with Agentic AI findings
 
 Optimized for minimal LLM calls by batching findings.
 
@@ -15,6 +16,11 @@ Large Codebase Optimizations:
 - Adaptive batch sizes based on total findings
 - Caching of analysis results for identical patterns
 - Progressive analysis with early termination for resource limits
+
+Agentic AI Corroboration:
+- Scanner findings without matching agentic findings are more likely false positives
+- Scanner findings WITH matching agentic findings are more likely genuine
+- AI Analysis acts as the final judge on vulnerability validity
 """
 
 import json
@@ -77,9 +83,189 @@ class AIAnalysisSummary:
     severity_adjustments: int
     attack_chains: List[AttackChain]
     analysis_results: Dict[int, AIAnalysisResult]  # finding_id -> result
+    agentic_corroborated: int = 0  # Findings confirmed by agentic AI
+    filtered_out: int = 0  # Findings filtered as likely false positives
 
 
-# Patterns that strongly suggest false positives
+# ============================================================================
+# Agentic AI Corroboration
+# ============================================================================
+
+def _is_agentic_finding(finding: dict) -> bool:
+    """Check if a finding is from the Agentic AI scan."""
+    finding_type = finding.get("type", "")
+    details = finding.get("details", {}) or {}
+    
+    # Check type prefix or source field
+    return (
+        finding_type.startswith("agentic-") or 
+        details.get("source") == "agentic_ai"
+    )
+
+
+def _normalize_vuln_type(finding_type: str) -> str:
+    """Normalize vulnerability type for comparison."""
+    # Strip agentic prefix
+    if finding_type.startswith("agentic-"):
+        finding_type = finding_type.replace("agentic-", "")
+    
+    # Normalize common variations
+    finding_type = finding_type.lower().strip()
+    finding_type = finding_type.replace("_", " ").replace("-", " ")
+    
+    # Map common SAST types to normalized names
+    type_mappings = {
+        "sql injection": "sql injection",
+        "sqli": "sql injection",
+        "sql": "sql injection",
+        "cross site scripting": "xss",
+        "cross-site scripting": "xss",
+        "xss": "xss",
+        "reflected xss": "xss",
+        "stored xss": "xss",
+        "dom xss": "xss",
+        "command injection": "command injection",
+        "os command injection": "command injection",
+        "shell injection": "command injection",
+        "path traversal": "path traversal",
+        "directory traversal": "path traversal",
+        "lfi": "path traversal",
+        "rfi": "path traversal",
+        "ssrf": "ssrf",
+        "server side request forgery": "ssrf",
+        "idor": "idor",
+        "insecure direct object reference": "idor",
+        "hardcoded secret": "secret",
+        "hardcoded password": "secret",
+        "hardcoded credential": "secret",
+        "hardcoded api key": "secret",
+        "secret": "secret",
+        "authentication bypass": "auth",
+        "broken authentication": "auth",
+        "weak authentication": "auth",
+        "xxe": "xxe",
+        "xml external entity": "xxe",
+        "deserialization": "deserialization",
+        "insecure deserialization": "deserialization",
+        "open redirect": "open redirect",
+        "url redirect": "open redirect",
+        "csrf": "csrf",
+        "cross site request forgery": "csrf",
+        "log injection": "log injection",
+        "header injection": "header injection",
+        "http response splitting": "header injection",
+    }
+    
+    # Check for mapping
+    for key, normalized in type_mappings.items():
+        if key in finding_type:
+            return normalized
+    
+    return finding_type
+
+
+def _findings_match(scanner_finding: dict, agentic_finding: dict) -> bool:
+    """
+    Check if a scanner finding matches an agentic finding.
+    
+    Matching criteria:
+    1. Same or similar vulnerability type
+    2. Same or nearby file location
+    3. Similar summary/description
+    
+    Returns True if findings likely refer to the same vulnerability.
+    """
+    # Normalize types
+    scanner_type = _normalize_vuln_type(scanner_finding.get("type", ""))
+    agentic_type = _normalize_vuln_type(agentic_finding.get("type", ""))
+    
+    # Type match
+    type_match = (
+        scanner_type == agentic_type or
+        scanner_type in agentic_type or
+        agentic_type in scanner_type
+    )
+    
+    if not type_match:
+        return False
+    
+    # File match (same file or in same directory)
+    scanner_file = Path(scanner_finding.get("file_path", "")).resolve() if scanner_finding.get("file_path") else None
+    agentic_file = Path(agentic_finding.get("file_path", "")).resolve() if agentic_finding.get("file_path") else None
+    
+    if scanner_file and agentic_file:
+        # Exact file match
+        if scanner_file == agentic_file:
+            # Check line proximity (within 50 lines)
+            scanner_line = scanner_finding.get("start_line", 0) or 0
+            agentic_line = agentic_finding.get("start_line", 0) or 0
+            if abs(scanner_line - agentic_line) <= 50:
+                return True
+        
+        # Same directory, check if file names are similar
+        if scanner_file.parent == agentic_file.parent:
+            scanner_line = scanner_finding.get("start_line", 0) or 0
+            agentic_line = agentic_finding.get("start_line", 0) or 0
+            if abs(scanner_line - agentic_line) <= 20:
+                return True
+    
+    # Summary similarity check (basic)
+    scanner_summary = scanner_finding.get("summary", "").lower()
+    agentic_summary = agentic_finding.get("summary", "").lower()
+    
+    # Check for key word overlap
+    scanner_words = set(scanner_summary.split())
+    agentic_words = set(agentic_summary.split())
+    
+    common_words = scanner_words & agentic_words
+    # Filter out common stop words
+    stop_words = {"the", "a", "an", "is", "are", "in", "to", "of", "and", "or", "for", "with"}
+    meaningful_common = common_words - stop_words
+    
+    if len(meaningful_common) >= 3:
+        return True
+    
+    return False
+
+
+def _separate_findings(findings: List[dict]) -> Tuple[List[dict], List[dict]]:
+    """
+    Separate findings into scanner findings and agentic findings.
+    
+    Returns:
+        Tuple of (scanner_findings, agentic_findings)
+    """
+    scanner_findings = []
+    agentic_findings = []
+    
+    for f in findings:
+        if _is_agentic_finding(f):
+            agentic_findings.append(f)
+        else:
+            scanner_findings.append(f)
+    
+    return scanner_findings, agentic_findings
+
+
+def _check_agentic_corroboration(
+    scanner_finding: dict, 
+    agentic_findings: List[dict]
+) -> Tuple[bool, Optional[dict]]:
+    """
+    Check if a scanner finding is corroborated by any agentic finding.
+    
+    Returns:
+        Tuple of (is_corroborated, matching_agentic_finding)
+    """
+    for agentic_finding in agentic_findings:
+        if _findings_match(scanner_finding, agentic_finding):
+            return True, agentic_finding
+    return False, None
+
+
+# ============================================================================
+# False Positive Detection Patterns
+# ============================================================================
 FALSE_POSITIVE_PATTERNS = [
     (r'test[_/]|_test\.py|\.test\.[jt]sx?|spec\.[jt]sx?', 'Test file'),
     (r'mock|stub|fake|dummy', 'Mock/test code'),
@@ -296,13 +482,18 @@ def _identify_attack_chains_heuristic(findings: List[dict]) -> List[AttackChain]
 async def _call_llm_batch_analysis(
     findings_batch: List[dict],
     code_snippets: Dict[int, str],
-    analysis_types: List[str] = None
+    analysis_types: List[str] = None,
+    agentic_findings: List[dict] = None,
+    corroboration_map: Dict[int, dict] = None
 ) -> Dict[int, AIAnalysisResult]:
     """
     Call LLM once for a batch of findings.
     Returns analysis results keyed by finding ID.
     
     analysis_types can include: 'false_positive', 'severity', 'data_flow', 'remediation'
+    
+    agentic_findings: List of findings from the Agentic AI scan for context
+    corroboration_map: Map of scanner finding IDs to matching agentic findings
     """
     if not genai_client or not settings.gemini_api_key:
         logger.info("Gemini API not configured, skipping LLM analysis")
@@ -311,6 +502,12 @@ async def _call_llm_batch_analysis(
     if analysis_types is None:
         analysis_types = ['false_positive', 'severity', 'remediation']
     
+    if agentic_findings is None:
+        agentic_findings = []
+    
+    if corroboration_map is None:
+        corroboration_map = {}
+    
     if not findings_batch:
         return {}
     
@@ -318,23 +515,54 @@ async def _call_llm_batch_analysis(
     findings_text = []
     for i, f in enumerate(findings_batch[:15]):  # Max 15 findings per batch
         snippet = code_snippets.get(f.get("id"), "")[:500]  # Truncate snippets
+        finding_id = f.get('id')
+        
+        # Check if this finding is corroborated
+        corroboration_note = ""
+        if finding_id in corroboration_map:
+            matching = corroboration_map[finding_id]
+            corroboration_note = f"\n⚠️ CORROBORATED: This finding was ALSO found by the Agentic AI deep scan with confidence {matching.get('details', {}).get('confidence', 0.8):.0%}. This strongly suggests it's a real vulnerability."
+        elif agentic_findings:
+            corroboration_note = "\n⚡ Note: Agentic AI scan ran but did NOT find this vulnerability - consider if it might be a false positive."
+        
         findings_text.append(f"""
-Finding #{f.get('id')}:
+Finding #{finding_id}:
 - Type: {f.get('type')}
 - Severity: {f.get('severity')}
 - File: {f.get('file_path')}
 - Line: {f.get('start_line')}
-- Summary: {f.get('summary')}
+- Summary: {f.get('summary')}{corroboration_note}
 - Code snippet:
 ```
 {snippet}
 ```
 """)
     
+    # Build agentic context section
+    agentic_context = ""
+    if agentic_findings:
+        agentic_summary = []
+        for af in agentic_findings[:5]:  # Max 5 agentic findings for context
+            agentic_summary.append(f"  - {af.get('type', 'Unknown')}: {af.get('summary', '')[:100]} (File: {af.get('file_path', 'Unknown')})")
+        
+        agentic_context = f"""
+AGENTIC AI SCAN CONTEXT:
+The Agentic AI performed a deep code analysis and found {len(agentic_findings)} vulnerabilities.
+Sample agentic findings:
+{chr(10).join(agentic_summary)}
+
+IMPORTANT: 
+- Findings corroborated by the Agentic AI (marked with ⚠️) are LIKELY REAL vulnerabilities
+- Findings NOT found by Agentic AI should be scrutinized more carefully for false positives
+- The Agentic AI traces data flows and validates exploitability, so its findings are high-confidence
+"""
+    
     analysis_instructions = []
     if 'false_positive' in analysis_types:
         analysis_instructions.append("""
 - false_positive_score: 0.0-1.0 (1.0 = definitely false positive)
+  * If finding is CORROBORATED by Agentic AI, score should be LOW (0.0-0.3)
+  * If finding is NOT corroborated and Agentic AI ran, consider score 0.3-0.7
 - false_positive_reason: Brief explanation if score > 0.3""")
     
     if 'severity' in analysis_types:
@@ -352,7 +580,7 @@ Finding #{f.get('id')}:
     
     prompt = f"""Analyze these security findings and provide structured analysis.
 Be concise. Focus on actionable insights.
-
+{agentic_context}
 FINDINGS:
 {''.join(findings_text)}
 
@@ -372,7 +600,7 @@ Return a JSON object with finding IDs as keys:
   ...
 }}
 
-Only include fields that are relevant. Be conservative with false_positive_score."""
+Only include fields that are relevant. Be conservative with false_positive_score for CORROBORATED findings."""
 
     try:
         if not genai_client:
@@ -529,15 +757,17 @@ async def analyze_findings(
     Main entry point for AI-enhanced analysis.
     
     Performs:
-    1. Quick heuristic checks on all findings (no LLM)
-    2. LLM analysis on top priority findings (batched, 1-2 calls max)
-    3. Attack chain identification (1 LLM call)
+    1. Separate scanner findings from agentic findings
+    2. Check agentic corroboration for scanner findings
+    3. Quick heuristic checks on all findings (no LLM)
+    4. LLM analysis on top priority findings (batched, 1-2 calls max)
+    5. Attack chain identification (1 LLM call)
+    6. Final judgment: Filter scanner findings not corroborated by agentic AI
     
-    Large codebase optimizations:
-    - Prioritizes critical/high severity findings
-    - Deduplicates similar findings before LLM
-    - Limits findings per type for diversity
-    - Applies pattern-based analysis for common issues
+    Agentic Corroboration Logic:
+    - Scanner findings WITH matching agentic findings are likely genuine (reduce FP score)
+    - Scanner findings WITHOUT matching agentic findings may be false positives (increase FP score)
+    - Agentic findings are always trusted (they come from deep AI analysis)
     
     Args:
         findings: List of finding dicts with id, type, severity, file_path, summary, details
@@ -554,17 +784,41 @@ async def analyze_findings(
     analysis_results: Dict[int, AIAnalysisResult] = {}
     false_positives_count = 0
     severity_adjustments_count = 0
+    agentic_corroborated_count = 0
+    filtered_out_count = 0
     
     total_findings = len(findings)
     logger.info(f"Starting AI analysis on {total_findings} findings")
     
-    # Step 0: For large finding sets, pre-filter and deduplicate
+    # Step 0: Separate agentic findings from scanner findings
+    scanner_findings, agentic_findings = _separate_findings(findings)
+    logger.info(f"Found {len(agentic_findings)} agentic findings and {len(scanner_findings)} scanner findings")
+    
+    # Build a map of corroborated scanner findings
+    corroboration_map: Dict[int, dict] = {}  # scanner_finding_id -> matching_agentic_finding
+    
+    if agentic_findings:
+        for scanner_finding in scanner_findings:
+            finding_id = scanner_finding.get("id")
+            if not finding_id:
+                continue
+            
+            is_corroborated, matching_agentic = _check_agentic_corroboration(
+                scanner_finding, agentic_findings
+            )
+            if is_corroborated:
+                corroboration_map[finding_id] = matching_agentic
+                agentic_corroborated_count += 1
+        
+        logger.info(f"Agentic corroboration: {agentic_corroborated_count}/{len(scanner_findings)} scanner findings corroborated by agentic AI")
+    
+    # Step 1: For large finding sets, pre-filter and deduplicate
     if total_findings > MAX_FINDINGS_FOR_FULL_ANALYSIS:
         logger.info(f"Large finding set ({total_findings}), applying aggressive prioritization")
         findings = _prioritize_findings_for_analysis(findings, MAX_FINDINGS_FOR_FULL_ANALYSIS)
         logger.info(f"Reduced to {len(findings)} priority findings for analysis")
     
-    # Step 1: Quick heuristic analysis on ALL findings
+    # Step 2: Quick heuristic analysis on ALL findings
     pattern_based_results = 0
     for f in findings:
         finding_id = f.get("id")
@@ -572,6 +826,8 @@ async def analyze_findings(
             continue
         
         snippet = code_snippets.get(finding_id, "")
+        is_agentic = _is_agentic_finding(f)
+        is_corroborated = finding_id in corroboration_map
         
         # Quick false positive check
         fp_score, fp_reason = _quick_false_positive_check(f, snippet)
@@ -582,7 +838,37 @@ async def analyze_findings(
         # Pattern-based analysis for common vulnerability types
         pattern_analysis = _analyze_by_pattern(f, snippet)
         
-        if fp_score > 0.3 or new_severity or pattern_analysis:
+        # Apply agentic corroboration adjustments for scanner findings
+        if not is_agentic:
+            if is_corroborated:
+                # Corroborated by agentic AI - reduce false positive score
+                matching_agentic = corroboration_map[finding_id]
+                agentic_confidence = matching_agentic.get("details", {}).get("confidence", 0.8)
+                
+                # Reduce FP score based on agentic confidence
+                fp_reduction = min(0.4, agentic_confidence * 0.5)
+                fp_score = max(0.0, fp_score - fp_reduction)
+                
+                # Update reason to note corroboration
+                corroboration_note = f"Corroborated by Agentic AI scan (confidence: {agentic_confidence:.1%})"
+                if fp_reason:
+                    fp_reason = f"{fp_reason}. However: {corroboration_note}"
+                else:
+                    fp_reason = None  # Clear FP reason since it's corroborated
+            else:
+                # NOT corroborated - if agentic scan ran but didn't find this, it's more likely FP
+                if agentic_findings:
+                    # Increase FP score for uncorroborated findings
+                    # The more agentic findings we have, the more confident we are in the corroboration
+                    agentic_coverage_factor = min(0.3, len(agentic_findings) * 0.03)
+                    fp_score = min(1.0, fp_score + 0.15 + agentic_coverage_factor)
+                    
+                    if not fp_reason:
+                        fp_reason = "Not corroborated by Agentic AI scan - may be false positive"
+                    else:
+                        fp_reason = f"{fp_reason}. Also not corroborated by Agentic AI scan."
+        
+        if fp_score > 0.3 or new_severity or pattern_analysis or is_corroborated:
             result = AIAnalysisResult(
                 finding_id=finding_id,
                 false_positive_score=fp_score,
@@ -596,6 +882,8 @@ async def analyze_findings(
             
             if fp_score >= 0.5:
                 false_positives_count += 1
+                if fp_score >= 0.6 and not is_agentic and not is_corroborated:
+                    filtered_out_count += 1
             if new_severity:
                 severity_adjustments_count += 1
             if pattern_analysis:
@@ -603,10 +891,10 @@ async def analyze_findings(
     
     logger.info(f"Heuristic analysis complete: {false_positives_count} FPs, {severity_adjustments_count} severity changes, {pattern_based_results} pattern matches")
     
-    # Step 2: Attack chain identification (heuristic)
+    # Step 3: Attack chain identification (heuristic)
     attack_chains = _identify_attack_chains_heuristic(findings)
     
-    # Step 3: LLM analysis (if enabled and we have API key)
+    # Step 4: LLM analysis (if enabled and we have API key)
     if enable_llm and genai_client and settings.gemini_api_key:
         # Prioritize findings for LLM analysis
         # Focus on high/critical that haven't been fully analyzed
@@ -620,11 +908,13 @@ async def analyze_findings(
         if priority_findings:
             logger.info(f"Running LLM analysis on {len(priority_findings)} priority findings")
             
-            # Single batched LLM call for finding analysis
+            # Single batched LLM call for finding analysis with agentic context
             llm_results = await _call_llm_batch_analysis(
                 priority_findings,
                 code_snippets,
-                analysis_types=['false_positive', 'severity', 'data_flow', 'remediation']
+                analysis_types=['false_positive', 'severity', 'data_flow', 'remediation'],
+                agentic_findings=agentic_findings,
+                corroboration_map=corroboration_map
             )
             
             for finding_id, result in llm_results.items():
@@ -640,6 +930,13 @@ async def analyze_findings(
                     if not result.remediation_code and existing.remediation_code:
                         result.remediation_code = existing.remediation_code
                 
+                # Apply corroboration adjustment after LLM analysis
+                if finding_id in corroboration_map:
+                    # LLM might have increased FP score, but corroboration reduces it
+                    matching_agentic = corroboration_map[finding_id]
+                    agentic_confidence = matching_agentic.get("details", {}).get("confidence", 0.8)
+                    result.false_positive_score = max(0.0, result.false_positive_score - (agentic_confidence * 0.3))
+                
                 analysis_results[finding_id] = result
                 
                 if result.false_positive_score >= 0.5:
@@ -653,6 +950,7 @@ async def analyze_findings(
             attack_chains = await _call_llm_attack_chains(findings, attack_chains)
     
     logger.info(f"AI analysis complete: {len(analysis_results)} findings analyzed, {len(attack_chains)} attack chains identified")
+    logger.info(f"Agentic corroboration: {agentic_corroborated_count} corroborated, {filtered_out_count} likely filtered")
     
     return AIAnalysisSummary(
         findings_analyzed=len(findings),
@@ -660,6 +958,8 @@ async def analyze_findings(
         severity_adjustments=severity_adjustments_count,
         attack_chains=attack_chains,
         analysis_results=analysis_results,
+        agentic_corroborated=agentic_corroborated_count,
+        filtered_out=filtered_out_count,
     )
 
 

@@ -1,5 +1,10 @@
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const ACCESS_TOKEN_KEY = "vragent_access_token";
+const REFRESH_TOKEN_KEY = "vragent_refresh_token";
+
+// Track if we're currently refreshing to prevent multiple refresh attempts
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
 
 // Get auth headers
 function getAuthHeaders(): HeadersInit {
@@ -13,7 +18,48 @@ function getAuthHeaders(): HeadersInit {
   return headers;
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+// Try to refresh the access token
+async function tryRefreshToken(): Promise<boolean> {
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+  if (!refreshToken) return false;
+
+  try {
+    const resp = await fetch(`${API_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (resp.ok) {
+      const tokens = await resp.json();
+      localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+      localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+      console.log("[API] Token refreshed successfully");
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Synchronized token refresh to prevent race conditions
+async function refreshTokenIfNeeded(): Promise<boolean> {
+  if (isRefreshing) {
+    // Wait for the existing refresh to complete
+    return refreshPromise || Promise.resolve(false);
+  }
+
+  isRefreshing = true;
+  refreshPromise = tryRefreshToken().finally(() => {
+    isRefreshing = false;
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+}
+
+async function request<T>(path: string, options?: RequestInit, retryOnAuth = true): Promise<T> {
   const headers = new Headers(getAuthHeaders());
   
   // Merge any additional headers from options
@@ -29,10 +75,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers,
   });
   
-  // Handle 401 - redirect to login
-  if (resp.status === 401) {
+  // Handle 401 - try to refresh token first
+  if (resp.status === 401 && retryOnAuth) {
+    console.log("[API] Got 401, attempting token refresh...");
+    const refreshed = await refreshTokenIfNeeded();
+    
+    if (refreshed) {
+      // Retry the request with the new token
+      return request<T>(path, options, false);
+    }
+    
+    // Refresh failed - clear tokens and redirect
     localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem("vragent_refresh_token");
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     if (!window.location.pathname.includes("/login")) {
       window.location.href = "/login";
     }
@@ -46,7 +101,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return (await resp.json()) as T;
 }
 
-export async function uploadZip(projectId: number, file: File) {
+export async function uploadZip(projectId: number, file: File, retryOnAuth = true): Promise<any> {
   const form = new FormData();
   form.append("file", file);
   const token = localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -59,8 +114,13 @@ export async function uploadZip(projectId: number, file: File) {
     headers,
     body: form
   });
-  if (resp.status === 401) {
+  if (resp.status === 401 && retryOnAuth) {
+    const refreshed = await refreshTokenIfNeeded();
+    if (refreshed) {
+      return uploadZip(projectId, file, false);
+    }
     localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     window.location.href = "/login";
     throw new Error("Unauthorized");
   }
@@ -73,7 +133,8 @@ export async function uploadZip(projectId: number, file: File) {
 export async function cloneRepository(
   projectId: number, 
   repoUrl: string, 
-  branch?: string
+  branch?: string,
+  retryOnAuth = true
 ): Promise<CloneResponse> {
   const token = localStorage.getItem(ACCESS_TOKEN_KEY);
   const headers: HeadersInit = { "Content-Type": "application/json" };
@@ -85,8 +146,13 @@ export async function cloneRepository(
     headers,
     body: JSON.stringify({ repo_url: repoUrl, branch })
   });
-  if (resp.status === 401) {
+  if (resp.status === 401 && retryOnAuth) {
+    const refreshed = await refreshTokenIfNeeded();
+    if (refreshed) {
+      return cloneRepository(projectId, repoUrl, branch, false);
+    }
     localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     window.location.href = "/login";
     throw new Error("Unauthorized");
   }
@@ -104,8 +170,11 @@ export const api = {
   getProject: (id: number) => request<ProjectSummary>(`/projects/${id}`),
   deleteProject: (id: number) => 
     request<{ status: string; project_id: number }>(`/projects/${id}`, { method: "DELETE" }),
-  triggerScan: (projectId: number) =>
-    request<ScanRun>(`/projects/${projectId}/scan`, { method: "POST" }),
+  triggerScan: (projectId: number, options?: { includeAgentic?: boolean }) =>
+    request<ScanRun>(`/projects/${projectId}/scan`, { 
+      method: "POST",
+      body: JSON.stringify({ include_agentic: options?.includeAgentic ?? false })
+    }),
   getReports: (projectId: number) => request<Report[]>(`/projects/${projectId}/reports`),
   getReport: (reportId: number) => request<Report>(`/reports/${reportId}`),
   getFindings: (reportId: number) => request<Finding[]>(`/reports/${reportId}/findings`),
@@ -117,16 +186,22 @@ export const api = {
     request<CodebaseStructure>(`/reports/${reportId}/codebase`),
   getCodebaseSummary: (reportId: number) =>
     request<CodebaseSummary>(`/reports/${reportId}/codebase/summary`),
+  getCodebaseDiagram: (reportId: number) =>
+    request<CodebaseDiagram>(`/reports/${reportId}/codebase/diagram`),
   getFileContent: (reportId: number, filePath: string) =>
     request<FileContent>(`/reports/${reportId}/codebase/file?file_path=${encodeURIComponent(filePath)}`),
   getDependencies: (reportId: number) =>
     request<DependencyGraph>(`/reports/${reportId}/dependencies`),
+  getVulnerabilities: (reportId: number) =>
+    request<VulnerabilitySummary>(`/reports/${reportId}/vulnerabilities`),
   getScanDiff: (reportId: number, compareReportId: number) =>
     request<ScanDiff>(`/reports/${reportId}/diff/${compareReportId}`),
   getFileTrends: (reportId: number, filePath: string) =>
     request<FileTrends>(`/reports/${reportId}/file-trends/${encodeURIComponent(filePath)}`),
   getTodos: (reportId: number) =>
     request<TodoScanResult>(`/reports/${reportId}/todos`),
+  getSecrets: (reportId: number) =>
+    request<SecretsScanResult>(`/reports/${reportId}/secrets`),
   searchCode: (reportId: number, query: string) =>
     request<CodeSearchResult>(`/reports/${reportId}/search-code?q=${encodeURIComponent(query)}`),
   explainCode: (reportId: number, filePath: string, code: string, language?: string) =>
@@ -193,6 +268,8 @@ export type Report = {
     severity_counts?: Record<string, number>;
     affected_packages?: string[];
     code_issues?: { file?: string; summary: string; severity: string }[];
+    scan_stats?: any;
+    [key: string]: any;
   };
 };
 
@@ -227,6 +304,9 @@ export type Finding = {
     fix?: string;
     nvd_description?: string;
     references?: Array<{ url: string; source?: string; tags?: string[] }>;
+    source?: string;  // Source of the finding (e.g., "agentic_ai")
+    filtered_out?: boolean;  // Whether this finding was filtered by AI Analysis
+    false_positive_score?: number;  // FP score from AI Analysis
     // AI Analysis fields
     ai_analysis?: {
       is_false_positive?: boolean;
@@ -251,6 +331,9 @@ export type ExploitScenario = {
   preconditions?: string;
   impact?: string;
   poc_outline?: string;
+  poc_scripts?: Record<string, string>;  // Language -> script content
+  attack_complexity?: string;  // Low, Medium, High
+  exploit_maturity?: string;  // Proof of Concept, Functional, High
   mitigation_notes?: string;
 };
 
@@ -337,6 +420,14 @@ export type CodebaseSummary = {
   has_security_summary: boolean;
 };
 
+// AI-generated Mermaid architecture diagram
+export type CodebaseDiagram = {
+  report_id: number;
+  diagram: string;
+  diagram_type: string;
+  cached: boolean;
+};
+
 // File content for inline code preview
 export type FileContent = {
   file_path: string;
@@ -382,6 +473,62 @@ export type DependencyGraph = {
     total_internal_edges: number;
     total_files: number;
     ecosystems: string[];
+  };
+};
+
+// CVE/CWE vulnerability summary types
+export type CVEEntry = {
+  cve_id: string;
+  title: string;
+  severity: string;
+  cvss_score: number | null;
+  cvss_vector: string | null;
+  affected_packages: string[];
+  epss_score: number | null;
+  cisa_kev: boolean;
+  fix_available: boolean;
+  published_date: string | null;
+  description: string | null;
+  references: string[];
+};
+
+export type CWEEntry = {
+  cwe_id: string;
+  name: string;
+  count: number;
+  severity_breakdown: Record<string, number>;
+  findings?: Array<{
+    id: number;
+    file_path: string;
+    line: number;
+    severity: string;
+    summary: string;
+  }>;
+  mitre_url: string;
+};
+
+export type VulnerabilitySummary = {
+  report_id: number;
+  cves: {
+    items: CVEEntry[];
+    total: number;
+    by_severity: Record<string, number>;
+    critical_count: number;
+    high_count: number;
+  };
+  cwes: {
+    items: CWEEntry[];
+    total: number;
+    unique_cwes: number;
+    total_findings_with_cwe: number;
+  };
+  summary: {
+    total_cves: number;
+    total_cwes: number;
+    total_findings: number;
+    findings_by_severity: Record<string, number>;
+    most_common_cwe: string | null;
+    highest_cvss: number | null;
   };
 };
 
@@ -449,6 +596,45 @@ export type TodoScanResult = {
   items: TodoItem[];
 };
 
+// Secrets/Sensitive Data Scanner types (credentials + PII)
+export type SecretType = 
+  // Credentials & API Keys
+  | "email" | "api_key" | "password" | "token" | "aws_key" | "aws_secret" 
+  | "private_key" | "github_token" | "jwt" | "url_with_creds" | "connection_string" 
+  | "slack_webhook" | "stripe_key" | "google_api" | "openai_key" | "anthropic_key" 
+  | "generic_secret" | "db_password" | "db_user"
+  // PII - Personally Identifiable Information
+  | "phone" | "phone_intl" | "ssn" | "credit_card" | "ip_address" 
+  | "username" | "user_id" | "hardcoded_name" | "address";
+
+export type SecretItem = {
+  type: SecretType;
+  file_path: string;
+  line: number;
+  value: string;        // Full unmasked value for security audit
+  masked_value: string; // Same as value (no masking)
+  full_line: string;
+  severity: "critical" | "high" | "medium" | "low";
+  // AI validation fields (when use_ai=true)
+  ai_validated?: boolean;
+  ai_is_real?: boolean;
+  ai_confidence?: number;
+  ai_reason?: string;
+  ai_risk_level?: "critical" | "high" | "medium" | "low" | "none";
+};
+
+export type SecretsScanResult = {
+  total: number;
+  summary: Record<string, number>;
+  by_file: Record<string, SecretItem[]>;
+  by_type: Record<string, SecretItem[]>;
+  items: SecretItem[];
+  // AI validation metadata
+  ai_validated?: boolean;
+  ai_filtered_count?: number;
+  ai_error?: string | null;
+};
+
 // Code Search types
 export type CodeSearchMatch = {
   file_path: string;
@@ -496,6 +682,19 @@ export type AIInsights = {
   severity_adjustments: number;
   findings_analyzed: number;
   false_positives: FalsePositiveInfo[];
+  // New agentic corroboration fields
+  agentic_corroborated?: number;
+  filtered_count?: number;
+  filtered_findings?: Array<{
+    finding_id: number;
+    summary: string;
+    type: string;
+    severity: string;
+    fp_score: number;
+    reason?: string;
+    file_path?: string;
+  }>;
+  agentic_findings_count?: number;
 };
 
 // PCAP Analysis Types
@@ -776,7 +975,9 @@ export async function getPcapStatus(): Promise<PcapStatusResponse> {
 export async function analyzePcaps(
   files: File[],
   includeAi: boolean = true,
-  maxPackets: number = 100000
+  maxPackets: number = 100000,
+  saveReport: boolean = true,
+  projectId?: number
 ): Promise<MultiPcapAnalysisResponse> {
   const form = new FormData();
   files.forEach((file) => form.append("files", file));
@@ -784,7 +985,9 @@ export async function analyzePcaps(
   const params = new URLSearchParams({
     include_ai: String(includeAi),
     max_packets: String(maxPackets),
+    save_report: String(saveReport),
   });
+  if (projectId !== undefined) params.append("project_id", String(projectId));
 
   const resp = await fetch(`${API_URL}/pcap/analyze?${params}`, {
     method: "POST",
@@ -971,6 +1174,87 @@ export type NmapAnalysisResult = {
   report_id?: number;
 };
 
+// ============================================================================
+// Finding Notes Types
+// ============================================================================
+
+export type NoteType = "comment" | "remediation" | "false_positive" | "accepted_risk" | "in_progress";
+
+export type FindingNote = {
+  id: number;
+  finding_id: number;
+  user_id?: number;
+  content: string;
+  note_type: NoteType;
+  created_at: string;
+  updated_at: string;
+  extra_data?: Record<string, any>;
+};
+
+export type FindingNoteCreate = {
+  content: string;
+  note_type?: NoteType;
+  extra_data?: Record<string, any>;
+};
+
+export type FindingNoteUpdate = {
+  content?: string;
+  note_type?: NoteType;
+  extra_data?: Record<string, any>;
+};
+
+export type FindingWithNotes = {
+  id: number;
+  project_id: number;
+  type: string;
+  severity: string;
+  file_path?: string;
+  start_line?: number;
+  end_line?: number;
+  summary: string;
+  details?: Record<string, any>;
+  notes_count: number;
+  notes: FindingNote[];
+};
+
+export type ProjectNotesSummary = {
+  total_notes: number;
+  by_type: Record<string, number>;
+  recent_notes: FindingNote[];
+};
+
+// ============================================================================
+// Project Notes Types (general notes not tied to findings)
+// ============================================================================
+
+export type ProjectNoteType = "general" | "todo" | "important" | "reference";
+
+export type ProjectNote = {
+  id: number;
+  project_id: number;
+  user_id?: number;
+  title?: string;
+  content: string;
+  note_type: ProjectNoteType;
+  created_at: string;
+  updated_at: string;
+  extra_data?: Record<string, any>;
+};
+
+export type ProjectNoteCreate = {
+  title?: string;
+  content: string;
+  note_type?: ProjectNoteType;
+  extra_data?: Record<string, any>;
+};
+
+export type ProjectNoteUpdate = {
+  title?: string;
+  content?: string;
+  note_type?: ProjectNoteType;
+  extra_data?: Record<string, any>;
+};
+
 export type SavedNetworkReport = {
   id: number;
   analysis_type: string;
@@ -980,6 +1264,7 @@ export type SavedNetworkReport = {
   risk_level?: string;
   risk_score?: number;
   findings_count: number;
+  project_id?: number;
 };
 
 export type FullNetworkReport = {
@@ -1151,9 +1436,12 @@ export const apiClient = {
     return resp.json();
   },
 
-  getNetworkReports: async (analysisType?: string): Promise<SavedNetworkReport[]> => {
-    const params = analysisType ? `?analysis_type=${analysisType}` : "";
-    const resp = await fetch(`${API_URL}/network/reports${params}`);
+  getNetworkReports: async (analysisType?: string, projectId?: number): Promise<SavedNetworkReport[]> => {
+    const params = new URLSearchParams();
+    if (analysisType) params.append("analysis_type", analysisType);
+    if (projectId !== undefined) params.append("project_id", String(projectId));
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    const resp = await fetch(`${API_URL}/network/reports${queryString}`);
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -1168,6 +1456,100 @@ export const apiClient = {
     const resp = await fetch(`${API_URL}/network/reports/${reportId}`, { method: "DELETE" });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
+  },
+
+  // ============================================================================
+  // Finding Notes Endpoints
+  // ============================================================================
+
+  getFindingNotes: async (findingId: number, noteType?: NoteType): Promise<FindingNote[]> => {
+    const params = new URLSearchParams();
+    if (noteType) params.append("note_type", noteType);
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    const resp = await fetch(`${API_URL}/findings/${findingId}/notes${queryString}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  createFindingNote: async (findingId: number, note: FindingNoteCreate): Promise<FindingNote> => {
+    const resp = await fetch(`${API_URL}/findings/${findingId}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(note),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateFindingNote: async (noteId: number, note: FindingNoteUpdate): Promise<FindingNote> => {
+    const resp = await fetch(`${API_URL}/findings/notes/${noteId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(note),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteFindingNote: async (noteId: number): Promise<void> => {
+    const resp = await fetch(`${API_URL}/findings/notes/${noteId}`, { method: "DELETE" });
+    if (!resp.ok) throw new Error(await resp.text());
+  },
+
+  getProjectNotesSummary: async (projectId: number): Promise<ProjectNotesSummary> => {
+    const resp = await fetch(`${API_URL}/findings/project/${projectId}/notes-summary`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getProjectFindingsWithNotes: async (
+    projectId: number,
+    hasNotes?: boolean,
+    noteType?: NoteType
+  ): Promise<FindingWithNotes[]> => {
+    const params = new URLSearchParams();
+    if (hasNotes !== undefined) params.append("has_notes", String(hasNotes));
+    if (noteType) params.append("note_type", noteType);
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    const resp = await fetch(`${API_URL}/findings/project/${projectId}/findings-with-notes${queryString}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Project Notes API (general notes not tied to findings)
+  // ============================================================================
+
+  getProjectGeneralNotes: async (projectId: number, noteType?: ProjectNoteType): Promise<ProjectNote[]> => {
+    const params = noteType ? `?note_type=${noteType}` : "";
+    const resp = await fetch(`${API_URL}/findings/project/${projectId}/general-notes${params}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  createProjectNote: async (projectId: number, note: ProjectNoteCreate): Promise<ProjectNote> => {
+    const resp = await fetch(`${API_URL}/findings/project/${projectId}/general-notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(note),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateProjectNote: async (noteId: number, note: ProjectNoteUpdate): Promise<ProjectNote> => {
+    const resp = await fetch(`${API_URL}/findings/project-notes/${noteId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(note),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteProjectNote: async (noteId: number): Promise<void> => {
+    const resp = await fetch(`${API_URL}/findings/project-notes/${noteId}`, { method: "DELETE" });
+    if (!resp.ok) throw new Error(await resp.text());
   },
 
   exportNetworkReport: async (reportId: number, format: "markdown" | "pdf" | "docx"): Promise<Blob> => {
@@ -1295,6 +1677,7 @@ export const apiClient = {
     save_report?: boolean;
     report_title?: string;
     run_ai_analysis?: boolean;
+    project_id?: number;
   }): Promise<DNSReconResult> => {
     const resp = await fetch(`${API_URL}/dns/scan`, {
       method: "POST",
@@ -1313,6 +1696,7 @@ export const apiClient = {
       save_report?: boolean;
       report_title?: string;
       run_ai_analysis?: boolean;
+      project_id?: number;
     },
     onProgress: (phase: string, progress: number, message: string) => void,
     onResult: (result: DNSReconResult) => void,
@@ -1876,6 +2260,7 @@ export type TracerouteRequest = {
   resolve_hostnames?: boolean;
   save_report?: boolean;
   report_title?: string;
+  project_id?: number;
 };
 
 export type TracerouteHop = {
@@ -2957,6 +3342,7 @@ export const fuzzer = {
     method?: string;
     config?: Record<string, any>;
     tags?: string[];
+    project_id?: number;
   }): Promise<{ id: number; name: string; target_url: string; status: string; created_at: string; message: string }> => {
     const resp = await fetch(`${API_URL}/fuzzer/sessions`, {
       method: "POST",
@@ -2973,6 +3359,7 @@ export const fuzzer = {
     page_size?: number;
     status?: string;
     search?: string;
+    project_id?: number;
   } = {}): Promise<{
     sessions: Array<{
       id: number;
@@ -2992,6 +3379,7 @@ export const fuzzer = {
       avg_response_time?: number;
       tags: string[];
       findings_count: number;
+      project_id?: number;
     }>;
     total: number;
     page: number;
@@ -3002,6 +3390,7 @@ export const fuzzer = {
     if (params.page_size) queryParams.append("page_size", params.page_size.toString());
     if (params.status) queryParams.append("status", params.status);
     if (params.search) queryParams.append("search", params.search);
+    if (params.project_id !== undefined) queryParams.append("project_id", params.project_id.toString());
     
     const resp = await fetch(`${API_URL}/fuzzer/sessions?${queryParams}`);
     if (!resp.ok) throw new Error(await resp.text());
@@ -3688,3 +4077,3581 @@ declare module './client' {
     checkProxyHealth: (proxyId: string) => Promise<MITMProxyHealth>;
   }
 }
+
+// ============================================================================
+// Agentic AI Scan Types
+// ============================================================================
+
+export type AgenticScanPhase = 
+  | "initializing"
+  | "chunking"
+  | "entry_point_detection"
+  | "flow_tracing"
+  | "vulnerability_analysis"
+  | "report_generation"
+  | "complete"
+  | "error";
+
+export interface AgenticScanRequest {
+  project_id: number;
+  project_path: string;
+  file_extensions?: string[];
+}
+
+export interface AgenticScanStartResponse {
+  scan_id: string;
+  status: string;
+  message: string;
+}
+
+export interface AgenticScanProgress {
+  scan_id: string;
+  project_id: number;
+  phase: AgenticScanPhase;
+  phase_progress: number;
+  total_chunks: number;
+  analyzed_chunks: number;
+  entry_points_found: number;
+  flows_traced: number;
+  vulnerabilities_found: number;
+  current_file?: string;
+  message: string;
+  started_at: string;
+  estimated_completion?: string;
+  completed_at?: string;
+  status?: string;
+}
+
+export interface AgenticFlowStep {
+  file_path: string;
+  line_number: number;
+  code_snippet: string;
+  variable_name: string;
+  transformation: string;
+}
+
+export interface AgenticEntryPoint {
+  file_path: string;
+  line_number: number;
+  entry_type: string;
+  variable_name: string;
+  code_snippet: string;
+}
+
+export interface AgenticSink {
+  file_path: string;
+  line_number: number;
+  sink_type: string;
+  function_name: string;
+  code_snippet: string;
+}
+
+export interface AgenticFlow {
+  entry_point: AgenticEntryPoint;
+  sink: AgenticSink;
+  steps: AgenticFlowStep[];
+}
+
+export interface AgenticVulnerability {
+  id: string;
+  vulnerability_type: string;
+  severity: string;
+  cwe_id: string;
+  owasp_category: string;
+  title: string;
+  description: string;
+  llm_analysis: string;
+  exploit_scenario: string;
+  remediation: string;
+  code_fix?: string;
+  confidence: number;
+  false_positive_likelihood: number;
+  flow: AgenticFlow;
+}
+
+export interface AgenticScanStatistics {
+  by_severity: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  by_type: Record<string, number>;
+  by_file: Record<string, number>;
+  entry_point_types: Record<string, number>;
+  sink_types: Record<string, number>;
+  avg_confidence: number;
+}
+
+export interface AgenticScanResult {
+  scan_id: string;
+  project_id: number;
+  project_path: string;
+  status: string;
+  phase: AgenticScanPhase;
+  total_chunks: number;
+  analyzed_chunks: number;
+  entry_points_count: number;
+  sinks_count: number;
+  flows_traced: number;
+  vulnerabilities: AgenticVulnerability[];
+  statistics: AgenticScanStatistics;
+  started_at: string;
+  completed_at?: string;
+  scan_duration_seconds: number;
+  error_message?: string;
+}
+
+export interface AgenticVulnerabilitySummary {
+  id: string;
+  type: string;
+  severity: string;
+  cwe_id: string;
+  title: string;
+  file: string;
+  line: number;
+  confidence: number;
+}
+
+export interface AgenticVulnerabilitiesResponse {
+  scan_id: string;
+  total: number;
+  filtered: number;
+  vulnerabilities: AgenticVulnerabilitySummary[];
+}
+
+// ============================================================================
+// Agentic AI Scan Client
+// ============================================================================
+
+export const agenticScanClient = {
+  /**
+   * Start an agentic AI scan asynchronously.
+   * Use getStatus to poll for progress or use the WebSocket for real-time updates.
+   */
+  startScan: async (request: AgenticScanRequest): Promise<AgenticScanStartResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/start`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Start an agentic AI scan and wait for completion.
+   * Good for smaller projects or when immediate results are needed.
+   */
+  startScanSync: async (request: AgenticScanRequest): Promise<AgenticScanResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/start-sync`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get the current status/progress of a scan.
+   */
+  getStatus: async (scanId: string): Promise<AgenticScanProgress> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/status/${scanId}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get the full result of a completed scan.
+   */
+  getResult: async (scanId: string): Promise<AgenticScanResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/result/${scanId}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get just the vulnerabilities from a scan, optionally filtered by severity.
+   */
+  getVulnerabilities: async (scanId: string, severity?: string): Promise<AgenticVulnerabilitiesResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const params = severity ? `?severity=${severity}` : "";
+    const resp = await fetch(`${API_URL}/agentic-scan/vulnerabilities/${scanId}${params}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get statistics from a completed scan.
+   */
+  getStatistics: async (scanId: string): Promise<{
+    scan_id: string;
+    project_id: number;
+    duration_seconds: number;
+    total_chunks: number;
+    entry_points: number;
+    sinks: number;
+    flows_traced: number;
+    vulnerabilities: number;
+    statistics: AgenticScanStatistics;
+  }> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/statistics/${scanId}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * List all currently active scans.
+   */
+  listActiveScans: async (): Promise<{ active_scans: AgenticScanProgress[]; count: number }> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/active`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Cancel an active scan.
+   */
+  cancelScan: async (scanId: string): Promise<{ message: string; scan_id: string }> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/cancel/${scanId}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Connect to WebSocket for real-time progress updates.
+   * Returns a function to close the connection.
+   */
+  connectProgressWebSocket: (
+    scanId: string,
+    onProgress: (progress: AgenticScanProgress) => void,
+    onError: (error: string) => void,
+    onComplete: () => void
+  ): (() => void) => {
+    const wsUrl = `${API_URL.replace(/^http/, 'ws')}/agentic-scan/ws/${scanId}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.phase === "complete" || data.phase === "error") {
+          onComplete();
+        }
+        onProgress(data);
+      } catch (e) {
+        // Ignore parse errors for pong messages
+        if (event.data !== "pong") {
+          console.error("WebSocket parse error:", e);
+        }
+      }
+    };
+
+    ws.onerror = (event) => {
+      onError("WebSocket connection error");
+    };
+
+    ws.onclose = () => {
+      onComplete();
+    };
+
+    // Send periodic pings to keep connection alive
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send("ping");
+      }
+    }, 30000);
+
+    // Return cleanup function
+    return () => {
+      clearInterval(pingInterval);
+      ws.close();
+    };
+  },
+
+  /**
+   * Poll for scan progress (alternative to WebSocket).
+   * Returns a function to stop polling.
+   */
+  pollProgress: (
+    scanId: string,
+    onProgress: (progress: AgenticScanProgress) => void,
+    onComplete: (result: AgenticScanResult) => void,
+    onError: (error: string) => void,
+    intervalMs: number = 2000
+  ): (() => void) => {
+    let active = true;
+    
+    const poll = async () => {
+      while (active) {
+        try {
+          const progress = await agenticScanClient.getStatus(scanId);
+          onProgress(progress);
+          
+          if (progress.phase === "complete" || progress.status === "complete") {
+            const result = await agenticScanClient.getResult(scanId);
+            onComplete(result);
+            break;
+          }
+          
+          if (progress.phase === "error") {
+            onError(progress.message || "Scan failed");
+            break;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, intervalMs));
+        } catch (e: any) {
+          onError(e.message || "Polling error");
+          break;
+        }
+      }
+    };
+    
+    poll();
+    
+    return () => { active = false; };
+  },
+};
+
+
+// ============================================================================
+// REVERSE ENGINEERING TYPES AND FUNCTIONS
+// ============================================================================
+
+// Binary Analysis Types
+export type BinaryStringResult = {
+  value: string;
+  offset: number;
+  encoding: string;
+  category?: string;
+};
+
+export type ImportedFunctionResult = {
+  name: string;
+  library: string;
+  ordinal?: number;
+  is_suspicious: boolean;
+  reason?: string;
+};
+
+// PE Rich Header types
+export type RichHeaderEntry = {
+  product_id: number;
+  build_id: number;
+  count: number;
+  product_name?: string;
+  vs_version?: string;
+};
+
+export type RichHeader = {
+  entries: RichHeaderEntry[];
+  rich_hash: string;
+  checksum: number;
+  raw_data: string;
+  clear_data: string;
+};
+
+// Hex Viewer types
+export type HexViewRow = {
+  offset: number;
+  offset_hex: string;
+  hex: string;
+  ascii: string;
+  bytes: number[];
+};
+
+export type HexViewResult = {
+  offset: number;
+  length: number;
+  total_size: number;
+  hex_data: string;
+  ascii_preview: string;
+  rows: HexViewRow[];
+};
+
+export type HexSearchResult = {
+  offset: number;
+  offset_hex: string;
+  match_length: number;
+  context_hex: string;
+  context_ascii: string;
+  match_offset_in_context: number;
+};
+
+export type HexSearchResponse = {
+  query: string;
+  search_type: string;
+  pattern_hex: string;
+  total_matches: number;
+  results: HexSearchResult[];
+};
+
+export type BinaryMetadataResult = {
+  file_type: string;
+  architecture: string;
+  file_size: number;
+  entry_point?: number;
+  is_packed: boolean;
+  packer_name?: string;
+  compile_time?: string;
+  sections: Array<{
+    name: string;
+    virtual_address?: number;
+    address?: number;
+    virtual_size?: number;
+    raw_size?: number;
+    size?: number;
+    entropy?: number;
+    type?: string;
+    flags?: string;
+  }>;
+  headers: Record<string, any>;
+  // PE-specific fields
+  rich_header?: RichHeader;
+  imphash?: string;
+  // ELF-specific fields
+  interpreter?: string;
+  linked_libraries?: string[];
+  relro?: string;
+  stack_canary?: boolean;
+  nx_enabled?: boolean;
+  pie_enabled?: boolean;
+};
+
+// ELF Symbol
+export type ELFSymbolResult = {
+  name: string;
+  address: number;
+  size: number;
+  symbol_type: string;
+  binding: string;
+  section: string;
+  is_imported: boolean;
+  is_exported: boolean;
+  is_suspicious: boolean;
+  reason?: string;
+};
+
+// Disassembly Types
+export type DisassemblyInstruction = {
+  address: number;
+  mnemonic: string;
+  op_str: string;
+  bytes_hex: string;
+  size: number;
+  is_call: boolean;
+  is_jump: boolean;
+  is_suspicious: boolean;
+  comment?: string;
+};
+
+export type DisassemblyFunction = {
+  name: string;
+  address: number;
+  size: number;
+  instructions: DisassemblyInstruction[];
+  calls: string[];
+  suspicious_patterns: string[];
+};
+
+export type DisassemblyResult = {
+  entry_point_disasm: DisassemblyInstruction[];
+  functions: DisassemblyFunction[];
+  suspicious_instructions: Array<{ function?: string; pattern?: string; note?: string }>;
+  architecture: string;
+  mode: string;
+};
+
+export type SecretResult = {
+  type: string;
+  value: string;
+  masked_value: string;
+  severity: string;
+  context?: string;
+  offset?: number;
+};
+
+export type SuspiciousIndicator = {
+  category: string;
+  severity: string;
+  description: string;
+  details?: any;
+};
+
+export type BinaryAnalysisResult = {
+  filename: string;
+  metadata: BinaryMetadataResult;
+  strings_count: number;
+  strings_sample: BinaryStringResult[];
+  imports: ImportedFunctionResult[];
+  exports: string[];
+  secrets: SecretResult[];
+  suspicious_indicators: SuspiciousIndicator[];
+  // Enhanced ELF fields
+  symbols?: ELFSymbolResult[];
+  disassembly?: DisassemblyResult;
+  dwarf_info?: {
+    has_debug_info: boolean;
+    compilation_units?: Array<{
+      name: string;
+      producer?: string;
+      language?: number;
+    }>;
+    source_files?: string[];
+    error?: string;
+  };
+  ai_analysis?: string;
+  error?: string;
+};
+
+// APK Analysis Types
+export type ApkPermissionResult = {
+  name: string;
+  is_dangerous: boolean;
+  description?: string;
+};
+
+export type ApkComponentResult = {
+  name: string;
+  component_type: string;
+  is_exported: boolean;
+  intent_filters: string[];
+};
+
+export type ApkSecurityIssue = {
+  category: string;
+  severity: string;
+  description: string;
+  details?: any;
+  recommendation?: string;
+};
+
+export type ApkCertificate = {
+  subject: string;
+  issuer: string;
+  serial_number: string;
+  fingerprint_sha256: string;
+  fingerprint_sha1: string;
+  fingerprint_md5: string;
+  valid_from: string;
+  valid_until: string;
+  is_debug_cert: boolean;
+  is_expired: boolean;
+  is_self_signed: boolean;
+  signature_version: string;
+  public_key_algorithm?: string;
+  public_key_bits?: number;
+};
+
+// DEX Analysis Types
+export type DexSuspiciousMethod = {
+  class: string;
+  method: string;
+  category: string;
+  pattern: string;
+};
+
+export type DexTrackerInfo = {
+  name: string;
+  package: string;
+  class: string;
+};
+
+export type DexClassInfo = {
+  name: string;
+  superclass?: string;
+  interfaces: string[];
+  methods_count: number;
+};
+
+export type DexAnalysis = {
+  total_classes: number;
+  total_methods: number;
+  suspicious_classes: any[];
+  suspicious_methods: DexSuspiciousMethod[];
+  detected_trackers: DexTrackerInfo[];
+  class_hierarchy: DexClassInfo[];
+  reflection_usage: DexSuspiciousMethod[];
+  crypto_usage: DexSuspiciousMethod[];
+  native_calls: DexSuspiciousMethod[];
+  dynamic_loading: DexSuspiciousMethod[];
+  anti_analysis_detected: DexSuspiciousMethod[];
+};
+
+// Resource Analysis Types
+export type ResourceSecret = {
+  type: string;
+  source: string;
+  value_preview: string;
+  severity: string;
+};
+
+export type ResourceAnalysis = {
+  string_resources: Record<string, string>;
+  string_count: number;
+  asset_files: string[];
+  raw_resources: string[];
+  drawable_count: number;
+  layout_count: number;
+  potential_secrets: ResourceSecret[];
+  interesting_assets: any[];
+  database_files: string[];
+  config_files: string[];
+};
+
+// Intent Filter Analysis Types
+export type DeepLinkInfo = {
+  url: string;
+  component: string;
+  type: string;
+};
+
+export type BrowsableActivity = {
+  name: string;
+  schemes: string[];
+  hosts: string[];
+};
+
+export type ExportedComponent = {
+  name: string;
+  type: string;
+  exported: boolean;
+  has_intent_filter: boolean;
+  actions: string[];
+};
+
+export type AttackSurfaceSummary = {
+  total_deep_links: number;
+  browsable_activities_count: number;
+  custom_uri_schemes: string[];
+  exported_activities: number;
+  exported_services: number;
+  exported_receivers: number;
+  exported_providers: number;
+};
+
+export type IntentFilterAnalysis = {
+  deep_links: DeepLinkInfo[];
+  browsable_activities: BrowsableActivity[];
+  exported_components: ExportedComponent[];
+  uri_schemes: string[];
+  data_handlers: any[];
+  implicit_intents: any[];
+  attack_surface_summary: AttackSurfaceSummary;
+};
+
+// Network Security Config Types
+export type CertificatePin = {
+  domains: string[];
+  expiration?: string;
+  pins: { digest: string; value: string }[];
+};
+
+export type DomainConfig = {
+  domains: { name: string; include_subdomains: boolean }[];
+  cleartext_permitted: boolean;
+  has_pins: boolean;
+};
+
+export type NetworkSecurityConfig = {
+  has_config: boolean;
+  cleartext_permitted: boolean;
+  cleartext_domains: string[];
+  trust_anchors: { source: string; scope: string }[];
+  certificate_pins: CertificatePin[];
+  domain_configs: DomainConfig[];
+  security_issues: string[];
+  config_xml?: string;
+};
+
+// Smali/Bytecode Decompilation Types
+export type SmaliMethodCode = {
+  class_name: string;
+  method_name: string;
+  method_signature: string;
+  access_flags: string;
+  return_type: string;
+  parameters: string[];
+  registers_count: number;
+  instructions: string[];
+  instruction_count: number;
+  has_try_catch: boolean;
+  is_native: boolean;
+  is_abstract: boolean;
+};
+
+export type SmaliInterestingMethod = {
+  class: string;
+  method: string;
+  pattern: string;
+  preview: string[];
+};
+
+export type SmaliSearchIndex = {
+  class: string;
+  method: string;
+  signature: string;
+  preview: string;
+};
+
+export type SmaliStatistics = {
+  total_methods_analyzed: number;
+  total_instructions: number;
+  native_methods: number;
+  abstract_methods: number;
+  classes_analyzed: number;
+};
+
+export type SmaliAnalysis = {
+  decompiled_methods: SmaliMethodCode[];
+  class_smali: Record<string, string>;
+  statistics: SmaliStatistics;
+  interesting_methods: SmaliInterestingMethod[];
+  search_index: SmaliSearchIndex[];
+  error?: string;
+};
+
+// Dynamic Analysis / Frida Script Types
+export type FridaScript = {
+  name: string;
+  category: string;
+  description: string;
+  script_code: string;
+  target_classes: string[];
+  target_methods: string[];
+  is_dangerous: boolean;
+  usage_instructions: string;
+};
+
+export type CryptoMethod = {
+  pattern: string;
+  description: string;
+  context: string;
+};
+
+export type InterestingHook = {
+  class: string;
+  reason: string;
+  methods: string[];
+};
+
+export type DynamicAnalysis = {
+  package_name: string;
+  frida_scripts: FridaScript[];
+  ssl_pinning_detected: boolean;
+  ssl_patterns_found: string[];
+  root_detection_detected: boolean;
+  root_patterns_found: string[];
+  emulator_detection_detected: boolean;
+  anti_tampering_detected: boolean;
+  debugger_detection_detected: boolean;
+  crypto_methods: CryptoMethod[];
+  auth_patterns_found: string[];
+  interesting_hooks: InterestingHook[];
+  suggested_test_cases: string[];
+  frida_spawn_command: string;
+  frida_attach_command: string;
+  total_scripts: number;
+};
+
+// Native Library Analysis Types
+export type NativeFunction = {
+  name: string;
+  address: string;
+  size: number;
+  is_jni: boolean;
+  is_exported: boolean;
+  is_suspicious: boolean;
+};
+
+export type NativeLibraryInfo = {
+  name: string;
+  path: string;
+  architecture: string;
+  size: number;
+  is_stripped: boolean;
+  has_jni: boolean;
+  has_anti_debug: boolean;
+  has_crypto: boolean;
+  functions: NativeFunction[];
+  jni_functions: NativeFunction[];
+  suspicious_functions: NativeFunction[];
+  strings_found: string[];
+  secrets_found: string[];
+  urls_found: string[];
+  anti_debug_indicators: string[];
+  crypto_indicators: string[];
+};
+
+export type NativeAnalysisResult = {
+  total_libraries: number;
+  architectures: string[];
+  libraries: NativeLibraryInfo[];
+  total_jni_functions: number;
+  total_suspicious_functions: number;
+  has_native_anti_debug: boolean;
+  has_native_crypto: boolean;
+  native_secrets: string[];
+  risk_level: "low" | "medium" | "high" | "critical";
+  summary: string;
+};
+
+// Hardening Score Types
+export type HardeningFinding = {
+  issue: string;
+  impact: string;
+  severity: "low" | "medium" | "high" | "critical";
+};
+
+export type HardeningRecommendation = {
+  action: string;
+  priority: "low" | "medium" | "high";
+  impact: string;
+};
+
+export type HardeningCategory = {
+  name: string;
+  score: number;
+  max_score: number;
+  percentage: number;
+  weight: number;
+  findings: HardeningFinding[];
+  recommendations: HardeningRecommendation[];
+};
+
+export type HardeningScore = {
+  overall_score: number;
+  grade: "A" | "B" | "C" | "D" | "F";
+  risk_level: "low" | "medium" | "high" | "critical";
+  categories: {
+    code_protection: HardeningCategory;
+    network_security: HardeningCategory;
+    data_storage: HardeningCategory;
+    authentication_crypto: HardeningCategory;
+    platform_security: HardeningCategory;
+  };
+  attack_surface_summary: {
+    exported_components: number;
+    deep_links: number;
+    dangerous_permissions: number;
+    native_libraries: number;
+    cleartext_traffic: boolean;
+    debug_enabled: boolean;
+    backup_enabled: boolean;
+  };
+  comparison: {
+    industry_average: number;
+    percentile: number;
+  };
+  top_risks: string[];
+  quick_wins: string[];
+};
+
+// Data Flow / Taint Analysis Types
+export type TaintSource = {
+  source_type: string;
+  class_name: string;
+  method_name: string;
+  description: string;
+  sensitivity: "low" | "medium" | "high" | "critical";
+  owasp_category: string;
+};
+
+export type TaintSink = {
+  sink_type: string;
+  class_name: string;
+  method_name: string;
+  description: string;
+  risk_level: "low" | "medium" | "high" | "critical";
+  owasp_category: string;
+};
+
+export type DataFlowPath = {
+  source: TaintSource;
+  sink: TaintSink;
+  intermediate_methods: string[];
+  affected_class: string;
+  affected_method: string;
+  severity: "low" | "medium" | "high" | "critical";
+  description: string;
+  recommendation: string;
+  is_privacy_violation: boolean;
+  gdpr_relevant: boolean;
+  owasp_category: string;
+};
+
+export type DataFlowAnalysisResult = {
+  total_sources: number;
+  total_sinks: number;
+  total_flows: number;
+  critical_flows: number;
+  high_risk_flows: number;
+  sources_found: Array<{
+    source_type: string;
+    class_name: string;
+    method_name: string;
+    description: string;
+    sensitivity: string;
+    affected_method: string;
+  }>;
+  sinks_found: Array<{
+    sink_type: string;
+    class_name: string;
+    method_name: string;
+    description: string;
+    risk_level: string;
+    affected_method: string;
+  }>;
+  data_flow_paths: DataFlowPath[];
+  privacy_violations: Array<{
+    data_type: string;
+    source: string;
+    sink: string;
+    description: string;
+    affected_class: string;
+    affected_method: string;
+  }>;
+  data_leak_risks: Array<{
+    risk_type: string;
+    source: string;
+    sink: string;
+    severity: string;
+    description: string;
+  }>;
+  summary: string;
+  recommendations: string[];
+};
+
+export type ApkAnalysisResult = {
+  filename: string;
+  package_name: string;
+  version_name?: string;
+  version_code?: number;
+  min_sdk?: number;
+  target_sdk?: number;
+  permissions: ApkPermissionResult[];
+  dangerous_permissions_count: number;
+  components: ApkComponentResult[];
+  strings_count: number;
+  secrets: SecretResult[];
+  urls: string[];
+  native_libraries: string[];
+  // Certificate info
+  certificate?: ApkCertificate;
+  activities: string[];
+  services: string[];
+  receivers: string[];
+  providers: string[];
+  uses_features: string[];
+  app_name?: string;
+  debuggable: boolean;
+  allow_backup: boolean;
+  network_security_config?: string;
+  // Analysis fields
+  dex_analysis?: DexAnalysis;
+  resource_analysis?: ResourceAnalysis;
+  intent_filter_analysis?: IntentFilterAnalysis;
+  network_config_analysis?: NetworkSecurityConfig;
+  smali_analysis?: SmaliAnalysis;
+  dynamic_analysis?: DynamicAnalysis;
+  native_analysis?: NativeAnalysisResult;
+  hardening_score?: HardeningScore;
+  data_flow_analysis?: DataFlowAnalysisResult;
+  // Security & AI
+  security_issues: ApkSecurityIssue[];
+  ai_analysis?: string;
+  // New structured AI reports (HTML formatted)
+  ai_report_functionality?: string;  // "What does this APK do" report
+  ai_report_security?: string;        // "Security Findings" report
+  // AI-generated Mermaid diagrams
+  ai_architecture_diagram?: string;   // Architecture visualization
+  ai_data_flow_diagram?: string;      // Data flow & privacy diagram
+  error?: string;
+};
+
+// Docker Analysis Types
+export type DockerLayerResult = {
+  id: string;
+  command: string;
+  size: number;
+};
+
+export type DockerSecretResult = {
+  layer_id: string;
+  layer_command: string;
+  secret_type: string;
+  value: string;
+  masked_value: string;
+  context: string;
+  severity: string;
+};
+
+export type DockerSecurityIssue = {
+  category: string;
+  severity: string;
+  description: string;
+  command?: string;
+};
+
+export type DockerAnalysisResult = {
+  image_name: string;
+  image_id: string;
+  total_layers: number;
+  total_size: number;
+  total_size_human: string;
+  base_image?: string;
+  layers: DockerLayerResult[];
+  secrets: DockerSecretResult[];
+  deleted_files: Array<Record<string, any>>;
+  security_issues: DockerSecurityIssue[];
+  ai_analysis?: string;
+  error?: string;
+};
+
+export type ReverseEngineeringStatus = {
+  binary_analysis: boolean;
+  apk_analysis: boolean;
+  docker_analysis: boolean;
+  jadx_available: boolean;
+  docker_available: boolean;
+  message: string;
+};
+
+export type DockerImageInfo = {
+  name: string;
+  id: string;
+  size: string;
+  created: string;
+};
+
+export type DockerImagesList = {
+  images: DockerImageInfo[];
+  total: number;
+};
+
+// ============================================================================
+// AI-Powered APK Analysis Types
+// ============================================================================
+
+// Chat Types
+export type ApkChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp?: string;
+};
+
+export type ApkChatRequest = {
+  message: string;
+  conversation_history: ApkChatMessage[];
+  analysis_context: Record<string, unknown>;
+  beginner_mode?: boolean;
+};
+
+export type ApkChatResponse = {
+  response: string;
+  suggested_questions: string[];
+  related_findings: string[];
+  learning_tip?: string;
+};
+
+// Threat Model Types
+export type ThreatActor = {
+  name: string;
+  motivation: string;
+  capability: "Low" | "Medium" | "High";
+  likelihood: "Low" | "Medium" | "High";
+  description: string;
+};
+
+export type AttackScenario = {
+  id: string;
+  name: string;
+  description: string;
+  preconditions: string[];
+  attack_steps: string[];
+  impact: string;
+  likelihood: "Low" | "Medium" | "High";
+  severity: "Low" | "Medium" | "High" | "Critical";
+  mitre_techniques: string[];
+};
+
+export type AttackTreeBranch = {
+  method: string;
+  sub_branches: string[];
+  difficulty: "Easy" | "Medium" | "Hard";
+};
+
+export type AttackTree = {
+  goal: string;
+  branches: AttackTreeBranch[];
+};
+
+export type MitreMapping = {
+  technique_id: string;
+  technique_name: string;
+  tactic: string;
+  relevance: string;
+  finding_reference: string;
+};
+
+export type RiskMatrix = {
+  critical_risks: string[];
+  high_risks: string[];
+  medium_risks: string[];
+  low_risks: string[];
+  accepted_risks: string[];
+};
+
+export type PrioritizedThreat = {
+  rank: number;
+  threat: string;
+  risk_score: number;
+  rationale: string;
+  recommendation: string;
+};
+
+export type ThreatModelRequest = {
+  analysis_context: Record<string, unknown>;
+  focus_areas?: string[];
+  attacker_profile?: "script_kiddie" | "skilled" | "nation_state";
+};
+
+export type ThreatModelResponse = {
+  threat_actors: ThreatActor[];
+  attack_scenarios: AttackScenario[];
+  attack_tree: AttackTree;
+  mitre_attack_mappings: MitreMapping[];
+  risk_matrix: RiskMatrix;
+  prioritized_threats: PrioritizedThreat[];
+  executive_summary: string;
+};
+
+// Exploit Suggestion Types
+export type VulnerabilityInfo = {
+  id: string;
+  name: string;
+  category: string;
+  severity: "Low" | "Medium" | "High" | "Critical";
+  description: string;
+  root_cause: string;
+  affected_component: string;
+};
+
+export type ExploitStep = {
+  step: number;
+  action: string;
+  command?: string;
+  expected_result: string;
+};
+
+export type ExploitationPath = {
+  vulnerability_id: string;
+  name: string;
+  prerequisites: string[];
+  steps: ExploitStep[];
+  success_indicators: string[];
+  impact: string;
+};
+
+export type RequiredTool = {
+  name: string;
+  purpose: string;
+  installation: string;
+  usage_example: string;
+};
+
+export type PocScript = {
+  vulnerability_id: string;
+  name: string;
+  language: string;
+  description: string;
+  code: string;
+  usage: string;
+};
+
+export type MitigationBypass = {
+  protection: string;
+  bypass_method: string;
+  tools: string[];
+  difficulty: "Easy" | "Medium" | "Hard";
+  detection_risk: string;
+};
+
+export type DifficultyAssessment = {
+  overall_difficulty: "Easy" | "Medium" | "Hard" | "Expert";
+  time_estimate: string;
+  skill_requirements: string[];
+  resource_requirements: string[];
+  success_probability: "Low" | "Medium" | "High";
+};
+
+export type ExploitSuggestionRequest = {
+  analysis_context: Record<string, unknown>;
+  vulnerability_focus?: string;
+  include_poc?: boolean;
+  skill_level?: "beginner" | "intermediate" | "advanced";
+};
+
+export type ExploitSuggestionResponse = {
+  vulnerabilities: VulnerabilityInfo[];
+  exploitation_paths: ExploitationPath[];
+  tools_required: RequiredTool[];
+  poc_scripts: PocScript[];
+  mitigation_bypasses: MitigationBypass[];
+  difficulty_assessment: DifficultyAssessment;
+};
+
+// Walkthrough Types
+export type WalkthroughStep = {
+  step_number: number;
+  phase: string;
+  title: string;
+  description: string;
+  technical_detail: string;
+  beginner_explanation: string;
+  why_it_matters: string;
+  findings_count: number;
+  severity?: string;
+  progress_percent: number;
+};
+
+export type LearningResource = {
+  title: string;
+  url: string;
+  description: string;
+};
+
+export type AnalysisWalkthroughResponse = {
+  total_steps: number;
+  steps: WalkthroughStep[];
+  glossary: Record<string, string>;
+  learning_resources: LearningResource[];
+  next_steps: string[];
+};
+
+// Chat Export Types
+export type ChatExportRequest = {
+  messages: ApkChatMessage[];
+  analysis_context: Record<string, unknown>;
+  format: "markdown" | "json" | "pdf";
+};
+
+// Code Explanation Types
+export type SecurityConcern = {
+  severity: "critical" | "high" | "medium" | "low";
+  issue: string;
+  location: string;
+  recommendation: string;
+};
+
+export type CodeExplanationRequest = {
+  source_code: string;
+  class_name: string;
+  language?: "java" | "smali" | "kotlin";
+  focus_area?: "security" | "functionality" | "data_flow" | null;
+  beginner_mode?: boolean;
+};
+
+export type CodeExplanationResponse = {
+  summary: string;
+  detailed_explanation: string;
+  security_concerns: SecurityConcern[];
+  interesting_findings: string[];
+  data_flow_analysis?: string;
+  suggested_focus_points: string[];
+  code_quality_notes: string[];
+};
+
+// AI Code Search Types
+export type CodeSearchAIRequest = {
+  session_id: string;
+  query: string;
+  max_results?: number;
+};
+
+export type AICodeSearchMatch = {
+  file_path: string;
+  line_number: number;
+  line_content: string;
+  matched_pattern: string;
+};
+
+export type CodeSearchAIResponse = {
+  query: string;
+  interpreted_as: string;
+  search_patterns: string[];
+  results: AICodeSearchMatch[];
+  suggestions: string[];
+};
+
+// Reverse Engineering API Client
+export const reverseEngineeringClient = {
+  /**
+   * Get status of reverse engineering capabilities
+   */
+  getStatus: async (): Promise<ReverseEngineeringStatus> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/status`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Analyze a binary executable file (EXE, ELF, DLL)
+   */
+  analyzeBinary: async (
+    file: File,
+    includeAi: boolean = true
+  ): Promise<BinaryAnalysisResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const form = new FormData();
+    form.append("file", file);
+
+    const params = new URLSearchParams({ include_ai: String(includeAi) });
+    const resp = await fetch(`${API_URL}/reverse/analyze-binary?${params}`, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.json();
+  },
+
+  /**
+   * Analyze an Android APK file
+   */
+  analyzeApk: async (
+    file: File,
+    includeAi: boolean = true
+  ): Promise<ApkAnalysisResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const form = new FormData();
+    form.append("file", file);
+
+    const params = new URLSearchParams({ include_ai: String(includeAi) });
+    const resp = await fetch(`${API_URL}/reverse/analyze-apk?${params}`, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.json();
+  },
+
+  /**
+   * Analyze a Docker image's layers
+   */
+  analyzeDockerImage: async (
+    imageName: string,
+    includeAi: boolean = true
+  ): Promise<DockerAnalysisResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const params = new URLSearchParams({ include_ai: String(includeAi) });
+    const resp = await fetch(`${API_URL}/reverse/analyze-docker/${encodeURIComponent(imageName)}?${params}`, {
+      headers,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.json();
+  },
+
+  /**
+   * List locally available Docker images
+   */
+  listDockerImages: async (): Promise<DockerImagesList> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/docker-images`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Save a reverse engineering report
+   */
+  saveReport: async (report: SaveREReportRequest): Promise<REReportSummary> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/reports`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(report),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.json();
+  },
+
+  /**
+   * Export APK analysis report to Markdown, PDF, or Word format
+   */
+  exportApkReport: async (
+    file: File,
+    format: "markdown" | "pdf" | "docx",
+    reportType: "functionality" | "security" | "both" = "both"
+  ): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const form = new FormData();
+    form.append("file", file);
+
+    const params = new URLSearchParams({ format, report_type: reportType });
+    const resp = await fetch(`${API_URL}/reverse/apk/export?${params}`, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.blob();
+  },
+
+  /**
+   * Export APK analysis report from existing result data
+   */
+  exportApkReportFromResult: async (
+    resultData: ApkAnalysisResult,
+    format: "markdown" | "pdf" | "docx",
+    reportType: "functionality" | "security" | "both" = "both"
+  ): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const params = new URLSearchParams({ format, report_type: reportType });
+    const resp = await fetch(`${API_URL}/reverse/apk/export-from-result?${params}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(resultData),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.blob();
+  },
+
+  /**
+   * List saved reports
+   */
+  listReports: async (params?: {
+    analysis_type?: string;
+    project_id?: number;
+    risk_level?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<REReportSummary[]> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const searchParams = new URLSearchParams();
+    if (params?.analysis_type) searchParams.set("analysis_type", params.analysis_type);
+    if (params?.project_id) searchParams.set("project_id", String(params.project_id));
+    if (params?.risk_level) searchParams.set("risk_level", params.risk_level);
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    if (params?.offset) searchParams.set("offset", String(params.offset));
+    
+    const resp = await fetch(`${API_URL}/reverse/reports?${searchParams}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get a specific report by ID
+   */
+  getReport: async (reportId: number): Promise<REReportDetail> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/reports/${reportId}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Delete a report
+   */
+  deleteReport: async (reportId: number): Promise<void> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/reports/${reportId}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+  },
+
+  /**
+   * Export a saved report to Markdown, PDF, or Word format
+   * Includes all analysis data: Quick Scan, JADX Full Scan, and AI Reports
+   */
+  exportSavedReport: async (
+    reportId: number,
+    format: "markdown" | "pdf" | "docx"
+  ): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    
+    const params = new URLSearchParams({ format });
+    const resp = await fetch(`${API_URL}/reverse/reports/${reportId}/export?${params}`, {
+      headers,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.blob();
+  },
+
+  /**
+   * Update a report (notes, tags, title)
+   */
+  updateReport: async (reportId: number, updates: {
+    notes?: string;
+    tags?: string[];
+    title?: string;
+  }): Promise<void> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const params = new URLSearchParams();
+    if (updates.notes !== undefined) params.set("notes", updates.notes);
+    if (updates.title !== undefined) params.set("title", updates.title);
+    // Tags need special handling
+    
+    const resp = await fetch(`${API_URL}/reverse/reports/${reportId}?${params}`, {
+      method: "PATCH",
+      headers,
+      body: updates.tags ? JSON.stringify({ tags: updates.tags }) : undefined,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+  },
+
+  // ================== AI-Powered APK Analysis API ==================
+
+  /**
+   * Chat about APK analysis results with AI
+   */
+  chatAboutApk: async (request: ApkChatRequest): Promise<ApkChatResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Export chat conversation to file
+   */
+  exportApkChat: async (request: ChatExportRequest): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/chat/export`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  /**
+   * AI-powered code explanation for decompiled sources
+   */
+  explainCode: async (request: CodeExplanationRequest): Promise<CodeExplanationResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/code/explain`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * AI-powered semantic code search in decompiled sources
+   */
+  searchCodeAI: async (request: CodeSearchAIRequest): Promise<CodeSearchAIResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/code/search-ai`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Generate threat model for APK analysis
+   */
+  generateThreatModel: async (request: ThreatModelRequest): Promise<ThreatModelResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/threat-model`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get AI-powered exploit suggestions for APK vulnerabilities
+   */
+  getExploitSuggestions: async (request: ExploitSuggestionRequest): Promise<ExploitSuggestionResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/exploit-suggestions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get educational walkthrough of APK analysis
+   */
+  getAnalysisWalkthrough: async (analysisContext: Record<string, unknown>): Promise<AnalysisWalkthroughResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/walkthrough`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ analysis_context: analysisContext }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Hex Viewer API ==================
+
+  /**
+   * Upload a file for hex viewing
+   */
+  uploadForHexView: async (file: File): Promise<{ file_id: string; filename: string; file_size: number }> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    const resp = await fetch(`${API_URL}/reverse/hex-upload`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get hex view of an uploaded file
+   */
+  getHexView: async (fileId: string, offset: number = 0, length: number = 512): Promise<HexViewResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const params = new URLSearchParams({
+      offset: String(offset),
+      length: String(length),
+    });
+    const resp = await fetch(`${API_URL}/reverse/hex/${fileId}?${params}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Search in hex file
+   */
+  searchHex: async (
+    fileId: string,
+    query: string,
+    searchType: 'text' | 'hex' = 'text',
+    maxResults: number = 50
+  ): Promise<HexSearchResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const params = new URLSearchParams({
+      query,
+      search_type: searchType,
+      max_results: String(maxResults),
+    });
+    const resp = await fetch(`${API_URL}/reverse/hex/${fileId}/search?${params}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Delete an uploaded hex view file
+   */
+  deleteHexFile: async (fileId: string): Promise<void> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/hex/${fileId}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+  },
+
+  // ================== JADX Decompilation API ==================
+
+  /**
+   * Decompile APK to Java source code using JADX
+   */
+  decompileApk: async (file: File): Promise<JadxDecompilationResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // Use AbortController for 30 minute timeout (very large APKs like games can take a while)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1800000); // 30 minutes
+
+    try {
+      const resp = await fetch(`${API_URL}/reverse/apk/decompile`, {
+        method: "POST",
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Decompilation timed out after 30 minutes. The APK may be extremely large or complex.');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Get decompiled Java source code for a specific class
+   */
+  getDecompiledSource: async (sessionId: string, classPath: string): Promise<JadxSourceResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/${sessionId}/source/${encodeURIComponent(classPath)}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Search in decompiled Java sources
+   */
+  searchDecompiledSources: async (
+    sessionId: string,
+    query: string,
+    maxResults: number = 50
+  ): Promise<JadxSearchResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const params = new URLSearchParams({
+      query,
+      max_results: String(maxResults),
+    });
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/${sessionId}/search?${params}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Clean up decompilation session
+   */
+  cleanupDecompilation: async (sessionId: string): Promise<void> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/${sessionId}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+  },
+
+  // ================== AI Code Analysis API ==================
+
+  /**
+   * Explain decompiled code with AI
+   */
+  explainCodeWithAI: async (
+    sourceCode: string,
+    className: string,
+    explanationType: "general" | "security" | "method" = "general",
+    methodName?: string
+  ): Promise<AICodeExplanationResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/ai/explain`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        source_code: sourceCode,
+        class_name: className,
+        explanation_type: explanationType,
+        method_name: methodName,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Analyze code vulnerabilities with AI
+   */
+  analyzeVulnerabilitiesWithAI: async (
+    sourceCode: string,
+    className: string
+  ): Promise<AIVulnerabilityAnalysisResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/ai/vulnerabilities`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        source_code: sourceCode,
+        class_name: className,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Analyze data flow in decompiled code
+   */
+  analyzeDataFlow: async (
+    sourceCode: string,
+    className: string
+  ): Promise<ClassDataFlowResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/dataflow`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        source_code: sourceCode,
+        class_name: className,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Build method call graph from decompiled code
+   */
+  buildCallGraph: async (
+    sourceCode: string,
+    className: string
+  ): Promise<CallGraphResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/callgraph`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        source_code: sourceCode,
+        class_name: className,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Smart search across decompiled sources
+   */
+  smartSearch: async (
+    outputDirectory: string,
+    query: string,
+    searchType: "smart" | "vuln" | "regex" | "exact" = "smart",
+    maxResults: number = 100
+  ): Promise<SmartSearchResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/smart-search`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        output_directory: outputDirectory,
+        query: query,
+        search_type: searchType,
+        max_results: maxResults,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * AI-powered vulnerability scan across multiple classes
+   */
+  aiVulnScan: async (
+    outputDirectory: string,
+    scanType: "quick" | "deep" | "focused" = "quick",
+    focusAreas: string[] = []
+  ): Promise<AIVulnScanResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/ai-vulnscan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        output_directory: outputDirectory,
+        scan_type: scanType,
+        focus_areas: focusAreas,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Smali View API ==================
+
+  /**
+   * Get Smali bytecode view for a class
+   */
+  getSmaliView: async (
+    outputDirectory: string,
+    classPath: string
+  ): Promise<SmaliViewResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/smali`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        output_directory: outputDirectory,
+        class_path: classPath,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== String Extraction API ==================
+
+  /**
+   * Extract and categorize all strings from decompiled sources
+   */
+  extractStrings: async (
+    outputDirectory: string,
+    filters?: string[]
+  ): Promise<StringExtractionResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/strings`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        output_directory: outputDirectory,
+        filters: filters || null,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Cross-Reference (XREF) API ==================
+
+  /**
+   * Build cross-references for a class
+   */
+  getCrossReferences: async (
+    outputDirectory: string,
+    classPath: string
+  ): Promise<CrossReferenceResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/xref`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        output_directory: outputDirectory,
+        class_path: classPath,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Project ZIP API ==================
+
+  /**
+   * Get information about project ZIP
+   */
+  getProjectZipInfo: async (outputDirectory: string): Promise<ProjectZipInfo> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/zip-info`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ output_directory: outputDirectory }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Download project as ZIP file
+   */
+  downloadProjectZip: async (outputDirectory: string): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/download-zip`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ output_directory: outputDirectory }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  // ================== Permission Analysis API ==================
+
+  /**
+   * Analyze permissions from AndroidManifest.xml
+   */
+  analyzePermissions: async (outputDirectory: string): Promise<PermissionAnalysisResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/permissions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ output_directory: outputDirectory }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Network Endpoint API ==================
+
+  /**
+   * Extract network endpoints from decompiled sources
+   */
+  extractNetworkEndpoints: async (outputDirectory: string): Promise<NetworkEndpointResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/network-endpoints`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ output_directory: outputDirectory }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Manifest Visualization API ==================
+
+  /**
+   * Generate manifest visualization for an APK
+   */
+  getManifestVisualization: async (file: File): Promise<ManifestVisualizationResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const resp = await fetch(`${API_URL}/reverse/apk/manifest-visualization`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Attack Surface Map API ==================
+
+  /**
+   * Generate attack surface map for an APK
+   */
+  getAttackSurfaceMap: async (file: File): Promise<AttackSurfaceMapResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // Use AbortController for 15-minute timeout (large APK uploads can be slow)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 900000);
+
+    try {
+      const resp = await fetch(`${API_URL}/reverse/apk/attack-surface`, {
+        method: "POST",
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Attack surface analysis timed out after 15 minutes. Please try a smaller APK.');
+      }
+      throw error;
+    }
+  },
+
+  // ================== Obfuscation Analysis API ==================
+
+  /**
+   * Analyze APK for obfuscation techniques
+   */
+  analyzeObfuscation: async (file: File): Promise<ObfuscationAnalysisResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // Use AbortController for 15-minute timeout (large APK uploads can be slow)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 900000);
+
+    try {
+      const resp = await fetch(`${API_URL}/reverse/apk/obfuscation-analysis`, {
+        method: "POST",
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Obfuscation analysis timed out after 15 minutes. Please try a smaller APK.');
+      }
+      throw error;
+    }
+  },
+
+  // ================== Binary Entropy Analysis API ==================
+
+  /**
+   * Analyze binary entropy distribution
+   */
+  analyzeBinaryEntropy: async (
+    file: File, 
+    windowSize: number = 256, 
+    stepSize: number = 128
+  ): Promise<EntropyAnalysisResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const resp = await fetch(
+      `${API_URL}/reverse/binary/entropy?window_size=${windowSize}&step_size=${stepSize}`, 
+      {
+        method: "POST",
+        headers,
+        body: formData,
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Crypto Audit API ==================
+
+  /**
+   * Perform comprehensive cryptographic audit on decompiled APK sources
+   */
+  cryptoAudit: async (outputDirectory: string): Promise<CryptoAuditResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/crypto-audit`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ output_directory: outputDirectory }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Component Map API ==================
+
+  /**
+   * Generate visual component map showing activities, services, receivers, providers
+   */
+  getComponentMap: async (outputDirectory: string): Promise<ComponentMapResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/component-map`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ output_directory: outputDirectory }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Class Dependency Graph API ==================
+
+  /**
+   * Generate a class dependency graph showing how classes are interconnected
+   */
+  getDependencyGraph: async (outputDirectory: string, maxClasses?: number): Promise<DependencyGraphResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/dependency-graph`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ 
+        output_directory: outputDirectory,
+        max_classes: maxClasses || 100
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Symbol Lookup API (Jump to Definition) ==================
+
+  /**
+   * Look up a symbol (class, method, or field) and return its definition location
+   */
+  lookupSymbol: async (
+    outputDirectory: string, 
+    symbol: string, 
+    symbolType?: "class" | "method" | "field"
+  ): Promise<SymbolLookupResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/symbol-lookup`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ 
+        output_directory: outputDirectory,
+        symbol,
+        symbol_type: symbolType || null
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+// Report types
+export interface SaveREReportRequest {
+  analysis_type: 'binary' | 'apk' | 'docker';
+  title: string;
+  filename?: string;
+  project_id?: number;
+  risk_level?: string;
+  risk_score?: number;
+  
+  // Binary fields
+  file_type?: string;
+  architecture?: string;
+  file_size?: number;
+  is_packed?: boolean;
+  packer_name?: string;
+  
+  // APK fields
+  package_name?: string;
+  version_name?: string;
+  min_sdk?: number;
+  target_sdk?: number;
+  
+  // Docker fields
+  image_name?: string;
+  image_id?: string;
+  total_layers?: number;
+  base_image?: string;
+  
+  // Counts
+  strings_count?: number;
+  imports_count?: number;
+  exports_count?: number;
+  secrets_count?: number;
+  
+  // JSON data
+  suspicious_indicators?: Array<Record<string, unknown>>;
+  permissions?: Array<Record<string, unknown>>;
+  security_issues?: Array<Record<string, unknown>>;
+  full_analysis_data?: Record<string, unknown>;
+  
+  // AI Quick Analysis
+  ai_analysis_raw?: string;
+  
+  // JADX Full Scan Data (Deep Analysis)
+  jadx_total_classes?: number;
+  jadx_total_files?: number;
+  jadx_output_directory?: string;
+  jadx_classes_sample?: Array<Record<string, unknown>>;
+  jadx_security_issues?: Array<Record<string, unknown>>;
+  
+  // AI-Generated Reports (Deep Analysis)
+  ai_functionality_report?: string;
+  ai_security_report?: string;
+  ai_privacy_report?: string;
+  ai_threat_model?: Record<string, unknown>;
+  ai_vuln_scan_result?: Record<string, unknown>;
+  ai_chat_history?: Array<Record<string, unknown>>;
+  
+  // Metadata
+  tags?: string[];
+  notes?: string;
+}
+
+export interface REReportSummary {
+  id: number;
+  analysis_type: string;
+  title: string;
+  filename?: string;
+  risk_level?: string;
+  risk_score?: number;
+  created_at: string;
+  tags?: string[];
+}
+
+export interface REReportDetail extends REReportSummary {
+  updated_at: string;
+  project_id?: number;
+  
+  file_type?: string;
+  architecture?: string;
+  file_size?: number;
+  is_packed?: string;
+  packer_name?: string;
+  
+  package_name?: string;
+  version_name?: string;
+  min_sdk?: number;
+  target_sdk?: number;
+  
+  image_name?: string;
+  image_id?: string;
+  total_layers?: number;
+  base_image?: string;
+  
+  strings_count?: number;
+  imports_count?: number;
+  exports_count?: number;
+  secrets_count?: number;
+  
+  suspicious_indicators?: Array<Record<string, unknown>>;
+  permissions?: Array<Record<string, unknown>>;
+  security_issues?: Array<Record<string, unknown>>;
+  full_analysis_data?: Record<string, unknown>;
+  
+  ai_analysis_raw?: string;
+  ai_analysis_structured?: Record<string, unknown>;
+  
+  // JADX Full Scan Data
+  jadx_total_classes?: number;
+  jadx_total_files?: number;
+  jadx_data?: {
+    output_directory?: string;
+    classes_sample?: Array<Record<string, unknown>>;
+    security_issues?: Array<Record<string, unknown>>;
+  };
+  
+  // AI-Generated Reports (Deep Analysis)
+  ai_functionality_report?: string;
+  ai_security_report?: string;
+  ai_privacy_report?: string;
+  ai_threat_model?: Record<string, unknown>;
+  ai_vuln_scan_result?: Record<string, unknown>;
+  ai_chat_history?: Array<Record<string, unknown>>;
+  
+  notes?: string;
+}
+
+// ============================================================================
+// JADX Decompilation Types
+// ============================================================================
+
+export type JadxDecompiledClass = {
+  class_name: string;
+  package_name: string;
+  file_path: string;
+  line_count: number;
+  is_activity: boolean;
+  is_service: boolean;
+  is_receiver: boolean;
+  is_provider: boolean;
+  extends?: string;
+  security_issues_count: number;
+};
+
+export type JadxDecompilationResult = {
+  package_name: string;
+  total_classes: number;
+  total_files: number;
+  output_directory: string;  // This is actually the session_id
+  decompilation_time: number;
+  classes: JadxDecompiledClass[];
+  source_tree: Record<string, unknown>;
+  security_issues: Array<{
+    type: string;
+    severity: string;
+    description: string;
+    class: string;
+    line: number;
+    code_snippet: string;
+  }>;
+  errors: string[];
+  warnings: string[];
+};
+
+export type JadxSourceResult = {
+  class_name: string;
+  package_name: string;
+  file_path: string;
+  source_code: string;
+  line_count: number;
+  is_activity: boolean;
+  is_service: boolean;
+  is_receiver: boolean;
+  is_provider: boolean;
+  extends?: string;
+  implements: string[];
+  methods: string[];
+  security_issues: Array<{
+    type: string;
+    severity: string;
+    description: string;
+    class: string;
+    line: number;
+    code_snippet: string;
+  }>;
+};
+
+export type JadxSearchResult = {
+  query: string;
+  total_results: number;
+  results: Array<{
+    file: string;
+    line: number;
+    content: string;
+    class_name: string;
+  }>;
+};
+
+// ============================================================================
+// AI Code Analysis Types
+// ============================================================================
+
+export type AICodeExplanationResult = {
+  class_name: string;
+  explanation_type: "general" | "security" | "method";
+  explanation: string;
+  key_points: string[];
+  security_concerns: Array<{
+    concern: string;
+    severity: string;
+    line_hint?: string;
+    recommendation?: string;
+  }>;
+  method_name?: string;
+};
+
+export type AIVulnerabilityAnalysisResult = {
+  class_name: string;
+  risk_level: "critical" | "high" | "medium" | "low" | "info" | "unknown" | "error";
+  vulnerabilities: Array<{
+    id: string;
+    title: string;
+    severity: string;
+    category: string;
+    description: string;
+    affected_code?: string;
+    impact?: string;
+    cvss_estimate?: string;
+  }>;
+  recommendations: string[];
+  exploitation_scenarios: string[];
+  summary: string;
+};
+
+// ============================================================================
+// Data Flow Analysis Types
+// ============================================================================
+
+export type DataFlowSourceEntry = {
+  type: string;
+  pattern?: string;
+  line: number;
+  code: string;
+  variable?: string;
+};
+
+export type DataFlowSinkEntry = {
+  type: string;
+  pattern?: string;
+  line: number;
+  code: string;
+};
+
+export type DataFlowEntry = {
+  source: {
+    type: string;
+    variable?: string;
+    line: number;
+  };
+  sink: {
+    type: string;
+    line: number;
+    code: string;
+  };
+  risk: "critical" | "high" | "medium" | "low";
+};
+
+export type DataFlowSummaryInfo = {
+  total_sources: number;
+  total_sinks: number;
+  potential_leaks: number;
+  risk_level: "critical" | "high" | "medium" | "low";
+};
+
+export type ClassDataFlowResult = {
+  class_name: string;
+  sources: DataFlowSourceEntry[];
+  sinks: DataFlowSinkEntry[];
+  flows: DataFlowEntry[];
+  risk_flows: DataFlowEntry[];
+  summary: DataFlowSummaryInfo;
+};
+
+// ============================================================================
+// Method Call Graph Types
+// ============================================================================
+
+export type MethodParameter = {
+  type: string;
+  name: string;
+};
+
+export type MethodCall = {
+  method: string;
+  class?: string;
+  line: number;
+  type: "constructor" | "static" | "instance" | "super";
+};
+
+export type MethodInfo = {
+  name: string;
+  return_type: string;
+  parameters: MethodParameter[];
+  line_start: number;
+  line_end: number;
+  is_entry_point: boolean;
+  calls: MethodCall[];
+  called_by: string[];
+  modifiers: string[];
+};
+
+export type CallInfo = {
+  caller: string;
+  caller_line: number;
+  callee: string;
+  callee_class: string;
+  line: number;
+  is_internal: boolean;
+};
+
+export type GraphNode = {
+  id: string;
+  label: string;
+  type: "internal" | "external";
+  is_entry_point: boolean;
+  line?: number;
+  class?: string;
+};
+
+export type GraphEdge = {
+  from: string;
+  to: string;
+  label: string;
+};
+
+export type CallGraphStatistics = {
+  total_methods: number;
+  total_internal_calls: number;
+  total_external_calls: number;
+  max_depth: number;
+  cyclomatic_complexity: number;
+};
+
+export type CallGraphResult = {
+  class_name: string;
+  methods: MethodInfo[];
+  calls: CallInfo[];
+  entry_points: Array<{
+    name: string;
+    line: number;
+    type: string;
+  }>;
+  external_calls: CallInfo[];
+  graph: {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+  };
+  statistics: CallGraphStatistics;
+};
+
+// ============================================================================
+// Smart Search Types
+// ============================================================================
+
+export type SmartSearchMatch = {
+  file: string;
+  line: number;
+  code: string;
+  match: string;
+  context?: string;
+  vuln_type?: string;
+  description?: string;
+  severity?: string;
+};
+
+export type VulnSummaryItem = {
+  count: number;
+  severity: string;
+  description: string;
+};
+
+export type SmartSearchResult = {
+  query: string;
+  search_type: string;
+  total_matches: number;
+  files_searched: number;
+  matches: SmartSearchMatch[];
+  vulnerability_summary: Record<string, VulnSummaryItem>;
+  expanded_terms: string[];
+  suggestions: string[];
+  error?: string;
+};
+
+// ============================================================================
+// AI Vulnerability Scan Types
+// ============================================================================
+
+export type AIVulnScanVulnerability = {
+  id: string;
+  title: string;
+  severity: "critical" | "high" | "medium" | "low";
+  category: string;
+  affected_class: string;
+  affected_method: string;
+  description: string;
+  code_snippet: string;
+  impact: string;
+  remediation: string;
+  cwe_id: string;
+};
+
+export type AIVulnScanAttackChain = {
+  name: string;
+  steps: string[];
+  impact: string;
+  likelihood: "high" | "medium" | "low";
+};
+
+export type AIVulnScanRiskSummary = {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+};
+
+export type AIVulnScanResult = {
+  scan_type: string;
+  focus_areas: string[];
+  classes_scanned: number;
+  vulnerabilities: AIVulnScanVulnerability[];
+  risk_summary: AIVulnScanRiskSummary;
+  attack_chains: AIVulnScanAttackChain[];
+  recommendations: string[];
+  summary: string;
+  overall_risk: "critical" | "high" | "medium" | "low";
+  error?: string;
+};
+
+// ============================================================================
+// Smali View Types
+// ============================================================================
+
+export type SmaliInstruction = {
+  method: string;
+  instruction: string;
+  category: string;
+};
+
+export type SmaliBytecodStats = {
+  invocations?: Record<string, number>;
+  field_ops?: Record<string, number>;
+  control_flow?: Record<string, number>;
+  suspicious_ops?: Record<string, number>;
+};
+
+export type SmaliViewResult = {
+  class_path: string;
+  smali_code: string;
+  bytecode_stats: SmaliBytecodStats;
+  registers_used: number;
+  method_count: number;
+  field_count: number;
+  instructions: SmaliInstruction[];
+  is_pseudo: boolean;
+  error?: string;
+};
+
+// ============================================================================
+// String Extraction Types
+// ============================================================================
+
+export type ExtractedString = {
+  value: string;
+  file: string;
+  line: number;
+  categories: string[];
+  severity: "critical" | "high" | "medium" | "low";
+  length: number;
+  is_resource?: boolean;
+};
+
+export type StringExtractionResult = {
+  total_strings: number;
+  files_scanned: number;
+  strings: ExtractedString[];
+  stats: Record<string, number>;
+  severity_counts: Record<string, number>;
+  top_categories: Array<[string, number]>;
+  error?: string;
+};
+
+// ============================================================================
+// Cross-Reference (XREF) Types
+// ============================================================================
+
+export type XrefCaller = {
+  class: string;
+  file: string;
+  method: string;
+  line: number;
+};
+
+export type XrefCallee = {
+  method: string;
+  object: string;
+  line: number;
+};
+
+export type XrefMethod = {
+  name: string;
+  return_type: string;
+  params: string;
+  signature: string;
+  line: number;
+  callers: XrefCaller[];
+  callees: XrefCallee[];
+  caller_count: number;
+  callee_count: number;
+};
+
+export type XrefField = {
+  name: string;
+  type: string;
+  line: number;
+  readers: Array<{ class: string; file: string; line: number }>;
+  writers: Array<{ class: string; file: string; line: number }>;
+  read_count: number;
+  write_count: number;
+};
+
+export type XrefStatistics = {
+  method_count: number;
+  field_count: number;
+  total_incoming_refs: number;
+  total_outgoing_refs: number;
+  is_heavily_used: boolean;
+  is_hub_class: boolean;
+};
+
+export type CrossReferenceResult = {
+  class_name: string;
+  package: string;
+  file_path: string;
+  methods: XrefMethod[];
+  fields: XrefField[];
+  statistics: XrefStatistics;
+  summary: string;
+  error?: string;
+};
+
+// ============================================================================
+// Project ZIP Types
+// ============================================================================
+
+export type ProjectZipInfo = {
+  total_files: number;
+  total_size_bytes: number;
+  total_size_mb: number;
+  file_types: Record<string, number>;
+  estimated_zip_size_mb: number;
+  error?: string;
+};
+
+// ============================================================================
+// Permission Analysis Types
+// ============================================================================
+
+export type PermissionInfo = {
+  name: string;
+  short_name: string;
+  level: "dangerous" | "normal" | "signature" | "deprecated" | "unknown";
+  description: string;
+  category: string;
+};
+
+export type DangerousCombination = {
+  permissions: string[];
+  risk: "critical" | "high" | "medium";
+  description: string;
+};
+
+export type PermissionAnalysisResult = {
+  total_permissions: number;
+  permissions: PermissionInfo[];
+  by_level: Record<string, PermissionInfo[]>;
+  by_category: Record<string, PermissionInfo[]>;
+  dangerous_combinations: DangerousCombination[];
+  risk_score: number;
+  overall_risk: "critical" | "high" | "medium" | "low";
+  summary: string;
+  error?: string;
+};
+
+// ============================================================================
+// Network Endpoint Types
+// ============================================================================
+
+export type NetworkEndpoint = {
+  value: string;
+  type: string;
+  category: string;
+  risk: "high" | "medium" | "low";
+  file: string;
+  line: number;
+};
+
+export type NetworkEndpointResult = {
+  total_endpoints: number;
+  endpoints: NetworkEndpoint[];
+  by_category: Record<string, NetworkEndpoint[]>;
+  by_risk: Record<string, NetworkEndpoint[]>;
+  unique_domains: string[];
+  domain_count: number;
+  summary: string;
+  error?: string;
+};
+
+// ============================================================================
+// Manifest Visualization Types
+// ============================================================================
+
+export type ManifestNode = {
+  id: string;
+  name: string;
+  node_type: "application" | "activity" | "service" | "receiver" | "provider" | "permission";
+  label: string;
+  is_exported: boolean;
+  is_main: boolean;
+  is_dangerous: boolean;
+  attributes: Record<string, unknown>;
+};
+
+export type ManifestEdge = {
+  source: string;
+  target: string;
+  edge_type: string;
+  label: string;
+};
+
+export type ManifestVisualizationResult = {
+  package_name: string;
+  app_name?: string;
+  version_name?: string;
+  nodes: ManifestNode[];
+  edges: ManifestEdge[];
+  component_counts: {
+    activities: number;
+    services: number;
+    receivers: number;
+    providers: number;
+    permissions: number;
+  };
+  permission_summary: {
+    dangerous: number;
+    normal: number;
+    signature: number;
+    total: number;
+  };
+  exported_count: number;
+  main_activity?: string;
+  deep_link_schemes: string[];
+  mermaid_diagram: string;
+};
+
+// ============================================================================
+// Attack Surface Map Types
+// ============================================================================
+
+export type AttackVector = {
+  id: string;
+  name: string;
+  vector_type: "exported_activity" | "exported_service" | "exported_receiver" | "exported_provider" | "deep_link";
+  component: string;
+  severity: "low" | "medium" | "high" | "critical";
+  description: string;
+  exploitation_steps: string[];
+  required_permissions: string[];
+  adb_command?: string;
+  intent_example?: string;
+  mitigation?: string;
+};
+
+export type DeepLinkEntry = {
+  scheme: string;
+  host: string;
+  path: string;
+  full_url: string;
+  handling_activity: string;
+  parameters: string[];
+  is_verified: boolean;
+  security_notes: string[];
+};
+
+export type ExposedDataPath = {
+  provider_name: string;
+  uri_pattern: string;
+  permissions_required: string[];
+  operations: string[];
+  is_exported: boolean;
+  potential_data: string;
+  risk_level: string;
+};
+
+export type AttackSurfaceMapResult = {
+  package_name: string;
+  total_attack_vectors: number;
+  attack_vectors: AttackVector[];
+  exposed_data_paths: ExposedDataPath[];
+  deep_links: DeepLinkEntry[];
+  overall_exposure_score: number;
+  risk_level: "low" | "medium" | "high" | "critical";
+  risk_breakdown: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  priority_targets: string[];
+  automated_tests: Array<{
+    name: string;
+    command: string;
+    description: string;
+  }>;
+  mermaid_attack_tree: string;
+};
+
+// ============================================================================
+// Obfuscation Analysis Types
+// ============================================================================
+
+export type ObfuscationIndicator = {
+  indicator_type: string;
+  confidence: "high" | "medium" | "low";
+  description: string;
+  evidence: string[];
+  location?: string;
+  deobfuscation_hint?: string;
+};
+
+export type StringEncryptionPattern = {
+  pattern_name: string;
+  class_name: string;
+  method_name: string;
+  encrypted_strings_count: number;
+  decryption_method_signature?: string;
+  sample_encrypted_values: string[];
+  suggested_frida_hook?: string;
+};
+
+export type ClassNamingAnalysis = {
+  total_classes: number;
+  single_letter_classes: number;
+  short_name_classes: number;
+  meaningful_name_classes: number;
+  obfuscation_ratio: number;
+  sample_obfuscated_names: string[];
+  sample_original_names: string[];
+};
+
+export type ControlFlowObfuscation = {
+  pattern_type: string;
+  affected_methods: number;
+  sample_classes: string[];
+  complexity_score: number;
+};
+
+export type NativeProtection = {
+  has_native_libs: boolean;
+  native_lib_names: string[];
+  protection_indicators: string[];
+  jni_functions: string[];
+};
+
+export type ObfuscationAnalysisResult = {
+  package_name: string;
+  overall_obfuscation_level: "none" | "light" | "moderate" | "heavy" | "extreme";
+  obfuscation_score: number;
+  detected_tools: string[];
+  
+  indicators: ObfuscationIndicator[];
+  class_naming: ClassNamingAnalysis;
+  string_encryption: StringEncryptionPattern[];
+  control_flow: ControlFlowObfuscation[];
+  native_protection: NativeProtection;
+  
+  deobfuscation_strategies: string[];
+  recommended_tools: string[];
+  frida_hooks: string[];
+  
+  analysis_time: number;
+  warnings: string[];
+};
+
+// ============================================================================
+// Binary Entropy Analysis Types
+// ============================================================================
+
+export type EntropyDataPoint = {
+  offset: number;
+  entropy: number;
+  size: number;
+};
+
+export type EntropyRegion = {
+  start_offset: number;
+  end_offset: number;
+  avg_entropy: number;
+  max_entropy: number;
+  min_entropy: number;
+  classification: "packed" | "encrypted" | "code" | "data" | "sparse" | "empty" | "packed_code" | "resources";
+  section_name?: string;
+  description: string;
+};
+
+export type SectionEntropy = {
+  name: string;
+  entropy: number;
+  virtual_address?: number;
+  raw_size?: number;
+  virtual_size?: number;
+  address?: number;
+  size?: number;
+  characteristics?: string;
+  type?: string;
+};
+
+export type EntropyAnalysisResult = {
+  filename: string;
+  file_size: number;
+  overall_entropy: number;
+  entropy_data: EntropyDataPoint[];
+  regions: EntropyRegion[];
+  is_likely_packed: boolean;
+  packing_confidence: number;
+  detected_packers: string[];
+  section_entropy: SectionEntropy[];
+  analysis_notes: string[];
+  window_size: number;
+  step_size: number;
+};
+
+// ============================================================================
+// Crypto Audit Types
+// ============================================================================
+
+export type CryptoFinding = {
+  type: string;
+  category: string;
+  severity: "critical" | "high" | "medium" | "low";
+  description: string;
+  recommendation: string;
+  file: string;
+  line: number;
+  match: string;
+  context?: string;
+};
+
+export type CryptoGoodPractice = {
+  type: string;
+  file: string;
+  line: number;
+  match: string;
+};
+
+export type CryptoAuditMethod = {
+  type: string;
+  algorithm: string;
+  file: string;
+  line: number;
+};
+
+export type CryptoAuditResult = {
+  total_findings: number;
+  findings: CryptoFinding[];
+  by_severity: Record<string, CryptoFinding[]>;
+  by_category: Record<string, CryptoFinding[]>;
+  good_practices: CryptoGoodPractice[];
+  crypto_methods: CryptoAuditMethod[];
+  files_scanned: number;
+  risk_score: number;
+  grade: string;
+  overall_risk: string;
+  top_recommendations: string[];
+  summary: string;
+  error?: string;
+};
+
+// ============================================================================
+// Component Map Types
+// ============================================================================
+
+export type ActivityComponentInfo = {
+  name: string;
+  full_name: string;
+  exported: boolean;
+  risk: string;
+  launcher: boolean;
+  actions: string[];
+  categories: string[];
+  data_schemes: string[];
+  theme?: string;
+  launch_mode: string;
+};
+
+export type ServiceComponentInfo = {
+  name: string;
+  full_name: string;
+  exported: boolean;
+  risk: string;
+  actions: string[];
+  permission?: string;
+  foreground: boolean;
+};
+
+export type ReceiverComponentInfo = {
+  name: string;
+  full_name: string;
+  exported: boolean;
+  risk: string;
+  actions: string[];
+  permission?: string;
+  system_broadcast: boolean;
+};
+
+export type ProviderComponentInfo = {
+  name: string;
+  full_name: string;
+  exported: boolean;
+  risk: string;
+  authorities?: string;
+  read_permission?: string;
+  write_permission?: string;
+  grant_uri_permissions: boolean;
+};
+
+export type ComponentDeepLink = {
+  scheme: string;
+  host?: string;
+  path?: string;
+  component: string;
+  component_full: string;
+  type: string;
+};
+
+export type ComponentConnection = {
+  source: string;
+  target: string;
+  type: string;
+};
+
+export type ComponentMapResult = {
+  package_name: string;
+  components: {
+    activities: ActivityComponentInfo[];
+    services: ServiceComponentInfo[];
+    receivers: ReceiverComponentInfo[];
+    providers: ProviderComponentInfo[];
+  };
+  connections: ComponentConnection[];
+  deep_links: ComponentDeepLink[];
+  stats: {
+    total_activities: number;
+    total_services: number;
+    total_receivers: number;
+    total_providers: number;
+    exported_activities: number;
+    exported_services: number;
+    exported_receivers: number;
+    exported_providers: number;
+    deep_links: number;
+    connections: number;
+  };
+  risk_counts: Record<string, number>;
+  attack_surface_score: number;
+  summary: string;
+  error?: string;
+};
+
+// ============================================================================
+// Class Dependency Graph Types
+// ============================================================================
+
+export type DependencyGraphNode = {
+  id: string;
+  label: string;
+  full_name: string;
+  package: string;
+  type: "activity" | "service" | "receiver" | "provider" | "fragment" | "adapter" | "interface" | "abstract" | "class";
+  color: string;
+  size: number;
+  methods: number;
+  lines: number;
+  file_path: string;
+};
+
+export type DependencyGraphEdge = {
+  from: string;
+  to: string;
+  type: "extends" | "implements" | "imports" | "calls";
+  color: string;
+  dashes?: boolean | number[];
+  width?: number;
+};
+
+export type DependencyGraphStatistics = {
+  total_classes: number;
+  total_connections: number;
+  node_types: Record<string, number>;
+  edge_types: Record<string, number>;
+  packages: Record<string, number>;
+  hub_classes: Array<{ name: string; connections: number }>;
+};
+
+export type DependencyGraphResult = {
+  nodes: DependencyGraphNode[];
+  edges: DependencyGraphEdge[];
+  statistics: DependencyGraphStatistics;
+  legend: {
+    node_colors: Record<string, string>;
+    edge_types: Record<string, string>;
+  };
+  error?: string;
+};
+
+// ============================================================================
+// Symbol Lookup Types (Jump to Definition)
+// ============================================================================
+
+export type SymbolResult = {
+  type: "class" | "method" | "field";
+  name: string;
+  file: string;
+  line: number;
+  package?: string;
+  full_name?: string;
+  class?: string;
+  signature?: string;
+  return_type?: string;
+  params?: string;
+  field_type?: string;
+};
+
+export type SymbolLookupResult = {
+  symbol: string;
+  results: SymbolResult[];
+  total_found: number;
+  index_stats: {
+    classes: number;
+    methods: number;
+    fields: number;
+    files_indexed: number;
+  };
+  error?: string;
+};

@@ -308,3 +308,156 @@ def is_git_repo(path: str) -> bool:
     """Check if a path is a git repository."""
     git_dir = os.path.join(path, '.git')
     return os.path.isdir(git_dir)
+
+
+def get_changed_files_since_commit(repo_path: str, base_commit: str) -> list:
+    """
+    Get list of files changed since a specific commit.
+    
+    Args:
+        repo_path: Path to the git repository
+        base_commit: Commit hash to compare against
+        
+    Returns:
+        List of changed file paths (relative to repo root)
+    """
+    try:
+        result = subprocess.run(
+            ['git', 'diff', '--name-only', base_commit, 'HEAD'],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30
+        )
+        files = [f.strip() for f in result.stdout.strip().split('\n') if f.strip()]
+        logger.info(f"Found {len(files)} files changed since {base_commit[:8]}")
+        return files
+    except Exception as e:
+        logger.warning(f"Failed to get changed files: {e}")
+        return []
+
+
+def get_current_commit_hash(repo_path: str) -> Optional[str]:
+    """Get the current HEAD commit hash."""
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10
+        )
+        return result.stdout.strip()
+    except Exception as e:
+        logger.warning(f"Failed to get current commit: {e}")
+        return None
+
+
+def detect_project_languages(source_path: str) -> dict:
+    """
+    Detect programming languages used in a project by analyzing file extensions.
+    
+    Args:
+        source_path: Path to the source code directory
+        
+    Returns:
+        Dict mapping language to (file_count, percentage)
+    """
+    from pathlib import Path
+    from collections import Counter
+    
+    EXTENSION_MAP = {
+        # Python
+        '.py': 'python',
+        '.pyw': 'python',
+        '.pyx': 'python',
+        
+        # JavaScript/TypeScript
+        '.js': 'javascript',
+        '.jsx': 'javascript',
+        '.mjs': 'javascript',
+        '.ts': 'typescript',
+        '.tsx': 'typescript',
+        
+        # Java
+        '.java': 'java',
+        '.kt': 'kotlin',
+        '.kts': 'kotlin',
+        
+        # Go
+        '.go': 'go',
+        
+        # Rust
+        '.rs': 'rust',
+        
+        # C/C++
+        '.c': 'c',
+        '.h': 'c',
+        '.cpp': 'cpp',
+        '.cxx': 'cpp',
+        '.cc': 'cpp',
+        '.hpp': 'cpp',
+        '.hxx': 'cpp',
+        
+        # C#
+        '.cs': 'csharp',
+        
+        # Ruby
+        '.rb': 'ruby',
+        '.rake': 'ruby',
+        
+        # PHP
+        '.php': 'php',
+        
+        # Swift
+        '.swift': 'swift',
+        
+        # Scala
+        '.scala': 'scala',
+        
+        # Shell
+        '.sh': 'shell',
+        '.bash': 'shell',
+        '.zsh': 'shell',
+        
+        # Infrastructure
+        '.tf': 'terraform',
+        '.yaml': 'yaml',
+        '.yml': 'yaml',
+        '.json': 'json',
+    }
+    
+    SKIP_DIRS = {
+        'node_modules', '__pycache__', '.git', 'venv', '.venv',
+        'dist', 'build', 'target', 'vendor', '.idea', '.vscode'
+    }
+    
+    language_counts = Counter()
+    total_files = 0
+    
+    try:
+        for root, dirs, files in os.walk(source_path):
+            # Skip excluded directories
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+            
+            for file in files:
+                ext = Path(file).suffix.lower()
+                if ext in EXTENSION_MAP:
+                    language_counts[EXTENSION_MAP[ext]] += 1
+                    total_files += 1
+    except Exception as e:
+        logger.warning(f"Error detecting languages: {e}")
+    
+    # Calculate percentages
+    result = {}
+    for lang, count in language_counts.most_common():
+        percentage = (count / total_files * 100) if total_files > 0 else 0
+        result[lang] = {
+            'files': count,
+            'percentage': round(percentage, 1)
+        }
+    
+    logger.info(f"Detected languages: {list(result.keys())}")
+    return result

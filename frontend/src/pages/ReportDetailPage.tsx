@@ -67,7 +67,9 @@ import {
   Snackbar,
 } from "@mui/material";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, AIInsights, AttackChain, ChatMessage, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, ExploitScenario, Finding, FileContent, DependencyGraph, ScanDiff, FileTrends, TodoScanResult, TodoItem, CodeSearchResult, CodeSearchMatch, CodeExplanation } from "../api/client";
+import { api, AIInsights, AttackChain, ChatMessage, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, CodebaseDiagram, ExploitScenario, Finding, FileContent, DependencyGraph, ScanDiff, FileTrends, TodoScanResult, TodoItem, CodeSearchResult, CodeSearchMatch, CodeExplanation, SecretsScanResult, SecretItem, VulnerabilitySummary, CVEEntry, CWEEntry } from "../api/client";
+import { FindingNotesBadge } from "../components/FindingNotesPanel";
+import { MermaidDiagram } from "../components/MermaidDiagram";
 
 // AI Icon for explanation feature
 const AIIcon = () => (
@@ -976,7 +978,7 @@ interface CodebaseMapViewProps {
 type SeverityFilter = "all" | "critical" | "high" | "medium" | "low";
 
 // View mode type - expanded with new views
-type ViewMode = "tree" | "treemap" | "dependencies" | "diff" | "todos";
+type ViewMode = "tree" | "treemap" | "dependencies" | "diff" | "todos" | "secrets" | "diagram" | "cves";
 
 function CodebaseMapView({ reportId, projectId, availableReports = [] }: CodebaseMapViewProps) {
   const theme = useTheme();
@@ -1064,6 +1066,28 @@ function CodebaseMapView({ reportId, projectId, availableReports = [] }: Codebas
     queryKey: ["todos", reportId],
     queryFn: () => api.getTodos(reportId),
     enabled: !!reportId && viewMode === "todos",
+  });
+  
+  // Query for Secrets (Feature: Secrets/Sensitive Data Scanner)
+  const secretsQuery = useQuery({
+    queryKey: ["secrets", reportId],
+    queryFn: () => api.getSecrets(reportId),
+    enabled: !!reportId && viewMode === "secrets",
+  });
+  
+  // Query for AI-generated architecture diagram
+  const diagramQuery = useQuery({
+    queryKey: ["codebaseDiagram", reportId],
+    queryFn: () => api.getCodebaseDiagram(reportId),
+    enabled: !!reportId && viewMode === "diagram",
+    staleTime: 1000 * 60 * 30, // Cache for 30 minutes (diagram generation is expensive)
+  });
+  
+  // Query for CVE/CWE vulnerabilities
+  const cvesQuery = useQuery({
+    queryKey: ["vulnerabilities", reportId],
+    queryFn: () => api.getVulnerabilities(reportId),
+    enabled: !!reportId && viewMode === "cves",
   });
   
   // Query for file trends (Feature: Finding Trends Sparkline)
@@ -2271,6 +2295,15 @@ function CodebaseMapView({ reportId, projectId, availableReports = [] }: Codebas
           <ToggleButton value="todos" sx={{ px: 2, py: 0.5 }}>
             📝 TODOs
           </ToggleButton>
+          <ToggleButton value="secrets" sx={{ px: 2, py: 0.5 }}>
+            🔐 Secrets
+          </ToggleButton>
+          <ToggleButton value="diagram" sx={{ px: 2, py: 0.5 }}>
+            🕸️ Diagram
+          </ToggleButton>
+          <ToggleButton value="cves" sx={{ px: 2, py: 0.5 }}>
+            🛡️ CVEs
+          </ToggleButton>
         </ToggleButtonGroup>
         
         {/* Heatmap Toggle for Treemap */}
@@ -3203,7 +3236,8 @@ function CodebaseMapView({ reportId, projectId, availableReports = [] }: Codebas
                             }}
                           />
                           <Typography variant="body2" fontWeight="medium">
-                            {finding.type}
+                            {finding.type.startsWith("agentic-") && "🤖 "}
+                            {finding.type.startsWith("agentic-") ? finding.type.replace("agentic-", "") : finding.type}
                           </Typography>
                           <Typography variant="caption" color="text.secondary" fontFamily="monospace">
                             {finding.file_path}{finding.start_line ? `:${finding.start_line}` : ""}
@@ -3426,6 +3460,646 @@ function CodebaseMapView({ reportId, projectId, availableReports = [] }: Codebas
         </Paper>
       )}
 
+      {/* Secrets View (Feature: Secrets/Credentials Scanner) */}
+      {viewMode === "secrets" && (
+        <Paper
+          sx={{
+            p: 2,
+            bgcolor: alpha(theme.palette.background.paper, 0.5),
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 2,
+          }}
+        >
+          {secretsQuery.isLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+              <CircularProgress size={40} />
+              <Typography sx={{ ml: 2 }}>Scanning for secrets (AI validation enabled)...</Typography>
+            </Box>
+          ) : secretsQuery.isError ? (
+            <Alert severity="error">Failed to scan for secrets</Alert>
+          ) : secretsQuery.data ? (
+            <Box>
+              {/* Summary Header */}
+              <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }} flexWrap="wrap">
+                <Typography variant="h6">
+                  🔐 Secrets & Credentials Scanner
+                </Typography>
+                <Chip 
+                  label={`${secretsQuery.data.total} found`}
+                  size="small"
+                  sx={{ bgcolor: alpha(theme.palette.error.main, 0.1) }}
+                />
+                {secretsQuery.data.ai_validated && (
+                  <Chip 
+                    icon={<span style={{ fontSize: "0.8rem" }}>🤖</span>}
+                    label={`AI Validated${secretsQuery.data.ai_filtered_count ? ` (${secretsQuery.data.ai_filtered_count} false positives filtered)` : ''}`}
+                    size="small"
+                    sx={{ 
+                      bgcolor: alpha(theme.palette.success.main, 0.1),
+                      color: theme.palette.success.main,
+                    }}
+                  />
+                )}
+                {secretsQuery.data.ai_error && (
+                  <Chip 
+                    label="AI validation failed"
+                    size="small"
+                    sx={{ 
+                      bgcolor: alpha(theme.palette.warning.main, 0.1),
+                      color: theme.palette.warning.main,
+                    }}
+                  />
+                )}
+              </Stack>
+              
+              {/* Type breakdown chips */}
+              <Stack direction="row" spacing={1} sx={{ mb: 3 }} flexWrap="wrap" useFlexGap>
+                {Object.entries(secretsQuery.data.summary).map(([type, count]) => {
+                  // Categorize secret types for coloring
+                  const isCritical = ["password", "private_key", "aws_secret", "connection_string", "url_with_creds", "db_password", "credit_card", "ssn"].includes(type);
+                  const isHigh = ["api_key", "token", "aws_key", "github_token", "jwt", "stripe_key", "slack_webhook", "openai_key", "anthropic_key", "db_user"].includes(type);
+                  const isPII = ["email", "phone", "phone_intl", "username", "user_id", "hardcoded_name", "address", "ip_address"].includes(type);
+                  
+                  return (
+                    <Chip
+                      key={type}
+                      size="small"
+                      label={`${type.replace(/_/g, " ")}: ${count}`}
+                      sx={{
+                        bgcolor: alpha(
+                          isCritical ? theme.palette.error.main :
+                          isHigh ? theme.palette.warning.main :
+                          isPII ? theme.palette.info.main :
+                          theme.palette.success.main,
+                          0.15
+                        ),
+                        color: isCritical ? theme.palette.error.main :
+                          isHigh ? theme.palette.warning.main :
+                          isPII ? theme.palette.info.main :
+                          theme.palette.success.main,
+                      }}
+                    />
+                  );
+                })}
+              </Stack>
+
+              {secretsQuery.data.total === 0 ? (
+                <Box sx={{ p: 4, textAlign: "center" }}>
+                  <Typography variant="h6" color="success.main">✨ No Secrets Found!</Typography>
+                  <Typography color="text.secondary">
+                    {secretsQuery.data.ai_validated 
+                      ? "AI analysis confirmed no real hardcoded secrets or PII in the codebase."
+                      : "No hardcoded secrets, API keys, passwords, credentials, or PII detected in the codebase."}
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ maxHeight: 500, overflow: "auto" }}>
+                  {Object.entries(secretsQuery.data.by_file).map(([filePath, items]) => (
+                    <Box key={filePath} sx={{ mb: 2 }}>
+                      <Typography 
+                        variant="subtitle2" 
+                        fontFamily="monospace"
+                        sx={{ 
+                          bgcolor: alpha(theme.palette.background.default, 0.5),
+                          p: 1,
+                          borderRadius: 1,
+                          cursor: "pointer",
+                          "&:hover": { bgcolor: alpha(theme.palette.error.main, 0.1) },
+                        }}
+                        onClick={() => {
+                          setPreviewFile(filePath);
+                          setViewMode("tree");
+                        }}
+                      >
+                        📄 {filePath} ({items.length})
+                      </Typography>
+                      <Stack spacing={0.5} sx={{ pl: 2, mt: 1 }}>
+                        {items.map((item: SecretItem, idx: number) => {
+                          // Use AI risk level if available, otherwise fall back to regex severity
+                          const effectiveSeverity = item.ai_risk_level || item.severity;
+                          const severityColor = 
+                            effectiveSeverity === "critical" ? theme.palette.error.main :
+                            effectiveSeverity === "high" ? theme.palette.warning.main :
+                            effectiveSeverity === "medium" ? theme.palette.info.main :
+                            effectiveSeverity === "none" ? theme.palette.grey[500] :
+                            theme.palette.text.secondary;
+                          
+                          return (
+                            <Paper
+                              key={idx}
+                              sx={{
+                                p: 1,
+                                bgcolor: alpha(severityColor, 0.05),
+                                border: `1px solid ${alpha(severityColor, 0.2)}`,
+                                cursor: "pointer",
+                                "&:hover": { 
+                                  bgcolor: alpha(severityColor, 0.1),
+                                },
+                              }}
+                              onClick={() => {
+                                setPreviewFile(filePath);
+                                setViewMode("tree");
+                                setTimeout(() => handleJumpToFinding(item.line), 500);
+                              }}
+                            >
+                              <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                                <Chip
+                                  size="small"
+                                  label={item.type.replace(/_/g, " ")}
+                                  sx={{
+                                    height: 20,
+                                    fontSize: "0.65rem",
+                                    fontWeight: 700,
+                                    bgcolor: alpha(severityColor, 0.2),
+                                    color: severityColor,
+                                  }}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={effectiveSeverity}
+                                  sx={{
+                                    height: 18,
+                                    fontSize: "0.6rem",
+                                    fontWeight: 700,
+                                    bgcolor: alpha(severityColor, 0.15),
+                                    color: severityColor,
+                                  }}
+                                />
+                                {item.ai_validated && item.ai_confidence !== undefined && (
+                                  <Tooltip title={item.ai_reason || "AI validated"}>
+                                    <Chip
+                                      size="small"
+                                      label={`🤖 ${Math.round(item.ai_confidence * 100)}%`}
+                                      sx={{
+                                        height: 18,
+                                        fontSize: "0.6rem",
+                                        fontWeight: 700,
+                                        bgcolor: alpha(theme.palette.info.main, 0.1),
+                                        color: theme.palette.info.main,
+                                      }}
+                                    />
+                                  </Tooltip>
+                                )}
+                                <Typography variant="caption" color="text.secondary" fontFamily="monospace">
+                                  L{item.line}
+                                </Typography>
+                                <Typography 
+                                  variant="body2" 
+                                  fontFamily="monospace" 
+                                  sx={{ 
+                                    flex: 1,
+                                    bgcolor: alpha(theme.palette.error.main, 0.1),
+                                    px: 1,
+                                    py: 0.25,
+                                    borderRadius: 0.5,
+                                    fontSize: "0.75rem",
+                                    minWidth: 100,
+                                    border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`,
+                                    fontWeight: 600,
+                                    wordBreak: "break-all",
+                                  }}
+                                  title={`Full value: ${item.value}`}
+                                >
+                                  🔓 {item.value}
+                                </Typography>
+                              </Stack>
+                              {item.ai_reason && (
+                                <Typography 
+                                  variant="caption" 
+                                  color="text.secondary" 
+                                  sx={{ 
+                                    display: "block", 
+                                    mt: 0.5, 
+                                    pl: 1,
+                                    fontStyle: "italic",
+                                  }}
+                                >
+                                  💡 {item.ai_reason}
+                                </Typography>
+                              )}
+                            </Paper>
+                          );
+                        })}
+                      </Stack>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          ) : null}
+        </Paper>
+      )}
+
+      {/* Architecture Diagram View */}
+      {viewMode === "diagram" && (
+        <Paper
+          sx={{
+            p: 2,
+            bgcolor: alpha(theme.palette.background.paper, 0.5),
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 2,
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.5rem",
+              }}
+            >
+              🕸️
+            </Box>
+            <Box>
+              <Typography variant="h6">Architecture Diagram</Typography>
+              <Typography variant="body2" color="text.secondary">
+                AI-generated visual representation of the codebase structure
+              </Typography>
+            </Box>
+            {diagramQuery.data?.cached && (
+              <Chip 
+                size="small" 
+                label="Cached" 
+                sx={{ ml: "auto" }}
+                color="success"
+                variant="outlined"
+              />
+            )}
+          </Stack>
+
+          {diagramQuery.isLoading && (
+            <Box sx={{ textAlign: "center", py: 6 }}>
+              <CircularProgress size={48} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                🤖 Generating architecture diagram with AI...
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                This may take a few seconds
+              </Typography>
+            </Box>
+          )}
+
+          {diagramQuery.isError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              Failed to generate diagram. Make sure Gemini API is configured.
+            </Alert>
+          )}
+
+          {diagramQuery.data && (
+            <MermaidDiagram 
+              code={diagramQuery.data.diagram}
+              title="Codebase Architecture"
+              maxHeight={600}
+              showControls={true}
+              showCodeToggle={true}
+            />
+          )}
+        </Paper>
+      )}
+
+      {/* CVE/CWE Vulnerabilities View */}
+      {viewMode === "cves" && (
+        <Paper
+          sx={{
+            p: 2,
+            bgcolor: alpha(theme.palette.background.paper, 0.5),
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 2,
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                bgcolor: alpha(theme.palette.error.main, 0.1),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.5rem",
+              }}
+            >
+              🛡️
+            </Box>
+            <Box>
+              <Typography variant="h6">CVE/CWE Vulnerabilities</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Known vulnerabilities from dependency scanning and code analysis
+              </Typography>
+            </Box>
+          </Stack>
+
+          {cvesQuery.isLoading && (
+            <Box sx={{ textAlign: "center", py: 6 }}>
+              <CircularProgress size={48} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Loading vulnerability data...
+              </Typography>
+            </Box>
+          )}
+
+          {cvesQuery.isError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              Failed to load vulnerability data.
+            </Alert>
+          )}
+
+          {cvesQuery.data && (
+            <Stack spacing={3}>
+              {/* Summary Cards */}
+              <Grid container spacing={2}>
+                <Grid item xs={6} sm={3}>
+                  <Paper 
+                    sx={{ 
+                      p: 2, 
+                      textAlign: "center",
+                      bgcolor: alpha(theme.palette.error.main, 0.1),
+                      border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
+                    }}
+                  >
+                    <Typography variant="h4" color="error.main" fontWeight={700}>
+                      {cvesQuery.data.cves.critical_count}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">Critical CVEs</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Paper 
+                    sx={{ 
+                      p: 2, 
+                      textAlign: "center",
+                      bgcolor: alpha(theme.palette.warning.main, 0.1),
+                      border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}`,
+                    }}
+                  >
+                    <Typography variant="h4" color="warning.main" fontWeight={700}>
+                      {cvesQuery.data.cves.high_count}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">High CVEs</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Paper 
+                    sx={{ 
+                      p: 2, 
+                      textAlign: "center",
+                      bgcolor: alpha(theme.palette.info.main, 0.1),
+                      border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                    }}
+                  >
+                    <Typography variant="h4" color="info.main" fontWeight={700}>
+                      {cvesQuery.data.cwes.unique_cwes}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">CWE Types</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Paper 
+                    sx={{ 
+                      p: 2, 
+                      textAlign: "center",
+                      bgcolor: alpha(theme.palette.secondary.main, 0.1),
+                      border: `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`,
+                    }}
+                  >
+                    <Typography variant="h4" color="secondary.main" fontWeight={700}>
+                      {cvesQuery.data.summary.total_findings}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">Total Findings</Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              {/* CVE List */}
+              {cvesQuery.data.cves.items.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+                    CVE Details ({cvesQuery.data.cves.total})
+                  </Typography>
+                  <TableContainer component={Paper} sx={{ bgcolor: "transparent" }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>CVE ID</TableCell>
+                          <TableCell>Severity</TableCell>
+                          <TableCell>CVSS</TableCell>
+                          <TableCell>Affected Packages</TableCell>
+                          <TableCell>EPSS</TableCell>
+                          <TableCell>Fix</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {cvesQuery.data.cves.items.map((cve: CVEEntry) => (
+                          <TableRow key={cve.cve_id} hover>
+                            <TableCell>
+                              <Tooltip title={cve.title || cve.cve_id}>
+                                <Typography 
+                                  component="a"
+                                  href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  sx={{ 
+                                    color: theme.palette.primary.main,
+                                    textDecoration: "none",
+                                    fontFamily: "monospace",
+                                    fontSize: "0.875rem",
+                                    "&:hover": { textDecoration: "underline" }
+                                  }}
+                                >
+                                  {cve.cve_id}
+                                </Typography>
+                              </Tooltip>
+                              {cve.cisa_kev && (
+                                <Chip 
+                                  label="KEV" 
+                                  size="small" 
+                                  color="error" 
+                                  sx={{ ml: 1, height: 18, fontSize: "0.65rem" }}
+                                />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={cve.severity}
+                                size="small"
+                                sx={{
+                                  bgcolor: 
+                                    cve.severity === "critical" ? alpha(theme.palette.error.main, 0.2) :
+                                    cve.severity === "high" ? alpha(theme.palette.warning.main, 0.2) :
+                                    cve.severity === "medium" ? alpha(theme.palette.info.main, 0.2) :
+                                    alpha(theme.palette.success.main, 0.2),
+                                  color:
+                                    cve.severity === "critical" ? theme.palette.error.main :
+                                    cve.severity === "high" ? theme.palette.warning.main :
+                                    cve.severity === "medium" ? theme.palette.info.main :
+                                    theme.palette.success.main,
+                                  fontWeight: 600,
+                                  textTransform: "capitalize",
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography 
+                                variant="body2" 
+                                fontWeight={600}
+                                color={
+                                  (cve.cvss_score || 0) >= 9.0 ? "error.main" :
+                                  (cve.cvss_score || 0) >= 7.0 ? "warning.main" :
+                                  (cve.cvss_score || 0) >= 4.0 ? "info.main" :
+                                  "text.secondary"
+                                }
+                              >
+                                {cve.cvss_score?.toFixed(1) || "N/A"}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                                {cve.affected_packages.slice(0, 3).map((pkg) => (
+                                  <Chip 
+                                    key={pkg}
+                                    label={pkg}
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ fontSize: "0.7rem", height: 20 }}
+                                  />
+                                ))}
+                                {cve.affected_packages.length > 3 && (
+                                  <Chip 
+                                    label={`+${cve.affected_packages.length - 3}`}
+                                    size="small"
+                                    sx={{ fontSize: "0.7rem", height: 20 }}
+                                  />
+                                )}
+                              </Stack>
+                            </TableCell>
+                            <TableCell>
+                              {cve.epss_score != null ? (
+                                <Tooltip title={`${(cve.epss_score * 100).toFixed(1)}% probability of exploitation in next 30 days`}>
+                                  <Typography 
+                                    variant="body2"
+                                    color={cve.epss_score > 0.1 ? "error.main" : "text.secondary"}
+                                    fontWeight={cve.epss_score > 0.1 ? 600 : 400}
+                                  >
+                                    {(cve.epss_score * 100).toFixed(1)}%
+                                  </Typography>
+                                </Tooltip>
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">-</Typography>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {cve.fix_available ? (
+                                <Chip label="Available" size="small" color="success" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">-</Typography>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* CWE List */}
+              {cvesQuery.data.cwes.items.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+                    CWE Breakdown ({cvesQuery.data.cwes.items.length} weakness types)
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {cvesQuery.data.cwes.items.map((cwe: CWEEntry) => (
+                      <Grid item xs={12} sm={6} md={4} key={cwe.cwe_id}>
+                        <Paper
+                          sx={{
+                            p: 2,
+                            bgcolor: alpha(theme.palette.background.paper, 0.5),
+                            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                            "&:hover": {
+                              borderColor: theme.palette.primary.main,
+                            },
+                          }}
+                        >
+                          <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                            <Box>
+                              <Typography 
+                                component="a"
+                                href={cwe.mitre_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{ 
+                                  color: theme.palette.primary.main,
+                                  textDecoration: "none",
+                                  fontFamily: "monospace",
+                                  fontSize: "0.875rem",
+                                  fontWeight: 600,
+                                  "&:hover": { textDecoration: "underline" }
+                                }}
+                              >
+                                {cwe.cwe_id}
+                              </Typography>
+                              <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                {cwe.name}
+                              </Typography>
+                            </Box>
+                            <Chip 
+                              label={cwe.count} 
+                              size="small"
+                              color="primary"
+                              sx={{ fontWeight: 600 }}
+                            />
+                          </Stack>
+                          {cwe.severity_breakdown && Object.keys(cwe.severity_breakdown).length > 0 && (
+                            <Stack direction="row" spacing={0.5} sx={{ mt: 1 }} flexWrap="wrap">
+                              {Object.entries(cwe.severity_breakdown).map(([severity, count]) => (
+                                <Chip
+                                  key={severity}
+                                  label={`${severity}: ${count}`}
+                                  size="small"
+                                  sx={{
+                                    fontSize: "0.65rem",
+                                    height: 18,
+                                    bgcolor: 
+                                      severity === "critical" ? alpha(theme.palette.error.main, 0.2) :
+                                      severity === "high" ? alpha(theme.palette.warning.main, 0.2) :
+                                      severity === "medium" ? alpha(theme.palette.info.main, 0.2) :
+                                      alpha(theme.palette.success.main, 0.2),
+                                    textTransform: "capitalize",
+                                  }}
+                                />
+                              ))}
+                            </Stack>
+                          )}
+                        </Paper>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
+
+              {/* Empty State */}
+              {cvesQuery.data.cves.items.length === 0 && cvesQuery.data.cwes.items.length === 0 && (
+                <Box sx={{ textAlign: "center", py: 4 }}>
+                  <Typography variant="h6" color="success.main" sx={{ mb: 1 }}>
+                    🎉 No Known Vulnerabilities Found
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    No CVEs or CWEs were identified in the scanned dependencies or code.
+                  </Typography>
+                </Box>
+              )}
+            </Stack>
+          )}
+        </Paper>
+      )}
+
       {/* File Metadata Dialog */}
       <FileMetadataDialog
         file={selectedFile}
@@ -3436,6 +4110,343 @@ function CodebaseMapView({ reportId, projectId, availableReports = [] }: Codebas
         }}
       />
     </Box>
+  );
+}
+
+type SensitiveDataOccurrence = {
+  file_path?: string;
+  line_number?: number;
+  line_excerpt?: string;
+};
+
+type SensitiveDataItem = {
+  kind?: string;
+  label?: string | null;
+  masked_value?: string;
+  value_hash?: string;
+  confidence?: number;
+  source?: string;
+  occurrences?: SensitiveDataOccurrence[];
+  gemini?: {
+    type?: string;
+    confidence?: number;
+    likely_placeholder?: boolean;
+    reason?: string;
+  };
+};
+
+type SensitiveDataCategory = {
+  label?: string;
+  count?: number;
+  items?: SensitiveDataItem[];
+};
+
+type SensitiveDataInventory = {
+  totals?: Record<string, number>;
+  categories?: Record<string, SensitiveDataCategory>;
+  used_gemini?: boolean;
+  gemini_model?: string | null;
+  gemini_error?: string | null;
+  truncated?: boolean;
+  error?: string;
+};
+
+const SensitiveDataIcon = ({ color }: { color: string }) => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill={color}>
+    <path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm-3 8V6a3 3 0 0 1 6 0v3H9zm3 4a2 2 0 0 0-1 3.732V18a1 1 0 0 0 2 0v-1.268A2 2 0 0 0 12 13z" />
+  </svg>
+);
+
+function SensitiveDataInventoryPanel({ inventory }: { inventory: SensitiveDataInventory }) {
+  const theme = useTheme();
+  const [expanded, setExpanded] = useState(false);
+
+  const totals = inventory?.totals || {};
+  const categories = inventory?.categories || {};
+
+  const categoryOrder: Array<{ key: string; fallbackLabel: string }> = [
+    { key: "api_keys", fallbackLabel: "API Keys & Tokens" },
+    { key: "passwords", fallbackLabel: "Passwords" },
+    { key: "usernames", fallbackLabel: "Usernames" },
+    { key: "emails", fallbackLabel: "Email Addresses" },
+    { key: "phones", fallbackLabel: "Phone Numbers" },
+    { key: "names", fallbackLabel: "People Names" },
+  ];
+
+  const hasAny =
+    typeof totals.total === "number"
+      ? totals.total > 0
+      : Object.values(totals).some((v) => typeof v === "number" && v > 0);
+
+  if (!hasAny && !inventory?.error) return null;
+
+  const chipColor = (key: string) => {
+    const palette: Record<string, string> = {
+      api_keys: theme.palette.error.main,
+      passwords: theme.palette.warning.main,
+      usernames: theme.palette.info.main,
+      emails: theme.palette.secondary.main,
+      phones: theme.palette.success.main,
+      names: theme.palette.primary.main,
+    };
+    return palette[key] || theme.palette.text.secondary;
+  };
+
+  return (
+    <Card
+      sx={{
+        mb: 3,
+        background: `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.06)} 0%, ${alpha(theme.palette.primary.main, 0.04)} 100%)`,
+        border: `1px solid ${alpha(theme.palette.secondary.main, 0.18)}`,
+        borderRadius: 3,
+        overflow: "hidden",
+      }}
+    >
+      <CardContent sx={{ p: 3 }}>
+        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: 2,
+              bgcolor: alpha(theme.palette.secondary.main, 0.12),
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <SensitiveDataIcon color={theme.palette.secondary.main} />
+          </Box>
+          <Box sx={{ flexGrow: 1 }}>
+            <Typography variant="h6" fontWeight={800}>
+              Sensitive Data Inventory
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Extracted emails, phone numbers, usernames, passwords, and API keys (values masked by default)
+            </Typography>
+          </Box>
+          <Button
+            size="small"
+            endIcon={<ExpandIcon expanded={expanded} />}
+            onClick={() => setExpanded(!expanded)}
+            sx={{ textTransform: "none" }}
+          >
+            {expanded ? "Hide" : "View"}
+          </Button>
+        </Stack>
+
+        {inventory?.error && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Sensitive data inventory unavailable: {inventory.error}
+          </Alert>
+        )}
+
+        {!inventory?.error && (
+          <>
+            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
+              {categoryOrder
+                .map(({ key }) => ({ key, count: totals[key] }))
+                .filter((x) => typeof x.count === "number" && x.count > 0)
+                .map(({ key, count }) => {
+                  const c = chipColor(key);
+                  return (
+                    <Chip
+                      key={key}
+                      size="small"
+                      label={`${count} ${key.replace("_", " ")}`}
+                      sx={{
+                        bgcolor: alpha(c, 0.12),
+                        color: c,
+                        border: `1px solid ${alpha(c, 0.25)}`,
+                        fontWeight: 700,
+                        fontSize: "0.7rem",
+                      }}
+                    />
+                  );
+                })}
+
+              {inventory.truncated && (
+                <Chip
+                  size="small"
+                  label="truncated"
+                  sx={{
+                    bgcolor: alpha(theme.palette.warning.main, 0.12),
+                    color: theme.palette.warning.main,
+                    border: `1px solid ${alpha(theme.palette.warning.main, 0.25)}`,
+                    fontWeight: 700,
+                    fontSize: "0.7rem",
+                  }}
+                />
+              )}
+
+              {inventory.used_gemini && (
+                <Chip
+                  size="small"
+                  label={`AI-reviewed${inventory.gemini_model ? ` (${inventory.gemini_model})` : ""}`}
+                  sx={{
+                    bgcolor: alpha(theme.palette.info.main, 0.12),
+                    color: theme.palette.info.main,
+                    border: `1px solid ${alpha(theme.palette.info.main, 0.25)}`,
+                    fontWeight: 700,
+                    fontSize: "0.7rem",
+                  }}
+                />
+              )}
+            </Stack>
+
+            {inventory.gemini_error && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                AI classification error: {inventory.gemini_error}
+              </Typography>
+            )}
+
+            <Collapse in={expanded}>
+              <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                {categoryOrder.map(({ key, fallbackLabel }) => {
+                  const cat = categories[key];
+                  const items = (cat?.items || []) as SensitiveDataItem[];
+                  if (!items.length) return null;
+
+                  return (
+                    <Grid item xs={12} md={6} key={key}>
+                      <Paper
+                        sx={{
+                          p: 2,
+                          borderRadius: 2,
+                          border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+                          bgcolor: alpha(theme.palette.background.paper, 0.7),
+                        }}
+                      >
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                          <Typography variant="subtitle1" fontWeight={800}>
+                            {cat?.label || fallbackLabel}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={items.length}
+                            sx={{
+                              bgcolor: alpha(theme.palette.text.primary, 0.08),
+                              fontWeight: 800,
+                              height: 22,
+                            }}
+                          />
+                        </Stack>
+
+                        <Stack spacing={1}>
+                          {items.slice(0, 50).map((item, idx) => {
+                            const occs = item.occurrences || [];
+                            const locations = occs
+                              .slice(0, 5)
+                              .map((o) => `${o.file_path || "?"}:${o.line_number || "?"}`)
+                              .join("\n");
+
+                            const isSecretLike = key === "api_keys" || key === "passwords";
+                            const placeholder = item.gemini?.likely_placeholder;
+
+                            return (
+                              <Box
+                                key={item.value_hash || `${key}-${idx}`}
+                                sx={{
+                                  p: 1.25,
+                                  borderRadius: 1.5,
+                                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                                  bgcolor: alpha(theme.palette.background.default, 0.35),
+                                }}
+                              >
+                                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+                                  <Box sx={{ minWidth: 0 }}>
+                                    <Typography
+                                      variant="body2"
+                                      sx={{
+                                        fontFamily: isSecretLike ? "monospace" : "inherit",
+                                        fontWeight: 700,
+                                        wordBreak: "break-word",
+                                      }}
+                                    >
+                                      {item.masked_value || "-"}
+                                    </Typography>
+                                    {(item.label || item.gemini?.reason) && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                        {item.label ? `${item.label}` : ""}
+                                        {item.label && item.gemini?.reason ? " • " : ""}
+                                        {item.gemini?.reason ? item.gemini.reason : ""}
+                                      </Typography>
+                                    )}
+                                  </Box>
+
+                                  <Stack direction="row" spacing={0.75} alignItems="center">
+                                    {placeholder && (
+                                      <Chip
+                                        size="small"
+                                        label="example?"
+                                        sx={{
+                                          height: 20,
+                                          fontSize: "0.65rem",
+                                          bgcolor: alpha(theme.palette.warning.main, 0.12),
+                                          color: theme.palette.warning.main,
+                                          border: `1px solid ${alpha(theme.palette.warning.main, 0.25)}`,
+                                          fontWeight: 700,
+                                        }}
+                                      />
+                                    )}
+
+                                    {item.gemini && (
+                                      <Tooltip
+                                        title={`Gemini: ${item.gemini.type || "unknown"} (${Math.round(
+                                          (item.gemini.confidence || 0) * 100
+                                        )}%)`}
+                                      >
+                                        <Chip
+                                          size="small"
+                                          label="AI"
+                                          sx={{
+                                            height: 20,
+                                            fontSize: "0.65rem",
+                                            bgcolor: alpha(theme.palette.info.main, 0.12),
+                                            color: theme.palette.info.main,
+                                            border: `1px solid ${alpha(theme.palette.info.main, 0.25)}`,
+                                            fontWeight: 700,
+                                            cursor: "help",
+                                          }}
+                                        />
+                                      </Tooltip>
+                                    )}
+
+                                    <Tooltip title={locations || "No locations recorded"}>
+                                      <Chip
+                                        size="small"
+                                        label={`${occs.length} loc`}
+                                        sx={{
+                                          height: 20,
+                                          fontSize: "0.65rem",
+                                          bgcolor: alpha(theme.palette.text.primary, 0.08),
+                                          fontWeight: 800,
+                                          cursor: "help",
+                                        }}
+                                      />
+                                    </Tooltip>
+                                  </Stack>
+                                </Stack>
+                              </Box>
+                            );
+                          })}
+                        </Stack>
+
+                        {items.length > 50 && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                            Showing first 50 items.
+                          </Typography>
+                        )}
+                      </Paper>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            </Collapse>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -3522,11 +4533,30 @@ export default function ReportDetailPage() {
     return counts || {};
   }, [reportQuery.data]);
 
-  // Sort findings
+  // Sort findings - AI-judged false positives go to the bottom automatically
   const sortedFindings = useMemo(() => {
     if (!findingsQuery.data) return [];
     
     return [...findingsQuery.data].sort((a, b) => {
+      // Get AI analysis for both findings
+      const aiA = a.details?.ai_analysis as { is_false_positive?: boolean; false_positive_score?: number; filtered_out?: boolean } | undefined;
+      const aiB = b.details?.ai_analysis as { is_false_positive?: boolean; false_positive_score?: number; filtered_out?: boolean } | undefined;
+      
+      // First priority: filtered/false positive findings go to the bottom
+      const aIsLowConfidence = aiA?.filtered_out || aiA?.is_false_positive || (aiA?.false_positive_score && aiA.false_positive_score > 0.5);
+      const bIsLowConfidence = aiB?.filtered_out || aiB?.is_false_positive || (aiB?.false_positive_score && aiB.false_positive_score > 0.5);
+      
+      if (aIsLowConfidence && !bIsLowConfidence) return 1; // a goes to bottom
+      if (!aIsLowConfidence && bIsLowConfidence) return -1; // b goes to bottom
+      
+      // If both are low confidence, sort by FP score (higher = more likely false positive = further down)
+      if (aIsLowConfidence && bIsLowConfidence) {
+        const fpScoreA = aiA?.false_positive_score || 0;
+        const fpScoreB = aiB?.false_positive_score || 0;
+        if (fpScoreA !== fpScoreB) return fpScoreB - fpScoreA; // Higher FP score goes further down
+      }
+      
+      // Then apply normal sorting
       let comparison = 0;
       
       switch (sortField) {
@@ -4215,6 +5245,12 @@ export default function ReportDetailPage() {
             </Card>
           </Stack>
 
+          {reportQuery.data?.data?.scan_stats?.sensitive_data_inventory && (
+            <SensitiveDataInventoryPanel
+              inventory={reportQuery.data.data.scan_stats.sensitive_data_inventory as SensitiveDataInventory}
+            />
+          )}
+
           {findingsQuery.isLoading && (
             <Paper sx={{ p: 3 }}>
               <Skeleton variant="rectangular" height={200} />
@@ -4291,6 +5327,7 @@ export default function ReportDetailPage() {
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Summary</TableCell>
                     <TableCell sx={{ fontWeight: 700, width: 100 }}>AI Insights</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: 60 }}>Notes</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -4299,6 +5336,7 @@ export default function ReportDetailPage() {
                     // AI analysis data from details
                     const aiAnalysis = finding.details?.ai_analysis as {
                       is_false_positive?: boolean;
+                      false_positive_score?: number;
                       false_positive_reason?: string;
                       severity_adjusted?: boolean;
                       original_severity?: string;
@@ -4306,7 +5344,12 @@ export default function ReportDetailPage() {
                       duplicate_group?: string;
                       attack_chain?: string;
                       data_flow_summary?: string;
+                      filtered_out?: boolean;
                     } | undefined;
+                    
+                    // Check if this is an agentic finding
+                    const isAgenticFinding = finding.type.startsWith("agentic-") || finding.details?.source === "agentic_ai";
+                    
                     return (
                       <TableRow
                         key={finding.id}
@@ -4315,8 +5358,13 @@ export default function ReportDetailPage() {
                           "&:hover": {
                             bgcolor: alpha(theme.palette.primary.main, 0.03),
                           },
-                          // Dim false positives
-                          opacity: aiAnalysis?.is_false_positive ? 0.6 : 1,
+                          // Dim false positives, more for filtered out
+                          opacity: aiAnalysis?.filtered_out ? 0.4 : (aiAnalysis?.is_false_positive ? 0.6 : 1),
+                          // Strike-through for filtered findings
+                          ...(aiAnalysis?.filtered_out && {
+                            textDecoration: "line-through",
+                            textDecorationColor: alpha(theme.palette.error.main, 0.5),
+                          }),
                         }}
                       >
                         <TableCell>
@@ -4333,10 +5381,20 @@ export default function ReportDetailPage() {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={finding.type}
+                            icon={finding.type.startsWith("agentic-") ? (
+                              <span style={{ fontSize: "0.85rem", marginLeft: 4 }}>🤖</span>
+                            ) : undefined}
+                            label={finding.type.startsWith("agentic-") ? finding.type.replace("agentic-", "") : finding.type}
                             size="small"
-                            variant="outlined"
-                            sx={{ fontWeight: 500 }}
+                            variant={finding.type.startsWith("agentic-") ? "filled" : "outlined"}
+                            sx={{ 
+                              fontWeight: 500,
+                              ...(finding.type.startsWith("agentic-") && {
+                                bgcolor: alpha("#8b5cf6", 0.15),
+                                color: "#8b5cf6",
+                                border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+                              })
+                            }}
                           />
                         </TableCell>
                         <TableCell>
@@ -4382,19 +5440,12 @@ export default function ReportDetailPage() {
                         <TableCell>
                           {aiAnalysis && (
                             <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                              {aiAnalysis.is_false_positive && (
-                                <Tooltip title={`Likely false positive: ${aiAnalysis.false_positive_reason || 'Context suggests low risk'}`}>
-                                  <Chip
-                                    size="small"
-                                    label="FP?"
-                                    sx={{
-                                      bgcolor: alpha(theme.palette.warning.main, 0.15),
-                                      color: theme.palette.warning.main,
-                                      fontSize: "0.65rem",
-                                      height: 20,
-                                      cursor: "help",
-                                    }}
-                                  />
+                              {/* Low confidence findings just show a subtle tooltip - no chips needed since they're greyed out */}
+                              {(aiAnalysis.filtered_out || aiAnalysis.is_false_positive) && (
+                                <Tooltip title={aiAnalysis.false_positive_reason || 'Lower confidence finding'}>
+                                  <Typography variant="caption" color="text.disabled" sx={{ cursor: "help", fontStyle: "italic" }}>
+                                    {aiAnalysis.filtered_out ? "Low confidence" : "Possibly benign"}
+                                  </Typography>
                                 </Tooltip>
                               )}
                               {aiAnalysis.severity_adjusted && (
@@ -4459,6 +5510,9 @@ export default function ReportDetailPage() {
                               )}
                             </Stack>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <FindingNotesBadge findingId={finding.id} />
                         </TableCell>
                       </TableRow>
                     );
@@ -4557,7 +5611,7 @@ export default function ReportDetailPage() {
           )}
 
           {/* AI Insights Summary */}
-          {aiInsightsQuery.data && (aiInsightsQuery.data.false_positive_count > 0 || aiInsightsQuery.data.severity_adjustments > 0) && (
+          {aiInsightsQuery.data && ((aiInsightsQuery.data.agentic_corroborated ?? 0) > 0 || aiInsightsQuery.data.severity_adjustments > 0) && (
             <Paper
               sx={{
                 p: 2,
@@ -4570,7 +5624,7 @@ export default function ReportDetailPage() {
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
                 🤖 AI Analysis Summary
               </Typography>
-              <Stack direction="row" spacing={2} flexWrap="wrap">
+              <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mb: 1 }}>
                 {aiInsightsQuery.data.findings_analyzed > 0 && (
                   <Chip 
                     size="small" 
@@ -4578,12 +5632,15 @@ export default function ReportDetailPage() {
                     sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}
                   />
                 )}
-                {aiInsightsQuery.data.false_positive_count > 0 && (
-                  <Chip 
-                    size="small" 
-                    label={`${aiInsightsQuery.data.false_positive_count} likely false positives`}
-                    sx={{ bgcolor: alpha(theme.palette.warning.main, 0.15), color: theme.palette.warning.dark }}
-                  />
+                {(aiInsightsQuery.data.agentic_corroborated ?? 0) > 0 && (
+                  <Tooltip title="High-confidence vulnerabilities confirmed by deep AI analysis">
+                    <Chip 
+                      size="small" 
+                      icon={<span style={{ fontSize: "0.8rem", marginLeft: 4 }}>✓</span>}
+                      label={`${aiInsightsQuery.data.agentic_corroborated} high-confidence findings`}
+                      sx={{ bgcolor: alpha(theme.palette.success.main, 0.15), color: theme.palette.success.dark, cursor: "help" }}
+                    />
+                  </Tooltip>
                 )}
                 {aiInsightsQuery.data.severity_adjustments > 0 && (
                   <Chip 
@@ -4593,6 +5650,16 @@ export default function ReportDetailPage() {
                   />
                 )}
               </Stack>
+              {(aiInsightsQuery.data.agentic_findings_count ?? 0) > 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  AI found {aiInsightsQuery.data.agentic_findings_count} additional vulnerabilities through deep code analysis
+                </Typography>
+              )}
+              {((aiInsightsQuery.data.filtered_count ?? 0) > 0 || aiInsightsQuery.data.false_positive_count > 0) && (
+                <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 0.5 }}>
+                  Lower confidence findings are shown at the bottom in grey
+                </Typography>
+              )}
             </Paper>
           )}
 
@@ -4784,6 +5851,53 @@ export default function ReportDetailPage() {
                               <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{scenario.impact}</Typography>
                             </Grid>
                           )}
+                          
+                          {/* Attack Complexity & Maturity Badges */}
+                          {scenario.title !== "Exploit Development Summary" && (scenario.attack_complexity || scenario.exploit_maturity) && (
+                            <Grid item xs={12}>
+                              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                {scenario.attack_complexity && (
+                                  <Chip
+                                    size="small"
+                                    label={`Complexity: ${scenario.attack_complexity}`}
+                                    sx={{
+                                      bgcolor: scenario.attack_complexity === "Low" 
+                                        ? alpha(theme.palette.error.main, 0.15) 
+                                        : scenario.attack_complexity === "Medium"
+                                        ? alpha(theme.palette.warning.main, 0.15)
+                                        : alpha(theme.palette.success.main, 0.15),
+                                      color: scenario.attack_complexity === "Low"
+                                        ? theme.palette.error.main
+                                        : scenario.attack_complexity === "Medium"
+                                        ? theme.palette.warning.main
+                                        : theme.palette.success.main,
+                                      fontWeight: 600,
+                                    }}
+                                  />
+                                )}
+                                {scenario.exploit_maturity && (
+                                  <Chip
+                                    size="small"
+                                    label={`Maturity: ${scenario.exploit_maturity}`}
+                                    sx={{
+                                      bgcolor: scenario.exploit_maturity === "High"
+                                        ? alpha(theme.palette.error.main, 0.15)
+                                        : scenario.exploit_maturity === "Functional"
+                                        ? alpha(theme.palette.warning.main, 0.15)
+                                        : alpha(theme.palette.info.main, 0.15),
+                                      color: scenario.exploit_maturity === "High"
+                                        ? theme.palette.error.main
+                                        : scenario.exploit_maturity === "Functional"
+                                        ? theme.palette.warning.main
+                                        : theme.palette.info.main,
+                                      fontWeight: 600,
+                                    }}
+                                  />
+                                )}
+                              </Stack>
+                            </Grid>
+                          )}
+                          
                           <Grid item xs={12} md={6}>
                             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                               Proof of Concept Outline
@@ -4797,6 +5911,66 @@ export default function ReportDetailPage() {
                               </Typography>
                             </Paper>
                           </Grid>
+                          
+                          {/* POC Scripts Section */}
+                          {scenario.poc_scripts && Object.keys(scenario.poc_scripts).length > 0 && !scenario.poc_scripts.note && (
+                            <Grid item xs={12}>
+                              <Typography variant="subtitle2" color="error.main" gutterBottom sx={{ fontWeight: 700 }}>
+                                🔥 Executable POC Scripts
+                              </Typography>
+                              <Paper sx={{ bgcolor: alpha(theme.palette.grey[900], 0.9), borderRadius: 2, overflow: "hidden" }}>
+                                <Tabs
+                                  value={0}
+                                  variant="scrollable"
+                                  scrollButtons="auto"
+                                  sx={{
+                                    bgcolor: alpha(theme.palette.grey[800], 0.8),
+                                    minHeight: 36,
+                                    "& .MuiTab-root": { minHeight: 36, py: 0.5, fontSize: "0.75rem", color: "grey.400" },
+                                    "& .Mui-selected": { color: "error.main" },
+                                  }}
+                                >
+                                  {Object.keys(scenario.poc_scripts).map((lang, idx) => (
+                                    <Tab key={lang} label={lang.toUpperCase()} value={idx} />
+                                  ))}
+                                </Tabs>
+                                {Object.entries(scenario.poc_scripts).map(([lang, script], idx) => (
+                                  <Box key={lang} sx={{ display: idx === 0 ? "block" : "none" }}>
+                                    <Box sx={{ position: "relative" }}>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => navigator.clipboard.writeText(script)}
+                                        sx={{ position: "absolute", top: 8, right: 8, color: "grey.500", "&:hover": { color: "white" } }}
+                                        title="Copy to clipboard"
+                                      >
+                                        <CopyIcon />
+                                      </IconButton>
+                                      <Box
+                                        component="pre"
+                                        sx={{
+                                          p: 2,
+                                          m: 0,
+                                          overflow: "auto",
+                                          maxHeight: 400,
+                                          fontSize: "0.75rem",
+                                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                                          color: "#e6e6e6",
+                                          "& .comment": { color: "#6a9955" },
+                                          lineHeight: 1.5,
+                                        }}
+                                      >
+                                        <code>{script}</code>
+                                      </Box>
+                                    </Box>
+                                  </Box>
+                                ))}
+                              </Paper>
+                              <Typography variant="caption" color="warning.main" sx={{ display: "block", mt: 1 }}>
+                                ⚠️ Use only for authorized security testing. Unauthorized use is illegal.
+                              </Typography>
+                            </Grid>
+                          )}
+                          
                           {scenario.title !== "Exploit Development Summary" && (
                             <Grid item xs={12} md={6}>
                               <Typography variant="subtitle2" color="text.secondary" gutterBottom>

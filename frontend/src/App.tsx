@@ -22,6 +22,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import UserMenu from "./components/UserMenu";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
+import MemoryIcon from "@mui/icons-material/Memory";
 
 // Lazy load all pages
 const ProjectListPage = lazy(() => import("./pages/ProjectListPage"));
@@ -64,10 +65,11 @@ const FuzzingPage = lazy(() => import("./pages/FuzzingPage"));
 const FuzzingToolGuidePage = lazy(() => import("./pages/FuzzingToolGuidePage"));
 const MITMWorkbenchPage = lazy(() => import("./pages/MITMWorkbenchPage"));
 const MITMGuidePage = lazy(() => import("./pages/MITMGuidePage"));
-const VulnHuntrPage = lazy(() => import("./pages/VulnHuntrPage"));
 const DigitalForensicsPage = lazy(() => import("./pages/DigitalForensicsPage"));
 const OSINTReconPage = lazy(() => import("./pages/OSINTReconPage"));
 const LateralMovementPage = lazy(() => import("./pages/LateralMovementPage"));
+const ReverseEngineeringHubPage = lazy(() => import("./pages/ReverseEngineeringHubPage"));
+const ApkAnalysisGuidePage = lazy(() => import("./pages/ApkAnalysisGuidePage"));
 
 // Auth pages
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -304,6 +306,39 @@ function App() {
                     Network Analysis
                   </Button>
                 </Tooltip>
+                
+                <Tooltip title="Reverse Engineering - Binary, APK & Docker Analysis">
+                  <Button
+                    component={Link}
+                    to="/reverse"
+                    startIcon={<MemoryIcon sx={{ fontSize: "1.3rem !important" }} />}
+                    variant="contained"
+                    size="medium"
+                    sx={{
+                      background: `linear-gradient(135deg, #f97316 0%, #ea580c 50%, #dc2626 100%)`,
+                      color: "white",
+                      fontWeight: 700,
+                      px: 2.5,
+                      py: 1,
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontSize: "0.95rem",
+                      boxShadow: `0 4px 15px ${alpha("#ea580c", 0.4)}, 0 0 20px ${alpha("#ea580c", 0.2)}`,
+                      border: `1px solid ${alpha("#f97316", 0.5)}`,
+                      "&:hover": {
+                        background: `linear-gradient(135deg, #ea580c 0%, #dc2626 50%, #b91c1c 100%)`,
+                        boxShadow: `0 6px 25px ${alpha("#ea580c", 0.5)}, 0 0 30px ${alpha("#ea580c", 0.3)}`,
+                        transform: "translateY(-2px)",
+                      },
+                      "&:active": {
+                        transform: "translateY(0)",
+                      },
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    Reverse Engineering
+                  </Button>
+                </Tooltip>
               </>
             )}
             
@@ -470,9 +505,9 @@ function App() {
                 <MITMWorkbenchPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/vulnhuntr" element={
+            <Route path="/reverse" element={
               <ProtectedRoute>
-                <VulnHuntrPage />
+                <ReverseEngineeringHubPage />
               </ProtectedRoute>
             } />
             <Route path="/pcap" element={
@@ -513,6 +548,7 @@ function App() {
             <Route path="/learn/digital-forensics" element={<DigitalForensicsPage />} />
             <Route path="/learn/osint" element={<OSINTReconPage />} />
             <Route path="/learn/lateral-movement" element={<LateralMovementPage />} />
+            <Route path="/learn/apk-analysis" element={<ApkAnalysisGuidePage />} />
           </Routes>
         </Suspense>
       </Container>

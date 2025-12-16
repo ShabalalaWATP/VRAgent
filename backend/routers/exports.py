@@ -498,6 +498,346 @@ FORMATTING RULES:
     }
 
 
+@router.get("/{report_id}/codebase/diagram")
+async def get_codebase_diagram(report_id: int, db: Session = Depends(get_db)):
+    """
+    Get an AI-generated Mermaid architecture diagram for the codebase.
+    
+    Uses Gemini to analyze the codebase structure and generate a visual
+    architecture diagram showing:
+    - Main modules and components
+    - Entry points and data flow
+    - Dependencies between components
+    - Technology-specific patterns
+    
+    Returns Mermaid flowchart code with icons from available icon packs.
+    """
+    from backend.core.config import settings
+    
+    report = _get_report(db, report_id)
+    project_id = report.project_id
+    
+    # Check for cached diagram in report.data
+    if report.data and report.data.get("codebase_diagram"):
+        cached = report.data["codebase_diagram"]
+        logger.info(f"Using cached codebase diagram for report {report_id}")
+        return {
+            "report_id": report_id,
+            "diagram": cached.get("mermaid_code"),
+            "diagram_type": cached.get("diagram_type", "flowchart"),
+            "cached": True
+        }
+    
+    # Get project info
+    project = db.get(models.Project, project_id)
+    
+    # Get all code chunks for context
+    chunks = db.query(models.CodeChunk).filter(
+        models.CodeChunk.project_id == project_id
+    ).all()
+    
+    # Build file metadata
+    file_metadata = defaultdict(lambda: {"lines": 0, "language": None, "path": ""})
+    for chunk in chunks:
+        file_metadata[chunk.file_path]["language"] = chunk.language
+        file_metadata[chunk.file_path]["path"] = chunk.file_path
+        if chunk.end_line:
+            file_metadata[chunk.file_path]["lines"] = max(
+                file_metadata[chunk.file_path]["lines"],
+                chunk.end_line
+            )
+    
+    # Calculate statistics
+    total_files = len(file_metadata)
+    total_lines = sum(m["lines"] for m in file_metadata.values())
+    languages = {}
+    for m in file_metadata.values():
+        lang = m["language"] or "Unknown"
+        languages[lang] = languages.get(lang, 0) + 1
+    
+    # Build folder structure for context
+    folders = set()
+    for path in file_metadata.keys():
+        parts = path.split("/")
+        for i in range(1, len(parts)):
+            folders.add("/".join(parts[:i]))
+    
+    # Sample key files (entry points, configs, main files)
+    key_patterns = ["main", "app", "index", "config", "router", "service", "model", "view", "controller", "api", "handler"]
+    key_files = []
+    for path in file_metadata.keys():
+        filename = path.split("/")[-1].lower()
+        for pattern in key_patterns:
+            if pattern in filename:
+                key_files.append(path)
+                break
+    
+    # Get sample file contents for better understanding
+    sample_contents = []
+    important_files = ["main", "app", "index", "routes", "router", "server", "config", "package.json", "requirements.txt", "dockerfile"]
+    for chunk in chunks[:30]:
+        filename_lower = chunk.file_path.lower()
+        if any(imp in filename_lower for imp in important_files):
+            content_preview = chunk.code[:500] if chunk.code else ""
+            sample_contents.append(f"--- {chunk.file_path} ---\n{content_preview}")
+    
+    # Detect tech stack from languages and file names
+    tech_stack = []
+    lang_str = str(languages).lower()
+    if "python" in lang_str:
+        tech_stack.append("Python")
+    if "php" in lang_str:
+        tech_stack.append("PHP")
+    if "javascript" in lang_str or "typescript" in lang_str:
+        tech_stack.append("JavaScript/TypeScript")
+    file_paths_str = str(list(file_metadata.keys())).lower()
+    if "react" in file_paths_str or "jsx" in file_paths_str or "tsx" in file_paths_str:
+        tech_stack.append("React")
+    if "vue" in file_paths_str:
+        tech_stack.append("Vue")
+    if "angular" in file_paths_str:
+        tech_stack.append("Angular")
+    code_sample = " ".join(c.code or "" for c in chunks[:20]).lower()
+    if "fastapi" in code_sample:
+        tech_stack.append("FastAPI")
+    if "flask" in code_sample:
+        tech_stack.append("Flask")
+    if "django" in code_sample:
+        tech_stack.append("Django")
+    if "express" in code_sample:
+        tech_stack.append("Express.js")
+    if "laravel" in code_sample or "illuminate" in code_sample:
+        tech_stack.append("Laravel")
+    if "symfony" in code_sample:
+        tech_stack.append("Symfony")
+    if "codeigniter" in code_sample:
+        tech_stack.append("CodeIgniter")
+    if "wordpress" in code_sample or "wp_" in code_sample:
+        tech_stack.append("WordPress")
+    if "drupal" in code_sample:
+        tech_stack.append("Drupal")
+    if "docker" in file_paths_str:
+        tech_stack.append("Docker")
+    if "java" in lang_str:
+        tech_stack.append("Java")
+    if "spring" in code_sample:
+        tech_stack.append("Spring")
+    if "ruby" in lang_str:
+        tech_stack.append("Ruby")
+    if "rails" in code_sample:
+        tech_stack.append("Rails")
+    if "go" in lang_str or "golang" in lang_str:
+        tech_stack.append("Go")
+    if "rust" in lang_str:
+        tech_stack.append("Rust")
+    if "csharp" in lang_str or "c#" in lang_str:
+        tech_stack.append("C#")
+    if "aspnet" in code_sample or "asp.net" in code_sample:
+        tech_stack.append("ASP.NET")
+    if "mysql" in code_sample:
+        tech_stack.append("MySQL")
+    if "postgres" in code_sample or "postgresql" in code_sample:
+        tech_stack.append("PostgreSQL")
+    if "mongodb" in code_sample:
+        tech_stack.append("MongoDB")
+    if "redis" in code_sample:
+        tech_stack.append("Redis")
+    
+    # Build the prompt for diagram generation
+    diagram_prompt = f"""You are an expert software architect. Create a HIGH-LEVEL ARCHITECTURE DIAGRAM showing the technology stack and how components interact.
+
+PROJECT: {project.name if project else 'Unknown'}
+DETECTED TECH STACK: {', '.join(tech_stack) if tech_stack else 'Unknown'}
+TOTAL: {total_files} files, {total_lines:,} lines of code
+
+LANGUAGE BREAKDOWN:
+{chr(10).join(f"- {lang}: {count} files" for lang, count in sorted(languages.items(), key=lambda x: -x[1])[:8])}
+
+PROJECT STRUCTURE:
+{chr(10).join(f"- {f}/" for f in sorted(folders) if "/" not in f)}
+
+KEY FILES:
+{chr(10).join(f"- {f}" for f in sorted(key_files)[:30])}
+
+SAMPLE CODE (to understand the app):
+{chr(10).join(sample_contents[:5])}
+
+CREATE A TECHNOLOGY ARCHITECTURE OVERVIEW showing:
+1. **Client/Frontend Layer**: What users see (Browser, Mobile App, Desktop)
+2. **Backend/API Layer**: Server technology with framework name (Node.js, PHP, Python, Java)
+3. **Database Layer**: All data stores with specific tech (MySQL, PostgreSQL, MongoDB, Redis)
+4. **External Services**: Third-party APIs, cloud services, auth providers
+5. **Infrastructure**: Docker, Kubernetes, cloud platform if detected
+
+DIAGRAM RULES:
+- Use "flowchart TD" (top-down)
+- Group related components in subgraphs
+- Label connections with protocols: "HTTP/REST", "SQL", "WebSocket", "GraphQL"
+- Max 15-20 nodes for readability
+- Use the NEW MERMAID v11.3.0+ ICON SHAPE SYNTAX for nodes with icons
+
+=== ICON SHAPE SYNTAX (REQUIRED) ===
+Use this EXACT format for nodes with icons:
+    NodeId@{{ icon: "prefix:icon-name", form: "square", label: "Label Text" }}
+
+Available icon prefixes and EXACT icon names (use these exactly):
+
+fa (FontAwesome Solid):
+  - fa:user, fa:users, fa:user-shield
+  - fa:server, fa:database, fa:cloud, fa:globe
+  - fa:lock, fa:shield, fa:key
+  - fa:desktop, fa:mobile, fa:laptop, fa:tablet
+  - fa:code, fa:file, fa:folder, fa:gear
+  - fa:network-wired, fa:plug, fa:link
+
+fab (FontAwesome Brands):
+  - fab:react, fab:angular, fab:vuejs
+  - fab:node-js, fab:node, fab:php, fab:python, fab:java
+  - fab:docker, fab:aws, fab:google
+  - fab:github, fab:laravel, fab:wordpress, fab:symfony
+
+Form options: "square", "circle", "rounded" (or omit for no background)
+
+=== CORRECT EXAMPLES ===
+flowchart TD
+    Browser@{{ icon: "fa:desktop", form: "square", label: "Web Browser" }}
+    ReactApp@{{ icon: "fab:react", form: "square", label: "React Frontend" }}
+    NodeAPI@{{ icon: "fab:node-js", form: "square", label: "Node.js API" }}
+    MySQL@{{ icon: "fa:database", form: "square", label: "MySQL" }}
+    Redis@{{ icon: "fa:database", form: "circle", label: "Redis Cache" }}
+    
+    Browser --> ReactApp
+    ReactApp -->|REST API| NodeAPI
+    NodeAPI -->|SQL| MySQL
+    NodeAPI -->|Cache| Redis
+
+=== TECHNOLOGY-SPECIFIC ICONS ===
+Frontend: fab:react, fab:angular, fab:vuejs, fa:desktop, fa:mobile
+Backend: fab:node-js, fab:php, fab:python, fab:java, fab:laravel, fa:server
+Database: fa:database (for MySQL, PostgreSQL, MongoDB, etc.)
+Cache: fa:database with circle form (for Redis, Memcached)
+Cloud: fa:cloud, fab:aws, fab:google, fab:docker
+Auth: fa:lock, fa:user, fa:shield
+External: fa:globe, fa:cloud, fa:plug
+
+Return ONLY valid Mermaid code starting with "flowchart TD". No explanations, no markdown blocks.
+
+EXAMPLE OUTPUT (for a React + Node.js + MySQL app):
+flowchart TD
+    subgraph Clients[Users]
+        Browser@{{ icon: "fa:desktop", form: "square", label: "Web Browser" }}
+        Mobile@{{ icon: "fa:mobile", form: "square", label: "Mobile App" }}
+    end
+    
+    subgraph Frontend[React Frontend]
+        ReactUI@{{ icon: "fab:react", form: "square", label: "React UI" }}
+        State@{{ icon: "fa:gear", form: "square", label: "State Management" }}
+    end
+    
+    subgraph Backend[Node.js / Express]
+        API@{{ icon: "fab:node-js", form: "square", label: "REST API" }}
+        Auth@{{ icon: "fa:lock", form: "square", label: "Authentication" }}
+        Services@{{ icon: "fa:gear", form: "square", label: "Business Logic" }}
+    end
+    
+    subgraph DataLayer[Data Layer]
+        MySQL@{{ icon: "fa:database", form: "square", label: "MySQL Database" }}
+        Redis@{{ icon: "fa:database", form: "circle", label: "Redis Cache" }}
+    end
+    
+    subgraph External[External Services]
+        S3@{{ icon: "fab:aws", form: "circle", label: "AWS S3" }}
+        Email@{{ icon: "fa:globe", form: "circle", label: "Email Service" }}
+    end
+    
+    Browser --> ReactUI
+    Mobile -->|HTTPS| API
+    ReactUI -->|REST| API
+    API --> Auth
+    API --> Services
+    Services -->|SQL| MySQL
+    Services -->|Cache| Redis
+    Services -->|Upload| S3
+    Services -->|SMTP| Email"""
+    
+    mermaid_code = None
+    
+    if settings.gemini_api_key:
+        try:
+            from google import genai
+            
+            client = genai.Client(api_key=settings.gemini_api_key)
+            
+            response = client.models.generate_content(
+                model=settings.gemini_model_id,
+                contents=diagram_prompt
+            )
+            
+            if response and response.text:
+                diagram = response.text.strip()
+                
+                # Clean up response - remove markdown code blocks if present
+                if diagram.startswith("```mermaid"):
+                    diagram = diagram[10:]
+                if diagram.startswith("```"):
+                    diagram = diagram[3:]
+                if diagram.endswith("```"):
+                    diagram = diagram[:-3]
+                diagram = diagram.strip()
+                
+                # Validate it starts with flowchart
+                if diagram.startswith("flowchart"):
+                    mermaid_code = diagram
+                    logger.info(f"Generated codebase diagram for report {report_id}")
+                    
+                    # Cache the diagram in report.data
+                    report_data = report.data or {}
+                    report_data["codebase_diagram"] = {
+                        "mermaid_code": mermaid_code,
+                        "diagram_type": "flowchart"
+                    }
+                    report.data = report_data
+                    db.commit()
+                    logger.info(f"Cached codebase diagram for report {report_id}")
+                else:
+                    logger.warning(f"AI generated invalid diagram (doesn't start with flowchart): {diagram[:100]}")
+                    
+        except Exception as e:
+            logger.error(f"Error generating diagram with Gemini: {e}")
+    else:
+        logger.warning("Gemini API key not configured, cannot generate diagram")
+    
+    # Return fallback diagram if AI generation failed
+    if not mermaid_code:
+        # Generate a basic fallback diagram from folder structure using new icon syntax
+        top_folders = [f for f in folders if "/" not in f][:6]
+        mermaid_code = "flowchart TD\n"
+        project_name = (project.name if project else 'Project').replace('"', "'")
+        mermaid_code += f'    Project@{{ icon: "fa:folder", form: "square", label: "{project_name}" }}\n'
+        for folder in top_folders:
+            icon = "fa:file"
+            if folder in ["backend", "api", "server"]:
+                icon = "fa:server"
+            elif folder in ["frontend", "ui", "client", "web"]:
+                icon = "fab:react"
+            elif folder in ["models", "database", "db"]:
+                icon = "fa:database"
+            elif folder in ["tests", "test"]:
+                icon = "fa:check"
+            elif folder in ["services"]:
+                icon = "fa:gear"
+            safe_id = folder.replace('-', '_').replace('.', '_')
+            mermaid_code += f'    {safe_id}@{{ icon: "{icon}", form: "square", label: "{folder}/" }}\n'
+            mermaid_code += f"    Project --> {safe_id}\n"
+    
+    return {
+        "report_id": report_id,
+        "diagram": mermaid_code,
+        "diagram_type": "flowchart",
+        "cached": False
+    }
+
+
 @router.get("/{report_id}/codebase")
 def get_codebase_structure(report_id: int, db: Session = Depends(get_db)):
     """
@@ -919,14 +1259,21 @@ def get_dependencies(report_id: int, db: Session = Depends(get_db)):
                         "type": "internal"
                     })
     
-    # Check for vulnerabilities linked to dependencies
+    # Check for vulnerabilities linked to dependencies and build CVE map
     vulnerable_deps = set()
+    dep_vulns = defaultdict(list)  # dep_id -> list of CVE info
     vulns = db.query(models.Vulnerability).filter(
         models.Vulnerability.project_id == project_id,
         models.Vulnerability.dependency_id.isnot(None)
     ).all()
     for v in vulns:
         vulnerable_deps.add(v.dependency_id)
+        dep_vulns[v.dependency_id].append({
+            "cve_id": v.external_id,
+            "title": v.title,
+            "severity": v.severity,
+            "cvss_score": v.cvss_score,
+        })
     
     return {
         "report_id": report_id,
@@ -936,7 +1283,8 @@ def get_dependencies(report_id: int, db: Session = Depends(get_db)):
                 "version": d.version,
                 "ecosystem": d.ecosystem,
                 "manifest_path": d.manifest_path,
-                "has_vulnerabilities": d.id in vulnerable_deps
+                "has_vulnerabilities": d.id in vulnerable_deps,
+                "vulnerabilities": dep_vulns.get(d.id, []),  # Include CVE details!
             }
             for d in external_deps
         ],
@@ -945,9 +1293,214 @@ def get_dependencies(report_id: int, db: Session = Depends(get_db)):
         "summary": {
             "total_external": len(external_deps),
             "vulnerable_count": len(vulnerable_deps),
+            "total_cves": len(vulns),
             "total_internal_edges": len(edges),
             "total_files": len(files),
             "ecosystems": list(set(d.ecosystem for d in external_deps if d.ecosystem))
+        }
+    }
+
+
+@router.get("/{report_id}/vulnerabilities")
+def get_vulnerabilities(report_id: int, db: Session = Depends(get_db)):
+    """
+    Get detailed CVE/CWE vulnerability information for the report.
+    
+    Returns:
+    - All CVEs found in dependencies with full details
+    - CWE breakdown from static analysis findings
+    - EPSS scores and KEV status where available
+    - Affected packages and fix versions
+    """
+    report = _get_report(db, report_id)
+    project_id = report.project_id
+    
+    # Get all vulnerabilities from dependencies (CVEs)
+    vulns = db.query(models.Vulnerability).filter(
+        models.Vulnerability.project_id == project_id
+    ).all()
+    
+    # Get all findings for CWE analysis
+    findings = db.query(models.Finding).filter(
+        models.Finding.scan_run_id == report.scan_run_id
+    ).all()
+    
+    # Get dependencies for context
+    deps = db.query(models.Dependency).filter(
+        models.Dependency.project_id == project_id
+    ).all()
+    dep_map = {d.id: d for d in deps}
+    
+    # Build CVE list with full details
+    cve_list = []
+    for v in vulns:
+        dep = dep_map.get(v.dependency_id)
+        cve_entry = {
+            "id": v.id,
+            "cve_id": v.external_id,
+            "title": v.title,
+            "description": v.description,
+            "severity": v.severity,
+            "cvss_score": v.cvss_score,
+            "source": v.source,
+            "package": {
+                "name": dep.name if dep else "unknown",
+                "version": dep.version if dep else "unknown",
+                "ecosystem": dep.ecosystem if dep else "unknown",
+            } if dep else None,
+        }
+        cve_list.append(cve_entry)
+    
+    # Sort by CVSS score (highest first)
+    cve_list.sort(key=lambda x: x.get("cvss_score") or 0, reverse=True)
+    
+    # Build CWE breakdown from findings
+    cwe_counts = defaultdict(lambda: {"count": 0, "findings": [], "severity_breakdown": defaultdict(int)})
+    
+    # CWE names mapping
+    cwe_names = {
+        "CWE-22": "Path Traversal",
+        "CWE-78": "OS Command Injection",
+        "CWE-79": "Cross-site Scripting (XSS)",
+        "CWE-89": "SQL Injection",
+        "CWE-90": "LDAP Injection",
+        "CWE-94": "Code Injection",
+        "CWE-95": "Eval Injection",
+        "CWE-98": "PHP File Inclusion",
+        "CWE-200": "Information Exposure",
+        "CWE-259": "Hard-coded Password",
+        "CWE-287": "Authentication Issues",
+        "CWE-295": "Certificate Validation",
+        "CWE-306": "Missing Authentication",
+        "CWE-319": "Cleartext Transmission",
+        "CWE-326": "Weak Encryption",
+        "CWE-327": "Broken Crypto Algorithm",
+        "CWE-328": "Weak Hash",
+        "CWE-330": "Insufficient Randomness",
+        "CWE-338": "Weak PRNG",
+        "CWE-352": "Cross-Site Request Forgery",
+        "CWE-400": "Resource Exhaustion",
+        "CWE-434": "Unrestricted File Upload",
+        "CWE-502": "Insecure Deserialization",
+        "CWE-601": "Open Redirect",
+        "CWE-611": "XML External Entity (XXE)",
+        "CWE-614": "Sensitive Cookie Without Secure",
+        "CWE-643": "XPath Injection",
+        "CWE-693": "Protection Mechanism Failure",
+        "CWE-732": "Incorrect Permission Assignment",
+        "CWE-770": "Resource Allocation Limits",
+        "CWE-798": "Hard-coded Credentials",
+        "CWE-918": "Server-Side Request Forgery (SSRF)",
+    }
+    
+    import re
+    
+    def extract_cwes(raw_cwe) -> list:
+        """Extract CWE IDs from various formats (string, list, etc.)"""
+        if not raw_cwe:
+            return []
+        
+        cwes = []
+        # Handle list of CWEs
+        if isinstance(raw_cwe, list):
+            for item in raw_cwe:
+                cwes.extend(extract_cwes(item))
+            return cwes
+        
+        # Handle string
+        if isinstance(raw_cwe, str):
+            # Find all CWE patterns like CWE-79, CWE-89, etc.
+            matches = re.findall(r'CWE-?\d+', raw_cwe.upper())
+            for match in matches:
+                # Normalize to CWE-XXX format
+                num = re.search(r'\d+', match)
+                if num:
+                    cwes.append(f"CWE-{num.group()}")
+            return cwes
+        
+        # Handle number
+        if isinstance(raw_cwe, (int, float)):
+            return [f"CWE-{int(raw_cwe)}"]
+        
+        return []
+    
+    for f in findings:
+        # Extract CWE from finding details or type
+        cwe_ids = []
+        details = f.details or {}
+        
+        # Check various places where CWE might be stored
+        if details.get("cwe"):
+            cwe_ids.extend(extract_cwes(details["cwe"]))
+        if details.get("cwe_id"):
+            cwe_ids.extend(extract_cwes(details["cwe_id"]))
+        if details.get("metadata", {}).get("cwe"):
+            cwe_ids.extend(extract_cwes(details["metadata"]["cwe"]))
+        if "CWE-" in f.type.upper():
+            cwe_ids.extend(extract_cwes(f.type))
+        
+        # Deduplicate
+        cwe_ids = list(set(cwe_ids))
+        
+        for cwe_id in cwe_ids:
+            cwe_counts[cwe_id]["count"] += 1
+            cwe_counts[cwe_id]["severity_breakdown"][f.severity.lower()] += 1
+            cwe_counts[cwe_id]["findings"].append({
+                "id": f.id,
+                "file_path": f.file_path,
+                "line": f.start_line,
+                "severity": f.severity,
+                "summary": f.summary[:100] if f.summary else "",
+            })
+    
+    # Build CWE list with names
+    cwe_list = []
+    for cwe_id, data in cwe_counts.items():
+        cwe_list.append({
+            "cwe_id": cwe_id,
+            "name": cwe_names.get(cwe_id, "Unknown"),
+            "count": data["count"],
+            "severity_breakdown": dict(data["severity_breakdown"]),
+            "findings": data["findings"][:5],  # First 5 findings as examples
+            "mitre_url": f"https://cwe.mitre.org/data/definitions/{cwe_id.replace('CWE-', '')}.html",
+        })
+    
+    # Sort by count (most common first)
+    cwe_list.sort(key=lambda x: x["count"], reverse=True)
+    
+    # Build severity summary for CVEs
+    cve_severity = defaultdict(int)
+    for cve in cve_list:
+        sev = (cve.get("severity") or "unknown").lower()
+        cve_severity[sev] += 1
+    
+    # Build severity summary for findings/CWEs
+    finding_severity = defaultdict(int)
+    for f in findings:
+        finding_severity[f.severity.lower()] += 1
+    
+    return {
+        "report_id": report_id,
+        "cves": {
+            "items": cve_list,
+            "total": len(cve_list),
+            "by_severity": dict(cve_severity),
+            "critical_count": sum(1 for c in cve_list if (c.get("cvss_score") or 0) >= 9.0),
+            "high_count": sum(1 for c in cve_list if 7.0 <= (c.get("cvss_score") or 0) < 9.0),
+        },
+        "cwes": {
+            "items": cwe_list,
+            "total": len(cwe_list),
+            "unique_cwes": len(cwe_list),
+            "total_findings_with_cwe": sum(c["count"] for c in cwe_list),
+        },
+        "summary": {
+            "total_cves": len(cve_list),
+            "total_cwes": len(cwe_list),
+            "total_findings": len(findings),
+            "findings_by_severity": dict(finding_severity),
+            "most_common_cwe": cwe_list[0]["cwe_id"] if cwe_list else None,
+            "highest_cvss": max((c.get("cvss_score") or 0) for c in cve_list) if cve_list else None,
         }
     }
 
@@ -1335,6 +1888,330 @@ def get_todos(report_id: int, db: Session = Depends(get_db)):
         "by_file": by_file,
         "items": todos,
     }
+
+
+async def _validate_secrets_with_gemini(secrets: list, max_batch: int = 50) -> dict:
+    """
+    Use Gemini to validate detected secrets and filter false positives.
+    Returns a dict mapping secret index to validation result.
+    """
+    from backend.core.config import settings
+    
+    if not settings.gemini_api_key or not secrets:
+        return {}
+    
+    try:
+        from google import genai
+        from google.genai import types
+        
+        client = genai.Client(api_key=settings.gemini_api_key)
+        
+        # Limit batch size to avoid token limits
+        secrets_to_validate = secrets[:max_batch]
+        
+        # Build the prompt with secrets info
+        secrets_info = []
+        for i, s in enumerate(secrets_to_validate):
+            secrets_info.append(f"""
+[{i}] Type: {s['type']}
+    File: {s['file_path']}
+    Line: {s['line']}
+    Value: {s['value']}
+    Context: {s['full_line']}
+""")
+        
+        prompt = f"""You are a security expert analyzing code for hardcoded secrets and credentials.
+
+I have detected the following potential secrets in a codebase. For each one, determine if it's:
+1. A REAL secret that should be flagged (actual API key, password, credential, etc.)
+2. A FALSE POSITIVE (placeholder, example value, test data, documentation, environment variable reference, etc.)
+
+For each secret, provide:
+- is_real: true/false
+- confidence: 0.0-1.0 (how confident you are)
+- reason: brief explanation
+- risk_level: "critical", "high", "medium", "low", or "none" (if false positive)
+
+Respond in JSON format like this:
+{{
+  "validations": [
+    {{"index": 0, "is_real": true, "confidence": 0.95, "reason": "Appears to be a production API key", "risk_level": "high"}},
+    {{"index": 1, "is_real": false, "confidence": 0.9, "reason": "This is an example placeholder value", "risk_level": "none"}}
+  ]
+}}
+
+SECRETS TO ANALYZE:
+{''.join(secrets_info)}
+
+Important considerations:
+- Values like "your_api_key_here", "changeme", "password123", "test", "example" are usually placeholders
+- Environment variable references like "${{API_KEY}}" or "process.env.SECRET" are not hardcoded secrets
+- Look for context clues in the surrounding code line
+- Real AWS keys start with AKIA and are 20 chars
+- Real JWT tokens have 3 base64 parts separated by dots
+- Email addresses in test files or example code are usually not sensitive
+- IP addresses like 127.0.0.1, 0.0.0.0, or 192.168.x.x are typically not sensitive
+
+Analyze each carefully and respond with ONLY the JSON object."""
+
+        response = await client.aio.models.generate_content(
+            model=settings.gemini_model_id,
+            contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+            config=types.GenerateContentConfig(
+                temperature=0.1,  # Low temperature for consistent analysis
+                response_mime_type="application/json",
+            ),
+        )
+        
+        # Parse the response
+        import json
+        result_text = response.text.strip()
+        # Handle markdown code blocks
+        if result_text.startswith("```"):
+            result_text = result_text.split("```")[1]
+            if result_text.startswith("json"):
+                result_text = result_text[4:]
+        
+        result = json.loads(result_text)
+        
+        # Build validation map
+        validation_map = {}
+        for v in result.get("validations", []):
+            idx = v.get("index")
+            if idx is not None and idx < len(secrets_to_validate):
+                validation_map[idx] = {
+                    "is_real": v.get("is_real", True),
+                    "confidence": v.get("confidence", 0.5),
+                    "reason": v.get("reason", ""),
+                    "ai_risk_level": v.get("risk_level", "medium"),
+                }
+        
+        return validation_map
+        
+    except Exception as e:
+        logger.error(f"Gemini validation failed: {e}")
+        return {}
+
+
+@router.get("/{report_id}/secrets")
+async def get_secrets(
+    report_id: int, 
+    use_ai: bool = Query(True, description="Use Gemini AI to validate and filter false positives"),
+    db: Session = Depends(get_db)
+):
+    """
+    Scan code chunks for potential secrets, credentials, and sensitive data.
+    Detects: emails, API keys, passwords, phone numbers, usernames, tokens, etc.
+    
+    When use_ai=True, uses Gemini to validate findings and filter false positives.
+    """
+    import re
+    
+    report = _get_report(db, report_id)
+    
+    # Get all code chunks for this project
+    chunks = db.query(models.CodeChunk).filter(
+        models.CodeChunk.project_id == report.project_id
+    ).all()
+    
+    # Comprehensive patterns for sensitive data detection (PII + credentials)
+    patterns = {
+        # === CREDENTIALS & API KEYS ===
+        "email": re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'),
+        "api_key": re.compile(r'(?:api[_-]?key|apikey|api_secret|access[_-]?key)["\']?\s*[:=]\s*["\']?([a-zA-Z0-9_\-]{20,})["\']?', re.IGNORECASE),
+        "password": re.compile(r'(?:password|passwd|pwd|secret|credential)["\']?\s*[:=]\s*["\']?([^\s"\']{4,})["\']?', re.IGNORECASE),
+        "token": re.compile(r'(?:token|bearer|auth[_-]?token|access[_-]?token|refresh[_-]?token)["\']?\s*[:=]\s*["\']?([a-zA-Z0-9_\-\.]{20,})["\']?', re.IGNORECASE),
+        "aws_key": re.compile(r'(?:AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}'),
+        "aws_secret": re.compile(r'(?:aws[_-]?secret|secret[_-]?access[_-]?key)["\']?\s*[:=]\s*["\']?([a-zA-Z0-9/+=]{40})["\']?', re.IGNORECASE),
+        "private_key": re.compile(r'-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'),
+        "github_token": re.compile(r'gh[pousr]_[A-Za-z0-9_]{36,}'),
+        "jwt": re.compile(r'eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*'),
+        "url_with_creds": re.compile(r'(?:https?|ftp)://[^:]+:[^@]+@[^\s]+'),
+        "connection_string": re.compile(r'(?:mongodb|mysql|postgres|redis|amqp|mssql)://[^\s"\']+', re.IGNORECASE),
+        "slack_webhook": re.compile(r'https://hooks\.slack\.com/services/[A-Z0-9]+/[A-Z0-9]+/[a-zA-Z0-9]+'),
+        "stripe_key": re.compile(r'(?:sk|pk)_(?:live|test)_[a-zA-Z0-9]{24,}'),
+        "google_api": re.compile(r'AIza[0-9A-Za-z_-]{35}'),
+        "openai_key": re.compile(r'sk-[A-Za-z0-9]{48,}'),
+        "anthropic_key": re.compile(r'sk-ant-[A-Za-z0-9_-]{40,}'),
+        "generic_secret": re.compile(r'(?:secret|private|confidential)[_-]?(?:key|token|password)?["\']?\s*[:=]\s*["\']?([^\s"\']{8,})["\']?', re.IGNORECASE),
+        
+        # === PII - PERSONALLY IDENTIFIABLE INFORMATION ===
+        "phone": re.compile(r'(?:\+?1[-.\s]?)?\(?[2-9]\d{2}\)?[-.\s]?\d{3}[-.\s]?\d{4}'),
+        "phone_intl": re.compile(r'\+[1-9]\d{6,14}'),  # International phone format
+        "ssn": re.compile(r'\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b'),  # Social Security Number
+        "credit_card": re.compile(r'\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b'),  # Visa, MC, Amex, Discover
+        "ip_address": re.compile(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'),
+        
+        # === USERNAMES & IDENTIFIERS ===
+        "username": re.compile(r'(?:username|user_name|user|login)["\']?\s*[:=]\s*["\']([a-zA-Z0-9_\-\.]{3,30})["\']', re.IGNORECASE),
+        "user_id": re.compile(r'(?:user_id|userid|uid|account_id)["\']?\s*[:=]\s*["\']?([a-zA-Z0-9_\-]{4,})["\']?', re.IGNORECASE),
+        
+        # === PERSONAL NAMES (in assignments/configs) ===
+        "hardcoded_name": re.compile(r'(?:name|full_name|first_name|last_name|author|owner|contact)["\']?\s*[:=]\s*["\']([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)["\']', re.IGNORECASE),
+        
+        # === ADDRESSES ===
+        "address": re.compile(r'(?:address|street|addr)["\']?\s*[:=]\s*["\'](\d+\s+[A-Za-z\s,]+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd)[,\s]+[A-Za-z\s]+)["\']', re.IGNORECASE),
+        
+        # === DATABASE CREDENTIALS ===
+        "db_password": re.compile(r'(?:db_password|database_password|mysql_password|postgres_password|mongo_password)["\']?\s*[:=]\s*["\']?([^\s"\']{4,})["\']?', re.IGNORECASE),
+        "db_user": re.compile(r'(?:db_user|database_user|mysql_user|postgres_user|mongo_user)["\']?\s*[:=]\s*["\']?([^\s"\']{2,})["\']?', re.IGNORECASE),
+    }
+    
+    # Files to skip (binary, images, etc.)
+    skip_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.mp4', '.zip', '.tar', '.gz', '.pdf'}
+    
+    secrets = []
+    seen_values = set()  # Deduplicate
+    
+    for chunk in chunks:
+        if not chunk.code or not chunk.file_path:
+            continue
+        
+        # Skip binary files
+        ext = '.' + chunk.file_path.split('.')[-1].lower() if '.' in chunk.file_path else ''
+        if ext in skip_extensions:
+            continue
+            
+        lines = chunk.code.split('\n')
+        for line_offset, line in enumerate(lines):
+            line_num = (chunk.start_line or 1) + line_offset
+            
+            # Skip comments that are just documentation about secrets
+            line_lower = line.lower()
+            if 'example' in line_lower or 'sample' in line_lower or 'placeholder' in line_lower:
+                continue
+            
+            for secret_type, pattern in patterns.items():
+                matches = pattern.finditer(line)
+                for match in matches:
+                    # Get the actual value
+                    value = match.group(1) if match.lastindex else match.group(0)
+                    
+                    # Skip common false positives
+                    if value.lower() in {'password', 'secret', 'token', 'api_key', 'your_', 'xxx', 'example', 'test', 'placeholder', 'changeme', 'root', 'admin', 'user', 'localhost'}:
+                        continue
+                    if len(value) < 4:
+                        continue
+                    # Skip common test/placeholder IP addresses
+                    if secret_type == 'ip_address' and value in {'127.0.0.1', '0.0.0.0', '255.255.255.255', '192.168.1.1', '10.0.0.1'}:
+                        continue
+                    
+                    # Dedupe by value
+                    dedup_key = f"{secret_type}:{value}"
+                    if dedup_key in seen_values:
+                        continue
+                    seen_values.add(dedup_key)
+                    
+                    # NO MASKING - show actual secret value for security audit purposes
+                    secrets.append({
+                        "type": secret_type,
+                        "file_path": chunk.file_path,
+                        "line": line_num,
+                        "value": value,  # Full unmasked value
+                        "masked_value": value,  # Same as value (no masking)
+                        "full_line": line.strip()[:300],
+                        "severity": _get_secret_severity(secret_type),
+                    })
+    
+    # Use Gemini to validate secrets and filter false positives
+    ai_validated = False
+    ai_error = None
+    filtered_count = 0
+    
+    if use_ai and secrets:
+        try:
+            validation_map = await _validate_secrets_with_gemini(secrets)
+            
+            if validation_map:
+                ai_validated = True
+                validated_secrets = []
+                
+                for i, s in enumerate(secrets):
+                    validation = validation_map.get(i)
+                    if validation:
+                        s["ai_validated"] = True
+                        s["ai_is_real"] = validation["is_real"]
+                        s["ai_confidence"] = validation["confidence"]
+                        s["ai_reason"] = validation["reason"]
+                        s["ai_risk_level"] = validation["ai_risk_level"]
+                        
+                        # Only include if AI thinks it's real OR confidence is low
+                        if validation["is_real"] or validation["confidence"] < 0.7:
+                            validated_secrets.append(s)
+                        else:
+                            filtered_count += 1
+                    else:
+                        # No validation for this one (beyond batch limit), include it
+                        s["ai_validated"] = False
+                        validated_secrets.append(s)
+                
+                secrets = validated_secrets
+        except Exception as e:
+            ai_error = str(e)
+            logger.error(f"AI validation error: {e}")
+    
+    # Sort by severity (critical first), then by type
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    secrets.sort(key=lambda x: (severity_order.get(x.get("ai_risk_level", x["severity"]), 4), x["type"], x["file_path"]))
+    
+    # Summary counts
+    summary = {}
+    for s in secrets:
+        summary[s["type"]] = summary.get(s["type"], 0) + 1
+    
+    # Group by file
+    by_file = {}
+    for s in secrets:
+        if s["file_path"] not in by_file:
+            by_file[s["file_path"]] = []
+        by_file[s["file_path"]].append(s)
+    
+    # Group by type for easy filtering
+    by_type = {}
+    for s in secrets:
+        if s["type"] not in by_type:
+            by_type[s["type"]] = []
+        by_type[s["type"]].append(s)
+    
+    return {
+        "total": len(secrets),
+        "summary": summary,
+        "by_file": by_file,
+        "by_type": by_type,
+        "items": secrets,
+        "ai_validated": ai_validated,
+        "ai_filtered_count": filtered_count,
+        "ai_error": ai_error,
+    }
+
+
+def _get_secret_severity(secret_type: str) -> str:
+    """Assign severity based on secret type (credentials + PII)."""
+    # Critical - immediate risk of account compromise or data breach
+    critical = {
+        "private_key", "aws_secret", "password", "connection_string", 
+        "url_with_creds", "db_password", "credit_card", "ssn"
+    }
+    # High - significant security risk
+    high = {
+        "api_key", "token", "aws_key", "github_token", "stripe_key", 
+        "slack_webhook", "jwt", "openai_key", "anthropic_key", "db_user"
+    }
+    # Medium - potential security concern
+    medium = {
+        "google_api", "generic_secret", "username", "user_id", 
+        "hardcoded_name", "address"
+    }
+    # Low - PII that may need protection but lower risk
+    # email, phone, phone_intl, ip_address
+    
+    if secret_type in critical:
+        return "critical"
+    elif secret_type in high:
+        return "high"
+    elif secret_type in medium:
+        return "medium"
+    return "low"
 
 
 @router.get("/{report_id}/search-code")

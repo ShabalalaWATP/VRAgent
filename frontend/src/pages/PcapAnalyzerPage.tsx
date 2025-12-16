@@ -39,7 +39,7 @@ import {
   Menu,
   MenuItem,
 } from "@mui/material";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -854,6 +854,11 @@ function StructuredReportSection({ report, theme }: { report: AISecurityReport; 
 
 export default function PcapAnalyzerPage() {
   const theme = useTheme();
+  const [searchParams] = useSearchParams();
+  
+  // Get project context from URL params (when navigating from a project)
+  const projectId = searchParams.get("projectId") ? parseInt(searchParams.get("projectId")!, 10) : undefined;
+  const projectName = searchParams.get("projectName") || undefined;
   
   // File upload state
   const [files, setFiles] = useState<File[]>([]);
@@ -1089,7 +1094,7 @@ export default function PcapAnalyzerPage() {
 
     try {
       setProgress(30);
-      const result = await analyzePcaps(files, true);
+      const result = await analyzePcaps(files, true, 100000, true, projectId);
       setProgress(100);
       setResults(result);
     } catch (err) {
@@ -1118,21 +1123,55 @@ export default function PcapAnalyzerPage() {
         separator={<NavigateNextIcon fontSize="small" />} 
         sx={{ mb: 3 }}
       >
-        <MuiLink
-          component={Link}
-          to="/network"
-          sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 0.5,
-            textDecoration: 'none',
-            color: 'text.secondary',
-            '&:hover': { color: 'primary.main' }
-          }}
-        >
-          <HubIcon fontSize="small" />
-          Network Analysis
-        </MuiLink>
+        {projectId && projectName ? (
+          <>
+            <MuiLink
+              component={Link}
+              to={`/projects/${projectId}`}
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 0.5,
+                textDecoration: 'none',
+                color: 'text.secondary',
+                '&:hover': { color: 'primary.main' }
+              }}
+            >
+              📁 {projectName}
+            </MuiLink>
+            <MuiLink
+              component={Link}
+              to={`/projects/${projectId}?tab=network`}
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 0.5,
+                textDecoration: 'none',
+                color: 'text.secondary',
+                '&:hover': { color: 'primary.main' }
+              }}
+            >
+              <HubIcon fontSize="small" />
+              Network
+            </MuiLink>
+          </>
+        ) : (
+          <MuiLink
+            component={Link}
+            to="/network"
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 0.5,
+              textDecoration: 'none',
+              color: 'text.secondary',
+              '&:hover': { color: 'primary.main' }
+            }}
+          >
+            <HubIcon fontSize="small" />
+            Network Analysis
+          </MuiLink>
+        )}
         <Typography color="text.primary">PCAP Analyzer</Typography>
       </Breadcrumbs>
 
@@ -1157,6 +1196,19 @@ export default function PcapAnalyzerPage() {
           Upload Wireshark packet captures (.pcap, .pcapng) for security analysis. Detects cleartext credentials,
           suspicious traffic patterns, protocol anomalies, and more.
         </Typography>
+        {projectId && projectName && (
+          <Alert 
+            severity="info" 
+            sx={{ 
+              maxWidth: 500, 
+              mx: "auto", 
+              mb: 2,
+              '& .MuiAlert-message': { width: '100%', textAlign: 'center' }
+            }}
+          >
+            Reports will be saved to project: <strong>{projectName}</strong>
+          </Alert>
+        )}
         <Chip
           component={Link}
           to="/learn/wireshark"

@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     default-jdk-headless \
     clang-tidy \
+    cppcheck \
     nmap \
     tshark \
     libcap2-bin \
@@ -33,11 +34,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iputils-ping \
     dnsutils \
     whois \
+    ca-certificates \
+    gnupg \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/* \
     && setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip /usr/bin/nmap \
     && setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap
+
+# Install Docker CLI for Docker image layer analysis
+RUN install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
+    && chmod a+r /etc/apt/keyrings/docker.asc \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Go (for gosec)
 RUN wget -q https://go.dev/dl/go1.21.5.linux-amd64.tar.gz \
@@ -58,8 +70,45 @@ RUN mkdir -p /opt/spotbugs/plugin \
     && chmod +x /opt/spotbugs/bin/spotbugs \
     && ln -s /opt/spotbugs/bin/spotbugs /usr/local/bin/spotbugs
 
+# Install JADX (Java decompiler for APK analysis)
+RUN wget -q -O /tmp/jadx.zip https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip \
+    && mkdir -p /opt/jadx \
+    && unzip -q /tmp/jadx.zip -d /opt/jadx \
+    && chmod +x /opt/jadx/bin/jadx /opt/jadx/bin/jadx-gui \
+    && ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx \
+    && rm /tmp/jadx.zip
+
 # Install ESLint and security plugins globally for scanning
 RUN npm install -g eslint eslint-plugin-security @eslint/js
+
+# Install PHP and security scanning tools (PHP_CodeSniffer with security audit)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    php-cli \
+    php-mbstring \
+    php-xml \
+    php-curl \
+    composer \
+    && rm -rf /var/lib/apt/lists/* \
+    && composer global require --no-interaction squizlabs/php_codesniffer \
+    && composer global require --no-interaction pheromone/phpcs-security-audit \
+    && ln -sf /root/.composer/vendor/bin/phpcs /usr/local/bin/phpcs
+
+# Install Ruby and Brakeman (Ruby/Rails security scanner)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ruby \
+    ruby-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && gem install brakeman --no-document
+
+# Install Rust and cargo-audit (Rust security scanner)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && . /root/.cargo/env \
+    && cargo install cargo-audit \
+    && ln -sf /root/.cargo/bin/cargo /usr/local/bin/cargo \
+    && ln -sf /root/.cargo/bin/cargo-audit /usr/local/bin/cargo-audit
+
+ENV PATH="/root/.cargo/bin:$PATH"
 
 # Copy requirements first for better caching
 COPY requirements.txt .

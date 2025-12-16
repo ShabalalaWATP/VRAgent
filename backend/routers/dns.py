@@ -43,6 +43,7 @@ class DNSScanRequest(BaseModel):
     save_report: bool = Field(default=True, description="Save report to database")
     report_title: Optional[str] = Field(default=None, description="Custom title for saved report")
     run_ai_analysis: bool = Field(default=True, description="Run AI analysis on results")
+    project_id: Optional[int] = Field(default=None, description="Associate report with a project")
 
 
 class DNSValidateRequest(BaseModel):
@@ -288,6 +289,7 @@ async def run_dns_scan(request: DNSScanRequest):
                     recon_result,
                     request.scan_type,
                     request.report_title,
+                    request.project_id,
                 )
             except Exception as e:
                 logger.warning(f"Failed to save report: {e}")
@@ -363,6 +365,7 @@ async def run_dns_scan_stream(request: DNSScanRequest):
                             recon_result,
                             request.scan_type,
                             request.report_title,
+                            request.project_id,
                         )
                     except Exception as e:
                         logger.warning(f"Failed to save report: {e}")
@@ -630,6 +633,7 @@ async def _save_dns_report(
     result: DNSReconResult,
     scan_type: str,
     title: Optional[str],
+    project_id: Optional[int] = None,
 ) -> int:
     """Save DNS report to database."""
     db = next(get_db())
@@ -650,6 +654,7 @@ async def _save_dns_report(
         risk_level=risk_level,
         ai_report=result.ai_analysis if isinstance(result.ai_analysis, dict) else None,
         created_at=datetime.utcnow(),
+        project_id=project_id,
     )
     
     db.add(report)

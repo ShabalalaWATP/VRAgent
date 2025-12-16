@@ -57,6 +57,10 @@ class Project(Base):
     scan_runs = relationship("ScanRun", back_populates="project")
     findings = relationship("Finding", back_populates="project")
     reports = relationship("Report", back_populates="project")
+    network_analysis_reports = relationship("NetworkAnalysisReport", back_populates="project")
+    fuzzing_sessions = relationship("FuzzingSession", back_populates="project")
+    reverse_engineering_reports = relationship("ReverseEngineeringReport", back_populates="project")
+    project_notes = relationship("ProjectNote", back_populates="project", cascade="all, delete-orphan")
 
 
 class CodeChunk(Base):
@@ -116,6 +120,7 @@ class ScanRun(Base):
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
+    options = Column(JSON, nullable=True)  # Scan options like include_agentic
 
     project = relationship("Project", back_populates="scan_runs")
     findings = relationship("Finding", back_populates="scan_run")
@@ -142,6 +147,49 @@ class Finding(Base):
     scan_run = relationship("ScanRun", back_populates="findings")
     linked_vulnerability = relationship("Vulnerability", back_populates="findings")
     exploit_scenarios = relationship("ExploitScenario", back_populates="finding")
+    notes = relationship("FindingNote", back_populates="finding", cascade="all, delete-orphan")
+
+
+class FindingNote(Base):
+    """User notes on findings for tracking remediation, analysis, and comments."""
+    __tablename__ = "finding_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    finding_id = Column(Integer, ForeignKey("findings.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Optional, for multi-user support
+    
+    content = Column(Text, nullable=False)
+    note_type = Column(String, nullable=False, default="comment")  # comment, remediation, false_positive, accepted_risk, in_progress
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Optional extra data
+    extra_data = Column(JSON, nullable=True)  # For additional structured data like tags, priority, etc.
+    
+    finding = relationship("Finding", back_populates="notes")
+    user = relationship("User")
+
+
+class ProjectNote(Base):
+    """General project-level notes not tied to specific findings."""
+    __tablename__ = "project_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    
+    title = Column(String, nullable=True)
+    content = Column(Text, nullable=False)
+    note_type = Column(String, nullable=False, default="general")  # general, todo, important, reference
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    extra_data = Column(JSON, nullable=True)
+    
+    project = relationship("Project", back_populates="project_notes")
+    user = relationship("User")
 
 
 class Report(Base):
@@ -173,6 +221,9 @@ class ExploitScenario(Base):
     preconditions = Column(Text, nullable=True)
     impact = Column(Text, nullable=True)
     poc_outline = Column(Text, nullable=True)
+    poc_scripts = Column(JSON, nullable=True)  # Executable POC scripts by language
+    attack_complexity = Column(String, nullable=True)  # Low, Medium, High
+    exploit_maturity = Column(String, nullable=True)  # Proof of Concept, Functional, High
     mitigation_notes = Column(Text, nullable=True)
 
     report = relationship("Report", back_populates="exploit_scenarios")
@@ -184,6 +235,7 @@ class NetworkAnalysisReport(Base):
     __tablename__ = "network_analysis_reports"
 
     id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)  # Optional project association
     analysis_type = Column(String, nullable=False)  # 'pcap', 'nmap', 'dns'
     report_type = Column(String, nullable=True)  # Alternative categorization (dns, pcap, nmap)
     title = Column(String, nullable=False)
@@ -209,6 +261,9 @@ class NetworkAnalysisReport(Base):
     # Export metadata
     last_exported_at = Column(DateTime(timezone=True), nullable=True)
     export_formats = Column(JSON, nullable=True)  # List of formats exported
+    
+    # Relationship
+    project = relationship("Project", back_populates="network_analysis_reports")
 
 
 class FuzzingSession(Base):
@@ -216,6 +271,7 @@ class FuzzingSession(Base):
     __tablename__ = "fuzzing_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)  # Optional project association
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     target_url = Column(String, nullable=False, index=True)
@@ -248,4 +304,80 @@ class FuzzingSession(Base):
     
     # Tags for organization
     tags = Column(JSON, nullable=True)
+    
+    # Relationship
+    project = relationship("Project", back_populates="fuzzing_sessions")
 
+
+class ReverseEngineeringReport(Base):
+    """Stores reverse engineering analysis reports (Binary, APK, Docker)."""
+    __tablename__ = "reverse_engineering_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+    
+    # Report metadata
+    analysis_type = Column(String, nullable=False, index=True)  # 'binary', 'apk', 'docker'
+    title = Column(String, nullable=False)
+    filename = Column(String, nullable=True)  # Original filename analyzed
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Risk assessment from AI
+    risk_level = Column(String, nullable=True)  # Critical, High, Medium, Low, Clean
+    risk_score = Column(Integer, nullable=True)  # 0-100
+    
+    # For binary analysis
+    file_type = Column(String, nullable=True)
+    architecture = Column(String, nullable=True)
+    file_size = Column(Integer, nullable=True)
+    is_packed = Column(String, nullable=True)
+    packer_name = Column(String, nullable=True)
+    
+    # For APK analysis
+    package_name = Column(String, nullable=True)
+    version_name = Column(String, nullable=True)
+    min_sdk = Column(Integer, nullable=True)
+    target_sdk = Column(Integer, nullable=True)
+    
+    # For Docker analysis
+    image_name = Column(String, nullable=True)
+    image_id = Column(String, nullable=True)
+    total_layers = Column(Integer, nullable=True)
+    base_image = Column(String, nullable=True)
+    
+    # Analysis data (JSON)
+    strings_count = Column(Integer, nullable=True)
+    imports_count = Column(Integer, nullable=True)
+    exports_count = Column(Integer, nullable=True)
+    secrets_count = Column(Integer, nullable=True)
+    suspicious_indicators = Column(JSON, nullable=True)  # List of suspicious findings
+    permissions = Column(JSON, nullable=True)  # For APK
+    security_issues = Column(JSON, nullable=True)  # Common findings
+    
+    # Full analysis data (for detailed view)
+    full_analysis_data = Column(JSON, nullable=True)
+    
+    # AI Analysis - both raw and structured
+    ai_analysis_raw = Column(Text, nullable=True)  # Original AI response
+    ai_analysis_structured = Column(JSON, nullable=True)  # Parsed structured analysis
+    
+    # JADX Full Scan Data
+    jadx_total_classes = Column(Integer, nullable=True)
+    jadx_total_files = Column(Integer, nullable=True)
+    jadx_data = Column(JSON, nullable=True)  # Contains classes sample, security issues, etc.
+    
+    # AI-Generated Reports (Deep Analysis)
+    ai_functionality_report = Column(Text, nullable=True)
+    ai_security_report = Column(Text, nullable=True)
+    ai_privacy_report = Column(Text, nullable=True)
+    ai_threat_model = Column(JSON, nullable=True)
+    ai_vuln_scan_result = Column(JSON, nullable=True)
+    ai_chat_history = Column(JSON, nullable=True)
+    
+    # Tags and notes
+    tags = Column(JSON, nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    # Relationship
+    project = relationship("Project", back_populates="reverse_engineering_reports")

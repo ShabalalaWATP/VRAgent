@@ -100,6 +100,7 @@ class SavedReportResponse(BaseModel):
     risk_level: Optional[str]
     risk_score: Optional[int]
     findings_count: int
+    project_id: Optional[int] = None
 
 
 class StatusResponse(BaseModel):
@@ -941,6 +942,7 @@ def validate_nmap_target(target: str = Query(..., description="Target to validat
 @router.get("/reports", response_model=List[SavedReportResponse])
 def list_reports(
     analysis_type: Optional[str] = Query(None, description="Filter by type: pcap or nmap"),
+    project_id: Optional[int] = Query(None, description="Filter by project ID"),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
@@ -949,6 +951,9 @@ def list_reports(
     
     if analysis_type:
         query = query.filter(NetworkAnalysisReport.analysis_type == analysis_type)
+    
+    if project_id is not None:
+        query = query.filter(NetworkAnalysisReport.project_id == project_id)
     
     reports = query.order_by(NetworkAnalysisReport.created_at.desc()).limit(limit).all()
     
@@ -962,6 +967,7 @@ def list_reports(
             risk_level=r.risk_level,
             risk_score=r.risk_score,
             findings_count=len(r.findings_data) if r.findings_data else 0,
+            project_id=r.project_id,
         )
         for r in reports
     ]

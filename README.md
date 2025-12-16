@@ -1,8 +1,9 @@
 # AI Agent Vulnerability Research (VRAgent)
 
 An end-to-end platform for automated security vulnerability scanning and analysis. VRAgent provides:
-- **Code Security Scanning**: Upload code or clone repositories for comprehensive vulnerability detection with 10+ specialized scanners
+- **Code Security Scanning**: Upload code or clone repositories for comprehensive vulnerability detection with 14 specialized scanners
 - **Network Security Analysis**: Run Nmap scans and analyze PCAP files with AI-powered insights
+- **Reverse Engineering Hub**: Analyze binaries (PE/ELF), Android APKs, and Docker images with AI-powered insights
 - **AI-Powered Reports**: Google Gemini generates detailed exploitability narratives, attack scenarios, and remediation guidance
 - **Interactive Learning Hub**: Educational content covering security fundamentals, attack frameworks, and pentesting methodologies
 
@@ -14,7 +15,7 @@ An end-to-end platform for automated security vulnerability scanning and analysi
 
 ### Security Scanners
 
-VRAgent integrates **10+ specialized security scanners** for comprehensive vulnerability detection:
+VRAgent integrates **14 specialized security scanners** for comprehensive vulnerability detection:
 
 | Scanner | Languages | What It Detects |
 |---------|-----------|-----------------|
@@ -24,6 +25,10 @@ VRAgent integrates **10+ specialized security scanners** for comprehensive vulne
 | **gosec** | Go | SQL injection, command injection, file path traversal, crypto issues |
 | **SpotBugs + FindSecBugs** | Java/Kotlin | SQL injection, XXE, LDAP injection, weak crypto, Spring security |
 | **clang-tidy** | C/C++ | Buffer overflows, format strings, insecure functions, memory safety |
+| **Cppcheck** | C/C++ | Memory leaks, null pointers, buffer overruns, integer overflows, use-after-free |
+| **PHPCS Security** | PHP | SQL injection, XSS, command injection, file inclusion, insecure crypto |
+| **Brakeman** | Ruby/Rails | SQL injection, XSS, mass assignment, remote code execution, file access |
+| **Cargo Audit** | Rust | Dependency vulnerabilities (RustSec DB), unsafe code patterns |
 | **Secret Scanner** | All files | 50+ secret types: AWS, GCP, Azure, OpenAI, Anthropic, Hugging Face, and more |
 | **Docker Scanner** | Dockerfiles, Images | Dockerfile misconfigurations, image vulnerabilities via Trivy/Grype |
 | **IaC Scanner** | Terraform, K8s, CloudFormation | Infrastructure security issues, misconfigurations, compliance violations |
@@ -170,6 +175,14 @@ VRAgent includes a comprehensive **Security Learning Hub** with educational cont
 | **SSL/TLS Security Guide** | SSL/TLS scanning, certificate validation, CVE detection, and cipher analysis |
 | **DNS Reconnaissance Guide** | Complete guide to DNS enumeration, record types, email security (SPF/DMARC/DKIM), and zone transfers |
 | **Traceroute Guide** | Network path analysis, latency interpretation, troubleshooting, and security implications |
+
+#### Reverse Engineering Learning Pages
+| Topic | Description |
+|-------|-------------|
+| **Reverse Engineering Hub Guide** | Complete guide to VRAgent's RE tools: binary analysis, APK inspection, Docker forensics |
+| **APK Analysis Guide** | Android app analysis: permissions, certificates, manifest parsing, attack surface mapping |
+| **Binary Analysis Guide** | PE/ELF inspection: strings, imports, Rich headers, disassembly, malware indicators |
+| **Docker Layer Analysis Guide** | Container forensics: layer inspection, secret detection, Dockerfile reconstruction |
 
 ### Reports & Exports
 - **Multiple Export Formats**: Generate professional reports in:
@@ -450,6 +463,103 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
   - Click handlers for detailed inspection
   - Dynamic graph updates
 
+### Reverse Engineering Hub
+
+VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries, APKs, and Docker images:
+
+#### Binary Analysis (PE/ELF)
+- **Multi-Format Support**: Analyze Windows executables (PE), Linux binaries (ELF), and DLLs
+- **String Extraction**: Extract ASCII and Unicode strings with context
+  - Configurable minimum length filtering
+  - Automatic categorization (URLs, paths, registry keys, IP addresses)
+  - Interesting string highlighting (passwords, API keys, credentials)
+- **Import Analysis**: List imported functions and libraries
+  - DLL dependency mapping
+  - Suspicious import detection (process injection, crypto, network)
+  - Library version identification
+- **Rich Header Analysis** (PE): Development environment fingerprinting
+  - Visual Studio version detection
+  - Compiler identification
+  - Build artifact analysis
+- **ELF Symbol Extraction**: Function and object symbols
+- **Binary Metadata**: File size, architecture, entry point, sections
+- **AI-Powered Analysis**: Gemini AI generates:
+  - Binary purpose identification
+  - Suspicious behavior indicators
+  - Malware family classification hints
+  - Recommended next analysis steps
+
+#### APK Analysis (Android)
+- **Manifest Parsing**: Complete AndroidManifest.xml analysis
+  - Package name, version, SDK targets
+  - Declared permissions with risk categorization
+  - Exported components (activities, services, receivers, providers)
+  - Intent filters and deep links
+- **Certificate Analysis**: APK signing verification
+  - Certificate chain validation
+  - SHA-1/SHA-256 fingerprints
+  - Issuer and validity period
+  - v1/v2/v3 signature scheme detection
+- **Permission Security Analysis**:
+  - Dangerous permission detection (40+ dangerous permissions)
+  - Permission group categorization
+  - Over-permission warnings
+  - Privacy-sensitive permission flags
+- **Component Security**:
+  - Exported component enumeration
+  - Intent filter analysis for attack surface
+  - Content provider URI exposure
+  - Broadcast receiver analysis
+- **Quick AI Analysis**: One-click AI summary
+  - What does this app do?
+  - Quick security findings
+  - Risk assessment
+- **Advanced Analysis Tools**:
+  - **Attack Surface Map**: Comprehensive attack vector identification
+    - Exported activities with deep link analysis
+    - Content provider URI patterns
+    - Intent handler analysis
+    - ADB exploitation commands
+    - Mermaid attack tree visualization
+  - **Obfuscation Analysis**: Detect code protection
+    - ProGuard/R8 detection
+    - DexGuard commercial protection
+    - String encryption patterns
+    - Native library protection
+    - Class naming analysis
+    - Deobfuscation strategy recommendations
+    - Frida hook generation
+- **Report Management**: Save, view, and delete APK analysis reports
+- **Export Options**: Download reports as Markdown, PDF, or DOCX
+
+#### Docker Layer Analysis
+- **Image Inspection**: Pull and analyze Docker images
+  - Layer-by-layer breakdown
+  - Layer size and command history
+  - Created/modified timestamps
+- **Secret Detection**: Scan all layers for sensitive data
+  - Environment variables with secrets
+  - Hardcoded credentials in files
+  - API keys and tokens
+  - Private keys and certificates
+  - 50+ secret patterns
+- **Dockerfile Reconstruction**: Reverse-engineer the original Dockerfile
+  - Command history extraction
+  - Base image identification
+  - Build argument analysis
+- **Supply Chain Analysis**:
+  - Base image vulnerability assessment
+  - Package manifest extraction
+  - Outdated dependency detection
+- **AI Analysis**: Gemini AI security assessment
+  - Security posture evaluation
+  - Container hardening recommendations
+  - Best practice violations
+- **Export Options**: Download analysis as Markdown, PDF, or DOCX
+
+#### Learning Resources
+- Comprehensive guides at `/learn/reverse-hub`, `/learn/apk-analysis`, `/learn/binary-analysis`, `/learn/docker-forensics`
+
 ## 🏗️ Architecture
 
 ```
@@ -464,7 +574,7 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
            ┌──────────────┐ ┌────────┐ ┌─────────────┐
            │ Security     │ │ Redis  │ │  External   │
            │ Scanners     │ │ Queue  │ │  APIs       │
-           │ (7 tools)    │ │        │ │ (OSV/NVD)   │
+           │ (14 tools)   │ │        │ │ (OSV/NVD)   │
            └──────────────┘ └───┬────┘ └─────────────┘
                                 │
                                 ▼
@@ -480,7 +590,7 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
 - **Database**: PostgreSQL with pgvector for embeddings
 - **Workers**: Background job processing for long-running scans
 - **Redis**: Job queuing, WebSocket pub/sub, and API response caching
-- **Scanners**: Semgrep, Bandit, ESLint, gosec, SpotBugs, clang-tidy, Secret Scanner, Docker Scanner, IaC Scanner
+- **Scanners**: Semgrep, Bandit, ESLint, gosec, SpotBugs, clang-tidy, Cppcheck, PHPCS Security, Brakeman, Cargo Audit, Secret Scanner, Docker Scanner, IaC Scanner
 - **Network Tools**: Nmap (scanning), tshark (packet capture)
 - **AI**: Google Gemini for code analysis, exploitability narratives, and network analysis
 
@@ -1562,6 +1672,26 @@ The frontend will be available at http://localhost:5173
 | `GET` | `/api-tester/payloads` | Get test payloads reference |
 | `GET` | `/api-tester/security-headers` | Get security headers reference |
 
+### Reverse Engineering
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/reverse/status` | Check RE tools availability (jadx, radare2, strings) |
+| `POST` | `/reverse/binary/analyze` | Analyze PE/ELF binary (strings, imports, metadata) |
+| `POST` | `/reverse/binary/disassemble` | Disassemble binary functions |
+| `POST` | `/reverse/binary/ai-analyze` | AI-powered binary analysis |
+| `POST` | `/reverse/apk/analyze` | Full APK analysis (manifest, permissions, certs) |
+| `POST` | `/reverse/apk/quick-summary` | Quick AI summary of APK |
+| `POST` | `/reverse/apk/attack-surface` | Generate attack surface map |
+| `POST` | `/reverse/apk/obfuscation-analysis` | Detect obfuscation techniques |
+| `POST` | `/reverse/apk/ai-analyze` | AI-powered APK security analysis |
+| `GET` | `/reverse/apk/reports` | List saved APK reports |
+| `GET` | `/reverse/apk/reports/{id}` | Get specific APK report |
+| `DELETE` | `/reverse/apk/reports/{id}` | Delete APK report |
+| `GET` | `/reverse/apk/reports/{id}/export/{format}` | Export report (markdown/pdf/docx) |
+| `POST` | `/reverse/docker/analyze` | Analyze Docker image layers |
+| `POST` | `/reverse/docker/ai-analyze` | AI-powered Docker analysis |
+
 Full interactive documentation available at `/docs` when running the backend.
 
 ## 🧪 Testing
@@ -1613,6 +1743,7 @@ VRAgent/
 │   │   ├── exports.py       # Export endpoints
 │   │   ├── exploitability.py # AI exploit analysis
 │   │   ├── network.py       # Network analysis (Nmap/PCAP)
+│   │   ├── reverse_engineering.py # Binary/APK/Docker analysis
 │   │   └── webhooks.py      # Webhook notifications
 │   │
 │   ├── services/
@@ -1647,6 +1778,7 @@ VRAgent/
 │   │   ├── spotbugs_service.py       # Java/Kotlin scanning (SpotBugs)
 │   │   ├── ssl_scanner_service.py    # SSL/TLS security scanning
 │   │   ├── transitive_deps_service.py # Transitive dependency analysis
+│   │   ├── reverse_engineering_service.py # Binary/APK/Docker analysis
 │   │   ├── webhook_service.py        # Webhook notifications
 │   │   └── websocket_service.py      # Real-time updates
 │   │
@@ -1680,14 +1812,15 @@ VRAgent/
             ├── ProjectListPage.tsx      # Project listing
             ├── ProjectDetailPage.tsx    # Project details & scans
             ├── ReportDetailPage.tsx     # Scan report view
-            ├── NetworkAnalysisHub.tsx   # Network tools hub (5 tools)
+            ├── NetworkAnalysisHub.tsx   # Network tools hub (6 tools)
             ├── NmapAnalyzerPage.tsx     # Nmap scanning & analysis
             ├── PcapAnalyzerPage.tsx     # PCAP capture & analysis
             ├── SSLScannerPage.tsx       # SSL/TLS security scanning
             ├── DNSAnalyzerPage.tsx      # DNS reconnaissance & enumeration
             ├── TracerouteAnalyzerPage.tsx # Traceroute visualization
+            ├── ReverseEngineeringHubPage.tsx # Binary/APK/Docker analysis
             ├── LearnHubPage.tsx         # Security learning hub
-            └── [Learning Pages]         # Educational content (22 topics)
+            └── [Learning Pages]         # Educational content (26+ topics)
         └── components/
             ├── NetworkTopologyGraph.tsx # D3.js network visualization
             └── [Other Components]       # Form components, progress indicators

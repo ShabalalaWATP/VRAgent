@@ -36,6 +36,9 @@ import WifiIcon from "@mui/icons-material/Wifi";
 import DnsIcon from "@mui/icons-material/Dns";
 import RouteIcon from "@mui/icons-material/Route";
 import TravelExploreIcon from "@mui/icons-material/TravelExplore";
+import AndroidIcon from "@mui/icons-material/Android";
+import BuildIcon from "@mui/icons-material/Build";
+import LayersIcon from "@mui/icons-material/Layers";
 
 interface LearnCard {
   title: string;
@@ -155,6 +158,46 @@ const networkCards: LearnCard[] = [
     path: "/learn/mitm",
     color: "#ef4444",
     tags: ["Proxy", "Interception", "AI Rules"],
+    badge: "New",
+  },
+];
+
+// Reverse Engineering learning pages
+const reverseEngineeringCards: LearnCard[] = [
+  {
+    title: "Reverse Engineering Hub",
+    description: "Complete guide to VRAgent's RE Hub: APK analysis, binary inspection, Docker layer analysis, and AI-powered insights.",
+    icon: <BuildIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/reverse-hub",
+    color: "#a855f7",
+    tags: ["APK", "Binary", "Docker"],
+    badge: "New",
+  },
+  {
+    title: "APK Analysis Guide",
+    description: "Android APK deep analysis: permissions, certificates, manifest parsing, attack surface mapping, and obfuscation detection.",
+    icon: <AndroidIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/apk-analysis",
+    color: "#22c55e",
+    tags: ["Android", "Permissions", "Security"],
+    badge: "New",
+  },
+  {
+    title: "Binary Analysis Guide",
+    description: "PE/ELF binary inspection: strings extraction, import analysis, Rich headers, disassembly, and malware indicators.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/binary-analysis",
+    color: "#f59e0b",
+    tags: ["PE", "ELF", "Disassembly"],
+    badge: "New",
+  },
+  {
+    title: "Docker Layer Analysis",
+    description: "Docker image forensics: layer-by-layer inspection, secret detection, Dockerfile reconstruction, and supply chain security.",
+    icon: <LayersIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/docker-forensics",
+    color: "#0ea5e9",
+    tags: ["Layers", "Secrets", "Supply Chain"],
     badge: "New",
   },
 ];
@@ -532,6 +575,33 @@ export default function LearnHubPage() {
         </Paper>
         
         <CardGrid cards={networkCards} columns={{ xs: 12, sm: 6, md: 3, lg: 3 }} />
+      </Box>
+
+      <Divider sx={{ my: 5 }} />
+
+      {/* SECTION 2.5: Reverse Engineering */}
+      <Box sx={{ mb: 6 }}>
+        <Paper
+          sx={{
+            p: 3,
+            mb: 3,
+            borderRadius: 3,
+            background: `linear-gradient(135deg, ${alpha("#a855f7", 0.1)}, ${alpha("#8b5cf6", 0.05)})`,
+            border: `1px solid ${alpha("#a855f7", 0.2)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+            <BuildIcon sx={{ color: "#a855f7", fontSize: 32 }} />
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              🔬 Reverse Engineering
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            Master binary analysis, APK inspection, and Docker forensics. Learn to analyze compiled code and container images.
+          </Typography>
+        </Paper>
+        
+        <CardGrid cards={reverseEngineeringCards} columns={{ xs: 12, sm: 6, md: 3, lg: 3 }} />
       </Box>
 
       <Divider sx={{ my: 5 }} />

@@ -51,7 +51,7 @@ interface ScanProgressProps {
   onComplete?: () => void;
 }
 
-// Phase categories for organized display
+// Phase categories for organized display - ordered to match actual scan execution flow
 interface PhaseCategory {
   name: string;
   icon: string;
@@ -60,6 +60,12 @@ interface PhaseCategory {
 }
 
 const PHASE_CATEGORIES: PhaseCategory[] = [
+  {
+    name: "Agentic AI Scan",
+    icon: "🤖",
+    phases: ["agentic_scan", "agentic_initializing", "agentic_chunking", "agentic_entry_points", "agentic_flow_tracing", "agentic_analyzing", "agentic_reporting", "agentic_complete", "agentic_error", "agentic_scanning"],
+    description: "Deep LLM-powered vulnerability analysis with code flow tracing",
+  },
   {
     name: "Setup",
     icon: "📦",
@@ -75,7 +81,7 @@ const PHASE_CATEGORIES: PhaseCategory[] = [
   {
     name: "Security Scanners",
     icon: "🔍",
-    phases: ["parallel_scanning", "scanning", "sast", "secrets", "eslint", "semgrep", "bandit", "gosec", "spotbugs", "clangtidy"],
+    phases: ["parallel_scanning", "scanning", "sast", "secrets", "eslint", "semgrep", "bandit", "gosec", "spotbugs", "clangtidy", "cppcheck", "php", "brakeman", "cargo_audit"],
     description: "Running SAST security scanners",
   },
   {
@@ -116,9 +122,9 @@ const PHASE_CATEGORIES: PhaseCategory[] = [
   },
   {
     name: "AI Analysis",
-    icon: "🤖",
+    icon: "✨",
     phases: ["ai_analysis"],
-    description: "AI-powered vulnerability analysis",
+    description: "AI-powered false positive detection & attack chains",
   },
   {
     name: "Report",
@@ -144,6 +150,10 @@ const PHASE_LABELS: Record<string, string> = {
   gosec: "Gosec (Go)",
   spotbugs: "SpotBugs (Java)",
   clangtidy: "Clang-Tidy (C/C++)",
+  cppcheck: "Cppcheck (C/C++)",
+  php: "PHP Security Scanner",
+  brakeman: "Brakeman (Ruby)",
+  cargo_audit: "Cargo Audit (Rust)",
   docker: "Docker Scanning",
   iac: "IaC Scanning",
   deduplication: "Deduplicating Findings",
@@ -159,55 +169,197 @@ const PHASE_LABELS: Record<string, string> = {
   reporting: "Generating Report",
   complete: "Complete",
   failed: "Failed",
+  // Agentic AI phases
+  agentic_initializing: "Initializing Agentic AI",
+  agentic_chunking: "Breaking Code into Chunks",
+  agentic_entry_points: "Detecting Entry Points",
+  agentic_flow_tracing: "Tracing Data Flows",
+  agentic_analyzing: "Analyzing Vulnerabilities",
+  agentic_reporting: "Generating AI Report",
+  agentic_complete: "Agentic Scan Complete",
+  agentic_error: "Agentic Scan Error",
+  agentic_scanning: "Agentic AI Scanning",
 };
 
 export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProps) {
   const theme = useTheme();
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isCompleteRef = useRef(false);
+  const maxReconnectAttempts = 10;
+  const baseReconnectDelay = 1000; // 1 second
 
   useEffect(() => {
     if (!scanRunId) return;
 
-    // Connect to WebSocket
-    const wsUrl = `ws://${window.location.hostname}:8000/ws/scans/${scanRunId}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    const connectWebSocket = () => {
+      // Don't reconnect if scan is complete
+      if (isCompleteRef.current) return;
 
-    ws.onopen = () => {
-      console.log("WebSocket connected for scan", scanRunId);
-      setConnected(true);
-    };
+      setReconnecting(reconnectAttemptsRef.current > 0);
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as ScanProgress;
-        setProgress(data);
+      // Connect to WebSocket
+      const wsUrl = `ws://${window.location.hostname}:8000/ws/scans/${scanRunId}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-        // Notify parent when complete
-        if (data.phase === "complete" && onComplete) {
-          onComplete();
+      ws.onopen = () => {
+        console.log("WebSocket connected for scan", scanRunId);
+        setConnected(true);
+        setReconnecting(false);
+        setReconnectAttempt(0);
+        reconnectAttemptsRef.current = 0; // Reset on successful connection
+
+        // Start heartbeat - send ping every 25 seconds to keep connection alive
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send("ping");
+          }
+        }, 25000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          // Handle pong response (keep-alive)
+          if (event.data === "pong") {
+            return;
+          }
+
+          const data = JSON.parse(event.data) as ScanProgress;
+          setProgress(data);
+
+          // Notify parent when complete
+          if (data.phase === "complete" || data.phase === "failed") {
+            isCompleteRef.current = true;
+            if (onComplete) {
+              onComplete();
+            }
+            // Close connection gracefully on completion
+            ws.close(1000, "Scan complete");
+          }
+        } catch (e) {
+          console.error("Failed to parse WebSocket message:", e);
         }
-      } catch (e) {
-        console.error("Failed to parse WebSocket message:", e);
-      }
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        setConnected(false);
+      };
+
+      ws.onclose = (event) => {
+        console.log("WebSocket disconnected", event.code, event.reason);
+        setConnected(false);
+
+        // Clear heartbeat
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+
+        // Only reconnect if scan is not complete and we haven't exceeded max attempts
+        if (!isCompleteRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
+          // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+          const delay = Math.min(baseReconnectDelay * Math.pow(2, reconnectAttemptsRef.current), 30000);
+          reconnectAttemptsRef.current += 1;
+          setReconnectAttempt(reconnectAttemptsRef.current);
+          setReconnecting(true);
+          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectWebSocket();
+          }, delay);
+        } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+          console.error("Max reconnection attempts reached, giving up");
+          setReconnecting(false);
+        }
+      };
     };
 
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      setConnected(false);
-    };
-
-    ws.onclose = () => {
-      console.log("WebSocket disconnected");
-      setConnected(false);
-    };
+    connectWebSocket();
 
     return () => {
-      ws.close();
+      // Cleanup on unmount
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+      if (wsRef.current) {
+        isCompleteRef.current = true; // Prevent reconnection during cleanup
+        wsRef.current.close();
+      }
     };
   }, [scanRunId, onComplete]);
+
+  // Fallback polling when WebSocket fails completely
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  useEffect(() => {
+    if (!scanRunId || connected || isCompleteRef.current) {
+      // Clear polling if connected or complete
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Start polling only after max reconnect attempts
+    if (reconnectAttempt >= maxReconnectAttempts && !pollingIntervalRef.current) {
+      console.log("WebSocket failed, falling back to polling");
+      
+      const pollStatus = async () => {
+        try {
+          // Use the progress endpoint which returns WebSocket-compatible format
+          const response = await fetch(`/api/scans/scan-runs/${scanRunId}/progress`);
+          if (response.ok) {
+            const data = await response.json();
+            setProgress({
+              scan_run_id: data.scan_run_id || scanRunId,
+              phase: data.phase || "unknown",
+              progress: data.progress ?? data.overall_progress ?? 50,
+              message: data.message || `Status: ${data.phase}`,
+              timestamp: data.timestamp || new Date().toISOString(),
+            });
+            
+            if (data.phase === "complete" || data.phase === "failed") {
+              isCompleteRef.current = true;
+              if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+              }
+              if (onComplete) {
+                onComplete();
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Polling failed:", e);
+        }
+      };
+
+      // Poll immediately and then every 5 seconds
+      pollStatus();
+      pollingIntervalRef.current = setInterval(pollStatus, 5000);
+    }
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [scanRunId, connected, reconnectAttempt, onComplete]);
 
   if (!scanRunId) return null;
 
@@ -277,12 +429,26 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
         <Typography variant="h6" fontWeight={600}>
           Scan Progress
         </Typography>
-        <Chip
-          label={connected ? "Live" : "Connecting..."}
-          color={connected ? "success" : "default"}
-          size="small"
-          sx={{ fontWeight: 600 }}
-        />
+        <Tooltip title={
+          connected 
+            ? "Live connection to scan worker" 
+            : reconnecting 
+            ? `Reconnecting... attempt ${reconnectAttempt}/${maxReconnectAttempts}` 
+            : "Disconnected"
+        }>
+          <Chip
+            label={
+              connected 
+                ? "Live" 
+                : reconnecting 
+                ? `Reconnecting (${reconnectAttempt})` 
+                : "Disconnected"
+            }
+            color={connected ? "success" : reconnecting ? "warning" : "error"}
+            size="small"
+            sx={{ fontWeight: 600 }}
+          />
+        </Tooltip>
       </Stack>
 
       <Box sx={{ mb: 2 }}>
@@ -320,13 +486,72 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
         />
       </Box>
 
-      <Typography variant="body2" color="text.secondary">
-        {currentMessage}
-      </Typography>
+      {/* Current Message - Handle multi-line for agentic stats */}
+      {currentPhase.startsWith("agentic_") ? (
+        <AgenticStatsDisplay message={currentMessage} theme={theme} />
+      ) : (
+        <Typography variant="body2" color="text.secondary">
+          {currentMessage}
+        </Typography>
+      )}
 
       {/* Phase Category Display */}
       <PhaseProgressCategories currentPhase={currentPhase} theme={theme} />
     </Paper>
+  );
+}
+
+// Helper component to display agentic scan stats nicely
+interface AgenticStatsDisplayProps {
+  message: string;
+  theme: Theme;
+}
+
+function AgenticStatsDisplay({ message, theme }: AgenticStatsDisplayProps) {
+  // Parse the message to extract stats (format: "🤖 Message\n📄 x/y chunks | 🎯 n entry points | ...")
+  const lines = message.split("\n");
+  const mainMessage = lines[0] || "";
+  const statsLine = lines[1] || "";
+  
+  // Parse individual stats
+  const stats = statsLine.split("|").map(s => s.trim()).filter(Boolean);
+  
+  return (
+    <Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: stats.length > 0 ? 1 : 0 }}>
+        {mainMessage}
+      </Typography>
+      {stats.length > 0 && (
+        <Stack 
+          direction="row" 
+          spacing={1.5} 
+          flexWrap="wrap"
+          sx={{ 
+            gap: 1,
+            p: 1.5,
+            bgcolor: alpha(theme.palette.info.main, 0.08),
+            borderRadius: 1,
+            border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+          }}
+        >
+          {stats.map((stat, index) => (
+            <Chip
+              key={index}
+              label={stat}
+              size="small"
+              sx={{
+                fontWeight: 500,
+                bgcolor: alpha(theme.palette.background.paper, 0.8),
+                border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+                "& .MuiChip-label": {
+                  px: 1,
+                },
+              }}
+            />
+          ))}
+        </Stack>
+      )}
+    </Box>
   );
 }
 
@@ -338,6 +563,18 @@ interface PhaseProgressCategoriesProps {
 
 function PhaseProgressCategories({ currentPhase, theme }: PhaseProgressCategoriesProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [seenPhases, setSeenPhases] = useState<Set<string>>(new Set());
+  
+  // Track phases we've seen to determine what's been completed
+  useEffect(() => {
+    if (currentPhase) {
+      setSeenPhases(prev => new Set([...prev, currentPhase]));
+    }
+  }, [currentPhase]);
+
+  // Build a flat list of all phases in order
+  const allPhases = PHASE_CATEGORIES.flatMap((cat) => cat.phases);
+  const currentPhaseIndex = allPhases.indexOf(currentPhase);
 
   // Determine which category the current phase belongs to
   const getCurrentCategoryIndex = () => {
@@ -345,10 +582,6 @@ function PhaseProgressCategories({ currentPhase, theme }: PhaseProgressCategorie
   };
 
   const currentCategoryIndex = getCurrentCategoryIndex();
-
-  // Find all completed phases
-  const allPhases = PHASE_CATEGORIES.flatMap((cat) => cat.phases);
-  const currentPhaseIndex = allPhases.indexOf(currentPhase);
 
   const toggleCategory = (categoryName: string) => {
     setExpandedCategories((prev) => {
@@ -362,21 +595,42 @@ function PhaseProgressCategories({ currentPhase, theme }: PhaseProgressCategorie
     });
   };
 
+  // Check if any phase in a category has been seen (meaning it ran)
+  const categoryHasBeenSeen = (category: PhaseCategory) => {
+    return category.phases.some(phase => seenPhases.has(phase));
+  };
+
   const getCategoryStatus = (categoryIndex: number, category: PhaseCategory) => {
-    if (categoryIndex < currentCategoryIndex) {
-      return "complete";
-    } else if (categoryIndex === currentCategoryIndex) {
+    // If current phase is in this category, it's active
+    if (category.phases.includes(currentPhase)) {
       return "active";
     }
+    
+    // If we've seen phases from this category, it's complete
+    if (categoryHasBeenSeen(category)) {
+      return "complete";
+    }
+    
+    // If current category index is higher and this category hasn't been seen, it was skipped
+    if (categoryIndex < currentCategoryIndex && !categoryHasBeenSeen(category)) {
+      return "skipped";
+    }
+    
+    // Otherwise pending
     return "pending";
   };
 
   const getPhaseStatus = (phase: string) => {
+    if (phase === currentPhase) {
+      return "active";
+    }
+    if (seenPhases.has(phase)) {
+      return "complete";
+    }
     const phaseIndex = allPhases.indexOf(phase);
     if (phaseIndex < currentPhaseIndex) {
-      return "complete";
-    } else if (phase === currentPhase) {
-      return "active";
+      // Phase was before current but not seen - skipped
+      return "skipped";
     }
     return "pending";
   };
@@ -409,14 +663,19 @@ function PhaseProgressCategories({ currentPhase, theme }: PhaseProgressCategorie
                       ? alpha(theme.palette.primary.main, 0.1)
                       : status === "complete"
                         ? alpha(theme.palette.success.main, 0.05)
-                        : "transparent",
+                        : status === "skipped"
+                          ? alpha(theme.palette.grey[500], 0.05)
+                          : "transparent",
                   border: `1px solid ${
                     status === "active"
                       ? alpha(theme.palette.primary.main, 0.3)
                       : status === "complete"
                         ? alpha(theme.palette.success.main, 0.2)
-                        : "transparent"
+                        : status === "skipped"
+                          ? alpha(theme.palette.grey[500], 0.15)
+                          : "transparent"
                   }`,
+                  opacity: status === "skipped" ? 0.6 : 1,
                   "&:hover": hasMultiplePhases
                     ? {
                         bgcolor: alpha(theme.palette.primary.main, 0.05),
@@ -438,6 +697,10 @@ function PhaseProgressCategories({ currentPhase, theme }: PhaseProgressCategorie
                       animation: `${spinAnimation} 2s linear infinite`,
                     }}
                   />
+                ) : status === "skipped" ? (
+                  <CheckCircleIcon
+                    sx={{ fontSize: 18, color: theme.palette.grey[400] }}
+                  />
                 ) : (
                   <RadioButtonUncheckedIcon
                     sx={{ fontSize: 18, color: theme.palette.text.disabled }}
@@ -445,7 +708,7 @@ function PhaseProgressCategories({ currentPhase, theme }: PhaseProgressCategorie
                 )}
 
                 {/* Category Icon */}
-                <Typography sx={{ fontSize: "1rem" }}>{category.icon}</Typography>
+                <Typography sx={{ fontSize: "1rem", opacity: status === "skipped" ? 0.5 : 1 }}>{category.icon}</Typography>
 
                 {/* Category Name */}
                 <Typography
@@ -458,10 +721,17 @@ function PhaseProgressCategories({ currentPhase, theme }: PhaseProgressCategorie
                         ? theme.palette.primary.main
                         : status === "complete"
                           ? theme.palette.success.main
-                          : theme.palette.text.secondary,
+                          : status === "skipped"
+                            ? theme.palette.grey[500]
+                            : theme.palette.text.secondary,
                   }}
                 >
                   {category.name}
+                  {status === "skipped" && (
+                    <Typography component="span" variant="caption" sx={{ ml: 1, color: theme.palette.grey[500] }}>
+                      (skipped)
+                    </Typography>
+                  )}
                 </Typography>
 
                 {/* Phase count badge for categories with multiple phases */}

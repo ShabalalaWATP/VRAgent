@@ -7,7 +7,7 @@ from backend.core.config import settings
 from backend.core.database import Base, engine
 from backend.core.exceptions import VRAgentError
 from backend.core.logging import get_logger
-from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin
+from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering
 from backend import models  # noqa: F401  # ensure models are registered
 
 logger = get_logger(__name__)
@@ -93,6 +93,9 @@ app.include_router(api_tester.router, tags=["api-tester"])
 app.include_router(fuzzing.router, tags=["security-fuzzer"])
 app.include_router(mitm.router, tags=["mitm-workbench"])
 app.include_router(vulnhuntr.router, tags=["vulnhuntr"])
+app.include_router(agentic_scan.router, tags=["agentic-ai-scan"])
+app.include_router(findings.router, tags=["findings"])
+app.include_router(reverse_engineering.router, tags=["reverse-engineering"])
 
 
 @app.get("/health")

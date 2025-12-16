@@ -1,8 +1,10 @@
 import asyncio
+import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Set, Dict, Any, Callable
+from typing import List, Optional, Set, Dict, Any, Callable, Tuple
 import hashlib
 
 from sqlalchemy.orm import Session
@@ -16,8 +18,10 @@ from backend.services import secret_service, eslint_service, epss_service, semgr
 from backend.services import nvd_service, bandit_service, gosec_service
 from backend.services import spotbugs_service, clangtidy_service
 from backend.services import ai_analysis_service
+from backend.services import php_scanner_service, brakeman_service, cargo_audit_service, cppcheck_service
 from backend.services import deduplication_service, transitive_deps_service, reachability_service
 from backend.services import docker_scan_service, iac_scan_service
+from backend.services import sensitive_data_service
 from backend.services.codebase_service import (
     create_code_chunks,
     iter_source_files,
@@ -30,16 +34,45 @@ from backend.services.webhook_service import notify_scan_complete, get_webhooks
 
 logger = get_logger(__name__)
 
-# Maximum parallel scanners (don't overwhelm the system)
-MAX_PARALLEL_SCANNERS = settings.max_parallel_scanners
+# Dynamically determine optimal parallelism based on available CPUs
+CPU_COUNT = os.cpu_count() or 4
+# Maximum parallel scanners - optimize based on CPU cores (I/O bound so 2x cores works well)
+MAX_PARALLEL_SCANNERS = min(settings.max_parallel_scanners, max(4, CPU_COUNT * 2))
 # Maximum parallel phases for concurrent execution
-MAX_PARALLEL_PHASES = 4
+MAX_PARALLEL_PHASES = min(4, CPU_COUNT)
+# Parallel file processing workers (I/O bound)
+MAX_FILE_PROCESSORS = min(8, CPU_COUNT * 2)
 # Batch size for processing files in large codebases
 FILE_PROCESSING_BATCH_SIZE = 100
 # Maximum total chunks to process (prevents memory issues on huge repos)
 MAX_TOTAL_CHUNKS = settings.max_total_chunks
 # Memory-efficient chunk limit before flushing to DB
 CHUNK_FLUSH_THRESHOLD = settings.chunk_flush_threshold
+
+# Files to skip entirely (faster filtering)
+SKIP_EXTENSIONS: Set[str] = {
+    '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.webp', '.bmp', '.tiff',
+    '.mp3', '.mp4', '.wav', '.avi', '.mov', '.mkv', '.flv',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+    '.zip', '.tar', '.gz', '.rar', '.7z', '.bz2',
+    '.exe', '.dll', '.so', '.dylib', '.bin', '.wasm',
+    '.ttf', '.woff', '.woff2', '.eot', '.otf',
+    '.pyc', '.pyo', '.class', '.o', '.obj',
+    '.min.js', '.min.css',  # Minified files
+}
+
+# Directories to skip entirely
+SKIP_DIRS: Set[str] = {
+    'node_modules', '__pycache__', '.git', '.svn', '.hg',
+    'venv', '.venv', 'env', '.env', 'virtualenv',
+    'dist', 'build', 'target', 'out', 'bin', 'obj',
+    '.idea', '.vscode', '.vs',
+    'coverage', '.nyc_output', 'htmlcov',
+    '.next', '.nuxt', '.cache',
+}
+
+# Maximum file size to process (skip huge generated files)
+MAX_FILE_SIZE = 1024 * 1024  # 1MB
 
 
 # Thread-safe progress tracking for parallel phases
@@ -258,6 +291,180 @@ def _detect_language(path: Path) -> str:
     return mapping.get(ext, "unknown")
 
 
+def _should_skip_file(file_path: Path) -> bool:
+    """
+    Fast check to determine if a file should be skipped.
+    Returns True for binary, large, or irrelevant files.
+    """
+    # Check extension
+    ext = file_path.suffix.lower()
+    if ext in SKIP_EXTENSIONS:
+        return True
+    
+    # Check for minified files (common pattern)
+    name = file_path.name.lower()
+    if name.endswith('.min.js') or name.endswith('.min.css'):
+        return True
+    
+    # Check if in skip directory
+    parts = file_path.parts
+    for part in parts:
+        if part.lower() in SKIP_DIRS:
+            return True
+    
+    # Check file size (skip large files)
+    try:
+        if file_path.stat().st_size > MAX_FILE_SIZE:
+            return True
+    except (OSError, IOError):
+        pass
+    
+    return False
+
+
+def _filter_source_files_fast(source_root: Path, files: List[Path]) -> List[Path]:
+    """
+    Fast parallel filtering of source files.
+    Returns only files that should be processed.
+    """
+    filtered = []
+    skipped = 0
+    
+    for f in files:
+        if not _should_skip_file(f):
+            filtered.append(f)
+        else:
+            skipped += 1
+    
+    if skipped > 0:
+        logger.debug(f"Fast filter: skipped {skipped} files (binary/large/irrelevant)")
+    
+    return filtered
+
+
+def _process_single_file(args: Tuple[Path, Path, int]) -> Tuple[Optional[str], List[Any], Optional[List[models.Finding]]]:
+    """
+    Process a single file: read, chunk, and run static checks.
+    Designed to be called in parallel.
+    
+    Args:
+        args: Tuple of (file_path, source_root, project_id)
+        
+    Returns:
+        Tuple of (file_path, chunks, static_findings) or None on error
+    """
+    file_path, source_root, project_id = args
+    
+    try:
+        # Skip if file should be filtered
+        if _should_skip_file(file_path):
+            return None, [], None
+        
+        # Read file content
+        try:
+            contents = file_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return None, [], None
+        
+        # Skip empty or very small files
+        if len(contents) < 10:
+            return None, [], None
+        
+        # Split into chunks
+        chunks = split_into_chunks(contents)
+        
+        # Limit chunks per file to prevent single file domination
+        if len(chunks) > 50:
+            chunks = chunks[:50]
+        
+        # Run static pattern checks
+        findings = _static_checks(file_path, contents)
+        
+        # Get relative path
+        try:
+            rel_path = str(file_path.relative_to(source_root))
+        except ValueError:
+            rel_path = str(file_path)
+        
+        return rel_path, chunks, findings
+        
+    except Exception as e:
+        logger.debug(f"Error processing file {file_path}: {e}")
+        return None, [], None
+
+
+def _process_files_parallel(
+    source_root: Path,
+    files: List[Path],
+    project: models.Project,
+    progress_callback: Optional[Callable[[int, str], None]] = None
+) -> Tuple[List[Tuple[str, List[Any]]], List[models.Finding]]:
+    """
+    Process multiple files in parallel for chunking and static analysis.
+    
+    Returns:
+        Tuple of (list of (file_path, chunks), list of static findings)
+    """
+    all_results = []
+    all_findings = []
+    processed = 0
+    total = len(files)
+    
+    # Prepare args for parallel processing
+    args_list = [(f, source_root, project.id) for f in files]
+    
+    # Use ThreadPoolExecutor for I/O-bound file reading
+    with ThreadPoolExecutor(max_workers=MAX_FILE_PROCESSORS) as executor:
+        # Submit all tasks
+        futures = {executor.submit(_process_single_file, args): args[0] for args in args_list}
+        
+        # Collect results as they complete
+        for future in as_completed(futures):
+            try:
+                rel_path, chunks, findings = future.result(timeout=30)
+                
+                if rel_path and chunks:
+                    all_results.append((rel_path, chunks))
+                
+                if findings:
+                    all_findings.extend(findings)
+                
+                processed += 1
+                
+                # Progress update every 50 files
+                if progress_callback and processed % 50 == 0:
+                    progress_callback(processed, f"Processed {processed}/{total} files")
+                    
+            except Exception as e:
+                logger.debug(f"File processing failed: {e}")
+                processed += 1
+    
+    return all_results, all_findings
+
+
+def _get_file_hashes(files: List[Path]) -> Dict[str, str]:
+    """
+    Compute hashes for files in parallel.
+    Returns dict mapping relative path to content hash.
+    """
+    hashes = {}
+    
+    def hash_file(f: Path) -> Tuple[str, Optional[str]]:
+        try:
+            content = f.read_bytes()
+            return str(f), hashlib.md5(content).hexdigest()
+        except Exception:
+            return str(f), None
+    
+    with ThreadPoolExecutor(max_workers=MAX_FILE_PROCESSORS) as executor:
+        results = executor.map(hash_file, files)
+        for path, h in results:
+            if h:
+                hashes[path] = h
+    
+    return hashes
+
+
 def _compute_code_hash(code: str) -> str:
     """Compute a hash of code content for change detection."""
     return hashlib.sha256(code.encode()).hexdigest()[:32]
@@ -345,44 +552,95 @@ def _run_scanners_parallel(source_root: Path, timeout_per_scanner: int = None) -
         "gosec": [],
         "spotbugs": [],
         "clangtidy": [],
+        "cppcheck": [],
         "eslint": [],
         "secrets": [],
+        "php": [],
+        "brakeman": [],
+        "cargo_audit": [],
     }
     
+    # Detect project languages for smart scanner selection
+    from backend.services.git_service import detect_project_languages
+    detected_languages = detect_project_languages(str(source_root))
+    language_set = set(detected_languages.keys())
+    
     # Define scanner tasks: (name, check_available_func, run_func)
+    # Only run scanners relevant to detected languages
     scanner_tasks = []
     
-    # Semgrep (all languages)
+    # Semgrep (all languages) - always useful as fallback
     if semgrep_service.is_semgrep_available():
         scanner_tasks.append(("semgrep", lambda: semgrep_service.run_security_audit(source_root)))
     
-    # Bandit (Python)
-    if bandit_service.is_bandit_available():
+    # Bandit (Python) - only if Python files detected
+    if bandit_service.is_bandit_available() and 'python' in language_set:
         scanner_tasks.append(("bandit", lambda: bandit_service.run_security_audit(source_root)))
+    elif 'python' not in language_set:
+        logger.debug("Skipping Bandit - no Python files detected")
     
-    # gosec (Go)
-    if gosec_service.is_gosec_available():
+    # gosec (Go) - only if Go files detected
+    if gosec_service.is_gosec_available() and 'go' in language_set:
         scanner_tasks.append(("gosec", lambda: gosec_service.run_security_audit(source_root)))
+    elif 'go' not in language_set:
+        logger.debug("Skipping gosec - no Go files detected")
     
-    # SpotBugs (Java)
-    if spotbugs_service.is_spotbugs_available():
+    # SpotBugs (Java/Kotlin) - only if Java/Kotlin files detected
+    if spotbugs_service.is_spotbugs_available() and language_set & {'java', 'kotlin'}:
         scanner_tasks.append(("spotbugs", lambda: spotbugs_service.run_security_audit(source_root)))
+    elif not language_set & {'java', 'kotlin'}:
+        logger.debug("Skipping SpotBugs - no Java/Kotlin files detected")
     
-    # clang-tidy (C/C++)
-    if clangtidy_service.is_clangtidy_available():
+    # clang-tidy (C/C++) - only if C/C++ files detected
+    if clangtidy_service.is_clangtidy_available() and language_set & {'c', 'cpp'}:
         scanner_tasks.append(("clangtidy", lambda: clangtidy_service.run_security_audit(source_root)))
+    elif not language_set & {'c', 'cpp'}:
+        logger.debug("Skipping clang-tidy - no C/C++ files detected")
     
-    # ESLint (JS/TS) - always available (falls back gracefully)
-    scanner_tasks.append(("eslint", lambda: eslint_service.run_eslint_security_scan(str(source_root))))
+    # Cppcheck (C/C++) - complementary scanner for additional coverage
+    if cppcheck_service.is_cppcheck_available() and language_set & {'c', 'cpp'}:
+        scanner_tasks.append(("cppcheck", lambda: cppcheck_service.run_security_audit(source_root)))
+    elif not language_set & {'c', 'cpp'}:
+        logger.debug("Skipping Cppcheck - no C/C++ files detected")
+    else:
+        logger.debug("Skipping Cppcheck - cppcheck not available")
     
-    # Secret scanner (Python-based, always available)
+    # ESLint (JS/TS) - only if JavaScript/TypeScript files detected
+    if language_set & {'javascript', 'typescript'}:
+        scanner_tasks.append(("eslint", lambda: eslint_service.run_eslint_security_scan(str(source_root))))
+    else:
+        logger.debug("Skipping ESLint - no JS/TS files detected")
+    
+    # PHP Scanner (PHP) - only if PHP files detected
+    if php_scanner_service.is_progpilot_available() and 'php' in language_set:
+        scanner_tasks.append(("php", lambda: php_scanner_service.run_security_audit(source_root)))
+    elif 'php' not in language_set:
+        logger.debug("Skipping PHP scanner - no PHP files detected")
+    else:
+        logger.debug("Skipping PHP scanner - progpilot not available")
+    
+    # Brakeman (Ruby) - only if Ruby files detected
+    if brakeman_service.is_brakeman_available() and 'ruby' in language_set:
+        scanner_tasks.append(("brakeman", lambda: brakeman_service.run_security_audit(source_root)))
+    elif 'ruby' not in language_set:
+        logger.debug("Skipping Brakeman - no Ruby files detected")
+    else:
+        logger.debug("Skipping Brakeman - brakeman not available")
+    
+    # Cargo Audit (Rust) - only if Rust files detected
+    if 'rust' in language_set:
+        scanner_tasks.append(("cargo_audit", lambda: cargo_audit_service.run_security_audit(source_root)))
+    else:
+        logger.debug("Skipping Cargo Audit - no Rust files detected")
+    
+    # Secret scanner (Python-based, always available) - always run
     scanner_tasks.append(("secrets", lambda: secret_service.scan_directory(str(source_root))))
     
     if not scanner_tasks:
         logger.warning("No scanners available")
         return results
     
-    logger.info(f"Running {len(scanner_tasks)} scanners in parallel: {[t[0] for t in scanner_tasks]}")
+    logger.info(f"Smart scanner selection: Running {len(scanner_tasks)} scanners for languages {list(language_set)}: {[t[0] for t in scanner_tasks]}")
     
     # Run scanners in parallel with individual timeouts
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SCANNERS) as executor:
@@ -710,7 +968,12 @@ def _static_checks(file_path: Path, contents: str) -> List[models.Finding]:
     return findings
 
 
-def run_scan(db: Session, project: models.Project, scan_run: Optional[models.ScanRun] = None) -> models.Report:
+def run_scan(
+    db: Session, 
+    project: models.Project, 
+    scan_run: Optional[models.ScanRun] = None,
+    agentic_findings: Optional[List[models.Finding]] = None
+) -> models.Report:
     """
     Execute a full vulnerability scan on a project.
     
@@ -728,6 +991,7 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
         db: Database session
         project: Project model to scan
         scan_run: Optional existing ScanRun to update
+        agentic_findings: Optional list of findings from agentic AI scan to include
         
     Returns:
         Generated Report model
@@ -755,7 +1019,12 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
     # Broadcast scan started
     _broadcast_progress(scan_run.id, "initializing", 0, "Scan started")
 
+    # Initialize findings list - include any agentic findings passed in
     findings: List[models.Finding] = []
+    if agentic_findings:
+        findings.extend(agentic_findings)
+        logger.info(f"Including {len(agentic_findings)} agentic AI findings in scan")
+    
     try:
         if not project.upload_path:
             raise ScanError("Project has no uploaded archive to scan", project_id=project.id)
@@ -768,46 +1037,58 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
         all_chunks: List[models.CodeChunk] = []
         file_count = 0
         
-        # Phase 2: Parse source files with streaming for large codebases (10-30%)
+        # Phase 2: Parse source files with PARALLEL processing (10-30%)
         _broadcast_progress(scan_run.id, "parsing", 10, "Parsing source files")
+        scan_start = time.time()
         
-        # Collect all source files first to show progress
+        # Collect and filter source files
         source_files = list(iter_source_files(source_root))
-        total_files = len(source_files)
-        logger.info(f"Found {total_files} source files to process")
+        total_files_raw = len(source_files)
         
-        # Process files in batches for memory efficiency
+        # Fast filter to remove binary/irrelevant files
+        source_files = _filter_source_files_fast(source_root, source_files)
+        total_files = len(source_files)
+        skipped_files = total_files_raw - total_files
+        
+        logger.info(f"Found {total_files} source files to process (skipped {skipped_files} irrelevant)")
+        _broadcast_progress(scan_run.id, "parsing", 12, f"Processing {total_files} files ({skipped_files} skipped)")
+        
+        # Progress callback for parallel processing
+        def parsing_progress(processed: int, msg: str):
+            progress_pct = 12 + int((processed / total_files) * 18) if total_files > 0 else 12
+            _broadcast_progress(scan_run.id, "parsing", progress_pct, msg)
+        
+        # Process files in PARALLEL using ThreadPoolExecutor
         processed_files = 0
         total_chunks_created = 0
         chunks_buffer: List[models.CodeChunk] = []
         
-        for file_path in source_files:
+        # Use parallel processing for file reading and chunking
+        file_results, static_findings = _process_files_parallel(
+            source_root, source_files, project, parsing_progress
+        )
+        
+        # Add static findings
+        findings.extend(static_findings)
+        
+        # Convert results to CodeChunks and commit in batches
+        for rel_path, chunks in file_results:
             try:
                 # Check if we've hit the chunk limit
                 if total_chunks_created >= MAX_TOTAL_CHUNKS:
-                    logger.warning(f"Reached max chunk limit ({MAX_TOTAL_CHUNKS}), skipping remaining files")
+                    logger.warning(f"Reached max chunk limit ({MAX_TOTAL_CHUNKS}), stopping")
                     _broadcast_progress(
                         scan_run.id, "parsing", 28, 
-                        f"Chunk limit reached, processed {processed_files}/{total_files} files"
+                        f"Chunk limit reached at {total_chunks_created} chunks"
                     )
                     break
                 
-                contents = file_path.read_text(encoding="utf-8", errors="ignore")
-                
-                # Pass file path for language-specific chunking
-                chunks = split_into_chunks(contents, str(file_path))
-                
-                # Limit chunks per file to prevent single file domination
-                if len(chunks) > 50:
-                    logger.debug(f"Limiting {len(chunks)} chunks to 50 for {file_path}")
-                    chunks = chunks[:50]
-                
-                db_chunks = create_code_chunks(project, source_root, file_path, _detect_language(file_path), chunks)
+                # Create CodeChunk models
+                file_path = source_root / rel_path
+                language = _detect_language(file_path)
+                db_chunks = create_code_chunks(project, source_root, file_path, language, chunks)
                 chunks_buffer.extend(db_chunks)
                 total_chunks_created += len(db_chunks)
-                
-                # Static checks
-                findings.extend(_static_checks(file_path, contents))
                 processed_files += 1
                 
                 # Flush buffer periodically to prevent memory buildup
@@ -816,16 +1097,9 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
                     db.add_all(chunks_buffer)
                     db.commit()
                     chunks_buffer = []
-                    
-                    # Update progress
-                    progress_pct = 10 + int((processed_files / total_files) * 20)
-                    _broadcast_progress(
-                        scan_run.id, "parsing", progress_pct, 
-                        f"Processed {processed_files}/{total_files} files ({total_chunks_created} chunks)"
-                    )
                 
             except Exception as e:
-                logger.warning(f"Error processing file {file_path}: {e}")
+                logger.warning(f"Error creating chunks for {rel_path}: {e}")
                 continue
         
         # Flush remaining chunks
@@ -835,8 +1109,9 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
             db.commit()
         
         file_count = processed_files
-        logger.info(f"Processed {file_count} source files, {len(all_chunks)} code chunks")
-        _broadcast_progress(scan_run.id, "parsing", 30, f"Parsed {file_count} files, {len(all_chunks)} chunks")
+        parse_time = time.time() - scan_start
+        logger.info(f"Processed {file_count} source files, {len(all_chunks)} code chunks in {parse_time:.1f}s")
+        _broadcast_progress(scan_run.id, "parsing", 30, f"Parsed {file_count} files, {len(all_chunks)} chunks ({parse_time:.1f}s)")
 
         # Phase 3: Generate embeddings (30-45%)
         # Check if we should skip embeddings entirely
@@ -961,6 +1236,13 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
             )
         else:
             _broadcast_progress(scan_run.id, "deduplication", 72, "No duplicates found")
+        
+        # Cross-file correlation analysis
+        cross_file_correlations = deduplication_service.correlate_cross_file_findings(findings)
+        if cross_file_correlations:
+            logger.info(f"Found {len(cross_file_correlations)} cross-file correlations")
+            # Store correlations in dedup_stats for report
+            dedup_stats["cross_file_correlations"] = cross_file_correlations[:20]  # Limit for report
 
         # Phase 9: Save dependencies from parallel phase (72-75%)
         _broadcast_progress(scan_run.id, "dependencies", 72, "Saving dependencies")
@@ -1218,11 +1500,13 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
                 if ai_result:
                     from sqlalchemy.orm.attributes import flag_modified
                     
-                    # Store AI summary for report
+                    # Store AI summary for report (including agentic corroboration stats)
                     ai_summary = {
                         "findings_analyzed": ai_result.findings_analyzed,
                         "false_positives_detected": ai_result.false_positives_detected,
                         "severity_adjustments": ai_result.severity_adjustments,
+                        "agentic_corroborated": ai_result.agentic_corroborated,
+                        "filtered_out": ai_result.filtered_out,
                     }
                     
                     # Convert attack chains to dicts for storage
@@ -1236,25 +1520,46 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
                             "likelihood": chain.likelihood,
                         })
                     
-                    # Apply results to findings
+                    # Apply results to findings and track filtered findings
+                    filtered_finding_ids = []
                     for f in findings:
                         if f.id in ai_result.analysis_results:
                             result = ai_result.analysis_results[f.id]
+                            
+                            # Check if this finding should be filtered out
+                            # Filter criteria: high FP score AND not from agentic scan AND not corroborated
+                            is_agentic = f.type.startswith("agentic-") or (f.details and f.details.get("source") == "agentic_ai")
+                            should_filter = (
+                                result.false_positive_score >= 0.6 and 
+                                not is_agentic and
+                                "Corroborated by Agentic AI" not in (result.false_positive_reason or "")
+                            )
+                            
                             # Store AI analysis in details (must create new dict for SQLAlchemy)
                             new_details = dict(f.details) if f.details else {}
                             new_details["ai_analysis"] = {
                                 "is_false_positive": result.false_positive_score >= 0.5,
+                                "false_positive_score": result.false_positive_score,
                                 "false_positive_reason": result.false_positive_reason,
                                 "severity_adjusted": result.adjusted_severity is not None,
                                 "original_severity": f.severity if result.adjusted_severity else None,
                                 "severity_reason": result.severity_reason,
                                 "data_flow_summary": result.data_flow,
+                                "filtered_out": should_filter,
                             }
                             f.details = new_details
                             flag_modified(f, "details")
+                            
                             # Update severity if adjusted
                             if result.adjusted_severity:
                                 f.severity = result.adjusted_severity
+                            
+                            if should_filter:
+                                filtered_finding_ids.append(f.id)
+                    
+                    # Log filtered findings
+                    if filtered_finding_ids:
+                        logger.info(f"AI Analysis filtered out {len(filtered_finding_ids)} likely false positive findings")
                     
                     # Store attack chain info in findings
                     for chain in ai_result.attack_chains:
@@ -1271,17 +1576,27 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
                     db.commit()
                     logger.info(f"AI analysis complete: {ai_result.false_positives_detected} likely false positives, "
                                f"{ai_result.severity_adjustments} severity adjustments, "
-                               f"{len(ai_result.attack_chains)} attack chains")
+                               f"{len(ai_result.attack_chains)} attack chains, "
+                               f"{ai_result.agentic_corroborated} agentic-corroborated")
             except Exception as e:
                 logger.warning(f"AI analysis failed (non-critical): {e}")
         
         # Phase 13: Generate report (94-98%)
         _broadcast_progress(scan_run.id, "reporting", 94, "Generating report")
+        # Build sensitive data inventory for UI (non-blocking; may be AI-enhanced if configured)
+        sensitive_inventory: Dict[str, Any] = {}
+        try:
+            sensitive_inventory = sensitive_data_service.build_sensitive_data_inventory(source_root, findings)
+        except Exception as e:
+            logger.warning(f"Sensitive data inventory generation failed (non-critical): {e}")
+            sensitive_inventory = {"error": str(e)}
+
         # Include deduplication and analysis stats in report
         scan_stats = {
             "deduplication": dedup_stats if 'dedup_stats' in dir() else {},
             "transitive_analysis": tree_stats if 'tree_stats' in dir() else {},
             "reachability": reachability_summary if reachability_summary else {},
+            "sensitive_data_inventory": sensitive_inventory,
             "docker": {
                 "dockerfiles_scanned": docker_result.dockerfiles_scanned if docker_result else 0,
                 "images_scanned": docker_result.images_scanned if docker_result else 0,
@@ -1307,10 +1622,21 @@ def run_scan(db: Session, project: models.Project, scan_run: Optional[models.Sca
         db.add(scan_run)
         db.commit()
         
-        # Phase 14: Complete (100%)
-        _broadcast_progress(scan_run.id, "complete", 100, f"Scan complete. {len(findings)} findings")
+        # Calculate total scan time
+        total_scan_time = time.time() - scan_start
         
-        logger.info(f"Scan completed successfully. Report ID: {report.id}")
+        # Phase 14: Complete (100%)
+        _broadcast_progress(scan_run.id, "complete", 100, f"Scan complete. {len(findings)} findings in {total_scan_time:.1f}s")
+        
+        # Log performance summary
+        logger.info(
+            f"✅ Scan completed for '{project.name}' (ID: {project.id})\n"
+            f"   📊 Performance: {total_scan_time:.1f}s total ({file_count} files, {len(all_chunks)} chunks)\n"
+            f"   🔍 Findings: {len(findings)} total | "
+            f"SAST: {len(scanner_findings)} | Docker: {docker_findings_count} | IaC: {iac_findings_count}\n"
+            f"   📦 Dependencies: {len(deps)} packages, {len(vulns)} CVEs\n"
+            f"   ⚙️ System: {CPU_COUNT} CPUs, {MAX_PARALLEL_SCANNERS} parallel scanners"
+        )
         
         # Send webhook notifications
         webhooks = get_webhooks(project.id)

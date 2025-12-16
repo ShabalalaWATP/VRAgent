@@ -113,6 +113,7 @@ async def analyze_pcaps(
     include_ai: bool = Query(True, description="Include AI-powered analysis"),
     max_packets: int = Query(100000, ge=1000, le=1000000, description="Max packets to analyze per file"),
     save_report: bool = Query(True, description="Save the analysis report to database"),
+    project_id: Optional[int] = Query(None, description="Associate report with a project"),
     db: Session = Depends(get_db),
 ):
     """
@@ -299,6 +300,7 @@ async def analyze_pcaps(
                     findings_data=findings_data,
                     ai_report=ai_report_data,
                     created_at=datetime.utcnow(),
+                    project_id=project_id,
                 )
                 db.add(db_report)
                 db.commit()

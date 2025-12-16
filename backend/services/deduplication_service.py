@@ -178,6 +178,25 @@ def _get_vulnerability_category(finding: Any) -> str:
     summary = (finding.summary or "").lower()
     finding_type = (finding.type or "").lower()
     
+    # Check for agentic AI findings first (type is "agentic-SQL Injection" etc)
+    if finding_type.startswith("agentic-"):
+        vuln_type = finding_type.replace("agentic-", "").lower().replace(" ", "_")
+        # Map common agentic vulnerability types
+        agentic_categories = {
+            "sql_injection": "sql_injection",
+            "command_injection": "command_injection",
+            "cross-site_scripting": "xss",
+            "xss": "xss",
+            "path_traversal": "path_traversal",
+            "ssrf": "ssrf",
+            "server-side_request_forgery": "ssrf",
+            "xxe": "xxe",
+            "xml_external_entity": "xxe",
+            "insecure_deserialization": "insecure_deserialization",
+            "code_injection": "code_injection",
+        }
+        return agentic_categories.get(vuln_type, vuln_type)
+    
     # Try rule ID first (most specific)
     rule_id = (
         details.get("rule_id") or 
@@ -264,6 +283,10 @@ def _get_scanner_name(finding: Any) -> str:
     """Get the scanner name from a finding type."""
     finding_type = (finding.type or "").lower()
     
+    # Check for agentic AI scan first (type is "agentic-SQL Injection" etc)
+    if finding_type.startswith("agentic-"):
+        return "Agentic AI"
+    
     scanner_map = {
         "semgrep": "Semgrep",
         "bandit": "Bandit",
@@ -303,6 +326,7 @@ def _select_primary_finding(findings: List[Any]) -> Any:
     3. From more trusted scanner (Semgrep > Bandit > ESLint > Pattern)
     """
     scanner_trust = {
+        "Agentic AI": 6,  # Highest trust - LLM-powered with flow tracing
         "Semgrep": 5,
         "SpotBugs": 4,
         "Bandit": 4,
@@ -569,3 +593,110 @@ def get_deduplication_summary(findings: List[Any]) -> Dict[str, Any]:
         "potential_duplicates": potential_duplicates,
         "duplicate_groups": sum(1 for count in fingerprint_counts.values() if count > 1),
     }
+
+
+def correlate_cross_file_findings(findings: List[Any]) -> List[Dict[str, Any]]:
+    """
+    Correlate findings across different files to identify potential attack paths.
+    
+    This identifies when an entry point in one file connects to a sink in another,
+    suggesting a potential vulnerability flow across the codebase.
+    
+    Returns:
+        List of correlation groups with related findings
+    """
+    correlations = []
+    
+    # Index findings by category and file
+    by_category: Dict[str, List[Any]] = defaultdict(list)
+    entry_points: List[Any] = []
+    sinks: List[Any] = []
+    
+    ENTRY_POINT_PATTERNS = {
+        "request", "input", "param", "query", "body", "form",
+        "get", "post", "route", "endpoint", "handler", "api"
+    }
+    
+    SINK_PATTERNS = {
+        "sql", "exec", "eval", "system", "popen", "shell",
+        "write", "save", "store", "insert", "update", "delete",
+        "render", "response", "output", "send"
+    }
+    
+    for finding in findings:
+        category = _get_vulnerability_category(finding)
+        by_category[category].append(finding)
+        
+        summary_lower = (finding.summary or "").lower()
+        file_lower = (finding.file_path or "").lower()
+        
+        # Identify entry points
+        if any(p in summary_lower or p in file_lower for p in ENTRY_POINT_PATTERNS):
+            entry_points.append(finding)
+        
+        # Identify sinks
+        if any(p in summary_lower for p in SINK_PATTERNS):
+            sinks.append(finding)
+    
+    # Look for cross-file correlations
+    # Pattern 1: Entry point in one file, sink in another
+    for entry in entry_points:
+        entry_file = entry.file_path or ""
+        for sink in sinks:
+            sink_file = sink.file_path or ""
+            
+            # Skip same file (already correlated by other means)
+            if entry_file == sink_file:
+                continue
+            
+            # Look for module relationship (e.g., routes.py -> models.py)
+            entry_module = entry_file.split("/")[-1].replace(".py", "").replace(".js", "")
+            sink_module = sink_file.split("/")[-1].replace(".py", "").replace(".js", "")
+            
+            # Check if these could be connected (same directory, import relationship, etc.)
+            entry_dir = "/".join(entry_file.split("/")[:-1])
+            sink_dir = "/".join(sink_file.split("/")[:-1])
+            
+            if entry_dir == sink_dir or abs(len(entry_dir) - len(sink_dir)) <= 2:
+                correlations.append({
+                    "type": "cross_file_flow",
+                    "entry_point": {
+                        "file": entry_file,
+                        "line": entry.start_line,
+                        "summary": entry.summary,
+                        "finding_id": entry.id if hasattr(entry, 'id') else None,
+                    },
+                    "sink": {
+                        "file": sink_file,
+                        "line": sink.start_line,
+                        "summary": sink.summary,
+                        "finding_id": sink.id if hasattr(sink, 'id') else None,
+                    },
+                    "risk": "high" if _get_vulnerability_category(sink) in 
+                        ("sql_injection", "command_injection", "code_injection") else "medium",
+                    "description": f"User input from {entry_module} may flow to {sink_module}",
+                })
+    
+    # Pattern 2: Same vulnerability type across related files
+    for category, cat_findings in by_category.items():
+        if len(cat_findings) >= 2:
+            # Group by directory
+            by_dir: Dict[str, List[Any]] = defaultdict(list)
+            for f in cat_findings:
+                dir_path = "/".join((f.file_path or "").split("/")[:-1])
+                by_dir[dir_path].append(f)
+            
+            for dir_path, dir_findings in by_dir.items():
+                if len(dir_findings) >= 2:
+                    correlations.append({
+                        "type": "category_cluster",
+                        "category": category,
+                        "directory": dir_path,
+                        "finding_count": len(dir_findings),
+                        "finding_ids": [f.id for f in dir_findings if hasattr(f, 'id')],
+                        "description": f"Multiple {category} issues in {dir_path} ({len(dir_findings)} findings)",
+                        "risk": "high" if category in ("sql_injection", "command_injection") else "medium",
+                    })
+    
+    logger.info(f"Found {len(correlations)} cross-file correlations")
+    return correlations

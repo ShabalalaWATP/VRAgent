@@ -68,6 +68,8 @@ class ConnectionManager:
         self._connections: Dict[int, Set[WebSocket]] = {}
         # Map of project_id -> set of connected WebSockets (for project-level subscriptions)
         self._project_connections: Dict[int, Set[WebSocket]] = {}
+        # Cache of last progress for each scan (for reconnecting clients)
+        self._last_progress: Dict[int, str] = {}  # scan_run_id -> JSON string
         self._lock = asyncio.Lock()
     
     async def connect(self, websocket: WebSocket, scan_run_id: Optional[int] = None, project_id: Optional[int] = None):
@@ -80,6 +82,14 @@ class ConnectionManager:
                     self._connections[scan_run_id] = set()
                 self._connections[scan_run_id].add(websocket)
                 logger.debug(f"WebSocket connected for scan_run {scan_run_id}")
+                
+                # Send last known progress immediately on reconnect
+                if scan_run_id in self._last_progress:
+                    try:
+                        await websocket.send_text(self._last_progress[scan_run_id])
+                        logger.debug(f"Sent cached progress to reconnecting client for scan {scan_run_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to send cached progress: {e}")
             
             if project_id:
                 if project_id not in self._project_connections:
@@ -108,6 +118,20 @@ class ConnectionManager:
         disconnected = []
         
         async with self._lock:
+            # Cache the last progress for reconnecting clients
+            self._last_progress[progress.scan_run_id] = message
+            
+            # Clean up old completed scans from cache (keep only last 100)
+            if progress.phase in (ScanPhase.COMPLETE, ScanPhase.FAILED):
+                # Schedule cleanup after a delay to allow final reconnects
+                pass  # Keep it for reconnecting clients
+            
+            if len(self._last_progress) > 100:
+                # Remove oldest entries (simple FIFO cleanup)
+                oldest_keys = list(self._last_progress.keys())[:-100]
+                for key in oldest_keys:
+                    del self._last_progress[key]
+            
             # Send to scan-specific subscribers
             for ws in self._connections.get(progress.scan_run_id, set()):
                 try:
@@ -134,6 +158,15 @@ class ConnectionManager:
         if project_id and project_id in self._project_connections:
             count += len(self._project_connections[project_id])
         return count
+    
+    def get_cached_progress(self, scan_run_id: int) -> Optional[str]:
+        """Get the last cached progress for a scan (for HTTP fallback)."""
+        return self._last_progress.get(scan_run_id)
+    
+    def clear_scan_cache(self, scan_run_id: int):
+        """Clear cached progress for a completed scan."""
+        if scan_run_id in self._last_progress:
+            del self._last_progress[scan_run_id]
 
 
 # Global connection manager instance

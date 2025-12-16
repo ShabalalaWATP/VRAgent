@@ -738,6 +738,7 @@ class SessionCreateRequest(BaseModel):
     method: str = "GET"
     config: Dict[str, Any] = Field(default_factory=dict)
     tags: List[str] = Field(default_factory=list)
+    project_id: Optional[int] = Field(default=None, description="Associate session with a project")
 
 
 class SessionUpdateRequest(BaseModel):
@@ -776,6 +777,7 @@ async def create_session(request: SessionCreateRequest, db: Session = Depends(ge
             config=request.config,
             tags=request.tags,
             status="created",
+            project_id=request.project_id,
         )
         db.add(session)
         db.commit()
@@ -801,6 +803,7 @@ async def list_sessions(
     page_size: int = 20,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    project_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     """List all fuzzing sessions with pagination and filtering."""
@@ -815,6 +818,8 @@ async def list_sessions(
                 FuzzingSession.name.ilike(f"%{search}%") |
                 FuzzingSession.target_url.ilike(f"%{search}%")
             )
+        if project_id is not None:
+            query = query.filter(FuzzingSession.project_id == project_id)
         
         # Get total count
         total = query.count()
@@ -843,6 +848,7 @@ async def list_sessions(
                     "avg_response_time": s.avg_response_time,
                     "tags": s.tags or [],
                     "findings_count": len(s.findings) if s.findings else 0,
+                    "project_id": s.project_id,
                 }
                 for s in sessions
             ],

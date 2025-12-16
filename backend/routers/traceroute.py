@@ -39,6 +39,7 @@ class TracerouteRequest(BaseModel):
     resolve_hostnames: bool = Field(default=True, description="Resolve IP addresses to hostnames")
     save_report: bool = Field(default=True, description="Save report to database")
     report_title: Optional[str] = Field(default=None, description="Custom title for saved report")
+    project_id: Optional[int] = Field(default=None, description="Associate report with a project")
 
 
 class TracerouteHop(BaseModel):
@@ -521,7 +522,8 @@ async def run_traceroute_scan(request: TracerouteRequest):
                     "result": result.model_dump(),
                     "ai_analysis": ai_analysis
                 },
-                ai_report=ai_analysis
+                ai_report=ai_analysis,
+                project_id=request.project_id,
             )
             db.add(report)
             db.commit()
@@ -626,7 +628,8 @@ async def run_traceroute_stream(request: TracerouteRequest):
                             "result": result.model_dump(),
                             "ai_analysis": ai_analysis
                         },
-                        ai_report=ai_analysis
+                        ai_report=ai_analysis,
+                        project_id=request.project_id,
                     )
                     db.add(report)
                     db.commit()

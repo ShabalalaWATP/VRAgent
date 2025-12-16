@@ -58,14 +58,21 @@ def build_report_summary(findings: List[models.Finding], attack_chains: List[Dic
     false_positive_count = 0
     severity_adjusted_count = 0
     false_positives = []
+    filtered_findings = []  # Findings filtered out by AI analysis
     
     # Count transitive and reachability stats from findings
     transitive_vuln_count = 0
     unreachable_vuln_count = 0
     severity_downgraded_count = 0
+    agentic_findings_count = 0
     
     for f in findings:
         ai_analysis = f.details.get("ai_analysis") if f.details else None
+        
+        # Count agentic findings
+        if f.type.startswith("agentic-") or (f.details and f.details.get("source") == "agentic_ai"):
+            agentic_findings_count += 1
+        
         if ai_analysis:
             if ai_analysis.get("is_false_positive"):
                 false_positive_count += 1
@@ -74,7 +81,21 @@ def build_report_summary(findings: List[models.Finding], attack_chains: List[Dic
                     "summary": f.summary,
                     "reason": ai_analysis.get("false_positive_reason"),
                     "file_path": f.file_path,
+                    "filtered_out": ai_analysis.get("filtered_out", False),
                 })
+            
+            # Track filtered findings separately
+            if ai_analysis.get("filtered_out"):
+                filtered_findings.append({
+                    "finding_id": f.id,
+                    "summary": f.summary,
+                    "type": f.type,
+                    "severity": f.severity,
+                    "fp_score": ai_analysis.get("false_positive_score", 0),
+                    "reason": ai_analysis.get("false_positive_reason"),
+                    "file_path": f.file_path,
+                })
+            
             if ai_analysis.get("severity_adjusted"):
                 severity_adjusted_count += 1
         
@@ -100,6 +121,9 @@ def build_report_summary(findings: List[models.Finding], attack_chains: List[Dic
             "false_positive_count": false_positive_count,
             "severity_adjusted_count": severity_adjusted_count,
             "false_positives": false_positives[:20],  # Limit to 20 for report
+            "filtered_findings": filtered_findings[:20],  # Limit to 20 for report
+            "filtered_count": len(filtered_findings),
+            "agentic_findings_count": agentic_findings_count,
             **(ai_summary or {}),
         },
         "scan_stats": {

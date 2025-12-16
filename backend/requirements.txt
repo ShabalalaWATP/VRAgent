@@ -1,4 +1,5 @@
 # Core framework
+# Updated: 2024-12-11 - Added agentic queue
 fastapi==0.110.0
 uvicorn[standard]==0.29.0
 pydantic==2.5.0
@@ -43,6 +44,14 @@ packaging>=23.0
 # PCAP analysis
 scapy>=2.5.0
 pyshark>=0.6
+
+# Binary analysis
+pefile>=2023.2.7
+pyelftools>=0.31
+capstone>=5.0.0
+
+# APK analysis
+androguard>=3.4.0
 
 # SSL/TLS scanning
 cryptography>=41.0

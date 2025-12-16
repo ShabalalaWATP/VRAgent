@@ -50,6 +50,7 @@ services:
       - "8000:8000"
     volumes:
       - upload_data:/app/uploads
+      - /var/run/docker.sock:/var/run/docker.sock
     # Required for nmap to perform network scans
     cap_add:
       - NET_RAW

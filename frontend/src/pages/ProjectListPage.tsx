@@ -26,6 +26,7 @@ import NewProjectForm from "../components/NewProjectForm";
 import { api } from "../api/client";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
+import BuildIcon from "@mui/icons-material/Build";
 
 // Animations
 const float = keyframes`
@@ -107,16 +108,24 @@ export default function ProjectListPage() {
       setDeleteDialogOpen(false);
       setProjectToDelete(null);
     },
+    onError: (error) => {
+      console.error("Delete project failed:", error);
+      // Still close the dialog
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    },
   });
 
   const handleDeleteClick = (project: { id: number; name: string }, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log("Delete clicked for project:", project);
     setProjectToDelete(project);
     setDeleteDialogOpen(true);
   };
 
   const handleConfirmDelete = () => {
+    console.log("Confirm delete for:", projectToDelete);
     if (projectToDelete) {
       deleteMutation.mutate(projectToDelete.id);
     }
@@ -424,21 +433,23 @@ export default function ProjectListPage() {
                       <FolderIcon />
                     </Box>
                     <Tooltip title="Delete project">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => handleDeleteClick({ id: project.id, name: project.name }, e)}
-                        sx={{
-                          color: alpha(theme.palette.error.main, 0.6),
-                          transition: "all 0.2s ease",
-                          "&:hover": {
-                            color: theme.palette.error.main,
-                            background: alpha(theme.palette.error.main, 0.1),
-                            transform: "scale(1.1)",
-                          },
-                        }}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => handleDeleteClick({ id: project.id, name: project.name }, e)}
+                          sx={{
+                            color: alpha(theme.palette.error.main, 0.6),
+                            transition: "all 0.2s ease",
+                            "&:hover": {
+                              color: theme.palette.error.main,
+                              background: alpha(theme.palette.error.main, 0.1),
+                              transform: "scale(1.1)",
+                            },
+                          }}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   </Stack>
 
@@ -567,6 +578,65 @@ export default function ProjectListPage() {
           </Typography>
         </Box>
         <Box sx={{ color: "#22d3ee" }}>
+          <ArrowRightIcon />
+        </Box>
+      </Card>
+
+      {/* Reverse Engineering Link */}
+      <Card
+        component={Link}
+        to="/reverse"
+        sx={{
+          mt: 3,
+          textDecoration: "none",
+          display: "flex",
+          alignItems: "center",
+          p: 3,
+          background: `linear-gradient(135deg, ${alpha("#f97316", 0.08)} 0%, ${alpha("#ea580c", 0.05)} 100%)`,
+          border: `1px solid ${alpha("#f97316", 0.2)}`,
+          borderRadius: 3,
+          transition: "all 0.3s ease",
+          "&:hover": {
+            transform: "translateY(-4px)",
+            boxShadow: `0 10px 30px ${alpha("#f97316", 0.2)}`,
+            border: `1px solid ${alpha("#f97316", 0.4)}`,
+          },
+        }}
+      >
+        <Box
+          sx={{
+            width: 56,
+            height: 56,
+            borderRadius: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: `linear-gradient(135deg, #f97316 0%, #ea580c 100%)`,
+            color: "#fff",
+            mr: 3,
+          }}
+        >
+          <BuildIcon sx={{ fontSize: 32 }} />
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <Typography
+            variant="h6"
+            fontWeight={700}
+            sx={{
+              background: `linear-gradient(135deg, #fb923c 0%, #f97316 100%)`,
+              backgroundClip: "text",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              mb: 0.5,
+            }}
+          >
+            Reverse Engineering
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Analyze APKs, binaries (PE/ELF), and Docker images with AI-powered security insights
+          </Typography>
+        </Box>
+        <Box sx={{ color: "#fb923c" }}>
           <ArrowRightIcon />
         </Box>
       </Card>

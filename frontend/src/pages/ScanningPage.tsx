@@ -125,7 +125,7 @@ const scanPhases: ScanPhase[] = [
       "Each phase reports progress independently via ParallelPhaseTracker",
       "Scanner availability checked before execution to skip unavailable tools",
     ],
-    tools: ["Semgrep", "Bandit", "ESLint", "gosec", "SpotBugs", "clang-tidy", "Secrets", "Trivy", "Checkov", "tfsec"],
+    tools: ["Semgrep", "Bandit", "ESLint", "gosec", "SpotBugs", "clang-tidy", "Cppcheck", "PHPCS Security", "Brakeman", "Cargo Audit", "Secrets", "Trivy", "Checkov", "tfsec"],
     outputs: [
       "SAST findings from all applicable scanners",
       "Docker vulnerability and misconfiguration findings",
