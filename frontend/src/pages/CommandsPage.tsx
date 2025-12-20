@@ -28,6 +28,44 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SearchIcon from "@mui/icons-material/Search";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
+import LearnPageLayout from "../components/LearnPageLayout";
+
+// Page context for AI chat
+const pageContext = `This is a Security Commands Reference page containing 200+ essential commands for security professionals organized into 4 main categories:
+
+1. Linux/Bash Commands:
+- File Operations (ls, find, grep, cat, strings, file)
+- Network (netstat, ss, ip, nmap, tcpdump, curl, wget, netcat)
+- Process & System (ps, top, uname, crontab, systemctl)
+- Privilege Escalation (sudo -l, id, getcap, history)
+- Hash & Crypto (md5sum, sha256sum, hashcat, john, openssl)
+
+2. PowerShell Commands:
+- File Operations (Get-ChildItem, Get-Content, Select-String, Get-FileHash)
+- Network (Get-NetTCPConnection, Test-NetConnection, Invoke-WebRequest)
+- Process & System (Get-Process, Get-Service, Get-ComputerInfo, Get-ScheduledTask)
+- Active Directory (Get-ADUser, Get-ADGroup, Get-ADComputer, Get-ADDomain)
+- Privilege & Security (whoami /all, net user, Get-LocalUser)
+- Execution & Bypass (Set-ExecutionPolicy, IEX download cradles)
+
+3. Wireshark Filters:
+- Protocol Filters (http, dns, tcp, udp, tls, smb)
+- IP & Port Filters (ip.addr, tcp.port, src/dst filters)
+- HTTP Analysis (request methods, response codes, hosts, URIs)
+- Security Analysis (SYN scans, DNS queries, packet contents)
+- Compound Filters (combining multiple conditions)
+
+4. Nmap Commands:
+- Host Discovery (-sn, -Pn, -PS, -PA, -PU, -PE, -PR)
+- Port Scanning Techniques (-sS, -sT, -sU, -sA, -sN, -sF, -sX)
+- Port Specification (-p, --top-ports, -F)
+- Service & Version Detection (-sV, -A, -O)
+- NSE Scripts (--script=vuln, safe, exploit, auth, brute)
+- Timing & Performance (-T0 to -T5, --min-rate, --max-rate)
+- Output Formats (-oN, -oX, -oG, -oA)
+- Firewall/IDS Evasion (-f, -D, -S, -g, --data-length)
+
+Users can search commands, click to copy, and view examples for each command.`;
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -356,6 +394,7 @@ export default function CommandsPage() {
   };
 
   return (
+    <LearnPageLayout pageTitle="Security Commands Reference" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -557,5 +596,6 @@ export default function CommandsPage() {
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

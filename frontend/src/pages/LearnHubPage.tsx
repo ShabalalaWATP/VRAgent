@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -11,8 +12,16 @@ import {
   CardActionArea,
   Chip,
   Divider,
+  FormGroup,
+  FormControlLabel,
+  Checkbox,
+  Collapse,
+  IconButton,
+  Tooltip,
+  Badge,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 import SchoolIcon from "@mui/icons-material/School";
 import SecurityIcon from "@mui/icons-material/Security";
 import PsychologyIcon from "@mui/icons-material/Psychology";
@@ -22,6 +31,7 @@ import MenuBookIcon from "@mui/icons-material/MenuBook";
 import WarningIcon from "@mui/icons-material/Warning";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import TerminalIcon from "@mui/icons-material/Terminal";
+import CodeIcon from "@mui/icons-material/Code";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import LockIcon from "@mui/icons-material/Lock";
 import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
@@ -38,7 +48,28 @@ import RouteIcon from "@mui/icons-material/Route";
 import TravelExploreIcon from "@mui/icons-material/TravelExplore";
 import AndroidIcon from "@mui/icons-material/Android";
 import BuildIcon from "@mui/icons-material/Build";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LayersIcon from "@mui/icons-material/Layers";
+import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
+import CloudIcon from "@mui/icons-material/Cloud";
+import CloudOffIcon from "@mui/icons-material/CloudOff";
+import ShieldIcon from "@mui/icons-material/Shield";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
+import VpnKeyIcon from "@mui/icons-material/VpnKey";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import SettingsRemoteIcon from "@mui/icons-material/SettingsRemote";
+import RouterIcon from "@mui/icons-material/Router";
+import StorageIcon from "@mui/icons-material/Storage";
+import SupportAgentIcon from "@mui/icons-material/SupportAgent";
+import FilterListIcon from "@mui/icons-material/FilterList";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import LocalPoliceIcon from "@mui/icons-material/LocalPolice";
+import LanguageIcon from "@mui/icons-material/Language";
+import ScienceIcon from "@mui/icons-material/Science";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 
 interface LearnCard {
   title: string;
@@ -50,7 +81,18 @@ interface LearnCard {
   badge?: string;
 }
 
-// VRAgent-specific pages (About the App)
+interface CategorySection {
+  id: string;
+  title: string;
+  emoji: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+  gradientEnd: string;
+  cards: LearnCard[];
+}
+
+// ========== CATEGORY: About VRAgent ==========
 const appCards: LearnCard[] = [
   {
     title: "How Scanning Works",
@@ -77,142 +119,324 @@ const appCards: LearnCard[] = [
     color: "#6366f1",
     tags: ["Docker", "FastAPI", "PostgreSQL"],
   },
-];
-
-// Network Analysis learning pages
-const networkCards: LearnCard[] = [
   {
-    title: "Network Analysis Hub",
-    description: "Learn what the Network Analysis Hub does: 6 tools including Nmap, PCAP, SSL, DNS, Traceroute, and API Tester.",
+    title: "Network Analysis Hub Guide",
+    description: "Learn what the Network Analysis Hub does: 8 tools including Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Fuzzer, and MITM.",
     icon: <HubIcon sx={{ fontSize: 40 }} />,
     path: "/learn/network-hub",
     color: "#0ea5e9",
     tags: ["Nmap", "PCAP", "API Tester"],
-    badge: "Updated",
   },
   {
-    title: "Wireshark Essentials",
-    description: "Master packet analysis with essential display filters, capture filters, and security use cases.",
+    title: "Wireshark PCAP Guide",
+    description: "VRAgent's PCAP Analyzer: packet capture analysis, display filters, protocol dissection, and security findings.",
     icon: <WifiIcon sx={{ fontSize: 40 }} />,
     path: "/learn/wireshark",
     color: "#06b6d4",
     tags: ["Filters", "BPF", "Packets"],
   },
   {
-    title: "Nmap & Zenmap Guide",
-    description: "Network scanning fundamentals: scan types, common commands, and NSE scripting basics.",
+    title: "Nmap Scanner Guide",
+    description: "VRAgent's Nmap integration: port scanning, service detection, NSE scripts, and vulnerability discovery.",
     icon: <RadarIcon sx={{ fontSize: 40 }} />,
     path: "/learn/nmap",
     color: "#8b5cf6",
     tags: ["Port Scanning", "NSE", "Discovery"],
   },
   {
-    title: "SSL/TLS Security Guide",
-    description: "Understand SSL/TLS scanning: 12 CVE checks, certificate chain validation, cipher analysis, and AI exploitation.",
+    title: "SSL/TLS Scanner Guide",
+    description: "VRAgent's SSL Scanner: 12 CVE checks, certificate chain validation, cipher analysis, and AI exploitation paths.",
     icon: <LockIcon sx={{ fontSize: 40 }} />,
     path: "/learn/ssl-tls",
     color: "#10b981",
     tags: ["Certificates", "Vulnerabilities", "Ciphers"],
-    badge: "New",
   },
   {
-    title: "DNS Reconnaissance Guide",
-    description: "Learn DNS enumeration, subdomain discovery, zone transfers, and email security analysis (SPF, DMARC, DKIM).",
+    title: "DNS Analyzer Guide",
+    description: "VRAgent's DNS tool: enumeration, subdomain discovery, zone transfers, and email security analysis (SPF, DMARC, DKIM).",
     icon: <DnsIcon sx={{ fontSize: 40 }} />,
     path: "/learn/dns",
     color: "#f59e0b",
     tags: ["DNS", "Subdomains", "Email Security"],
-    badge: "New",
   },
   {
-    title: "Traceroute Guide",
-    description: "Master network path analysis: hop-by-hop diagnostics, latency interpretation, troubleshooting, and security implications.",
+    title: "Traceroute Analyzer Guide",
+    description: "VRAgent's Traceroute: network path analysis, hop-by-hop diagnostics, latency interpretation, and visualization.",
     icon: <RouteIcon sx={{ fontSize: 40 }} />,
     path: "/learn/traceroute",
     color: "#ec4899",
-    tags: ["Path Analysis", "Latency", "Troubleshooting"],
-    badge: "New",
+    tags: ["Path Analysis", "Latency", "Visualization"],
   },
   {
     title: "API Endpoint Tester Guide",
-    description: "Master VRAgent's API security testing: AI Auto-Test with CIDR scanning, JWT/WebSocket testing, batch operations, and multi-format exports.",
+    description: "VRAgent's API Tester: AI Auto-Test with CIDR scanning, JWT/WebSocket testing, batch operations, and multi-format exports.",
     icon: <ApiIcon sx={{ fontSize: 40 }} />,
     path: "/learn/api-testing",
     color: "#22c55e",
     tags: ["CIDR Scanning", "JWT", "WebSocket"],
-    badge: "Updated",
   },
   {
-    title: "VRAgent Fuzzer Guide",
-    description: "Complete guide to VRAgent's Fuzzing Tool: Smart Detection, session management, payload modes, and vulnerability analysis.",
+    title: "Fuzzer Tool Guide",
+    description: "VRAgent's Fuzzing Tool: Smart Detection, session management, payload modes, and vulnerability analysis.",
     icon: <RadarIcon sx={{ fontSize: 40 }} />,
     path: "/learn/fuzzing-tool",
     color: "#f97316",
     tags: ["Smart Detection", "Sessions", "Payloads"],
-    badge: "New",
   },
   {
     title: "MITM Workbench Guide",
-    description: "Master VRAgent's MITM Proxy: traffic interception, AI-powered rule creation, request modification, and security testing.",
+    description: "VRAgent's MITM Proxy: traffic interception, AI-powered rule creation, request modification, and security testing.",
     icon: <HubIcon sx={{ fontSize: 40 }} />,
     path: "/learn/mitm",
     color: "#ef4444",
     tags: ["Proxy", "Interception", "AI Rules"],
-    badge: "New",
   },
-];
-
-// Reverse Engineering learning pages
-const reverseEngineeringCards: LearnCard[] = [
   {
-    title: "Reverse Engineering Hub",
-    description: "Complete guide to VRAgent's RE Hub: APK analysis, binary inspection, Docker layer analysis, and AI-powered insights.",
+    title: "Reverse Engineering Hub Guide",
+    description: "VRAgent's RE Hub: APK analysis, binary inspection, Docker layer analysis, and AI-powered insights.",
     icon: <BuildIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/reverse-hub",
+    path: "/learn/reverse-engineering",
     color: "#a855f7",
     tags: ["APK", "Binary", "Docker"],
-    badge: "New",
   },
   {
     title: "APK Analysis Guide",
-    description: "Android APK deep analysis: permissions, certificates, manifest parsing, attack surface mapping, and obfuscation detection.",
+    description: "VRAgent's APK Analyzer: permissions, certificates, manifest parsing, attack surface mapping, and obfuscation detection.",
     icon: <AndroidIcon sx={{ fontSize: 40 }} />,
     path: "/learn/apk-analysis",
     color: "#22c55e",
     tags: ["Android", "Permissions", "Security"],
-    badge: "New",
   },
   {
     title: "Binary Analysis Guide",
-    description: "PE/ELF binary inspection: strings extraction, import analysis, Rich headers, disassembly, and malware indicators.",
+    description: "VRAgent's Binary Analyzer: PE/ELF inspection, strings extraction, import analysis, Rich headers, and disassembly.",
     icon: <MemoryIcon sx={{ fontSize: 40 }} />,
     path: "/learn/binary-analysis",
     color: "#f59e0b",
     tags: ["PE", "ELF", "Disassembly"],
-    badge: "New",
   },
   {
-    title: "Docker Layer Analysis",
-    description: "Docker image forensics: layer-by-layer inspection, secret detection, Dockerfile reconstruction, and supply chain security.",
+    title: "Docker Layer Analysis Guide",
+    description: "VRAgent's Docker Analyzer: layer-by-layer inspection, secret detection, Dockerfile reconstruction, and supply chain security.",
     icon: <LayersIcon sx={{ fontSize: 40 }} />,
     path: "/learn/docker-forensics",
     color: "#0ea5e9",
     tags: ["Layers", "Secrets", "Supply Chain"],
+  },
+];
+
+// ========== CATEGORY: Network Security ==========
+const networkCards: LearnCard[] = [
+  {
+    title: "Network Protocol Exploitation",
+    description: "Defensive guide to protocol abuse patterns, detection signals, and hardening priorities.",
+    icon: <RouterIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/network-protocol-exploitation",
+    color: "#14b8a6",
+    tags: ["TCP", "UDP", "TLS", "Detection"],
+  },
+  {
+    title: "ARP/DNS Poisoning",
+    description: "Understand spoofing risks, detection signals, and defensive monitoring.",
+    icon: <WifiIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/arp-dns-poisoning",
+    color: "#0ea5e9",
+    tags: ["ARP", "DNS", "MITM"],
+  },
+  {
+    title: "DDoS Attack Techniques",
+    description: "Distributed denial of service attacks: volumetric, protocol, application layer, amplification, and mitigation.",
+    icon: <CloudOffIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/ddos-techniques",
+    color: "#991b1b",
+    tags: ["Network", "Attacks", "Mitigation"],
+  },
+  {
+    title: "Wireless Pentesting",
+    description: "WiFi security testing: WEP/WPA cracking, evil twin attacks, Bluetooth exploitation, and RF protocols.",
+    icon: <WifiIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/wireless-pentesting",
+    color: "#0891b2",
+    tags: ["WiFi", "Bluetooth", "RF"],
+  },
+];
+
+// ========== CATEGORY: Reverse Engineering ==========
+const reverseEngineeringCards: LearnCard[] = [
+  {
+    title: "Debugging 101",
+    description: "Beginner-friendly guide to breakpoints, stepping, and memory inspection.",
+    icon: <BugReportIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/debugging-101",
+    color: "#3b82f6",
+    tags: ["Breakpoints", "Stack", "Workflow"],
+  },
+  {
+    title: "Ghidra Reverse Engineering",
+    description: "NSA's open-source RE tool: disassembly, decompilation, scripting, and binary analysis fundamentals.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/ghidra",
+    color: "#dc2626",
+    tags: ["Disassembly", "Decompiler", "NSA"],
+  },
+  {
+    title: "Android Reverse Engineering",
+    description: "Android RE fundamentals: APK structure, JADX, Frida, static/dynamic analysis, and common vulnerabilities.",
+    icon: <PhoneAndroidIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/android-reverse-engineering",
+    color: "#22c55e",
+    tags: ["Android", "Frida", "JADX"],
+  },
+  {
+    title: "Windows Internals for RE",
+    description: "PE format, TEB/PEB, API patterns, hooking, DLL injection, and anti-debugging techniques.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/windows-internals",
+    color: "#8b5cf6",
+    tags: ["PE", "TEB/PEB", "Injection"],
     badge: "New",
   },
 ];
 
-// General security learning pages
-const securityCards: LearnCard[] = [
+// ========== CATEGORY: Vulnerability Research ==========
+const vulnResearchCards: LearnCard[] = [
   {
-    title: "Cyber Threat Intelligence",
-    description: "Comprehensive guide to CTI: 70+ threat actors, attribution frameworks, tracking methods, and intelligence tradecraft.",
-    icon: <GpsFixedIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/cti",
+    title: "Buffer Overflow",
+    description: "Memory corruption fundamentals: stack/heap overflows, exploitation techniques, protections, and prevention.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/buffer-overflow",
     color: "#dc2626",
-    tags: ["APT Groups", "Attribution", "STIX/TAXII"],
+    tags: ["Memory", "Exploitation", "C/C++"],
     badge: "New",
   },
+  {
+    title: "Return-Oriented Programming (ROP)",
+    description: "Beginner-friendly guide to ROP concepts, risks, and modern mitigations.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/rop",
+    color: "#2563eb",
+    tags: ["Memory Safety", "Mitigations", "Crashes"],
+  },
+  {
+    title: "Deserialization Attacks",
+    description: "Understand unsafe object parsing, detection signals, and safer serialization patterns.",
+    icon: <AccountTreeIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/deserialization-attacks",
+    color: "#3b82f6",
+    tags: ["Serialization", "Object Graphs", "Defense"],
+  },
+  {
+    title: "Fuzzing Deep Dive",
+    description: "Automated bug hunting with coverage-guided fuzzing. AFL++, libFuzzer, crash triage.",
+    icon: <RadarIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/fuzzing",
+    color: "#ef4444",
+    tags: ["AFL++", "Automation", "Crashes"],
+  },
+  {
+    title: "CVE, CWE, CVSS & EPSS",
+    description: "Understand vulnerability identification and scoring systems. Interactive CVSS calculator.",
+    icon: <BugReportIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/cve-cwe-cvss",
+    color: "#ea580c",
+    tags: ["Scoring", "Severity", "Prioritization"],
+  },
+  {
+    title: "Heap Exploitation",
+    description: "Dynamic memory corruption: UAF, double-free, heap spray, tcache poisoning, House of techniques.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/heap-exploitation",
+    color: "#ef4444",
+    tags: ["Memory", "glibc", "Exploitation"],
+  },
+  {
+    title: "Integer Overflows & Underflows",
+    description: "Arithmetic boundary bugs: overflow, underflow, signed/unsigned issues, width truncation.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/integer-overflow",
+    color: "#f59e0b",
+    tags: ["Arithmetic", "Memory", "C/C++"],
+  },
+  {
+    title: "Out-of-Bounds Read/Write",
+    description: "Array boundary violations: info leaks, arbitrary R/W primitives, exploitation techniques.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/oob-read-write",
+    color: "#8b5cf6",
+    tags: ["Memory", "Arrays", "Info Leak"],
+  },
+];
+
+// ========== CATEGORY: Web Security ==========
+const webSecurityCards: LearnCard[] = [
+  {
+    title: "OWASP Top 10",
+    description: "The industry standard for web application security. Deep dive into the 10 most critical risks.",
+    icon: <WarningIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/owasp",
+    color: "#dc2626",
+    tags: ["Web Security", "2021", "Prevention"],
+  },
+  {
+    title: "Web Pentesting Guide",
+    description: "Comprehensive methodology for web app security assessments. From recon to reporting.",
+    icon: <SecurityIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/pentest-guide",
+    color: "#dc2626",
+    tags: ["Methodology", "Attacks", "Reporting"],
+  },
+  {
+    title: "SQL Injection (SQLi)",
+    description: "Beginner-friendly deep dive into SQLi mechanics, detection signals, and secure fixes.",
+    icon: <StorageIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/sql-injection",
+    color: "#f59e0b",
+    tags: ["SQLi", "Queries", "Prevention"],
+  },
+  {
+    title: "Server-Side Request Forgery (SSRF)",
+    description: "Understand SSRF attacks: cloud metadata theft, internal service access, bypass techniques and prevention.",
+    icon: <CloudIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/ssrf",
+    color: "#f97316",
+    tags: ["Web Security", "Cloud", "OWASP"],
+  },
+  {
+    title: "API Security Testing",
+    description: "REST & GraphQL security testing. BOLA, authentication bypass, injection, rate limits.",
+    icon: <ApiIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/api-security",
+    color: "#3b82f6",
+    tags: ["REST", "GraphQL", "OWASP API"],
+  },
+  {
+    title: "Auth & Crypto Foundations",
+    description: "Authentication, cryptography, sessions, JWTs, OAuth, TLS, and access control.",
+    icon: <LockIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/auth-crypto",
+    color: "#059669",
+    tags: ["Auth", "Crypto", "JWT", "OAuth"],
+  },
+  {
+    title: "Command Injection",
+    description: "OS command execution attacks: shell metacharacters, blind injection, and prevention.",
+    icon: <TerminalIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/command-injection",
+    color: "#ef4444",
+    tags: ["Injection", "RCE", "OWASP A03"],
+  },
+  {
+    title: "Cross-Site Scripting (XSS)",
+    description: "Client-side injection: reflected, stored, DOM XSS, payloads, and CSP prevention.",
+    icon: <CodeIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/xss",
+    color: "#f59e0b",
+    tags: ["XSS", "Client-Side", "CSP"],
+  },
+];
+
+// ========== CATEGORY: Offensive Security / Red Team ==========
+const offensiveSecurityCards: LearnCard[] = [
   {
     title: "Cyber Kill Chain",
     description: "Master the 7 phases of the Lockheed Martin Cyber Kill Chain. Understand how attackers operate.",
@@ -230,44 +454,120 @@ const securityCards: LearnCard[] = [
     tags: ["TTPs", "Threat Modeling", "Detection"],
   },
   {
-    title: "OWASP Top 10",
-    description: "The industry standard for web application security. Deep dive into the 10 most critical risks.",
-    icon: <WarningIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/owasp",
+    title: "C2 Frameworks",
+    description: "Command & Control fundamentals: Cobalt Strike, Sliver, Havoc, infrastructure, OPSEC, and detection.",
+    icon: <SettingsRemoteIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/c2-frameworks",
     color: "#dc2626",
-    tags: ["Web Security", "2021", "Prevention"],
+    tags: ["Red Team", "Beacon", "Infrastructure"],
   },
   {
-    title: "OWASP Mobile Top 10",
-    description: "Critical security risks for mobile applications (2024). Platform-specific guidance.",
-    icon: <PhoneAndroidIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/owasp-mobile",
-    color: "#8b5cf6",
-    tags: ["Mobile", "Android", "iOS"],
+    title: "Privilege Escalation",
+    description: "Linux & Windows privesc techniques: SUID, sudo, kernel exploits, token impersonation, GTFOBins, LOLBAS.",
+    icon: <AdminPanelSettingsIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/privilege-escalation",
+    color: "#ef4444",
+    tags: ["Linux", "Windows", "GTFOBins"],
   },
   {
-    title: "CVE, CWE, CVSS & EPSS",
-    description: "Understand vulnerability identification and scoring systems. Interactive CVSS calculator.",
-    icon: <BugReportIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/cve-cwe-cvss",
-    color: "#ea580c",
-    tags: ["Scoring", "Severity", "Prioritization"],
+    title: "Lateral Movement",
+    description: "Techniques for network pivoting: Windows protocols, LOLBins, credential attacks, and evasion.",
+    icon: <AccountTreeIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/lateral-movement",
+    color: "#ef4444",
+    tags: ["LOLBins", "PtH", "WinRM"],
   },
   {
-    title: "Web Pentesting Guide",
-    description: "Comprehensive methodology for web app security assessments. From recon to reporting.",
+    title: "Living off the Land",
+    description: "LOLBAS/GTFOBins fundamentals, safe inventory, and detection signals for built-in tool abuse.",
+    icon: <TerminalIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/living-off-the-land",
+    color: "#f97316",
+    tags: ["LOLBAS", "GTFOBins", "Detection"],
+  },
+  {
+    title: "Windows Persistence Mechanisms",
+    description: "Understand run keys, services, scheduled tasks, and safe enumeration of persistence artifacts.",
+    icon: <AutorenewIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/windows-persistence",
+    color: "#3b82f6",
+    tags: ["Run Keys", "Scheduled Tasks", "Services"],
+  },
+  {
+    title: "Pivoting & Tunneling",
+    description: "Beginner-friendly guide to traffic routing, tunnels, detection, and defenses.",
+    icon: <RouteIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/pivoting-tunneling",
+    color: "#3b82f6",
+    tags: ["Pivoting", "Tunneling", "Detection"],
+  },
+  {
+    title: "Credential Harvesting",
+    description: "Beginner-focused guide to credential risks, storage locations, detection signals, and prevention.",
+    icon: <VpnKeyIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/credential-harvesting",
+    color: "#a855f7",
+    tags: ["Phishing", "Secrets", "Detection"],
+  },
+  {
+    title: "Data Exfiltration",
+    description: "Learn common exfil paths, detection signals, and safe prevention practices.",
+    icon: <CloudUploadIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/data-exfiltration",
+    color: "#0ea5e9",
+    tags: ["Egress", "DLP", "Telemetry"],
+  },
+  {
+    title: "OSINT & Reconnaissance",
+    description: "Open source intelligence gathering: subdomain enumeration, email discovery, Google dorks, and OSINT tools.",
+    icon: <TravelExploreIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/osint",
+    color: "#f97316",
+    tags: ["Passive Recon", "Subdomains", "Shodan"],
+  },
+  {
+    title: "Container & Kubernetes Exploitation",
+    description: "Offensive testing paths for containers and clusters: runtime misconfigurations, RBAC, and escape themes.",
+    icon: <CloudIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/container-k8s",
+    color: "#38bdf8",
+    tags: ["Containers", "Kubernetes", "RBAC"],
+  },
+];
+
+// ========== CATEGORY: Defensive Security / Blue Team ==========
+const defensiveSecurityCards: LearnCard[] = [
+  {
+    title: "Cyber Threat Intelligence",
+    description: "Comprehensive guide to CTI: 70+ threat actors, attribution frameworks, tracking methods, and intelligence tradecraft.",
+    icon: <GpsFixedIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/cti",
+    color: "#dc2626",
+    tags: ["APT Groups", "Attribution", "STIX/TAXII"],
+  },
+  {
+    title: "Incident Response",
+    description: "NIST-based IR framework: 6 phases, playbooks, detection strategies, and forensic collection.",
     icon: <SecurityIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/pentest-guide",
+    path: "/learn/incident-response",
     color: "#dc2626",
-    tags: ["Methodology", "Attacks", "Reporting"],
+    tags: ["NIST", "DFIR", "Playbooks"],
   },
   {
-    title: "Auth & Crypto Foundations",
-    description: "Authentication, cryptography, sessions, JWTs, OAuth, TLS, and access control.",
-    icon: <LockIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/auth-crypto",
-    color: "#059669",
-    tags: ["Auth", "Crypto", "JWT", "OAuth"],
+    title: "Digital Forensics",
+    description: "Evidence acquisition, disk imaging, memory analysis, timeline creation, and Windows artifacts.",
+    icon: <SearchIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/digital-forensics",
+    color: "#14b8a6",
+    tags: ["DFIR", "Memory", "Timeline"],
+  },
+  {
+    title: "Antivirus Detection",
+    description: "Beginner-friendly guide to signatures, behavior monitoring, and safe platform checks.",
+    icon: <ShieldIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/anti-virus-detection",
+    color: "#22c55e",
+    tags: ["Signatures", "Behavior", "Triage"],
   },
   {
     title: "Data & Secrets Guide",
@@ -278,37 +578,48 @@ const securityCards: LearnCard[] = [
     tags: ["File Upload", "Secrets", "Exfil"],
   },
   {
-    title: "Fuzzing Deep Dive",
-    description: "Automated bug hunting with coverage-guided fuzzing. AFL++, libFuzzer, crash triage.",
-    icon: <RadarIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/fuzzing",
-    color: "#ef4444",
-    tags: ["AFL++", "Automation", "Crashes"],
-  },
-  {
-    title: "API Security Testing",
-    description: "REST & GraphQL security testing. BOLA, authentication bypass, injection, rate limits.",
-    icon: <ApiIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/api-security",
+    title: "SIEM Fundamentals",
+    description: "Security Information and Event Management: log collection, correlation, alerting, and SIEM platforms.",
+    icon: <StorageIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/siem",
     color: "#3b82f6",
-    tags: ["REST", "GraphQL", "OWASP API"],
+    tags: ["Splunk", "Elastic", "Sentinel"],
   },
   {
-    title: "Reverse Engineering Intro",
-    description: "Binary analysis fundamentals. Disassembly, debugging, x86 assembly, Ghidra basics.",
-    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/reverse-engineering",
-    color: "#a855f7",
-    tags: ["Binary", "Malware", "Ghidra"],
+    title: "SOC Analyst Workflow",
+    description: "Security Operations Center processes: triage, investigation, escalation, and shift handoffs.",
+    icon: <SupportAgentIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/soc-workflow",
+    color: "#10b981",
+    tags: ["SOC", "Triage", "Tier 1-3"],
   },
   {
-    title: "Digital Forensics",
-    description: "Evidence acquisition, disk imaging, memory analysis, timeline creation, and Windows artifacts.",
-    icon: <SearchIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/digital-forensics",
-    color: "#14b8a6",
-    tags: ["DFIR", "Memory", "Timeline"],
-    badge: "New",
+    title: "Threat Hunting Fundamentals",
+    description: "Proactive threat detection: hypothesis-driven hunting, data sources, and ATT&CK mapping.",
+    icon: <TravelExploreIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/threat-hunting",
+    color: "#8b5cf6",
+    tags: ["Hunting", "ATT&CK", "TTPs"],
+  },
+];
+
+// ========== CATEGORY: Mobile Security ==========
+const mobileSecurityCards: LearnCard[] = [
+  {
+    title: "iOS Pentesting",
+    description: "iOS app security testing: static/dynamic analysis, Frida, jailbreak bypass, and data storage.",
+    icon: <PhoneAndroidIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/ios-pentesting",
+    color: "#6366f1",
+    tags: ["iOS", "Mobile", "Frida", "Jailbreak"],
+  },
+  {
+    title: "OWASP Mobile Top 10",
+    description: "Critical security risks for mobile applications (2024). Platform-specific guidance.",
+    icon: <PhoneAndroidIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/owasp-mobile",
+    color: "#8b5cf6",
+    tags: ["Mobile", "Android", "iOS"],
   },
   {
     title: "Mobile App Pentesting",
@@ -317,29 +628,38 @@ const securityCards: LearnCard[] = [
     path: "/learn/mobile-pentest",
     color: "#10b981",
     tags: ["Android", "iOS", "Frida"],
-    badge: "New",
-  },
-  {
-    title: "OSINT & Reconnaissance",
-    description: "Open source intelligence gathering: subdomain enumeration, email discovery, Google dorks, and OSINT tools.",
-    icon: <TravelExploreIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/osint",
-    color: "#f97316",
-    tags: ["Passive Recon", "Subdomains", "Shodan"],
-    badge: "New",
-  },
-  {
-    title: "Lateral Movement",
-    description: "Techniques for network pivoting: Windows protocols, LOLBins, credential attacks, and evasion.",
-    icon: <AccountTreeIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/lateral-movement",
-    color: "#ef4444",
-    tags: ["LOLBins", "PtH", "WinRM"],
-    badge: "New",
   },
 ];
 
-// Reference pages
+// ========== CATEGORY: Career & Certifications ==========
+const careerCards: LearnCard[] = [
+  {
+    title: "Cyber Security Certifications",
+    description: "Certification map by subject and difficulty, covering SANS, OffSec, CompTIA, CREST, CEH, and more.",
+    icon: <WorkspacePremiumIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/certifications",
+    color: "#0ea5e9",
+    tags: ["SANS", "OffSec", "CompTIA", "CREST"],
+  },
+  {
+    title: "Cybersecurity Career Paths",
+    description: "Explore career tracks: Red Team, Blue Team, Security Engineering, and GRC with role progression.",
+    icon: <TrendingUpIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/career-paths",
+    color: "#f59e0b",
+    tags: ["Careers", "Red Team", "Blue Team", "GRC"],
+  },
+  {
+    title: "Building a Security Portfolio",
+    description: "Stand out with GitHub projects, CTF achievements, blog writing, and bug bounty work.",
+    icon: <FolderSpecialIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/portfolio",
+    color: "#6366f1",
+    tags: ["Portfolio", "GitHub", "CTF", "Blog"],
+  },
+];
+
+// ========== CATEGORY: Reference ==========
 const referenceCards: LearnCard[] = [
   {
     title: "Security Glossary",
@@ -359,16 +679,121 @@ const referenceCards: LearnCard[] = [
   },
 ];
 
+// ========== ALL CATEGORIES ==========
+const allCategories: CategorySection[] = [
+  {
+    id: "about-vragent",
+    title: "About VRAgent",
+    emoji: "🛡️",
+    description: "Complete guides to VRAgent's tools: scanning pipeline, AI analysis, Network Hub (Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Fuzzer, MITM), and RE Hub (APK, Binary, Docker).",
+    icon: <RocketLaunchIcon sx={{ fontSize: 32 }} />,
+    color: "#6366f1",
+    gradientEnd: "#8b5cf6",
+    cards: appCards,
+  },
+  {
+    id: "network-security",
+    title: "Network Security",
+    emoji: "🌐",
+    description: "Advanced network security concepts: protocol exploitation, wireless attacks, DDoS, and network-level threats.",
+    icon: <HubIcon sx={{ fontSize: 32 }} />,
+    color: "#0ea5e9",
+    gradientEnd: "#06b6d4",
+    cards: networkCards,
+  },
+  {
+    id: "reverse-engineering",
+    title: "Reverse Engineering",
+    emoji: "🔬",
+    description: "Reverse engineering fundamentals: debugging, Ghidra, and Android analysis techniques.",
+    icon: <BuildIcon sx={{ fontSize: 32 }} />,
+    color: "#a855f7",
+    gradientEnd: "#8b5cf6",
+    cards: reverseEngineeringCards,
+  },
+  {
+    id: "vulnerability-research",
+    title: "Vulnerability Research",
+    emoji: "🔍",
+    description: "Explore memory corruption, exploit development, fuzzing, and vulnerability analysis techniques.",
+    icon: <ScienceIcon sx={{ fontSize: 32 }} />,
+    color: "#ef4444",
+    gradientEnd: "#dc2626",
+    cards: vulnResearchCards,
+  },
+  {
+    id: "web-security",
+    title: "Web Security",
+    emoji: "🕸️",
+    description: "Web application security testing, OWASP vulnerabilities, API security, and authentication bypasses.",
+    icon: <LanguageIcon sx={{ fontSize: 32 }} />,
+    color: "#22c55e",
+    gradientEnd: "#16a34a",
+    cards: webSecurityCards,
+  },
+  {
+    id: "offensive-security",
+    title: "Offensive Security / Red Team",
+    emoji: "⚔️",
+    description: "Attack methodologies, privilege escalation, lateral movement, C2 frameworks, and adversary emulation.",
+    icon: <GpsFixedIcon sx={{ fontSize: 32 }} />,
+    color: "#dc2626",
+    gradientEnd: "#ef4444",
+    cards: offensiveSecurityCards,
+  },
+  {
+    id: "defensive-security",
+    title: "Defensive Security / Blue Team",
+    emoji: "🛡️",
+    description: "Threat intelligence, incident response, digital forensics, and defensive monitoring strategies.",
+    icon: <LocalPoliceIcon sx={{ fontSize: 32 }} />,
+    color: "#3b82f6",
+    gradientEnd: "#2563eb",
+    cards: defensiveSecurityCards,
+  },
+  {
+    id: "mobile-security",
+    title: "Mobile Security",
+    emoji: "📱",
+    description: "Android and iOS security testing, mobile app pentesting, and OWASP Mobile Top 10.",
+    icon: <PhoneAndroidIcon sx={{ fontSize: 32 }} />,
+    color: "#10b981",
+    gradientEnd: "#059669",
+    cards: mobileSecurityCards,
+  },
+  {
+    id: "career",
+    title: "Career & Certifications",
+    emoji: "🏆",
+    description: "Certification paths and career development resources for security professionals.",
+    icon: <WorkspacePremiumIcon sx={{ fontSize: 32 }} />,
+    color: "#f59e0b",
+    gradientEnd: "#d97706",
+    cards: careerCards,
+  },
+  {
+    id: "reference",
+    title: "Quick Reference",
+    emoji: "📚",
+    description: "Handy glossaries and command references to keep at your fingertips during assessments.",
+    icon: <MenuBookIcon sx={{ fontSize: 32 }} />,
+    color: "#10b981",
+    gradientEnd: "#6366f1",
+    cards: referenceCards,
+  },
+];
+
 interface CardGridProps {
   cards: LearnCard[];
   columns?: { xs: number; sm: number; md: number; lg: number };
+  centered?: boolean;
 }
 
-function CardGrid({ cards, columns = { xs: 12, sm: 6, md: 4, lg: 3 } }: CardGridProps) {
+function CardGrid({ cards, columns = { xs: 12, sm: 6, md: 4, lg: 3 }, centered = false }: CardGridProps) {
   const navigate = useNavigate();
   
   return (
-    <Grid container spacing={3}>
+    <Grid container spacing={3} justifyContent={centered ? "center" : "flex-start"}>
       {cards.map((card) => (
         <Grid item xs={columns.xs} sm={columns.sm} md={columns.md} lg={columns.lg} key={card.path}>
           <Card
@@ -455,8 +880,50 @@ function CardGrid({ cards, columns = { xs: 12, sm: 6, md: 4, lg: 3 } }: CardGrid
 export default function LearnHubPage() {
   const theme = useTheme();
   const navigate = useNavigate();
+  
+  // Filter state - all categories visible by default
+  const [visibleCategories, setVisibleCategories] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(allCategories.map((cat) => [cat.id, true]))
+  );
+  const [filterExpanded, setFilterExpanded] = useState(false);
+
+  const handleToggleCategory = (categoryId: string) => {
+    setVisibleCategories((prev) => ({
+      ...prev,
+      [categoryId]: !prev[categoryId],
+    }));
+  };
+
+  const handleShowAll = () => {
+    setVisibleCategories(Object.fromEntries(allCategories.map((cat) => [cat.id, true])));
+  };
+
+  const handleHideAll = () => {
+    setVisibleCategories(Object.fromEntries(allCategories.map((cat) => [cat.id, false])));
+  };
+
+  const visibleCount = useMemo(
+    () => Object.values(visibleCategories).filter(Boolean).length,
+    [visibleCategories]
+  );
+
+  const totalCards = useMemo(
+    () => allCategories.reduce((sum, cat) => sum + cat.cards.length, 0),
+    []
+  );
+
+  const visibleCards = useMemo(
+    () =>
+      allCategories
+        .filter((cat) => visibleCategories[cat.id])
+        .reduce((sum, cat) => sum + cat.cards.length, 0),
+    [visibleCategories]
+  );
+
+  const pageContext = `VRAgent Security Learning Hub - A comprehensive cybersecurity learning platform with ${allCategories.length} categories and ${totalCards} learning topics. Categories include: About VRAgent (scanning, AI analysis, tools), Network Security (Wireshark, Nmap, protocols), Reverse Engineering (debugging, Ghidra), Vulnerability Research (buffer overflows, ROP), Web Security (OWASP Top 10, SQLi, SSRF), Offensive Security (MITRE ATT&CK, C2, lateral movement), Defensive Security (threat intelligence, incident response, forensics), Mobile Security (OWASP Mobile Top 10, pentesting), Career & Certifications (OSCP, CISSP, CTF), and Quick Reference (glossary, commands). This hub provides structured learning paths for security professionals at all levels.`;
 
   return (
+    <LearnPageLayout pageTitle="Security Learning Hub" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ textAlign: "center", mb: 6 }}>
@@ -498,7 +965,7 @@ export default function LearnHubPage() {
       <Paper
         sx={{
           p: 3,
-          mb: 5,
+          mb: 4,
           borderRadius: 3,
           display: "flex",
           justifyContent: "center",
@@ -509,10 +976,10 @@ export default function LearnHubPage() {
         }}
       >
         {[
-          { value: "22", label: "Learning Topics" },
+          { value: allCategories.length.toString(), label: "Categories" },
+          { value: totalCards.toString(), label: "Learning Topics" },
           { value: "120+", label: "Glossary Terms" },
           { value: "200+", label: "Commands" },
-          { value: "30+", label: "Attack Types" },
         ].map((stat, i) => (
           <Box key={i} sx={{ textAlign: "center", minWidth: 100 }}>
             <Typography variant="h4" sx={{ fontWeight: 800, color: "primary.main" }}>
@@ -525,138 +992,188 @@ export default function LearnHubPage() {
         ))}
       </Paper>
 
-      {/* SECTION 1: About VRAgent */}
-      <Box sx={{ mb: 6 }}>
-        <Paper
+      {/* Category Filter */}
+      <Paper
+        sx={{
+          mb: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          overflow: "hidden",
+        }}
+      >
+        <Box
+          onClick={() => setFilterExpanded(!filterExpanded)}
           sx={{
-            p: 3,
-            mb: 3,
-            borderRadius: 3,
-            background: `linear-gradient(135deg, ${alpha("#6366f1", 0.1)}, ${alpha("#8b5cf6", 0.05)})`,
-            border: `1px solid ${alpha("#6366f1", 0.2)}`,
+            p: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            cursor: "pointer",
+            background: `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.05)}, ${alpha(theme.palette.primary.main, 0.03)})`,
+            "&:hover": {
+              background: `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.08)}, ${alpha(theme.palette.primary.main, 0.05)})`,
+            },
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-            <RocketLaunchIcon sx={{ color: "#6366f1", fontSize: 32 }} />
-            <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              🛡️ About VRAgent
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Badge badgeContent={visibleCount} color="primary">
+              <FilterListIcon sx={{ color: "primary.main" }} />
+            </Badge>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Category Filter
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              ({visibleCards} of {totalCards} topics visible)
             </Typography>
           </Box>
-          <Typography variant="body2" color="text.secondary">
-            Learn how VRAgent works under the hood. Understand the scanning pipeline, AI analysis, and system architecture.
-          </Typography>
-        </Paper>
-        
-        <CardGrid cards={appCards} columns={{ xs: 12, sm: 6, md: 4, lg: 4 }} />
-      </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Tooltip title="Show All">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleShowAll();
+                }}
+              >
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Hide All">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleHideAll();
+                }}
+              >
+                <VisibilityOffIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            {filterExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </Box>
+        </Box>
+        <Collapse in={filterExpanded}>
+          <Box sx={{ p: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <FormGroup row sx={{ gap: 1, flexWrap: "wrap" }}>
+              {allCategories.map((category) => (
+                <FormControlLabel
+                  key={category.id}
+                  control={
+                    <Checkbox
+                      checked={visibleCategories[category.id]}
+                      onChange={() => handleToggleCategory(category.id)}
+                      sx={{
+                        color: category.color,
+                        "&.Mui-checked": { color: category.color },
+                      }}
+                    />
+                  }
+                  label={
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <Typography variant="body2">{category.emoji}</Typography>
+                      <Typography variant="body2">{category.title}</Typography>
+                      <Chip
+                        label={category.cards.length}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.65rem",
+                          ml: 0.5,
+                          bgcolor: alpha(category.color, 0.1),
+                          color: category.color,
+                        }}
+                      />
+                    </Box>
+                  }
+                  sx={{
+                    mr: 2,
+                    mb: 1,
+                    p: 0.5,
+                    borderRadius: 1,
+                    border: `1px solid ${alpha(category.color, visibleCategories[category.id] ? 0.3 : 0.1)}`,
+                    bgcolor: visibleCategories[category.id] ? alpha(category.color, 0.05) : "transparent",
+                    transition: "all 0.2s ease",
+                  }}
+                />
+              ))}
+            </FormGroup>
+          </Box>
+        </Collapse>
+      </Paper>
 
-      <Divider sx={{ my: 5 }} />
+      {/* Category Sections */}
+      {allCategories.map((category, index) => (
+        <Collapse key={category.id} in={visibleCategories[category.id]}>
+          <Box sx={{ mb: 6 }}>
+            <Paper
+              sx={{
+                p: 3,
+                mb: 3,
+                borderRadius: 3,
+                background: `linear-gradient(135deg, ${alpha(category.color, 0.1)}, ${alpha(category.gradientEnd, 0.05)})`,
+                border: `1px solid ${alpha(category.color, 0.2)}`,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <Box sx={{ color: category.color }}>{category.icon}</Box>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  {category.emoji} {category.title}
+                </Typography>
+                <Chip
+                  label={`${category.cards.length} topics`}
+                  size="small"
+                  sx={{
+                    bgcolor: alpha(category.color, 0.15),
+                    color: category.color,
+                    fontWeight: 600,
+                  }}
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                {category.description}
+              </Typography>
+            </Paper>
+            
+            <CardGrid 
+              cards={category.cards} 
+              columns={category.cards.length <= 3 ? { xs: 12, sm: 6, md: 4, lg: 4 } : { xs: 12, sm: 6, md: 4, lg: 3 }}
+              centered={category.cards.length === 2}
+            />
+          </Box>
+          
+          {index < allCategories.length - 1 && visibleCategories[allCategories[index + 1]?.id] && (
+            <Divider sx={{ my: 5 }} />
+          )}
+        </Collapse>
+      ))}
 
-      {/* SECTION 2: Network Analysis */}
-      <Box sx={{ mb: 6 }}>
+      {/* No Categories Message */}
+      {visibleCount === 0 && (
         <Paper
           sx={{
-            p: 3,
-            mb: 3,
+            p: 6,
+            textAlign: "center",
             borderRadius: 3,
-            background: `linear-gradient(135deg, ${alpha("#0ea5e9", 0.1)}, ${alpha("#06b6d4", 0.05)})`,
-            border: `1px solid ${alpha("#0ea5e9", 0.2)}`,
+            border: `1px dashed ${alpha(theme.palette.divider, 0.3)}`,
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-            <HubIcon sx={{ color: "#0ea5e9", fontSize: 32 }} />
-            <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              🌐 Network Analysis
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary">
-            Master network security tools. Learn how to use VRAgent's Network Hub, Wireshark, and Nmap effectively.
+          <VisibilityOffIcon sx={{ fontSize: 60, color: "text.disabled", mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+            All categories are hidden
           </Typography>
+          <Chip
+            label="Show All Categories"
+            clickable
+            onClick={handleShowAll}
+            sx={{
+              bgcolor: "primary.main",
+              color: "white",
+              fontWeight: 600,
+              "&:hover": { bgcolor: "primary.dark" },
+            }}
+          />
         </Paper>
-        
-        <CardGrid cards={networkCards} columns={{ xs: 12, sm: 6, md: 3, lg: 3 }} />
-      </Box>
-
-      <Divider sx={{ my: 5 }} />
-
-      {/* SECTION 2.5: Reverse Engineering */}
-      <Box sx={{ mb: 6 }}>
-        <Paper
-          sx={{
-            p: 3,
-            mb: 3,
-            borderRadius: 3,
-            background: `linear-gradient(135deg, ${alpha("#a855f7", 0.1)}, ${alpha("#8b5cf6", 0.05)})`,
-            border: `1px solid ${alpha("#a855f7", 0.2)}`,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-            <BuildIcon sx={{ color: "#a855f7", fontSize: 32 }} />
-            <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              🔬 Reverse Engineering
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary">
-            Master binary analysis, APK inspection, and Docker forensics. Learn to analyze compiled code and container images.
-          </Typography>
-        </Paper>
-        
-        <CardGrid cards={reverseEngineeringCards} columns={{ xs: 12, sm: 6, md: 3, lg: 3 }} />
-      </Box>
-
-      <Divider sx={{ my: 5 }} />
-
-      {/* SECTION 3: Security Fundamentals */}
-      <Box sx={{ mb: 6 }}>
-        <Paper
-          sx={{
-            p: 3,
-            mb: 3,
-            borderRadius: 3,
-            background: `linear-gradient(135deg, ${alpha("#ef4444", 0.1)}, ${alpha("#f59e0b", 0.05)})`,
-            border: `1px solid ${alpha("#ef4444", 0.2)}`,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-            <SecurityIcon sx={{ color: "#ef4444", fontSize: 32 }} />
-            <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              🎯 Security Fundamentals
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary">
-            Core security concepts, frameworks, and methodologies every security professional should know.
-          </Typography>
-        </Paper>
-        
-        <CardGrid cards={securityCards} columns={{ xs: 12, sm: 6, md: 3, lg: 3 }} />
-      </Box>
-
-      <Divider sx={{ my: 5 }} />
-
-      {/* SECTION 4: Quick Reference */}
-      <Box sx={{ mb: 6 }}>
-        <Paper
-          sx={{
-            p: 3,
-            mb: 3,
-            borderRadius: 3,
-            background: `linear-gradient(135deg, ${alpha("#10b981", 0.1)}, ${alpha("#6366f1", 0.05)})`,
-            border: `1px solid ${alpha("#10b981", 0.2)}`,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-            <MenuBookIcon sx={{ color: "#10b981", fontSize: 32 }} />
-            <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              📚 Quick Reference
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary">
-            Handy glossaries and command references to keep at your fingertips during assessments.
-          </Typography>
-        </Paper>
-        
-        <CardGrid cards={referenceCards} columns={{ xs: 12, sm: 6, md: 6, lg: 6 }} />
-      </Box>
+      )}
 
       {/* Footer CTA */}
       <Paper
@@ -689,5 +1206,6 @@ export default function LearnHubPage() {
         />
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

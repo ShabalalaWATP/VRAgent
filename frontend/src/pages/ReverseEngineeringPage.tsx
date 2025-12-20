@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
   Container,
@@ -25,6 +26,10 @@ import {
   ListItemIcon,
   ListItemText,
   Grid,
+  Card,
+  CardContent,
+  Divider,
+  alpha,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -37,7 +42,13 @@ import SecurityIcon from "@mui/icons-material/Security";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import SchoolIcon from "@mui/icons-material/School";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import { useNavigate } from "react-router-dom";
+import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
+import AndroidIcon from "@mui/icons-material/Android";
+import StorageIcon from "@mui/icons-material/Storage";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import LayersIcon from "@mui/icons-material/Layers";
+import { useNavigate, Link } from "react-router-dom";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -135,7 +146,20 @@ const ReverseEngineeringPage: React.FC = () => {
     { name: "Sysinternals Suite", type: "Windows Utilities", platform: "Windows", cost: "Free", best: "Procmon, Autoruns, TCPView" },
   ];
 
+  const pageContext = `This page covers reverse engineering fundamentals and VRAgent's RE Hub capabilities including:
+- VRAgent RE Hub: Binary Analysis (PE/ELF/DLL), APK Analysis (6-phase UnifiedApkScanner), Docker Layer Analysis
+- Ghidra integration for decompilation, Capstone for disassembly, YARA for signature matching
+- AI-powered analysis with Google Gemini, attack surface mapping, hardening scores
+- What reverse engineering is and when to use it
+- Essential RE tools: Ghidra, IDA Pro, Binary Ninja, radare2, x64dbg, GDB
+- x86/x64 assembly language fundamentals
+- Static analysis techniques and disassembly
+- Dynamic analysis and debugging workflows
+- Malware analysis and vulnerability research
+- Complete RE workflow from binary to understanding`;
+
   return (
+    <LearnPageLayout pageTitle="Reverse Engineering" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
       <Container maxWidth="lg">
         {/* Header */}
@@ -171,6 +195,178 @@ const ReverseEngineeringPage: React.FC = () => {
             <Chip icon={<CodeIcon />} label="Binary Exploitation" size="small" />
           </Box>
         </Box>
+
+        {/* VRAgent RE Hub Capabilities */}
+        <Paper
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 3,
+            background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.15)} 0%, ${alpha("#a855f7", 0.1)} 50%, ${alpha("#7c3aed", 0.05)} 100%)`,
+            border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <RocketLaunchIcon sx={{ fontSize: 32, color: "#a855f7" }} />
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0" }}>
+              VRAgent RE Hub Capabilities
+            </Typography>
+          </Box>
+          
+          <Typography variant="body1" sx={{ color: "grey.400", mb: 3 }}>
+            VRAgent's Reverse Engineering Hub provides automated analysis powered by AI and industry tools.
+            Upload binaries, APKs, or Docker images for instant security insights.
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              {
+                title: "Binary Analysis",
+                icon: <MemoryIcon />,
+                color: "#8b5cf6",
+                capabilities: [
+                  "PE/ELF/DLL/SO format parsing with pefile & pyelftools",
+                  "Ghidra integration for decompilation (200+ functions)",
+                  "Capstone disassembly with entry point analysis",
+                  "YARA signature matching & fuzzy hashing (ssdeep, TLSH)",
+                  "Secret detection, string extraction, import/export analysis",
+                ],
+              },
+              {
+                title: "APK Analysis",
+                icon: <AndroidIcon />,
+                color: "#22c55e",
+                capabilities: [
+                  "6-Phase UnifiedApkScanner with progress tracking",
+                  "JADX decompilation for Java/Kotlin source review",
+                  "Certificate analysis (v1/v2/v3 signatures, debug detection)",
+                  "Permission analysis with dangerous permission flagging",
+                  "AI Functionality & Security Reports with Mermaid diagrams",
+                ],
+              },
+              {
+                title: "Docker Analysis",
+                icon: <LayersIcon />,
+                color: "#06b6d4",
+                capabilities: [
+                  "Layer-by-layer image inspection",
+                  "Deleted file recovery and secret detection",
+                  "Base image identification",
+                  "Security issue scanning across all layers",
+                  "AI-powered container security analysis",
+                ],
+              },
+              {
+                title: "AI-Powered Insights",
+                icon: <SmartToyIcon />,
+                color: "#f59e0b",
+                capabilities: [
+                  "Google Gemini analysis for all file types",
+                  "Attack Surface Mapping with risk scoring",
+                  "Obfuscation and anti-debug detection",
+                  "Interactive AI chat for deep-dive questions",
+                  "Hardening score with actionable recommendations",
+                ],
+              },
+            ].map((feature) => (
+              <Grid item xs={12} md={6} key={feature.title}>
+                <Card
+                  sx={{
+                    height: "100%",
+                    bgcolor: alpha(feature.color, 0.1),
+                    border: `1px solid ${alpha(feature.color, 0.3)}`,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                      <Box sx={{ color: feature.color }}>{feature.icon}</Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#e0e0e0" }}>
+                        {feature.title}
+                      </Typography>
+                    </Box>
+                    <List dense disablePadding>
+                      {feature.capabilities.map((cap, idx) => (
+                        <ListItem key={idx} sx={{ py: 0.25, px: 0 }}>
+                          <ListItemIcon sx={{ minWidth: 24 }}>
+                            <CheckCircleIcon sx={{ fontSize: 14, color: feature.color }} />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={cap}
+                            primaryTypographyProps={{ variant: "body2", sx: { color: "grey.300" } }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Divider sx={{ my: 2, borderColor: alpha("#8b5cf6", 0.2) }} />
+
+          {/* Key Stats */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { value: "3", label: "Analysis Types", color: "#8b5cf6" },
+              { value: "6", label: "APK Scan Phases", color: "#22c55e" },
+              { value: "AI", label: "Powered Analysis", color: "#f59e0b" },
+              { value: "200+", label: "Ghidra Functions", color: "#06b6d4" },
+            ].map((stat, idx) => (
+              <Grid item xs={6} sm={3} key={idx}>
+                <Box sx={{ textAlign: "center", py: 1 }}>
+                  <Typography variant="h5" sx={{ fontWeight: 800, color: stat.color }}>
+                    {stat.value}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "grey.500" }}>
+                    {stat.label}
+                  </Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+            <Button
+              variant="contained"
+              startIcon={<RocketLaunchIcon />}
+              component={Link}
+              to="/reverse-engineering"
+              sx={{
+                background: "linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)",
+                fontWeight: 600,
+                "&:hover": {
+                  background: "linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)",
+                },
+              }}
+            >
+              Launch RE Hub
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<MemoryIcon />}
+              component={Link}
+              to="/learn/binary-analysis"
+              sx={{
+                borderColor: alpha("#8b5cf6", 0.5),
+                color: "#a855f7",
+                "&:hover": {
+                  borderColor: "#8b5cf6",
+                  bgcolor: alpha("#8b5cf6", 0.1),
+                },
+              }}
+            >
+              Binary Analysis Guide
+            </Button>
+          </Box>
+        </Paper>
+
+        {/* Educational Content Tabs */}
+        <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          <SchoolIcon sx={{ color: "#8b5cf6" }} />
+          Reverse Engineering Fundamentals
+        </Typography>
 
         {/* Tabs */}
         <Paper sx={{ bgcolor: "#12121a", borderRadius: 2 }}>
@@ -2306,6 +2502,7 @@ Outputs:
         </Box>
       </Container>
     </Box>
+    </LearnPageLayout>
   );
 };
 

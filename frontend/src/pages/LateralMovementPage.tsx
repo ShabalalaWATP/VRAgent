@@ -43,7 +43,10 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WarningIcon from "@mui/icons-material/Warning";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
+import ShieldIcon from "@mui/icons-material/Shield";
+import SearchIcon from "@mui/icons-material/Search";
 import { useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 
 // Theme colors
 const theme = {
@@ -164,7 +167,79 @@ const LateralMovementPage: React.FC = () => {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
+  const pageContext = `This page covers Lateral Movement techniques for penetration testing including Windows remote protocols (PsExec, WMI, WinRM, DCOM, RDP), Living off the Land (LOLBins), credential attacks (Pass-the-Hash, Pass-the-Ticket, Kerberoasting), Linux/SSH pivoting, cloud pivoting, container escape, and OPSEC best practices. It also includes telemetry artifacts, detection signals, and defensive checklists for blue teams.`;
+  const movementObjectives = [
+    "Expand access to higher-value systems and data.",
+    "Reach isolated networks through trusted hosts.",
+    "Establish persistence for future access.",
+    "Blend into normal admin traffic to avoid detection.",
+  ];
+  const artifactMatrix = [
+    { source: "Windows Security Logs", artifact: "Logon events (4624/4625), explicit creds (4648)" },
+    { source: "Sysmon", artifact: "Process creation (1), network connections (3)" },
+    { source: "Windows Services", artifact: "Service creation (7045) for remote exec" },
+    { source: "RDP Logs", artifact: "Logon type 10, TerminalServices events" },
+    { source: "SMB Logs", artifact: "Admin share access (C$, ADMIN$)" },
+  ];
+  const defensiveChecklist = [
+    "Disable or restrict legacy protocols (NTLM where possible).",
+    "Segment admin paths and require jump hosts.",
+    "Enable PowerShell logging and Sysmon where allowed.",
+    "Limit local admin rights and remove stale accounts.",
+    "Monitor for new services, scheduled tasks, and remote logons.",
+  ];
+  const windowsProtocolMatrix = [
+    { protocol: "SMB/PsExec", ports: "445", auth: "NTLM/Kerberos", artifacts: "Service 7045, admin$ writes" },
+    { protocol: "WMI", ports: "135 + RPC", auth: "NTLM/Kerberos", artifacts: "WMI activity, process creation" },
+    { protocol: "WinRM", ports: "5985/5986", auth: "Kerberos/NTLM", artifacts: "WinRM logs, PowerShell events" },
+    { protocol: "RDP", ports: "3389", auth: "Kerberos/NTLM", artifacts: "Logon type 10, RDP logs" },
+  ];
+  const windowsEventIds = [
+    "4624/4625: Successful/failed logons",
+    "4648: Logon with explicit credentials",
+    "4672: Special privileges assigned",
+    "4688: Process creation",
+    "4698: Scheduled task created",
+    "7045: Service installed",
+  ];
+  const lolbinDetections = [
+    "Unusual LOLBin parent processes (Office -> cmd/PowerShell).",
+    "Remote execution tools from non-admin hosts.",
+    "Download activity to temp paths (certutil, bitsadmin).",
+    "Suspicious script block logging patterns.",
+    "New scheduled tasks or services created rapidly.",
+  ];
+  const credentialDetection = [
+    "Kerberos ticket requests from non-admin hosts",
+    "Multiple NTLM logons across many hosts",
+    "LSASS access from non-standard processes",
+    "RDP logons followed by admin share access",
+    "New admin group membership or privilege changes",
+  ];
+  const linuxMovementPatterns = [
+    "SSH from user workstations to servers",
+    "Sudo usage outside normal maintenance windows",
+    "New SSH keys added to authorized_keys",
+    "Unexpected scp/rsync transfers between hosts",
+    "New services listening on non-standard ports",
+  ];
+  const cloudPivotPaths = [
+    "Role chaining or privilege escalation via IAM",
+    "Lateral movement through SSM/RunCommand",
+    "Access to storage services (S3/Blob) from new principals",
+    "Container or function execution using stolen tokens",
+    "Cross-account access via misconfigured trust policies",
+  ];
+  const cloudTelemetry = [
+    "Cloud audit logs (CloudTrail, Azure Activity, GCP Audit)",
+    "IAM changes and role assumption events",
+    "Network flow logs and security group changes",
+    "Storage access logs and object reads",
+    "Serverless function invocations and role usage",
+  ];
+
   return (
+    <LearnPageLayout pageTitle="Lateral Movement Techniques" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: theme.bgDark, py: 4 }}>
       <Container maxWidth="lg">
         {/* Header */}
@@ -454,6 +529,71 @@ crackmapexec smb TARGETS --shares`}
                   />
                 </AccordionDetails>
               </Accordion>
+
+              <Accordion sx={accordionSx(theme.info)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.info }} />} sx={accordionSummarySx(theme.info)}>
+                  <AccountTreeIcon sx={{ color: theme.info, mr: 1.5 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Movement Objectives</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 3 }}>
+                  <List dense>
+                    {movementObjectives.map((item) => (
+                      <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <CheckCircleIcon sx={{ color: theme.info, fontSize: 16 }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: theme.textMuted, fontSize: "0.9rem" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion sx={accordionSx(theme.warning)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
+                  <SearchIcon sx={{ color: theme.warning, mr: 1.5 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Artifacts and Telemetry</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 3 }}>
+                  <TableContainer component={Paper} sx={{ bgcolor: "transparent", borderRadius: 2, border: `1px solid ${alpha(theme.warning, 0.2)}` }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: alpha(theme.warning, 0.1) }}>
+                          <TableCell sx={{ color: theme.warning, fontWeight: 700 }}>Source</TableCell>
+                          <TableCell sx={{ color: theme.warning, fontWeight: 700 }}>Artifacts</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {artifactMatrix.map((row) => (
+                          <TableRow key={row.source} sx={{ bgcolor: "transparent" }}>
+                            <TableCell sx={{ color: theme.text, fontWeight: 600 }}>{row.source}</TableCell>
+                            <TableCell sx={{ color: theme.textMuted }}>{row.artifact}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion sx={accordionSx(theme.success)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.success }} />} sx={accordionSummarySx(theme.success)}>
+                  <ShieldIcon sx={{ color: theme.success, mr: 1.5 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Defensive Checklist</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 3 }}>
+                  <List dense>
+                    {defensiveChecklist.map((item) => (
+                      <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <CheckCircleIcon sx={{ color: theme.success, fontSize: 16 }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: theme.textMuted, fontSize: "0.9rem" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
             </Box>
           </TabPanel>
 
@@ -473,6 +613,46 @@ crackmapexec smb TARGETS --shares`}
               <Alert severity="info" sx={{ mb: 4, bgcolor: alpha(theme.info, 0.1), border: `1px solid ${alpha(theme.info, 0.3)}` }}>
                 Windows offers multiple remote execution protocols. Each has different requirements, artifacts, and detection profiles.
               </Alert>
+
+              <Paper sx={{ p: 3, mb: 3, bgcolor: theme.bgNested, borderRadius: 3, border: `1px solid ${alpha(theme.info, 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.info, mb: 2 }}>Protocol Matrix</Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: alpha(theme.info, 0.1) }}>
+                        <TableCell sx={{ color: theme.info, fontWeight: 700 }}>Protocol</TableCell>
+                        <TableCell sx={{ color: theme.info, fontWeight: 700 }}>Ports</TableCell>
+                        <TableCell sx={{ color: theme.info, fontWeight: 700 }}>Auth</TableCell>
+                        <TableCell sx={{ color: theme.info, fontWeight: 700 }}>Artifacts</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {windowsProtocolMatrix.map((row) => (
+                        <TableRow key={row.protocol} sx={{ bgcolor: "transparent" }}>
+                          <TableCell sx={{ color: theme.text, fontWeight: 600 }}>{row.protocol}</TableCell>
+                          <TableCell sx={{ color: theme.textMuted, fontFamily: "monospace" }}>{row.ports}</TableCell>
+                          <TableCell sx={{ color: theme.textMuted }}>{row.auth}</TableCell>
+                          <TableCell sx={{ color: theme.textMuted }}>{row.artifacts}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+
+              <Paper sx={{ p: 3, mb: 3, bgcolor: theme.bgNested, borderRadius: 3, border: `1px solid ${alpha(theme.warning, 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.warning, mb: 2 }}>Key Event IDs to Watch</Typography>
+                <List dense>
+                  {windowsEventIds.map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 32 }}>
+                        <CheckCircleIcon sx={{ color: theme.warning, fontSize: 16 }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: theme.textMuted, fontSize: "0.9rem" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
 
               <Accordion defaultExpanded sx={accordionSx(theme.primary)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.primary }} />} sx={accordionSummarySx(theme.primary)}>
@@ -867,6 +1047,25 @@ cmstp.exe /ni /s payload.inf
                   </Grid>
                 </AccordionDetails>
               </Accordion>
+
+              <Accordion sx={accordionSx(theme.warning)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
+                  <WarningIcon sx={{ color: theme.warning, mr: 1.5 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>LOLBins Detection Tips</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 3 }}>
+                  <List dense>
+                    {lolbinDetections.map((item) => (
+                      <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <CheckCircleIcon sx={{ color: theme.warning, fontSize: 16 }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: theme.textMuted, fontSize: "0.9rem" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
             </Box>
           </TabPanel>
 
@@ -1063,6 +1262,25 @@ Rubeus.exe ptt /luid:0x123456 /ticket:ticket.kirbi`}
                   />
                 </AccordionDetails>
               </Accordion>
+
+              <Accordion sx={accordionSx(theme.warning)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
+                  <SecurityIcon sx={{ color: theme.warning, mr: 1.5 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Detection Signals</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 3 }}>
+                  <List dense>
+                    {credentialDetection.map((item) => (
+                      <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <CheckCircleIcon sx={{ color: theme.warning, fontSize: 16 }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: theme.textMuted, fontSize: "0.9rem" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
             </Box>
           </TabPanel>
 
@@ -1246,6 +1464,25 @@ SSH_AUTH_SOCK=/tmp/ssh-XXXX/agent.1234 ssh-add ~/.ssh/id_rsa
 # If SSH config has: ControlPath ~/.ssh/sockets/%r@%h-%p
 ssh -S /path/to/socket target`}
                   />
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion sx={accordionSx(theme.success)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.success }} />} sx={accordionSummarySx(theme.success)}>
+                  <CheckCircleIcon sx={{ color: theme.success, mr: 1.5 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Linux Movement Signals</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 3 }}>
+                  <List dense>
+                    {linuxMovementPatterns.map((item) => (
+                      <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <CheckCircleIcon sx={{ color: theme.success, fontSize: 16 }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: theme.textMuted, fontSize: "0.9rem" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
                 </AccordionDetails>
               </Accordion>
             </Box>
@@ -1433,6 +1670,44 @@ chroot /mnt`}
                       </TableBody>
                     </Table>
                   </TableContainer>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion sx={accordionSx(theme.info)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.info }} />} sx={accordionSummarySx(theme.info)}>
+                  <CloudIcon sx={{ color: theme.info, mr: 1.5 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Common Pivot Paths</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 3 }}>
+                  <List dense>
+                    {cloudPivotPaths.map((item) => (
+                      <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <CheckCircleIcon sx={{ color: theme.info, fontSize: 16 }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: theme.textMuted, fontSize: "0.9rem" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion sx={accordionSx(theme.success)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.success }} />} sx={accordionSummarySx(theme.success)}>
+                  <SearchIcon sx={{ color: theme.success, mr: 1.5 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Cloud Telemetry to Review</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 3 }}>
+                  <List dense>
+                    {cloudTelemetry.map((item) => (
+                      <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <CheckCircleIcon sx={{ color: theme.success, fontSize: 16 }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: theme.textMuted, fontSize: "0.9rem" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
                 </AccordionDetails>
               </Accordion>
             </Box>
@@ -1843,6 +2118,7 @@ proxychains crackmapexec smb TARGET`}
         </Paper>
       </Container>
     </Box>
+    </LearnPageLayout>
   );
 };
 

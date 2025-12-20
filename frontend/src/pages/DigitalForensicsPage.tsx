@@ -42,6 +42,7 @@ import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import DescriptionIcon from "@mui/icons-material/Description";
 import { useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -116,7 +117,10 @@ const DigitalForensicsPage: React.FC = () => {
     { name: "Arsenal Image Mounter", type: "Mounting", platform: "Windows", cost: "Free", best: "Mount forensic images" },
   ];
 
+  const pageContext = `This page covers Digital Forensics fundamentals including disk forensics, memory forensics, Windows artifact analysis (Registry, Event Logs, Prefetch, Shellbags, NTFS), timeline analysis, forensic tools like Autopsy, FTK Imager, Volatility, KAPE, and evidence acquisition best practices.`;
+
   return (
+    <LearnPageLayout pageTitle="Digital Forensics Fundamentals" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
       <Container maxWidth="lg">
         {/* Header */}
@@ -2437,6 +2441,7 @@ characteristic of commodity malware and penetration testing frameworks.`}
         </Box>
       </Container>
     </Box>
+    </LearnPageLayout>
   );
 };
 

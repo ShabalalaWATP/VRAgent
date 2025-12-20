@@ -27,6 +27,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SearchIcon from "@mui/icons-material/Search";
 import LaunchIcon from "@mui/icons-material/Launch";
+import LearnPageLayout from "../components/LearnPageLayout";
 
 interface Technique {
   id: string;
@@ -340,7 +341,10 @@ export default function MitreAttackPage() {
     );
   }, [selectedTab, searchQuery]);
 
+  const pageContext = `MITRE ATT&CK Framework Guide - Comprehensive coverage of adversary tactics, techniques, and procedures (TTPs). Covers all MITRE ATT&CK tactics: Reconnaissance, Resource Development, Initial Access, Execution, Persistence, Privilege Escalation, Defense Evasion, Credential Access, Discovery, Lateral Movement, Collection, Command and Control, Exfiltration, and Impact. Each tactic includes specific techniques with IDs, descriptions, and real-world examples used by threat actors. Essential knowledge for threat intelligence, red team operations, and security analysis.`;
+
   return (
+    <LearnPageLayout pageTitle="MITRE ATT&CK Framework" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -572,5 +576,6 @@ export default function MitreAttackPage() {
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

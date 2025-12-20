@@ -27,6 +27,7 @@ import {
   keyframes,
 } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import LockIcon from "@mui/icons-material/Lock";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -81,6 +82,15 @@ const lockPulse = keyframes`
 export default function SSLTLSGuidePage() {
   const theme = useTheme();
   const navigate = useNavigate();
+
+  const pageContext = `This page covers SSL/TLS security analysis including:
+- TLS protocol versions: TLS 1.3, 1.2, 1.1, 1.0 and SSL 3.0, 2.0 security status
+- Known vulnerabilities: POODLE, BEAST, Heartbleed, CRIME, BREACH, DROWN, FREAK, Logjam
+- Cipher suite analysis: AEAD ciphers, key exchange algorithms, encryption modes
+- Certificate inspection: validity, chain verification, key strength
+- Security headers and HSTS configuration
+- Common misconfigurations and remediation steps
+- Best practices for secure TLS deployment`;
 
   // SSL/TLS Protocol versions with security assessment
   const tlsVersions = [
@@ -333,6 +343,7 @@ export default function SSLTLSGuidePage() {
   ];
 
   return (
+    <LearnPageLayout pageTitle="SSL/TLS Security" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
@@ -946,5 +957,6 @@ export default function SSLTLSGuidePage() {
         </Box>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

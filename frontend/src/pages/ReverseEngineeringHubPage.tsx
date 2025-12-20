@@ -46,11 +46,22 @@ import {
   FormControl,
   Select,
   Switch,
+  Slider,
+  FormGroup,
   Breadcrumbs,
   Link as MuiLink,
   Autocomplete,
   Menu,
   MenuItem,
+  Stepper,
+  Step,
+  StepLabel,
+  StepContent,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  InputLabel,
 } from "@mui/material";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -71,6 +82,7 @@ import {
   Refresh as RefreshIcon,
   Home as HomeIcon,
   BugReport as BugIcon,
+  BugReport as BugReportIcon,
   Lock as LockIcon,
   Shield as ShieldIcon,
   Info as InfoIcon,
@@ -83,6 +95,10 @@ import {
   NavigateNext as NextIcon,
   FirstPage as FirstPageIcon,
   LastPage as LastPageIcon,
+  PlayArrow as PlayIcon,
+  Stop as StopIcon,
+  AccountTree as ArchitectureIcon,
+  Assessment as ReportIcon,
   DataObject as HexIcon,
   InsertLink as LinkIcon,
   Folder as StorageIcon,
@@ -108,6 +124,12 @@ import {
   type DataFlowAnalysisResult,
   type JadxDecompilationResult,
   type AIVulnScanResult,
+  type UnifiedApkScanProgress,
+  type UnifiedApkScanResult,
+  type UnifiedApkScanPhase,
+  type UnifiedBinaryScanProgress,
+  type AttackSurfaceMapResult,
+  type EnhancedSecurityResult,
 } from "../api/client";
 import { MermaidDiagram } from "../components/MermaidDiagram";
 
@@ -116,6 +138,23 @@ import { JadxDecompiler, ManifestVisualizer, AttackSurfaceMap, ObfuscationAnalyz
 
 // Advanced Binary Analysis Components
 import { EntropyVisualizer } from "../components/BinaryAdvancedAnalysis";
+import { VulnerabilityHunter } from "../components/VulnerabilityHunter";
+
+// AI Chat Panel and Guided Walkthrough
+import ApkChatPanel from "../components/ApkChatPanel";
+import GuidedWalkthrough from "../components/GuidedWalkthrough";
+import LearnPageLayout from "../components/LearnPageLayout";
+
+// Page context for AI chat
+const pageContext = `This is the Reverse Engineering Hub page covering:
+- Binary Analysis (EXE, ELF, DLL) - Extract strings, imports, metadata, entropy visualization
+- APK Analysis - Android app analysis with permission/security checks, JADX decompilation, manifest analysis
+- Docker Layer Analysis - Find secrets in image layers
+- Ghidra integration for decompilation and function analysis
+- AI-powered security scanning and vulnerability detection
+- Attack surface mapping and obfuscation analysis
+- Hex viewing and data flow analysis
+Topics include: IDA Pro, Ghidra, radare2, x64dbg, debugging, disassembly, decompilation, malware analysis, reverse engineering techniques, binary exploitation, and mobile security testing.`;
 
 // Severity colors
 const getSeverityColor = (severity: string): string => {
@@ -249,10 +288,1717 @@ function FileDropZone({
   );
 }
 
+// ============================================================================
+// Unified APK Scanner Component with Progress Stepper
+// ============================================================================
+
+const SCAN_PHASE_ICONS: Record<string, React.ReactNode> = {
+  manifest: <ApkIcon />,
+  secrets: <SecretIcon />,
+  jadx: <CodeIcon />,
+  ai_functionality: <ReportIcon />,
+  ai_security: <SecurityIcon />,
+  ai_diagram: <ArchitectureIcon />,
+};
+
+const SCAN_PHASE_LABELS: Record<string, string> = {
+  manifest: "📋 Manifest Analysis",
+  secrets: "🔑 Secret Detection",
+  jadx: "☕ JADX Decompilation",
+  ai_functionality: "📝 AI Functionality Report",
+  ai_security: "🔒 AI Security Report",
+  ai_diagram: "🕸️ Architecture Diagram",
+};
+
+const BINARY_SCAN_PHASE_ICONS: Record<string, React.ReactNode> = {
+  static: <BinaryIcon />,
+  ghidra: <CodeIcon />,
+  ghidra_ai: <AiIcon />,
+  ai_summary: <SecurityIcon />,
+};
+
+const BINARY_SCAN_PHASE_LABELS: Record<string, string> = {
+  static: "Static Analysis",
+  ghidra: "Ghidra Decompilation",
+  ghidra_ai: "Ghidra AI Summaries",
+  ai_summary: "AI Security Summary",
+};
+
+interface UnifiedApkScannerProps {
+  apkFile: File | null;
+  onFileSelect: (file: File | null) => void;
+  onScanComplete: (result: UnifiedApkScanResult) => void;
+  onJadxSessionReady: (sessionId: string) => void;
+}
+
+function UnifiedApkScanner({ 
+  apkFile, 
+  onFileSelect, 
+  onScanComplete,
+  onJadxSessionReady,
+}: UnifiedApkScannerProps) {
+  const theme = useTheme();
+  const [isScanning, setIsScanning] = useState(false);
+  const [progress, setProgress] = useState<UnifiedApkScanProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<{ abort: () => void } | null>(null);
+  
+  const startScan = useCallback(() => {
+    if (!apkFile) return;
+    
+    setIsScanning(true);
+    setError(null);
+    setProgress(null);
+    
+    const controller = reverseEngineeringClient.runUnifiedApkScan(
+      apkFile,
+      // onProgress
+      (prog) => {
+        setProgress(prog);
+      },
+      // onResult
+      (result) => {
+        if (result.jadx_session_id) {
+          onJadxSessionReady(result.jadx_session_id);
+        }
+        onScanComplete(result);
+        setIsScanning(false);
+      },
+      // onError
+      (err) => {
+        setError(err);
+        setIsScanning(false);
+      },
+      // onDone
+      () => {
+        setIsScanning(false);
+      }
+    );
+    
+    abortRef.current = controller;
+  }, [apkFile, onScanComplete, onJadxSessionReady]);
+  
+  const cancelScan = useCallback(() => {
+    abortRef.current?.abort();
+    setIsScanning(false);
+    setProgress(null);
+  }, []);
+  
+  // Get active step index
+  const getActiveStep = () => {
+    if (!progress) return -1;
+    return progress.phases.findIndex(p => p.status === "in_progress");
+  };
+  
+  const activeStep = getActiveStep();
+  
+  return (
+    <Box>
+      {/* File Selection */}
+      {!isScanning && !progress && (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={5}>
+            <FileDropZone
+              accept=".apk,.aab"
+              onFileSelect={(f) => {
+                onFileSelect(f);
+                setError(null);
+              }}
+              label="Upload APK"
+              description="Android APK or AAB files up to 500MB"
+              icon={<ApkIcon sx={{ fontSize: 48 }} />}
+              disabled={isScanning}
+            />
+          </Grid>
+          <Grid item xs={12} md={7}>
+            {apkFile ? (
+              <Paper sx={{ p: 3, height: "100%" }}>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <strong>{apkFile.name}</strong> ({(apkFile.size / (1024 * 1024)).toFixed(1)} MB)
+                </Alert>
+                
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  This comprehensive scan will:
+                </Typography>
+                <List dense>
+                  <ListItem>
+                    <ListItemIcon><ApkIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Extract manifest, permissions & components" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><SecretIcon color="warning" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Scan for hardcoded secrets, API keys & URLs" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><CodeIcon color="secondary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Decompile DEX to Java source code (JADX)" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><AiIcon color="info" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Generate AI-powered functionality & security reports" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><ArchitectureIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Create visual architecture diagram" />
+                  </ListItem>
+                </List>
+                
+                <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
+                  <Typography variant="body2">
+                    ⏱️ This comprehensive scan may take <strong>2-5 minutes</strong> depending on APK size.
+                  </Typography>
+                </Alert>
+                
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  onClick={startScan}
+                  startIcon={<PlayIcon />}
+                  sx={{
+                    py: 1.5,
+                    background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                  }}
+                >
+                  Start Full Analysis
+                </Button>
+                
+                <Button
+                  variant="text"
+                  size="small"
+                  fullWidth
+                  onClick={() => onFileSelect(null)}
+                  sx={{ mt: 1 }}
+                >
+                  Choose Different File
+                </Button>
+              </Paper>
+            ) : (
+              <Box sx={{ 
+                height: "100%", 
+                display: "flex", 
+                flexDirection: "column", 
+                alignItems: "center", 
+                justifyContent: "center",
+                textAlign: "center",
+                p: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.5),
+                borderRadius: 2,
+              }}>
+                <ApkIcon sx={{ fontSize: 64, opacity: 0.3, mb: 2 }} />
+                <Typography variant="h6" color="text.secondary">
+                  Upload an Android APK to analyze
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  One comprehensive scan covering permissions, secrets, decompilation, and AI analysis
+                </Typography>
+              </Box>
+            )}
+          </Grid>
+        </Grid>
+      )}
+      
+      {/* Scanning Progress */}
+      {isScanning && progress && (
+        <Paper sx={{ p: 3 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+            <Box>
+              <Typography variant="h6">
+                🔍 Analyzing: {apkFile?.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {progress.message}
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography variant="h4" color="primary">
+                {progress.overall_progress}%
+              </Typography>
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                onClick={cancelScan}
+                startIcon={<StopIcon />}
+              >
+                Cancel
+              </Button>
+            </Box>
+          </Box>
+          
+          {/* Overall Progress Bar */}
+          <LinearProgress 
+            variant="determinate" 
+            value={progress.overall_progress} 
+            sx={{ 
+              height: 8, 
+              borderRadius: 4, 
+              mb: 3,
+              "& .MuiLinearProgress-bar": {
+                background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+              }
+            }} 
+          />
+          
+          {/* Phase Stepper */}
+          <Stepper activeStep={activeStep} orientation="vertical">
+            {progress.phases.map((phase, index) => (
+              <Step key={phase.id} completed={phase.status === "completed"}>
+                <StepLabel
+                  error={phase.status === "error"}
+                  StepIconComponent={() => (
+                    <Box
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        bgcolor: phase.status === "completed"
+                          ? theme.palette.success.main
+                          : phase.status === "in_progress"
+                          ? theme.palette.primary.main
+                          : phase.status === "error"
+                          ? theme.palette.error.main
+                          : alpha(theme.palette.action.disabled, 0.3),
+                        color: phase.status === "pending" ? "text.disabled" : "white",
+                        transition: "all 0.3s",
+                      }}
+                    >
+                      {phase.status === "completed" ? (
+                        <CheckIcon sx={{ fontSize: 20 }} />
+                      ) : phase.status === "in_progress" ? (
+                        <CircularProgress size={20} color="inherit" />
+                      ) : phase.status === "error" ? (
+                        <ErrorIcon sx={{ fontSize: 20 }} />
+                      ) : (
+                        React.cloneElement(SCAN_PHASE_ICONS[phase.id] as React.ReactElement, { sx: { fontSize: 18 } })
+                      )}
+                    </Box>
+                  )}
+                >
+                  <Typography fontWeight={phase.status === "in_progress" ? 700 : 500}>
+                    {SCAN_PHASE_LABELS[phase.id] || phase.label}
+                  </Typography>
+                </StepLabel>
+                <StepContent>
+                  <Typography variant="body2" color="text.secondary">
+                    {phase.description}
+                  </Typography>
+                  {phase.status === "in_progress" && (
+                    <LinearProgress 
+                      sx={{ 
+                        mt: 1.5,
+                        borderRadius: 1,
+                        "& .MuiLinearProgress-bar": {
+                          background: `linear-gradient(90deg, ${theme.palette.primary.light}, ${theme.palette.primary.main})`,
+                        }
+                      }} 
+                    />
+                  )}
+                  {phase.status === "completed" && phase.details && (
+                    <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: "block" }}>
+                      ✓ {phase.details}
+                    </Typography>
+                  )}
+                  {phase.status === "error" && phase.details && (
+                    <Typography variant="caption" color="error" sx={{ mt: 0.5, display: "block" }}>
+                      ✗ {phase.details}
+                    </Typography>
+                  )}
+                </StepContent>
+              </Step>
+            ))}
+          </Stepper>
+        </Paper>
+      )}
+      
+      {/* Initial Loading State - When scan starts but no progress yet */}
+      {isScanning && !progress && (
+        <Paper sx={{ p: 4, textAlign: "center" }}>
+          <CircularProgress size={60} sx={{ mb: 2 }} />
+          <Typography variant="h6" gutterBottom>
+            🚀 Starting Comprehensive APK Analysis...
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Uploading <strong>{apkFile?.name}</strong> and initializing scan
+          </Typography>
+          <Alert severity="info" sx={{ maxWidth: 500, mx: "auto" }}>
+            This may take a moment for large APK files. Progress will appear shortly.
+          </Alert>
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            onClick={cancelScan}
+            startIcon={<StopIcon />}
+            sx={{ mt: 2 }}
+          >
+            Cancel
+          </Button>
+        </Paper>
+      )}
+      
+      {/* Error Display */}
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)} sx={{ mt: 2 }}>
+          {error}
+        </Alert>
+      )}
+    </Box>
+  );
+}
+
+// ============================================================================
+// Decompiled Code Security Findings Component
+// ============================================================================
+
+interface DecompiledCodeFindingsAccordionProps {
+  findings: Array<{
+    scanner: string;
+    category: string;
+    severity: string;
+    title: string;
+    description: string;
+    class_name: string;
+    file_path: string;
+    line_number: number;
+    code_snippet: string;
+    context_before: string;
+    context_after: string;
+    exploitation: string;
+    remediation: string;
+    cwe_id?: string;
+    confidence: string;
+  }>;
+  summary?: {
+    total_findings: number;
+    by_severity: Record<string, number>;
+    by_scanner: Record<string, number>;
+    by_category: Record<string, number>;
+    files_scanned: number;
+  };
+  jadxSessionId?: string;
+}
+
+function DecompiledCodeFindingsAccordion({ findings, summary, jadxSessionId }: DecompiledCodeFindingsAccordionProps) {
+  const theme = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const [selectedFinding, setSelectedFinding] = useState<typeof findings[0] | null>(null);
+  const [severityFilter, setSeverityFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  
+  const severityColors: Record<string, "error" | "warning" | "info" | "success" | "default"> = {
+    critical: "error",
+    high: "error",
+    medium: "warning",
+    low: "info",
+    info: "default"
+  };
+  
+  const severityOrder = ["critical", "high", "medium", "low", "info"];
+  
+  const filteredFindings = findings.filter(f => {
+    if (severityFilter !== "all" && f.severity !== severityFilter) return false;
+    if (categoryFilter !== "all" && f.category !== categoryFilter) return false;
+    return true;
+  });
+  
+  const sortedFindings = [...filteredFindings].sort((a, b) => {
+    const aIdx = severityOrder.indexOf(a.severity);
+    const bIdx = severityOrder.indexOf(b.severity);
+    return aIdx - bIdx;
+  });
+  
+  const categories = [...new Set(findings.map(f => f.category))];
+  
+  const criticalCount = summary?.by_severity?.critical || 0;
+  const highCount = summary?.by_severity?.high || 0;
+  
+  return (
+    <>
+      <Accordion expanded={expanded} onChange={(_, exp) => setExpanded(exp)}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+            <BugReportIcon color="error" />
+            <strong>Source Code Vulnerabilities ({findings.length})</strong>
+            {criticalCount > 0 && (
+              <Chip label={`${criticalCount} Critical`} size="small" color="error" />
+            )}
+            {highCount > 0 && (
+              <Chip label={`${highCount} High`} size="small" color="error" variant="outlined" />
+            )}
+            {summary?.files_scanned && (
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                ({summary.files_scanned} files scanned)
+              </Typography>
+            )}
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          {/* Summary chips */}
+          {summary && (
+            <Box sx={{ mb: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
+              {Object.entries(summary.by_severity || {}).map(([sev, count]) => (
+                <Chip 
+                  key={sev} 
+                  label={`${sev}: ${count}`} 
+                  size="small"
+                  color={severityColors[sev] || "default"}
+                  variant={severityFilter === sev ? "filled" : "outlined"}
+                  onClick={() => setSeverityFilter(severityFilter === sev ? "all" : sev)}
+                  sx={{ cursor: "pointer" }}
+                />
+              ))}
+            </Box>
+          )}
+          
+          {/* Category filter */}
+          <Box sx={{ mb: 2 }}>
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={categoryFilter}
+                label="Category"
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                <MenuItem value="all">All Categories</MenuItem>
+                {categories.map(cat => (
+                  <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+          
+          {/* Findings table */}
+          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400, overflow: "auto" }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Severity</TableCell>
+                  <TableCell>Title</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell>File</TableCell>
+                  <TableCell>Line</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {sortedFindings.slice(0, 100).map((finding, idx) => (
+                  <TableRow 
+                    key={idx}
+                    hover
+                    sx={{ 
+                      cursor: "pointer",
+                      bgcolor: finding.severity === "critical" ? alpha(theme.palette.error.main, 0.05) : undefined
+                    }}
+                    onClick={() => setSelectedFinding(finding)}
+                  >
+                    <TableCell>
+                      <Chip 
+                        label={finding.severity.toUpperCase()} 
+                        size="small" 
+                        color={severityColors[finding.severity]}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="medium">
+                        {finding.title}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={finding.category} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" fontFamily="monospace">
+                        {finding.class_name}.java
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" fontFamily="monospace">
+                        L{finding.line_number}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip title="View Details">
+                        <IconButton size="small" onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedFinding(finding);
+                        }}>
+                          <CodeIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          {sortedFindings.length > 100 && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Showing 100 of {sortedFindings.length} findings. Apply filters to narrow down.
+            </Typography>
+          )}
+        </AccordionDetails>
+      </Accordion>
+      
+      {/* Finding Detail Dialog */}
+      <Dialog 
+        open={!!selectedFinding} 
+        onClose={() => setSelectedFinding(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        {selectedFinding && (
+          <>
+            <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Chip 
+                label={selectedFinding.severity.toUpperCase()} 
+                color={severityColors[selectedFinding.severity]}
+              />
+              {selectedFinding.title}
+              {selectedFinding.cwe_id && (
+                <Chip label={selectedFinding.cwe_id} size="small" variant="outlined" />
+              )}
+            </DialogTitle>
+            <DialogContent dividers>
+              <Typography variant="body1" paragraph>
+                {selectedFinding.description}
+              </Typography>
+              
+              <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                📍 Location
+              </Typography>
+              <Box sx={{ 
+                bgcolor: alpha(theme.palette.background.default, 0.5), 
+                p: 1, 
+                borderRadius: 1,
+                fontFamily: "monospace",
+                fontSize: "0.85rem"
+              }}>
+                <strong>{selectedFinding.file_path}</strong> at line {selectedFinding.line_number}
+              </Box>
+              
+              <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                💻 Vulnerable Code
+              </Typography>
+              <Box sx={{ 
+                bgcolor: "#1e1e1e", 
+                color: "#d4d4d4", 
+                p: 2, 
+                borderRadius: 1,
+                fontFamily: "monospace",
+                fontSize: "0.8rem",
+                overflow: "auto",
+                whiteSpace: "pre-wrap"
+              }}>
+                {selectedFinding.context_before && (
+                  <Box sx={{ color: "#808080" }}>{selectedFinding.context_before}</Box>
+                )}
+                <Box sx={{ 
+                  bgcolor: alpha(theme.palette.error.main, 0.2),
+                  borderLeft: `3px solid ${theme.palette.error.main}`,
+                  pl: 1,
+                  my: 0.5
+                }}>
+                  {selectedFinding.code_snippet}
+                </Box>
+                {selectedFinding.context_after && (
+                  <Box sx={{ color: "#808080" }}>{selectedFinding.context_after}</Box>
+                )}
+              </Box>
+              
+              <Typography variant="subtitle2" gutterBottom sx={{ mt: 3, color: "error.main" }}>
+                🎯 Exploitation
+              </Typography>
+              <Box sx={{ 
+                bgcolor: alpha(theme.palette.error.main, 0.05), 
+                p: 2, 
+                borderRadius: 1,
+                border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
+                whiteSpace: "pre-wrap",
+                fontSize: "0.9rem"
+              }}>
+                {selectedFinding.exploitation}
+              </Box>
+              
+              <Typography variant="subtitle2" gutterBottom sx={{ mt: 3, color: "success.main" }}>
+                ✅ Remediation
+              </Typography>
+              <Box sx={{ 
+                bgcolor: alpha(theme.palette.success.main, 0.05), 
+                p: 2, 
+                borderRadius: 1,
+                border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
+                whiteSpace: "pre-wrap",
+                fontSize: "0.9rem"
+              }}>
+                {selectedFinding.remediation}
+              </Box>
+              
+              <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
+                <Chip label={`Scanner: ${selectedFinding.scanner}`} size="small" variant="outlined" />
+                <Chip label={`Confidence: ${selectedFinding.confidence}`} size="small" variant="outlined" />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSelectedFinding(null)}>Close</Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+    </>
+  );
+}
+
+// ============================================================================
+// Unified APK Results Component - Single Source of Truth
+// ============================================================================
+
+interface UnifiedApkResultsProps {
+  result: UnifiedApkScanResult;
+  jadxSessionId: string | null;
+  onBrowseSource: () => void;
+  apkFile: File | null;
+  onEnhancedSecurityComplete?: (result: EnhancedSecurityResult) => void;
+}
+
+function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onEnhancedSecurityComplete }: UnifiedApkResultsProps) {
+  const theme = useTheme();
+  const [activeTab, setActiveTab] = useState(0);
+  
+  // Enhanced Security Scan State
+  const [enhancedSecurityResult, setEnhancedSecurityResult] = useState<EnhancedSecurityResult | null>(null);
+  const [enhancedSecurityLoading, setEnhancedSecurityLoading] = useState(false);
+  const [enhancedSecurityOptions, setEnhancedSecurityOptions] = useState({
+    includeAiScan: true,
+    includeCveLookup: true,
+    aiScanType: "quick" as "quick" | "deep" | "focused"
+  });
+  const [securityExportAnchor, setSecurityExportAnchor] = useState<HTMLElement | null>(null);
+  const [securityExporting, setSecurityExporting] = useState<string | null>(null);
+
+  // Enhanced Security Scan Handler
+  const handleEnhancedSecurityScan = async () => {
+    if (!jadxSessionId) return;
+    
+    setEnhancedSecurityLoading(true);
+    try {
+      const res = await reverseEngineeringClient.enhancedSecurityScan(
+        jadxSessionId,
+        {
+          includeAiScan: enhancedSecurityOptions.includeAiScan,
+          includeCveLookup: enhancedSecurityOptions.includeCveLookup,
+          aiScanType: enhancedSecurityOptions.aiScanType,
+        }
+      );
+      setEnhancedSecurityResult(res);
+      // Notify parent component so save report can include this data
+      if (onEnhancedSecurityComplete) {
+        onEnhancedSecurityComplete(res);
+      }
+    } catch (err) {
+      console.error("Enhanced security scan failed:", err);
+    } finally {
+      setEnhancedSecurityLoading(false);
+    }
+  };
+
+  // Security Export Handler
+  const handleSecurityExport = async (format: "markdown" | "pdf" | "docx") => {
+    if (!enhancedSecurityResult) return;
+    
+    setSecurityExporting(format);
+    setSecurityExportAnchor(null);
+    
+    try {
+      const blob = await reverseEngineeringClient.exportEnhancedSecurity(
+        enhancedSecurityResult,
+        format
+      );
+      
+      // Download the file
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `security-report-${result.package_name || "analysis"}.${format === "markdown" ? "md" : format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setSecurityExporting(null);
+    }
+  };
+  
+  // Common HTML content styles for AI reports
+  const htmlContentStyles = {
+    fontFamily: theme.typography.fontFamily,
+    "& h3": {
+      fontSize: "1.15rem",
+      fontWeight: 700,
+      color: theme.palette.text.primary,
+      mt: 3,
+      mb: 1.5,
+      pt: 1,
+      borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+      pb: 1,
+    },
+    "& h3:first-of-type": { mt: 0, pt: 0 },
+    "& h4": {
+      fontSize: "1rem",
+      fontWeight: 600,
+      mt: 2,
+      mb: 1,
+    },
+    "& p": {
+      mb: 1.5,
+      lineHeight: 1.8,
+      color: theme.palette.text.secondary,
+    },
+    "& ul, & ol": { pl: 3, mb: 2 },
+    "& li": { mb: 1, lineHeight: 1.7, color: theme.palette.text.secondary },
+    "& code": {
+      bgcolor: alpha(theme.palette.grey[500], 0.15),
+      px: 0.75,
+      py: 0.25,
+      borderRadius: 0.5,
+      fontFamily: "monospace",
+      fontSize: "0.85em",
+    },
+    "& pre": {
+      bgcolor: alpha(theme.palette.grey[900], 0.9),
+      p: 2,
+      borderRadius: 1,
+      overflow: "auto",
+      "& code": { bgcolor: "transparent", p: 0 },
+    },
+  };
+  
+  return (
+    <Box>
+      {/* Summary Header */}
+      <Paper sx={{ p: 3, mb: 3, background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)` }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={6}>
+            <Typography variant="h5" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <ApkIcon color="primary" /> {result.package_name || result.filename}
+            </Typography>
+            {result.version_name && (
+              <Typography variant="body2" color="text.secondary">
+                Version {result.version_name} (code: {result.version_code}) • SDK {result.min_sdk}-{result.target_sdk}
+              </Typography>
+            )}
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: { xs: "flex-start", md: "flex-end" } }}>
+              <Chip 
+                icon={<LockIcon />} 
+                label={`${result.dangerous_permissions_count} Dangerous Permissions`}
+                color={result.dangerous_permissions_count > 5 ? "error" : result.dangerous_permissions_count > 0 ? "warning" : "success"}
+                size="small"
+              />
+              <Chip 
+                icon={<SecretIcon />} 
+                label={`${result.secrets.length} Secrets`}
+                color={result.secrets.length > 0 ? "warning" : "success"}
+                size="small"
+              />
+              <Chip 
+                icon={<CodeIcon />} 
+                label={`${result.total_classes} Classes`}
+                color="info"
+                size="small"
+              />
+              <Chip 
+                icon={<BugIcon />} 
+                label={`${result.security_issues.length + result.jadx_security_issues.length} Issues`}
+                color={result.security_issues.length > 0 ? "error" : "success"}
+                size="small"
+              />
+            </Box>
+          </Grid>
+        </Grid>
+        
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Scan completed in {result.scan_time.toFixed(1)}s • JADX decompilation: {result.decompilation_time.toFixed(1)}s • {result.total_files} files
+        </Typography>
+        
+        {jadxSessionId && (
+          <Button 
+            variant="outlined" 
+            size="small" 
+            onClick={onBrowseSource}
+            startIcon={<CodeIcon />}
+            sx={{ mt: 2 }}
+          >
+            Browse Decompiled Source
+          </Button>
+        )}
+      </Paper>
+      
+      {/* Main Tabs */}
+      <Paper sx={{ overflow: "hidden" }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, v) => setActiveTab(v)}
+          variant="fullWidth"
+          sx={{ borderBottom: 1, borderColor: "divider" }}
+        >
+          <Tab icon={<InfoIcon />} label="What Does This APK Do?" iconPosition="start" />
+          <Tab icon={<SecurityIcon />} label="Security Findings" iconPosition="start" />
+          <Tab icon={<ArchitectureIcon />} label="Architecture Diagram" iconPosition="start" />
+        </Tabs>
+        
+        <Box sx={{ p: 3 }}>
+          {/* Tab 0: Functionality Report */}
+          {activeTab === 0 && (
+            result.ai_functionality_report ? (
+              <Box sx={htmlContentStyles} dangerouslySetInnerHTML={{ __html: result.ai_functionality_report }} />
+            ) : (
+              <Alert severity="info">
+                Functionality report not available. This may happen if AI analysis encountered an error.
+              </Alert>
+            )
+          )}
+          
+          {/* Tab 1: Security Findings */}
+          {activeTab === 1 && (
+            <Box>
+              {/* Full Security Scan Controls */}
+              <Paper sx={{ mb: 3, p: 2, bgcolor: alpha(theme.palette.error.main, 0.05), border: `1px solid ${alpha(theme.palette.error.main, 0.2)}` }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <RadarIcon color="error" />
+                    <Typography variant="subtitle1" color="error.main" fontWeight={600}>Full Security Scan</Typography>
+                    <Chip label="Pattern + AI + CVE" size="small" variant="outlined" color="error" sx={{ height: 20, fontSize: "0.6rem" }} />
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    <FormControl size="small" sx={{ minWidth: 100 }}>
+                      <Select
+                        value={enhancedSecurityOptions.aiScanType}
+                        onChange={(e) => setEnhancedSecurityOptions(prev => ({ ...prev, aiScanType: e.target.value as "quick" | "deep" | "focused" }))}
+                        sx={{ height: 32 }}
+                      >
+                        <MenuItem value="quick">Quick</MenuItem>
+                        <MenuItem value="deep">Deep</MenuItem>
+                        <MenuItem value="focused">Focused</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Button 
+                      variant="contained" 
+                      color="error"
+                      size="small"
+                      onClick={handleEnhancedSecurityScan}
+                      disabled={enhancedSecurityLoading || !jadxSessionId}
+                      startIcon={enhancedSecurityLoading ? <CircularProgress size={16} /> : <RadarIcon />}
+                    >
+                      Run Full Scan
+                    </Button>
+                  </Box>
+                </Box>
+
+                {/* Scan Options */}
+                <Box sx={{ display: "flex", gap: 2, mb: 1 }}>
+                  <FormControl size="small">
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <input
+                        type="checkbox"
+                        checked={enhancedSecurityOptions.includeAiScan}
+                        onChange={(e) => setEnhancedSecurityOptions(prev => ({ ...prev, includeAiScan: e.target.checked }))}
+                        id="unifiedAiScanOption"
+                      />
+                      <label htmlFor="unifiedAiScanOption">
+                        <Typography variant="caption">AI Cross-Class Analysis</Typography>
+                      </label>
+                    </Box>
+                  </FormControl>
+                  <FormControl size="small">
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <input
+                        type="checkbox"
+                        checked={enhancedSecurityOptions.includeCveLookup}
+                        onChange={(e) => setEnhancedSecurityOptions(prev => ({ ...prev, includeCveLookup: e.target.checked }))}
+                        id="unifiedCveOption"
+                      />
+                      <label htmlFor="unifiedCveOption">
+                        <Typography variant="caption">CVE Lookup (Libraries)</Typography>
+                      </label>
+                    </Box>
+                  </FormControl>
+                </Box>
+
+                {!jadxSessionId && (
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    Full scan requires decompiled sources. The scan will run after JADX decompilation completes.
+                  </Alert>
+                )}
+              </Paper>
+
+              {/* Loading State */}
+              {enhancedSecurityLoading && (
+                <Box sx={{ textAlign: "center", py: 4 }}>
+                  <CircularProgress color="error" size={48} />
+                  <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
+                    Running comprehensive security analysis...
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                    Pattern scan + AI analysis + CVE lookup (3-5 minutes)
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Enhanced Security Results */}
+              {enhancedSecurityResult && !enhancedSecurityLoading && (
+                <Box>
+                  {/* Executive Summary */}
+                  <Box sx={{ 
+                    p: 2,
+                    borderRadius: 1,
+                    bgcolor: alpha(getSeverityColor(enhancedSecurityResult.overall_risk === "none" ? "low" : enhancedSecurityResult.overall_risk), 0.15),
+                    border: `1px solid ${getSeverityColor(enhancedSecurityResult.overall_risk === "none" ? "low" : enhancedSecurityResult.overall_risk)}`,
+                    mb: 3
+                  }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                      <Chip 
+                        label={`${enhancedSecurityResult.overall_risk.toUpperCase()} RISK`} 
+                        sx={{ 
+                          bgcolor: getSeverityColor(enhancedSecurityResult.overall_risk === "none" ? "low" : enhancedSecurityResult.overall_risk),
+                          color: "white",
+                          fontWeight: 700
+                        }} 
+                      />
+                      <Typography variant="body2" color="grey.300">
+                        {enhancedSecurityResult.combined_findings.length} findings from {enhancedSecurityResult.analysis_metadata.classes_scanned} classes
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="grey.400">
+                      {enhancedSecurityResult.executive_summary}
+                    </Typography>
+                  </Box>
+
+                  {/* Analysis Metadata */}
+                  <Box sx={{ display: "flex", gap: 1, mb: 3, flexWrap: "wrap", alignItems: "center" }}>
+                    <Chip 
+                      label={`Pattern: ${enhancedSecurityResult.pattern_findings.length}`} 
+                      size="small" 
+                      variant="outlined"
+                      color="info"
+                    />
+                    <Chip 
+                      label={`AI: ${enhancedSecurityResult.ai_findings.length}`} 
+                      size="small" 
+                      variant="outlined"
+                      color="warning"
+                    />
+                    <Chip 
+                      label={`CVEs: ${enhancedSecurityResult.analysis_metadata.cves_found}`} 
+                      size="small" 
+                      variant="outlined"
+                      color="error"
+                    />
+                    <Chip 
+                      label={`Libraries: ${enhancedSecurityResult.analysis_metadata.libraries_detected}`} 
+                      size="small" 
+                      variant="outlined"
+                    />
+                    <Box sx={{ flexGrow: 1 }} />
+                    {/* Export Dropdown */}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<DownloadIcon />}
+                      onClick={(e) => setSecurityExportAnchor(e.currentTarget)}
+                      disabled={!!securityExporting}
+                    >
+                      {securityExporting ? `Exporting ${securityExporting.toUpperCase()}...` : "Export Report"}
+                    </Button>
+                    <Menu
+                      anchorEl={securityExportAnchor}
+                      open={Boolean(securityExportAnchor)}
+                      onClose={() => setSecurityExportAnchor(null)}
+                    >
+                      <MenuItem onClick={() => handleSecurityExport("markdown")}>
+                        📄 Markdown (.md)
+                      </MenuItem>
+                      <MenuItem onClick={() => handleSecurityExport("pdf")}>
+                        📑 PDF Document
+                      </MenuItem>
+                      <MenuItem onClick={() => handleSecurityExport("docx")}>
+                        📝 Word Document (.docx)
+                      </MenuItem>
+                    </Menu>
+                  </Box>
+
+                  {/* Risk Summary */}
+                  <Grid container spacing={1} sx={{ mb: 3 }}>
+                    <Grid item xs={2.4}>
+                      <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#dc2626", 0.1) }}>
+                        <Typography variant="h4" color="error">{enhancedSecurityResult.risk_summary.critical}</Typography>
+                        <Typography variant="caption">Critical</Typography>
+                      </Paper>
+                    </Grid>
+                    <Grid item xs={2.4}>
+                      <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#ea580c", 0.1) }}>
+                        <Typography variant="h4" sx={{ color: "#ea580c" }}>{enhancedSecurityResult.risk_summary.high}</Typography>
+                        <Typography variant="caption">High</Typography>
+                      </Paper>
+                    </Grid>
+                    <Grid item xs={2.4}>
+                      <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#ca8a04", 0.1) }}>
+                        <Typography variant="h4" sx={{ color: "#ca8a04" }}>{enhancedSecurityResult.risk_summary.medium}</Typography>
+                        <Typography variant="caption">Medium</Typography>
+                      </Paper>
+                    </Grid>
+                    <Grid item xs={2.4}>
+                      <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#16a34a", 0.1) }}>
+                        <Typography variant="h4" color="success.main">{enhancedSecurityResult.risk_summary.low}</Typography>
+                        <Typography variant="caption">Low</Typography>
+                      </Paper>
+                    </Grid>
+                    <Grid item xs={2.4}>
+                      <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#6b7280", 0.1) }}>
+                        <Typography variant="h4" sx={{ color: "#6b7280" }}>{enhancedSecurityResult.risk_summary.info}</Typography>
+                        <Typography variant="caption">Info</Typography>
+                      </Paper>
+                    </Grid>
+                  </Grid>
+
+                  {/* AI Offensive Security Plan Summary */}
+                  {enhancedSecurityResult.offensive_plan_summary && (
+                    <Paper sx={{ p: 2, mb: 3, bgcolor: alpha(theme.palette.error.main, 0.05), border: `1px solid ${alpha(theme.palette.error.main, 0.3)}` }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                        <Typography variant="h6" color="error.main" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          🎯 Offensive Security Assessment
+                        </Typography>
+                        <Chip 
+                          label={`${enhancedSecurityResult.offensive_plan_summary.risk_rating?.toUpperCase() || 'UNKNOWN'} RISK`}
+                          size="small"
+                          sx={{ 
+                            bgcolor: getSeverityColor(enhancedSecurityResult.offensive_plan_summary.risk_rating || 'medium'),
+                            color: 'white'
+                          }}
+                        />
+                        <Chip 
+                          label={`Confidence: ${enhancedSecurityResult.offensive_plan_summary.confidence_level || 'unknown'}`}
+                          size="small"
+                          variant="outlined"
+                        />
+                      </Box>
+                      
+                      {/* Threat Assessment */}
+                      {enhancedSecurityResult.offensive_plan_summary.threat_assessment && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="subtitle2" color="error.light" gutterBottom>
+                            Threat Assessment
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>
+                            {enhancedSecurityResult.offensive_plan_summary.threat_assessment}
+                          </Typography>
+                        </Box>
+                      )}
+                      
+                      {/* Attack Surface Summary */}
+                      {enhancedSecurityResult.offensive_plan_summary.attack_surface_summary && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="subtitle2" color="warning.main" gutterBottom>
+                            Attack Surface
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>
+                            {enhancedSecurityResult.offensive_plan_summary.attack_surface_summary}
+                          </Typography>
+                        </Box>
+                      )}
+                      
+                      {/* Primary Attack Vectors */}
+                      {enhancedSecurityResult.offensive_plan_summary.primary_attack_vectors?.length > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="subtitle2" color="error.light" gutterBottom>
+                            Primary Attack Vectors
+                          </Typography>
+                          {enhancedSecurityResult.offensive_plan_summary.primary_attack_vectors.map((vector: any, idx: number) => (
+                            <Paper key={idx} sx={{ p: 1.5, mb: 1, bgcolor: alpha(theme.palette.background.paper, 0.5) }}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                                <Typography variant="body2" fontWeight={600}>{vector.vector}</Typography>
+                                <Chip 
+                                  label={vector.likelihood} 
+                                  size="small" 
+                                  sx={{ 
+                                    height: 18, 
+                                    fontSize: "0.6rem",
+                                    bgcolor: vector.likelihood === 'high' ? '#dc2626' : vector.likelihood === 'medium' ? '#ca8a04' : '#16a34a',
+                                    color: 'white'
+                                  }}
+                                />
+                              </Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                {vector.description}
+                              </Typography>
+                              {vector.prerequisites && (
+                                <Typography variant="caption" color="info.main" sx={{ display: "block", mt: 0.5 }}>
+                                  Prerequisites: {vector.prerequisites}
+                                </Typography>
+                              )}
+                              {vector.impact && (
+                                <Typography variant="caption" color="error.main" sx={{ display: "block" }}>
+                                  Impact: {vector.impact}
+                                </Typography>
+                              )}
+                            </Paper>
+                          ))}
+                        </Box>
+                      )}
+                      
+                      {/* Recommended Test Scenarios */}
+                      {enhancedSecurityResult.offensive_plan_summary.recommended_test_scenarios?.length > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="subtitle2" color="info.main" gutterBottom>
+                            Recommended Penetration Tests
+                          </Typography>
+                          <List dense disablePadding>
+                            {enhancedSecurityResult.offensive_plan_summary.recommended_test_scenarios.map((scenario: string, idx: number) => (
+                              <ListItem key={idx} sx={{ py: 0.25, pl: 1 }}>
+                                <ListItemIcon sx={{ minWidth: 24 }}>
+                                  <Typography variant="caption" color="info.main">{idx + 1}.</Typography>
+                                </ListItemIcon>
+                                <ListItemText 
+                                  primary={scenario}
+                                  primaryTypographyProps={{ variant: "caption", color: "text.secondary" }}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                      )}
+                      
+                      {/* Priority Targets */}
+                      {enhancedSecurityResult.offensive_plan_summary.priority_targets?.length > 0 && (
+                        <Box>
+                          <Typography variant="subtitle2" color="warning.main" gutterBottom>
+                            Priority Targets
+                          </Typography>
+                          <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                            {enhancedSecurityResult.offensive_plan_summary.priority_targets.map((target: string, idx: number) => (
+                              <Chip key={idx} label={target} size="small" variant="outlined" color="warning" sx={{ fontSize: "0.7rem" }} />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                    </Paper>
+                  )}
+
+                  {/* Combined Vulnerabilities - Collapsed by default */}
+                  {enhancedSecurityResult.combined_findings.length > 0 && (
+                    <Accordion sx={{ mb: 2 }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="body2" color="error.main">
+                          Individual Findings ({enhancedSecurityResult.combined_findings.length}) - Click to expand
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        {enhancedSecurityResult.combined_findings.map((finding, idx) => (
+                          <Accordion 
+                            key={idx} 
+                            sx={{ 
+                              bgcolor: alpha(getSeverityColor(finding.severity), 0.1),
+                              "&:before": { display: "none" },
+                              mb: 1
+                            }}
+                          >
+                            <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                                <Chip 
+                                  label={finding.severity} 
+                                  size="small"
+                                  sx={{ 
+                                    bgcolor: getSeverityColor(finding.severity),
+                                    color: "white",
+                                    fontSize: "0.65rem",
+                                    height: 20
+                                  }} 
+                                />
+                                <Chip 
+                                  label={finding.source.toUpperCase()} 
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ height: 18, fontSize: "0.6rem" }}
+                                />
+                                <Typography variant="body2" fontWeight={600}>
+                                  {finding.title}
+                                </Typography>
+                                {finding.cve_id && (
+                                  <Chip label={finding.cve_id} size="small" color="error" sx={{ height: 18, fontSize: "0.6rem" }} />
+                                )}
+                                {finding.cwe_id && (
+                                  <Chip label={finding.cwe_id} size="small" variant="outlined" sx={{ height: 18, fontSize: "0.6rem" }} />
+                                )}
+                              </Box>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                {finding.description}
+                              </Typography>
+                              {finding.affected_class && (
+                                <Typography variant="caption" color="info.main" sx={{ display: "block", mb: 1 }}>
+                                  Location: {finding.affected_class} {finding.affected_method ? `→ ${finding.affected_method}` : ""} {finding.line_number ? `(line ${finding.line_number})` : ""}
+                                </Typography>
+                              )}
+                              {finding.affected_library && (
+                                <Typography variant="caption" color="warning.main" sx={{ display: "block", mb: 1 }}>
+                                  Library: {finding.affected_library}
+                                </Typography>
+                              )}
+                              {finding.cvss_score && (
+                                <Typography variant="caption" color="error.main" sx={{ display: "block", mb: 1 }}>
+                                  CVSS Score: {finding.cvss_score}
+                                </Typography>
+                              )}
+                              {finding.code_snippet && (
+                                <Box sx={{ 
+                                  p: 1, 
+                                  bgcolor: alpha(theme.palette.background.paper, 0.3),
+                                  borderRadius: 1,
+                                  fontFamily: "monospace",
+                                  fontSize: "0.75rem",
+                                  color: "warning.main",
+                                  mb: 1,
+                                  whiteSpace: "pre-wrap",
+                                  overflow: "auto",
+                                  maxHeight: 150
+                                }}>
+                                  {finding.code_snippet}
+                                </Box>
+                              )}
+                              {finding.impact && (
+                                <Typography variant="caption" color="error.main" sx={{ display: "block", mb: 0.5 }}>
+                                  Impact: {finding.impact}
+                                </Typography>
+                              )}
+                              {finding.exploitation_potential && (
+                                <Typography variant="caption" color="warning.main" sx={{ display: "block", mb: 0.5 }}>
+                                  Exploitation: {finding.exploitation_potential}
+                                </Typography>
+                              )}
+                              {finding.attack_vector && (
+                                <Typography variant="caption" color="info.main" sx={{ display: "block", mb: 0.5 }}>
+                                  Attack Vector: {finding.attack_vector}
+                                </Typography>
+                              )}
+                              {finding.remediation && (
+                                <Typography variant="caption" color="success.main" sx={{ display: "block" }}>
+                                  Fix: {finding.remediation}
+                                </Typography>
+                              )}
+                            </AccordionDetails>
+                          </Accordion>
+                        ))}
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
+
+                  {/* Attack Chains */}
+                  {enhancedSecurityResult.attack_chains.length > 0 && (
+                    <Accordion sx={{ mb: 2 }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="body2" color="warning.main">
+                          Attack Chains ({enhancedSecurityResult.attack_chains.length})
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        {enhancedSecurityResult.attack_chains.map((chain, idx) => (
+                          <Paper key={idx} sx={{ p: 2, mb: 1, bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                              <Typography variant="subtitle2" fontWeight={700}>
+                                {chain.name}
+                              </Typography>
+                              <Chip 
+                                label={chain.likelihood} 
+                                size="small" 
+                                color={chain.likelihood === "high" ? "error" : chain.likelihood === "medium" ? "warning" : "info"}
+                              />
+                            </Box>
+                            <Box sx={{ pl: 2, borderLeft: `2px solid ${theme.palette.warning.main}` }}>
+                              {chain.steps.map((step, sidx) => (
+                                <Typography key={sidx} variant="body2" sx={{ mb: 0.5 }}>
+                                  {sidx + 1}. {step}
+                                </Typography>
+                              ))}
+                            </Box>
+                            {chain.classes_involved && chain.classes_involved.length > 0 && (
+                              <Box sx={{ mt: 1, display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                                {chain.classes_involved.map((cls, cidx) => (
+                                  <Chip key={cidx} label={cls} size="small" variant="outlined" sx={{ fontSize: "0.6rem" }} />
+                                ))}
+                              </Box>
+                            )}
+                            <Typography variant="caption" color="error.main" sx={{ mt: 1, display: "block" }}>
+                              Impact: {chain.impact}
+                            </Typography>
+                          </Paper>
+                        ))}
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
+
+                  {/* Recommendations */}
+                  {enhancedSecurityResult.recommendations.length > 0 && (
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="body2" color="success.main">
+                          Recommendations ({enhancedSecurityResult.recommendations.length})
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <List dense>
+                          {enhancedSecurityResult.recommendations.map((rec, idx) => (
+                            <ListItem key={idx}>
+                              <ListItemIcon sx={{ minWidth: 32 }}>
+                                <CheckIcon fontSize="small" color="success" />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary={rec}
+                                primaryTypographyProps={{ variant: "body2", color: "text.secondary" }}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
+                </Box>
+              )}
+
+              {/* Quick AI Security Report (if available and no full scan yet) */}
+              {!enhancedSecurityResult && !enhancedSecurityLoading && result.ai_security_report && (
+                <Box sx={{ mt: 2 }}>
+                  <Divider sx={{ mb: 2 }}>
+                    <Chip label="Quick AI Security Analysis" size="small" />
+                  </Divider>
+                  <Box sx={htmlContentStyles} dangerouslySetInnerHTML={{ __html: result.ai_security_report }} />
+                </Box>
+              )}
+
+              {/* Fallback: Show raw security issues if no AI report and no full scan */}
+              {!enhancedSecurityResult && !enhancedSecurityLoading && !result.ai_security_report && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="h6" gutterBottom>Security Issues Found</Typography>
+                  {result.security_issues.length === 0 && result.jadx_security_issues.length === 0 ? (
+                    <Alert severity="success">No security issues detected! Run a full security scan for comprehensive analysis.</Alert>
+                  ) : (
+                    <List>
+                      {[
+                        ...result.security_issues,
+                        ...result.jadx_security_issues.map(i => ({
+                          category: String(i.category || "Security Issue"),
+                          severity: String(i.severity || "medium"),
+                          description: String(i.description || ""),
+                        }))
+                      ].map((issue, idx) => (
+                        <ListItem key={idx}>
+                          <ListItemIcon>
+                            <WarningIcon color={issue.severity === "high" || issue.severity === "critical" ? "error" : "warning"} />
+                          </ListItemIcon>
+                          <ListItemText 
+                            primary={issue.category || issue.description}
+                            secondary={issue.description}
+                          />
+                          <Chip label={issue.severity} size="small" color={issue.severity === "high" ? "error" : "warning"} />
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </Box>
+              )}
+            </Box>
+          )}
+          
+          {/* Tab 2: Architecture Diagram */}
+          {activeTab === 2 && (
+            result.ai_architecture_diagram ? (
+              <MermaidDiagram 
+                code={result.ai_architecture_diagram}
+                title="APK Architecture"
+                maxHeight={600}
+                showControls={true}
+                showCodeToggle={true}
+              />
+            ) : (
+              <Alert severity="info">
+                Architecture diagram not available. This may happen if AI analysis encountered an error.
+              </Alert>
+            )
+          )}
+        </Box>
+      </Paper>
+      
+      {/* Additional Details Accordions */}
+      <Box sx={{ mt: 3 }}>
+        {/* Permissions */}
+        <Accordion>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <LockIcon color="primary" />
+              Permissions ({result.permissions.length})
+              {result.dangerous_permissions_count > 0 && (
+                <Chip label={`${result.dangerous_permissions_count} dangerous`} size="small" color="error" sx={{ ml: 1 }} />
+              )}
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={1}>
+              {result.permissions.map((perm, idx) => (
+                <Grid item xs={12} sm={6} key={idx}>
+                  <Chip
+                    label={perm.name.replace("android.permission.", "")}
+                    color={perm.is_dangerous ? "error" : "default"}
+                    variant={perm.is_dangerous ? "filled" : "outlined"}
+                    size="small"
+                    sx={{ m: 0.25 }}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+        
+        {/* Secrets */}
+        {result.secrets.length > 0 && (
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <SecretIcon color="warning" />
+                Hardcoded Secrets ({result.secrets.length})
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Value (Masked)</TableCell>
+                      <TableCell>Severity</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {result.secrets.map((secret, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell><Chip label={secret.type} size="small" /></TableCell>
+                        <TableCell><code>{secret.masked_value}</code></TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={secret.severity} 
+                            size="small" 
+                            color={secret.severity === "high" ? "error" : secret.severity === "medium" ? "warning" : "info"} 
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </AccordionDetails>
+          </Accordion>
+        )}
+        
+        {/* URLs */}
+        {result.urls.length > 0 && (
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <LinkIcon color="info" />
+                URLs Found ({result.urls.length})
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <List dense>
+                {result.urls.slice(0, 50).map((url, idx) => (
+                  <ListItem key={idx}>
+                    <ListItemText 
+                      primary={<code style={{ fontSize: "0.85em", wordBreak: "break-all" }}>{url}</code>}
+                    />
+                  </ListItem>
+                ))}
+                {result.urls.length > 50 && (
+                  <ListItem>
+                    <Typography variant="body2" color="text.secondary">
+                      ... and {result.urls.length - 50} more URLs
+                    </Typography>
+                  </ListItem>
+                )}
+              </List>
+            </AccordionDetails>
+          </Accordion>
+        )}
+        
+        {/* Components */}
+        <Accordion>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <LayersIcon color="secondary" />
+              Components ({result.components.length})
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Exported</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {result.components.slice(0, 30).map((comp, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell><code style={{ fontSize: "0.8em" }}>{comp.name.split(".").pop()}</code></TableCell>
+                      <TableCell><Chip label={comp.component_type} size="small" /></TableCell>
+                      <TableCell>
+                        {comp.is_exported ? (
+                          <Chip label="Exported" size="small" color="warning" />
+                        ) : (
+                          <Chip label="Internal" size="small" variant="outlined" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {result.components.length > 30 && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                ... and {result.components.length - 30} more components
+              </Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Decompiled Code Security Findings */}
+        {result.decompiled_code_findings && result.decompiled_code_findings.length > 0 && (
+          <DecompiledCodeFindingsAccordion 
+            findings={result.decompiled_code_findings} 
+            summary={result.decompiled_code_summary}
+            jadxSessionId={result.jadx_session_id}
+          />
+        )}
+      </Box>
+      
+      {/* Advanced Analysis Tools - Manifest Visualization, Attack Surface, Obfuscation */}
+      {apkFile && (
+        <AdvancedAnalysisToolsTabs apkFile={apkFile} autoStart={false} />
+      )}
+    </Box>
+  );
+}
+
 // Binary Analysis Results Component
 function BinaryResults({ result }: { result: BinaryAnalysisResult }) {
   const theme = useTheme();
   const [stringsExpanded, setStringsExpanded] = useState(false);
+  const [ghidraExpanded, setGhidraExpanded] = useState(false);
+  const [ghidraFilter, setGhidraFilter] = useState("");
+  const ghidra = result.ghidra_analysis;
+  const ghidraFunctions = ghidra?.functions || [];
+  const ghidraTotal = ghidra?.functions_total || ghidraFunctions.length;
+  const filteredGhidraFunctions = ghidraFilter
+    ? ghidraFunctions.filter((fn) => {
+        const needle = ghidraFilter.toLowerCase();
+        return (
+          fn.name.toLowerCase().includes(needle) ||
+          fn.entry.toLowerCase().includes(needle)
+        );
+      })
+    : ghidraFunctions;
+  const visibleGhidraFunctions = filteredGhidraFunctions.slice(0, 50);
+  const ghidraSummaryMap = new Map(
+    (result.ghidra_ai_summaries || []).map((s) => [`${s.name}:${s.entry}`, s])
+  );
+  const isPeBinary = result.metadata.file_type?.includes("PE");
+  const fuzzyHashes = result.fuzzy_hashes || {};
+  const yaraMatches = result.yara_matches || [];
+  const capaSummary = result.capa_summary || null;
+  const deobfuscatedStrings = result.deobfuscated_strings || [];
+  const peDelayImports = result.metadata.pe_delay_imports || [];
+  const peRelocations = result.metadata.pe_relocations || {};
+  const peDebug = result.metadata.pe_debug || {};
+  const peDataDirectories = result.metadata.pe_data_directories || [];
+  const peManifest = result.metadata.pe_manifest || "";
+  const peMitigations = result.metadata.mitigations || {};
+  const tlsCallbacks = result.metadata.tls_callbacks || [];
+  const resourceSummary = result.metadata.resource_summary || {};
+  const versionInfo = result.metadata.version_info || {};
+  const authenticode = result.metadata.authenticode || null;
+  const overlay = result.metadata.overlay || null;
+  const elfDynamic = result.metadata.elf_dynamic || {};
+  const elfRelocations = result.metadata.elf_relocations || {};
+  const elfVersionInfo = result.metadata.elf_version_info || {};
+  const elfBuildId = result.metadata.elf_build_id;
+  const elfProgramHeaders = result.metadata.elf_program_headers || [];
+  const preferredVersionKeys = [
+    "CompanyName",
+    "FileDescription",
+    "ProductName",
+    "ProductVersion",
+    "FileVersion",
+    "OriginalFilename",
+    "InternalName",
+  ];
+  const versionInfoEntries = preferredVersionKeys
+    .filter((key) => versionInfo[key])
+    .map((key) => [key, String(versionInfo[key])]);
+  const extraVersionEntries = Object.entries(versionInfo)
+    .filter(([key, value]) => !preferredVersionKeys.includes(key) && value)
+    .slice(0, 6)
+    .map(([key, value]) => [key, String(value)]);
+  const allVersionEntries = [...versionInfoEntries, ...extraVersionEntries];
+  const mitigationFlags = [
+    { key: "aslr", label: "ASLR" },
+    { key: "dep", label: "DEP" },
+    { key: "cfg", label: "CFG" },
+    { key: "gs_cookie", label: "GS Cookie" },
+    { key: "safe_seh", label: "SafeSEH" },
+    { key: "high_entropy_va", label: "High Entropy VA" },
+    { key: "force_integrity", label: "Force Integrity" },
+    { key: "no_seh", label: "No SEH" },
+    { key: "app_container", label: "AppContainer" },
+    { key: "terminal_server_aware", label: "Terminal Server Aware" },
+  ];
+  const mitigationChips = mitigationFlags
+    .map((flag) => ({
+      label: flag.label,
+      value: peMitigations[flag.key],
+    }))
+    .filter((entry): entry is { label: string; value: boolean } => typeof entry.value === "boolean");
+  const hasPeDeepDetails =
+    isPeBinary &&
+    (peDelayImports.length > 0 ||
+      (peRelocations.total_entries || 0) > 0 ||
+      (peDebug.count || 0) > 0 ||
+      peDataDirectories.length > 0 ||
+      Boolean(peManifest));
+  const hasElfDynamicValues =
+    Boolean(elfDynamic.soname || elfDynamic.rpath || elfDynamic.runpath) ||
+    (elfDynamic.flags?.length || 0) > 0 ||
+    (elfDynamic.flags_1?.length || 0) > 0 ||
+    (elfDynamic.needed?.length || 0) > 0;
+  const hasElfDeepDetails =
+    result.metadata.file_type?.includes("ELF") &&
+    (Boolean(elfBuildId) ||
+      hasElfDynamicValues ||
+      (elfRelocations.total || 0) > 0 ||
+      (elfVersionInfo.definitions?.length || 0) > 0 ||
+      (elfVersionInfo.requirements?.length || 0) > 0 ||
+      elfProgramHeaders.length > 0);
+  const hasIntel =
+    Object.keys(fuzzyHashes).length > 0 ||
+    yaraMatches.length > 0 ||
+    Boolean(capaSummary) ||
+    deobfuscatedStrings.length > 0;
 
   return (
     <Box>
@@ -572,7 +2318,7 @@ function BinaryResults({ result }: { result: BinaryAnalysisResult }) {
       )}
 
       {/* PE Rich Header & Imphash - Compiler/Linker Info */}
-      {result.metadata.file_type?.includes("PE") && (result.metadata.rich_header || result.metadata.imphash) && (
+      {isPeBinary && (result.metadata.rich_header || result.metadata.imphash) && (
         <Paper sx={{ p: 3, mt: 3, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
           <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <CodeIcon color="info" /> PE Rich Header & Build Info
@@ -650,6 +2396,509 @@ function BinaryResults({ result }: { result: BinaryAnalysisResult }) {
               </TableContainer>
             </Box>
           )}
+        </Paper>
+      )}
+
+      {/* PE Deep Details */}
+      {hasPeDeepDetails && (
+        <Accordion sx={{ mt: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <SecurityIcon color="info" /> PE Deep Details
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              {peDelayImports.length > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Delay Imports</Typography>
+                  <TableContainer sx={{ maxHeight: 220 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>DLL</TableCell>
+                          <TableCell>Count</TableCell>
+                          <TableCell>Sample Imports</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {peDelayImports.slice(0, 6).map((entry, idx) => (
+                          <TableRow key={`${entry.dll}-${idx}`}>
+                            <TableCell>{entry.dll}</TableCell>
+                            <TableCell>{entry.count}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2" color="text.secondary">
+                                {entry.imports.slice(0, 4).map((imp) => imp.name).join(", ") || "-"}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Grid>
+              )}
+              {(peRelocations.total_entries || 0) > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Relocations</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Blocks: {peRelocations.total_blocks || 0} | Entries: {peRelocations.total_entries || 0}
+                  </Typography>
+                  {Array.isArray(peRelocations.blocks) && peRelocations.blocks.length > 0 && (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                      {peRelocations.blocks.slice(0, 6).map((block, idx) => (
+                        <Chip
+                          key={`${block.base_rva}-${idx}`}
+                          label={`0x${block.base_rva.toString(16)} (${block.entries_count})`}
+                          size="small"
+                          variant="outlined"
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </Grid>
+              )}
+              {(peDebug.count || 0) > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Debug Info</Typography>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                    {peDebug.entries?.slice(0, 3).map((entry, idx) => (
+                      <Typography key={`${entry.type}-${idx}`} variant="caption" color="text.secondary">
+                        {entry.type} {entry.pdb_path ? `- ${entry.pdb_path}` : ""}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Grid>
+              )}
+              {peDataDirectories.length > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Data Directories</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {peDataDirectories.slice(0, 8).map((entry) => (
+                      <Chip
+                        key={entry.name}
+                        label={`${entry.name} (${entry.size})`}
+                        size="small"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+              )}
+              {peManifest && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" gutterBottom>Manifest</Typography>
+                  <Typography variant="body2" fontFamily="monospace" sx={{ whiteSpace: "pre-wrap" }}>
+                    {peManifest}
+                  </Typography>
+                </Grid>
+              )}
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+      )}
+
+      {/* ELF Deep Details */}
+      {hasElfDeepDetails && (
+        <Accordion sx={{ mt: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <SecurityIcon color="info" /> ELF Deep Details
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              {elfBuildId && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Build ID</Typography>
+                  <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                    {elfBuildId}
+                  </Typography>
+                </Grid>
+              )}
+              {(elfDynamic.soname || elfDynamic.rpath || elfDynamic.runpath) && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Dynamic Info</Typography>
+                  {elfDynamic.soname && (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      SONAME: {elfDynamic.soname}
+                    </Typography>
+                  )}
+                  {elfDynamic.rpath && (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      RPATH: {elfDynamic.rpath}
+                    </Typography>
+                  )}
+                  {elfDynamic.runpath && (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      RUNPATH: {elfDynamic.runpath}
+                    </Typography>
+                  )}
+                </Grid>
+              )}
+              {(elfDynamic.flags?.length || 0) > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>DT_FLAGS</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {elfDynamic.flags?.map((flag) => (
+                      <Chip key={flag} label={flag} size="small" variant="outlined" />
+                    ))}
+                  </Box>
+                </Grid>
+              )}
+              {(elfDynamic.flags_1?.length || 0) > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>DT_FLAGS_1</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {elfDynamic.flags_1?.map((flag) => (
+                      <Chip key={flag} label={flag} size="small" variant="outlined" />
+                    ))}
+                  </Box>
+                </Grid>
+              )}
+              {(elfRelocations.total || 0) > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Relocations</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Total relocations: {elfRelocations.total}
+                  </Typography>
+                  {Array.isArray(elfRelocations.sections) && elfRelocations.sections.length > 0 && (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                      {elfRelocations.sections.slice(0, 6).map((section) => (
+                        <Chip
+                          key={section.name}
+                          label={`${section.name} (${section.relocations})`}
+                          size="small"
+                          variant="outlined"
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </Grid>
+              )}
+              {(elfVersionInfo.definitions?.length || 0) > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Version Definitions</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {elfVersionInfo.definitions?.slice(0, 6).map((entry, idx) => (
+                      <Chip
+                        key={`${entry.name || "def"}-${idx}`}
+                        label={entry.name || `Index ${entry.index ?? "-"}`}
+                        size="small"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+              )}
+              {(elfVersionInfo.requirements?.length || 0) > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Version Requirements</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {elfVersionInfo.requirements?.slice(0, 6).map((entry, idx) => (
+                      <Chip
+                        key={`${entry.file || "req"}-${idx}`}
+                        label={entry.file || "unknown"}
+                        size="small"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+              )}
+              {elfProgramHeaders.length > 0 && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" gutterBottom>Program Headers</Typography>
+                  <TableContainer sx={{ maxHeight: 220 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Type</TableCell>
+                          <TableCell>Offset</TableCell>
+                          <TableCell>Vaddr</TableCell>
+                          <TableCell>Filesz</TableCell>
+                          <TableCell>Memsz</TableCell>
+                          <TableCell>Flags</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {elfProgramHeaders.slice(0, 8).map((seg, idx) => (
+                          <TableRow key={`${seg.type}-${idx}`}>
+                            <TableCell>{seg.type}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontFamily="monospace">
+                                0x{seg.offset.toString(16)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontFamily="monospace">
+                                0x{seg.vaddr.toString(16)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>{seg.filesz}</TableCell>
+                            <TableCell>{seg.memsz}</TableCell>
+                            <TableCell>{seg.flags}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Grid>
+              )}
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+      )}
+
+      {/* PE Security & Metadata */}
+      {isPeBinary && (
+        <Paper sx={{ p: 3, mt: 3, bgcolor: alpha(theme.palette.info.main, 0.04) }}>
+          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon color="info" /> PE Security & Metadata
+          </Typography>
+
+          {mitigationChips.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>Mitigations</Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                {mitigationChips.map((chip) => (
+                  <Chip
+                    key={chip.label}
+                    label={`${chip.label}: ${chip.value ? "On" : "Off"}`}
+                    size="small"
+                    color={chip.value ? "success" : "error"}
+                    variant="outlined"
+                  />
+                ))}
+              </Box>
+              {peMitigations.dll_characteristics && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                  DLL Characteristics: {peMitigations.dll_characteristics}
+                </Typography>
+              )}
+              {peMitigations.guard_flags && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  Guard Flags: {peMitigations.guard_flags}
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {(tlsCallbacks.length > 0 || overlay || authenticode || Object.keys(resourceSummary).length > 0 || allVersionEntries.length > 0) ? (
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>TLS Callbacks</Typography>
+                {tlsCallbacks.length > 0 ? (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {tlsCallbacks.slice(0, 10).map((cb) => (
+                      <Chip key={cb} label={`0x${cb.toString(16)}`} size="small" variant="outlined" />
+                    ))}
+                    {tlsCallbacks.length > 10 && (
+                      <Chip label={`+${tlsCallbacks.length - 10} more`} size="small" variant="outlined" />
+                    )}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">None detected</Typography>
+                )}
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>Authenticode</Typography>
+                {authenticode ? (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                    <Chip
+                      label={authenticode.signed ? "Signed" : "Unsigned"}
+                      size="small"
+                      color={authenticode.signed ? "success" : "warning"}
+                      variant="outlined"
+                    />
+                    {authenticode.certificate_type && (
+                      <Typography variant="caption" color="text.secondary">
+                        Type: {authenticode.certificate_type}
+                      </Typography>
+                    )}
+                    {authenticode.certificate_size && (
+                      <Typography variant="caption" color="text.secondary">
+                        Certificate Size: {(authenticode.certificate_size / 1024).toFixed(1)} KB
+                      </Typography>
+                    )}
+                    {authenticode.status && (
+                      <Typography variant="caption" color="text.secondary">
+                        Status: {authenticode.status}
+                      </Typography>
+                    )}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">Not available</Typography>
+                )}
+              </Grid>
+
+              {Object.keys(resourceSummary).length > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Resources</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Total: {resourceSummary.total_count || 0} items, {(resourceSummary.total_size || 0) / 1024 >= 0.1
+                      ? `${((resourceSummary.total_size || 0) / 1024).toFixed(1)} KB`
+                      : `${resourceSummary.total_size || 0} B`}
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                    <Chip
+                      label={resourceSummary.has_manifest ? "Manifest Present" : "No Manifest"}
+                      size="small"
+                      color={resourceSummary.has_manifest ? "success" : "default"}
+                      variant="outlined"
+                    />
+                    <Chip
+                      label={resourceSummary.has_version_info ? "Version Info Present" : "No Version Info"}
+                      size="small"
+                      color={resourceSummary.has_version_info ? "success" : "default"}
+                      variant="outlined"
+                    />
+                  </Box>
+                  {Array.isArray(resourceSummary.types) && resourceSummary.types.length > 0 && (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                      {resourceSummary.types.slice(0, 8).map((type) => (
+                        <Chip
+                          key={type.type}
+                          label={`${type.type} (${type.count})`}
+                          size="small"
+                          variant="outlined"
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </Grid>
+              )}
+
+              {allVersionEntries.length > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Version Info</Typography>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                    {allVersionEntries.map(([key, value]) => (
+                      <Typography key={key} variant="caption" color="text.secondary">
+                        {key}: {value}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Grid>
+              )}
+
+              {overlay && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>Overlay</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Offset: 0x{overlay.offset.toString(16)} | Size: {(overlay.size / 1024).toFixed(1)} KB
+                  </Typography>
+                </Grid>
+              )}
+            </Grid>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Additional PE metadata not available.
+            </Typography>
+          )}
+        </Paper>
+      )}
+
+      {/* Binary Intelligence */}
+      {hasIntel && (
+        <Paper sx={{ p: 3, mt: 3, bgcolor: alpha(theme.palette.warning.main, 0.04) }}>
+          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon color="warning" /> Binary Intelligence
+          </Typography>
+          <Grid container spacing={2}>
+            {Object.keys(fuzzyHashes).length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>Fuzzy Hashes</Typography>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                  {Object.entries(fuzzyHashes).map(([name, value]) => (
+                    <Typography key={name} variant="caption" color="text.secondary" fontFamily="monospace">
+                      {name}: {value || "N/A"}
+                    </Typography>
+                  ))}
+                </Box>
+              </Grid>
+            )}
+
+            {yaraMatches.length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>YARA Matches</Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                  {yaraMatches.slice(0, 10).map((match, idx) => (
+                    <Chip
+                      key={`${match.rule}-${idx}`}
+                      label={match.rule}
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                    />
+                  ))}
+                  {yaraMatches.length > 10 && (
+                    <Chip label={`+${yaraMatches.length - 10} more`} size="small" variant="outlined" />
+                  )}
+                </Box>
+              </Grid>
+            )}
+
+            {capaSummary && (
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>capa Capabilities</Typography>
+                {capaSummary.error ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {capaSummary.error}
+                  </Typography>
+                ) : (
+                  <>
+                    <Typography variant="body2" color="text.secondary">
+                      {capaSummary.rule_count || 0} capabilities detected
+                    </Typography>
+                    {Array.isArray(capaSummary.capabilities) && capaSummary.capabilities.length > 0 && (
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                        {capaSummary.capabilities.slice(0, 12).map((capability, idx) => (
+                          <Chip key={`${capability}-${idx}`} label={capability} size="small" variant="outlined" />
+                        ))}
+                      </Box>
+                    )}
+                  </>
+                )}
+              </Grid>
+            )}
+
+            {deobfuscatedStrings.length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>Deobfuscated Strings</Typography>
+                <TableContainer sx={{ maxHeight: 220 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Method</TableCell>
+                        <TableCell>Decoded</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {deobfuscatedStrings.slice(0, 6).map((entry, idx) => (
+                        <TableRow key={`${entry.method}-${idx}`}>
+                          <TableCell>
+                            <Chip label={entry.method} size="small" variant="outlined" />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                              {entry.decoded}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                {deobfuscatedStrings.length > 6 && (
+                  <Typography variant="caption" color="text.secondary">
+                    ...and {deobfuscatedStrings.length - 6} more
+                  </Typography>
+                )}
+              </Grid>
+            )}
+          </Grid>
         </Paper>
       )}
 
@@ -862,6 +3111,134 @@ function BinaryResults({ result }: { result: BinaryAnalysisResult }) {
                     </AccordionDetails>
                   </Accordion>
                 ))}
+              </Box>
+          )}
+        </AccordionDetails>
+      </Accordion>
+      )}
+
+      {/* Ghidra Decompilation */}
+      {ghidra && (
+        <Accordion expanded={ghidraExpanded} onChange={() => setGhidraExpanded(!ghidraExpanded)}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <CodeIcon color="primary" /> Ghidra Decompilation
+              {ghidra.error ? (
+                <Chip label="Error" size="small" color="error" />
+              ) : (
+                <Chip label={`${ghidraTotal} functions`} size="small" variant="outlined" />
+              )}
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {ghidra.error ? (
+              <Alert severity="warning">{ghidra.error}</Alert>
+            ) : (
+              <Box>
+                {ghidra.program && (
+                  <Grid container spacing={2} sx={{ mb: 2 }}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="caption" color="text.secondary">Program</Typography>
+                      <Typography variant="body2" fontFamily="monospace">{ghidra.program.name}</Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="caption" color="text.secondary">Processor</Typography>
+                      <Typography variant="body2" fontFamily="monospace">{ghidra.program.processor}</Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="caption" color="text.secondary">Language</Typography>
+                      <Typography variant="body2" fontFamily="monospace">{ghidra.program.language_id}</Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="caption" color="text.secondary">Compiler Spec</Typography>
+                      <Typography variant="body2" fontFamily="monospace">{ghidra.program.compiler_spec}</Typography>
+                    </Grid>
+                  </Grid>
+                )}
+
+                <TextField
+                  label="Filter functions"
+                  placeholder="Search by name or entry"
+                  value={ghidraFilter}
+                  onChange={(e) => setGhidraFilter(e.target.value)}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+
+                <Typography variant="caption" color="text.secondary">
+                  Showing {visibleGhidraFunctions.length} of {filteredGhidraFunctions.length} filtered functions
+                  {filteredGhidraFunctions.length !== ghidraTotal && ` (total ${ghidraTotal})`}
+                </Typography>
+
+                <Divider sx={{ my: 2 }} />
+
+                {visibleGhidraFunctions.map((func, idx) => {
+                  const summaryKey = `${func.name}:${func.entry}`;
+                  const summary = ghidraSummaryMap.get(summaryKey);
+                  return (
+                    <Accordion key={`${func.entry}-${idx}`} sx={{ mb: 1 }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography sx={{ fontFamily: "monospace", display: "flex", alignItems: "center", gap: 1 }}>
+                          {func.name}
+                          <Typography component="span" variant="caption" color="text.secondary">
+                            @ {func.entry} ({func.size} bytes)
+                          </Typography>
+                          {func.is_thunk && <Chip label="Thunk" size="small" variant="outlined" />}
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        {summary?.summary && (
+                          <Paper sx={{ p: 2, mb: 2, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
+                            <Typography variant="subtitle2" gutterBottom>
+                              Gemini Summary
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              component="pre"
+                              sx={{ whiteSpace: "pre-wrap", fontFamily: "inherit", m: 0 }}
+                            >
+                              {summary.summary}
+                            </Typography>
+                          </Paper>
+                        )}
+
+                        {func.called_functions && func.called_functions.length > 0 && (
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="caption" color="text.secondary">Calls</Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                              {func.called_functions.slice(0, 12).map((call, cIdx) => (
+                                <Chip key={cIdx} label={call} size="small" variant="outlined" />
+                              ))}
+                              {func.called_functions.length > 12 && (
+                                <Chip label={`+${func.called_functions.length - 12} more`} size="small" variant="outlined" />
+                              )}
+                            </Box>
+                          </Box>
+                        )}
+
+                        {func.decompiled && (
+                          <Box
+                            sx={{
+                              bgcolor: "grey.900",
+                              color: "grey.100",
+                              p: 2,
+                              borderRadius: 1,
+                              fontFamily: "monospace",
+                              fontSize: "0.75rem",
+                              maxHeight: 300,
+                              overflow: "auto",
+                            }}
+                          >
+                            <Typography component="pre" sx={{ m: 0, whiteSpace: "pre-wrap" }}>
+                              {func.decompiled}
+                            </Typography>
+                          </Box>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+                  );
+                })}
               </Box>
             )}
           </AccordionDetails>
@@ -1736,8 +4113,8 @@ function ApkResults({
         <AdvancedAnalysisToolsTabs apkFile={apkFile} autoStart={!!result} />
       )}
 
-      {/* AI Analysis Reports */}
-      <ApkAIReports result={result} />
+      {/* AI Analysis Reports - Hidden when JADX decompiler has run (single source of truth) */}
+      {!jadxResult && <ApkAIReports result={result} />}
 
       {/* AI-Powered Analysis Tools */}
       <ApkAITools analysisResult={result} jadxResult={jadxResult} />
@@ -1777,9 +4154,10 @@ function ApkResults({
 interface AdvancedAnalysisToolsTabsProps {
   apkFile: File;
   autoStart: boolean;
+  onAttackSurfaceResult?: (result: AttackSurfaceMapResult) => void;
 }
 
-function AdvancedAnalysisToolsTabs({ apkFile, autoStart }: AdvancedAnalysisToolsTabsProps) {
+function AdvancedAnalysisToolsTabs({ apkFile, autoStart, onAttackSurfaceResult }: AdvancedAnalysisToolsTabsProps) {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
 
@@ -1855,7 +4233,7 @@ function AdvancedAnalysisToolsTabs({ apkFile, autoStart }: AdvancedAnalysisTools
           <ManifestVisualizer apkFile={apkFile} autoStart={autoStart} />
         </Box>
         <Box sx={{ p: 2, display: activeTab === 1 ? 'block' : 'none' }}>
-          <AttackSurfaceMap apkFile={apkFile} autoStart={autoStart} />
+          <AttackSurfaceMap apkFile={apkFile} autoStart={autoStart} onResult={onAttackSurfaceResult} />
         </Box>
         <Box sx={{ p: 2, display: activeTab === 2 ? 'block' : 'none' }}>
           <ObfuscationAnalyzer apkFile={apkFile} autoStart={autoStart} />
@@ -2198,10 +4576,13 @@ function DeepAnalysisReports({
   const [activeTab, setActiveTab] = useState(0);
   const [functionalityReport, setFunctionalityReport] = useState<string | null>(null);
   const [securityReport, setSecurityReport] = useState<string | null>(null);
+  const [architectureDiagram, setArchitectureDiagram] = useState<string | null>(null);
   const [isLoadingFunc, setIsLoadingFunc] = useState(false);
   const [isLoadingSec, setIsLoadingSec] = useState(false);
+  const [isLoadingDiagram, setIsLoadingDiagram] = useState(false);
   const [errorFunc, setErrorFunc] = useState<string | null>(null);
   const [errorSec, setErrorSec] = useState<string | null>(null);
+  const [errorDiagram, setErrorDiagram] = useState<string | null>(null);
   const [autoGenerated, setAutoGenerated] = useState(false);
 
   // Format markdown to HTML with proper styling
@@ -2459,13 +4840,36 @@ Be specific with class names, methods, and technical details from the decompiled
     }
   };
 
+  // Generate architecture diagram
+  const generateArchitectureDiagram = async () => {
+    if (architectureDiagram) return;
+    setIsLoadingDiagram(true);
+    setErrorDiagram(null);
+    try {
+      // output_directory is actually the session_id
+      const result = await reverseEngineeringClient.generateArchitectureDiagram(jadxResult.output_directory);
+      if (result.error) {
+        setErrorDiagram(result.error);
+      } else if (result.architecture_diagram) {
+        setArchitectureDiagram(result.architecture_diagram);
+      } else {
+        setErrorDiagram("No diagram was generated. Please ensure Gemini API is configured.");
+      }
+    } catch (err) {
+      setErrorDiagram(err instanceof Error ? err.message : "Failed to generate diagram");
+    } finally {
+      setIsLoadingDiagram(false);
+    }
+  };
+
   // Auto-generate reports when component mounts
   useEffect(() => {
     if (!autoGenerated) {
       setAutoGenerated(true);
-      // Start generating both reports
+      // Start generating both reports and diagram
       generateFunctionalityReport();
       generateSecurityReport();
+      generateArchitectureDiagram();
     }
   }, []);
 
@@ -2475,6 +4879,8 @@ Be specific with class names, methods, and technical details from the decompiled
       generateFunctionalityReport();
     } else if (activeTab === 1 && !securityReport && !isLoadingSec) {
       generateSecurityReport();
+    } else if (activeTab === 2 && !architectureDiagram && !isLoadingDiagram) {
+      generateArchitectureDiagram();
     }
   }, [activeTab]);
 
@@ -2530,6 +4936,12 @@ Be specific with class names, methods, and technical details from the decompiled
             icon={<ShieldIcon sx={{ fontSize: 20 }} />}
             iconPosition="start"
             label="🔒 Advanced Security & Exploits"
+            sx={{ gap: 0.5 }}
+          />
+          <Tab
+            icon={<LayersIcon sx={{ fontSize: 20 }} />}
+            iconPosition="start"
+            label="🕸️ Architecture Diagram"
             sx={{ gap: 0.5 }}
           />
         </Tabs>
@@ -2637,6 +5049,59 @@ Be specific with class names, methods, and technical details from the decompiled
             )}
           </Box>
         )}
+
+        {/* Architecture Diagram Tab */}
+        {activeTab === 2 && (
+          <Box>
+            {isLoadingDiagram ? (
+              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, py: 6 }}>
+                <CircularProgress size={40} color="info" />
+                <Typography variant="body1" color="text.secondary">
+                  Generating architecture diagram from decompiled source...
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Analyzing component relationships and data flows
+                </Typography>
+              </Box>
+            ) : errorDiagram ? (
+              <Alert 
+                severity="error" 
+                action={
+                  <Button color="inherit" size="small" onClick={() => { setArchitectureDiagram(null); generateArchitectureDiagram(); }}>
+                    Retry
+                  </Button>
+                }
+              >
+                {errorDiagram}
+              </Alert>
+            ) : architectureDiagram ? (
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  AI-generated architecture visualization based on {jadxResult.total_classes.toLocaleString()} decompiled classes.
+                </Typography>
+                <MermaidDiagram 
+                  code={architectureDiagram}
+                  title="APK Architecture"
+                  maxHeight={600}
+                  showControls={true}
+                  showCodeToggle={true}
+                />
+              </Box>
+            ) : (
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <Button
+                  variant="contained"
+                  color="info"
+                  startIcon={<LayersIcon />}
+                  onClick={generateArchitectureDiagram}
+                  size="large"
+                >
+                  Generate Architecture Diagram
+                </Button>
+              </Box>
+            )}
+          </Box>
+        )}
       </Box>
     </Paper>
   );
@@ -2726,12 +5191,11 @@ function ApkAIReports({ result }: { result: ApkAnalysisResult }) {
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
 
-  // Check if we have the new structured reports or diagrams
+  // Check if we have the new structured reports (diagrams now only shown in DeepAnalysisReports)
   const hasStructuredReports = result.ai_report_functionality || result.ai_report_security;
-  const hasDiagrams = result.ai_architecture_diagram || result.ai_data_flow_diagram;
   const hasLegacyReport = result.ai_analysis && !hasStructuredReports;
 
-  if (!hasStructuredReports && !hasLegacyReport && !hasDiagrams) {
+  if (!hasStructuredReports && !hasLegacyReport) {
     return null;
   }
 
@@ -2925,6 +5389,7 @@ function ApkAIReports({ result }: { result: ApkAnalysisResult }) {
 
   // New structured reports with tabs
   return (
+    <>
     <Paper sx={{ mt: 3, overflow: "hidden" }}>
       {/* Tabs Header with Export Button */}
       <Box sx={{ 
@@ -2960,22 +5425,6 @@ function ApkAIReports({ result }: { result: ApkAnalysisResult }) {
             label="🔒 Security Findings"
             sx={{ gap: 1 }}
           />
-          {hasDiagrams && (
-            <Tab
-              icon={<LayersIcon />}
-              iconPosition="start"
-              label="🕸️ Architecture Diagram"
-              sx={{ gap: 1 }}
-            />
-          )}
-          {result.ai_data_flow_diagram && (
-            <Tab
-              icon={<LinkIcon />}
-              iconPosition="start"
-              label="🔄 Data Flow Diagram"
-              sx={{ gap: 1 }}
-            />
-          )}
         </Tabs>
         
         {/* Export Button */}
@@ -3082,46 +5531,10 @@ function ApkAIReports({ result }: { result: ApkAnalysisResult }) {
             Security analysis not available. Run analysis with AI enabled.
           </Alert>
         )}
-
-        {/* Architecture Diagram */}
-        {activeReport === 2 && hasDiagrams && (
-          <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              AI-generated visual representation of the APK's architecture showing key components, data flows, and integration points.
-            </Typography>
-            {result.ai_architecture_diagram ? (
-              <MermaidDiagram 
-                code={result.ai_architecture_diagram}
-                title="APK Architecture"
-                maxHeight={600}
-                showControls={true}
-                showCodeToggle={true}
-              />
-            ) : (
-              <Alert severity="info">
-                Architecture diagram not available. This is generated when AI analysis is enabled.
-              </Alert>
-            )}
-          </Box>
-        )}
-
-        {/* Data Flow Diagram */}
-        {activeReport === 3 && result.ai_data_flow_diagram && (
-          <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Data flow and privacy visualization showing how sensitive data moves through the application.
-            </Typography>
-            <MermaidDiagram 
-              code={result.ai_data_flow_diagram}
-              title="Data Flow & Privacy"
-              maxHeight={600}
-              showControls={true}
-              showCodeToggle={true}
-            />
-          </Box>
-        )}
       </Box>
     </Paper>
+
+    </>
   );
 }
 
@@ -7353,18 +9766,37 @@ export default function ReverseEngineeringHub() {
   const [status, setStatus] = useState<ReverseEngineeringStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [includeAi, setIncludeAi] = useState(true);
+  const [binaryIncludeAi, setBinaryIncludeAi] = useState(true);
+  const [includeGhidra, setIncludeGhidra] = useState(true);
+  const [includeGhidraAi, setIncludeGhidraAi] = useState(true);
+  const [ghidraMaxFunctions, setGhidraMaxFunctions] = useState(200);
+  const [ghidraDecompLimit, setGhidraDecompLimit] = useState(4000);
+  const [ghidraAiMaxFunctions, setGhidraAiMaxFunctions] = useState(20);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Binary state
   const [binaryFile, setBinaryFile] = useState<File | null>(null);
   const [binaryResult, setBinaryResult] = useState<BinaryAnalysisResult | null>(null);
   const [binaryLoading, setBinaryLoading] = useState(false);
+  const [binaryScanProgress, setBinaryScanProgress] = useState<UnifiedBinaryScanProgress | null>(null);
+  const binaryAbortRef = useRef<{ abort: () => void } | null>(null);
+  const [binaryExportAnchor, setBinaryExportAnchor] = useState<null | HTMLElement>(null);
+  const [exportingBinary, setExportingBinary] = useState(false);
 
   // APK state
   const [apkFile, setApkFile] = useState<File | null>(null);
   const [apkResult, setApkResult] = useState<ApkAnalysisResult | null>(null);
   const [apkLoading, setApkLoading] = useState(false);
+  
+  // Unified APK scan state
+  const [unifiedApkResult, setUnifiedApkResult] = useState<UnifiedApkScanResult | null>(null);
+  const [unifiedJadxSessionId, setUnifiedJadxSessionId] = useState<string | null>(null);
+  const [unifiedExportAnchor, setUnifiedExportAnchor] = useState<null | HTMLElement>(null);
+  const [exportingUnified, setExportingUnified] = useState(false);
+  const [autoSavedReport, setAutoSavedReport] = useState(false);
+  
+  // Attack Surface Map state (for saving to reports)
+  const [attackSurfaceMap, setAttackSurfaceMap] = useState<string | null>(null);
 
   // JADX Decompilation state (lifted for sharing with AI tools)
   const [jadxResult, setJadxResult] = useState<JadxDecompilationResult | null>(null);
@@ -7376,6 +9808,9 @@ export default function ReverseEngineeringHub() {
   const [aiThreatModel, setAiThreatModel] = useState<Record<string, unknown> | null>(null);
   const [aiVulnScanResult, setAiVulnScanResult] = useState<Record<string, unknown> | null>(null);
   const [aiChatHistory, setAiChatHistory] = useState<Array<Record<string, unknown>> | null>(null);
+  
+  // Enhanced Security Analysis state (combined Pattern + AI + CVE)
+  const [enhancedSecurityResult, setEnhancedSecurityResult] = useState<EnhancedSecurityResult | null>(null);
 
   // Docker state
   const [dockerImages, setDockerImages] = useState<DockerImageInfo[]>([]);
@@ -7387,12 +9822,21 @@ export default function ReverseEngineeringHub() {
   const [savedReports, setSavedReports] = useState<REReportSummary[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [savingReport, setSavingReport] = useState(false);
+  const [viewingReportId, setViewingReportId] = useState<number | null>(null);
+  const [loadingReportView, setLoadingReportView] = useState(false);
 
   // Load status on mount
   useEffect(() => {
     loadStatus();
     loadSavedReports();
   }, []);
+
+  useEffect(() => {
+    if (status && !status.ghidra_available) {
+      setIncludeGhidra(false);
+      setIncludeGhidraAi(false);
+    }
+  }, [status?.ghidra_available]);
 
   const loadStatus = async () => {
     try {
@@ -7450,6 +9894,8 @@ export default function ReverseEngineeringHub() {
           imports: binaryResult.imports,
           exports: binaryResult.exports,
           secrets: binaryResult.secrets,
+          ghidra_analysis: binaryResult.ghidra_analysis,
+          ghidra_ai_summaries: binaryResult.ghidra_ai_summaries,
         },
       };
       await reverseEngineeringClient.saveReport(report);
@@ -7462,10 +9908,55 @@ export default function ReverseEngineeringHub() {
     }
   };
 
+  const exportBinaryResult = async (format: "markdown" | "pdf" | "docx") => {
+    if (!binaryResult) return;
+    try {
+      setExportingBinary(true);
+      setBinaryExportAnchor(null);
+      const blob = await reverseEngineeringClient.exportBinaryResult(binaryResult, format);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ext = format === "markdown" ? "md" : format;
+      const base = binaryResult.filename || "binary_report";
+      const safeBase = base.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 50);
+      a.download = `binary_analysis_${safeBase}_${new Date().toISOString().split("T")[0]}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSuccessMessage(`Report exported as ${format.toUpperCase()} successfully!`);
+    } catch (e: any) {
+      setError(`Failed to export report: ${e.message}`);
+    } finally {
+      setExportingBinary(false);
+    }
+  };
+
   const saveApkReport = async () => {
     if (!apkResult || !apkFile) return;
     try {
       setSavingReport(true);
+      
+      // Merge security issues from APK result with enhanced security findings
+      let mergedSecurityIssues = [...(apkResult.security_issues || [])];
+      if (enhancedSecurityResult?.combined_findings) {
+        // Add enhanced security findings that aren't duplicates
+        const existingTitles = new Set(mergedSecurityIssues.map((i: any) => i.title?.toLowerCase() || ''));
+        for (const finding of enhancedSecurityResult.combined_findings) {
+          if (!existingTitles.has(finding.title?.toLowerCase() || '')) {
+            mergedSecurityIssues.push({
+              type: finding.title,
+              severity: finding.severity,
+              description: finding.description,
+              class: finding.affected_class || '',
+              line: finding.line_number || 0,
+              code_snippet: finding.code_snippet || '',
+            } as any);
+          }
+        }
+      }
+      
       const report: SaveREReportRequest = {
         analysis_type: 'apk',
         title: `APK Analysis: ${apkResult.package_name || apkFile.name}`,
@@ -7477,7 +9968,7 @@ export default function ReverseEngineeringHub() {
         target_sdk: apkResult.target_sdk,
         secrets_count: apkResult.secrets.length,
         permissions: apkResult.permissions as any,
-        security_issues: apkResult.security_issues as any,
+        security_issues: mergedSecurityIssues as any,
         ai_analysis_raw: apkResult.ai_analysis || undefined,
         full_analysis_data: {
           package_name: apkResult.package_name,
@@ -7488,8 +9979,20 @@ export default function ReverseEngineeringHub() {
           urls: apkResult.urls,
           secrets: apkResult.secrets,
           native_libraries: apkResult.native_libraries,
-          security_issues: apkResult.security_issues,
-        },
+          security_issues: mergedSecurityIssues,
+          // Include enhanced security metadata
+          enhanced_security_summary: enhancedSecurityResult ? {
+            overall_risk: enhancedSecurityResult.overall_risk,
+            executive_summary: enhancedSecurityResult.executive_summary,
+            risk_summary: enhancedSecurityResult.risk_summary,
+            pattern_findings_count: enhancedSecurityResult.pattern_findings.length,
+            ai_findings_count: enhancedSecurityResult.ai_findings.length,
+            cve_findings_count: enhancedSecurityResult.cve_findings.length,
+            attack_chains: enhancedSecurityResult.attack_chains,
+            recommendations: enhancedSecurityResult.recommendations,
+            offensive_plan_summary: enhancedSecurityResult.offensive_plan_summary,
+          } : undefined,
+        } as any,
         // JADX Full Scan Data (Deep Analysis)
         jadx_total_classes: jadxResult?.total_classes,
         jadx_total_files: jadxResult?.total_files,
@@ -7507,9 +10010,22 @@ export default function ReverseEngineeringHub() {
         ai_security_report: aiSecurityReport || undefined,
         ai_privacy_report: aiPrivacyReport || undefined,
         ai_threat_model: aiThreatModel as any,
-        ai_vuln_scan_result: aiVulnScanResult as any,
+        ai_vuln_scan_result: enhancedSecurityResult ? {
+          ...aiVulnScanResult,
+          // Merge enhanced security into AI vuln scan result for export
+          enhanced_security: {
+            overall_risk: enhancedSecurityResult.overall_risk,
+            executive_summary: enhancedSecurityResult.executive_summary,
+            risk_summary: enhancedSecurityResult.risk_summary,
+            combined_findings: enhancedSecurityResult.combined_findings,
+            attack_chains: enhancedSecurityResult.attack_chains,
+            recommendations: enhancedSecurityResult.recommendations,
+            analysis_metadata: enhancedSecurityResult.analysis_metadata,
+            offensive_plan_summary: enhancedSecurityResult.offensive_plan_summary,
+          }
+        } : aiVulnScanResult as any,
         ai_chat_history: aiChatHistory as any,
-      };
+      } as any;
       await reverseEngineeringClient.saveReport(report);
       setSuccessMessage("APK analysis report saved successfully (including Full Scan data)!");
       loadSavedReports();
@@ -7517,6 +10033,82 @@ export default function ReverseEngineeringHub() {
       setError(`Failed to save report: ${e.message}`);
     } finally {
       setSavingReport(false);
+    }
+  };
+
+  // Export unified APK scan result
+  const exportUnifiedApkResult = async (format: "markdown" | "pdf" | "docx") => {
+    if (!unifiedApkResult) return;
+    try {
+      setExportingUnified(true);
+      setUnifiedExportAnchor(null);
+      const blob = await reverseEngineeringClient.exportUnifiedApkScan(unifiedApkResult, format);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ext = format === "markdown" ? "md" : format;
+      a.download = `apk_analysis_${unifiedApkResult.package_name || "report"}_${new Date().toISOString().split("T")[0]}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSuccessMessage(`Report exported as ${format.toUpperCase()} successfully!`);
+    } catch (e: any) {
+      setError(`Failed to export report: ${e.message}`);
+    } finally {
+      setExportingUnified(false);
+    }
+  };
+
+  // Auto-save unified APK scan when complete
+  const autoSaveUnifiedResult = async (result: UnifiedApkScanResult, filename: string) => {
+    try {
+      const report: SaveREReportRequest = {
+        analysis_type: 'apk',
+        title: `APK Analysis: ${result.package_name || filename}`,
+        filename: filename,
+        project_id: projectId,
+        package_name: result.package_name,
+        version_name: result.version_name,
+        min_sdk: result.min_sdk,
+        target_sdk: result.target_sdk,
+        secrets_count: result.secrets.length,
+        permissions: result.permissions as any,
+        security_issues: result.security_issues as any,
+        full_analysis_data: {
+          package_name: result.package_name,
+          version_name: result.version_name,
+          version_code: result.version_code,
+          permissions: result.permissions,
+          components: result.components,
+          urls: result.urls,
+          secrets: result.secrets,
+          native_libraries: result.native_libraries,
+          security_issues: result.security_issues,
+        },
+        // JADX Full Scan Data
+        jadx_total_classes: result.total_classes,
+        jadx_total_files: result.total_files,
+        jadx_classes_sample: result.classes_summary?.slice(0, 100).map(c => ({
+          class_name: c.class_name,
+          package_name: c.package_name,
+          is_activity: c.is_activity,
+          is_service: c.is_service,
+          security_issues_count: c.security_issues_count,
+        })) as any,
+        jadx_security_issues: result.jadx_security_issues?.slice(0, 200) as any,
+        // AI-Generated Reports
+        ai_functionality_report: result.ai_functionality_report || undefined,
+        ai_security_report: result.ai_security_report || undefined,
+        ai_architecture_diagram: result.ai_architecture_diagram || undefined,
+        ai_attack_surface_map: result.ai_attack_surface_map || undefined,
+      };
+      await reverseEngineeringClient.saveReport(report);
+      setAutoSavedReport(true);
+      loadSavedReports();
+    } catch (e: any) {
+      console.error("Auto-save failed:", e);
+      // Don't show error to user for auto-save, just log it
     }
   };
 
@@ -7598,26 +10190,188 @@ export default function ReverseEngineeringHub() {
     }
   };
 
-  const analyzeBinary = async () => {
-    if (!binaryFile) return;
+  // View a saved report - loads full data and switches to appropriate tab
+  const viewSavedReport = async (reportId: number) => {
     try {
-      setBinaryLoading(true);
+      setLoadingReportView(true);
       setError(null);
-      const result = await reverseEngineeringClient.analyzeBinary(binaryFile, includeAi);
-      setBinaryResult(result);
+      setViewingReportId(reportId);
+      
+      const detail = await reverseEngineeringClient.getReport(reportId);
+      
+      // Populate the appropriate result state based on analysis type
+      if (detail.analysis_type === 'binary') {
+        // Reconstruct binary result from saved data
+        const fullData = detail.full_analysis_data || {};
+        setBinaryResult({
+          filename: detail.filename || 'Unknown',
+          metadata: fullData.metadata || {
+            file_type: detail.file_type || 'Unknown',
+            architecture: detail.architecture || 'Unknown',
+            file_size: detail.file_size || 0,
+            is_packed: detail.is_packed || 'unknown',
+            packer_name: detail.packer_name,
+          },
+          strings_count: detail.strings_count || 0,
+          strings_sample: fullData.strings_sample || [],
+          imports: fullData.imports || [],
+          exports: fullData.exports || [],
+          secrets: fullData.secrets || [],
+          suspicious_indicators: detail.suspicious_indicators || [],
+          ai_analysis: detail.ai_analysis_raw,
+          ghidra_analysis: fullData.ghidra_analysis || undefined,
+          ghidra_ai_summaries: fullData.ghidra_ai_summaries || undefined,
+        } as BinaryAnalysisResult);
+        setBinaryFile(null); // No file, just viewing
+        setActiveTab(0); // Binary tab
+        
+      } else if (detail.analysis_type === 'apk') {
+        // Reconstruct unified APK result from saved data
+        const fullData = detail.full_analysis_data || {};
+        const jadxData = detail.jadx_data || {};
+        
+        // Build the unified result structure matching UnifiedApkScanResult interface
+        const unifiedResult: UnifiedApkScanResult = {
+          scan_id: `saved-${detail.id}`,
+          filename: detail.filename || 'Unknown',
+          package_name: detail.package_name || 'Unknown',
+          version_name: detail.version_name || '',
+          version_code: (fullData.version_code as number) || 0,
+          min_sdk: detail.min_sdk || 0,
+          target_sdk: detail.target_sdk || 0,
+          permissions: (detail.permissions || []) as any[],
+          dangerous_permissions_count: (detail.permissions || []).filter((p: any) => p.is_dangerous).length,
+          components: (fullData.components || []) as any[],
+          secrets: (fullData.secrets || []) as any[],
+          urls: (fullData.urls || []) as string[],
+          native_libraries: (fullData.native_libraries || []) as string[],
+          security_issues: (detail.security_issues || []) as any[],
+          // JADX decompilation results
+          jadx_session_id: (fullData.jadx_session_id as string) || undefined,
+          total_classes: detail.jadx_total_classes || 0,
+          total_files: detail.jadx_total_files || 0,
+          classes_summary: (jadxData.classes_sample || []) as any[],
+          source_tree: (fullData.source_tree as Record<string, unknown>) || undefined,
+          jadx_security_issues: (jadxData.security_issues || []) as any[],
+          decompilation_time: (fullData.decompilation_time as number) || 0,
+          // AI Analysis Results
+          ai_functionality_report: detail.ai_functionality_report,
+          ai_security_report: detail.ai_security_report,
+          ai_architecture_diagram: detail.ai_architecture_diagram,
+          // Metadata
+          scan_time: (fullData.scan_time as number) || 0,
+          file_size: (fullData.file_size as number) || 0,
+        };
+        
+        setUnifiedApkResult(unifiedResult);
+        setApkFile(null); // No file, just viewing
+        setActiveTab(2); // APK tab
+        
+      } else if (detail.analysis_type === 'docker') {
+        // Reconstruct Docker result
+        const fullData = detail.full_analysis_data || {};
+        setDockerResult({
+          image_name: detail.image_name || 'Unknown',
+          image_id: detail.image_id || '',
+          created: (fullData.created as string) || '',
+          size: (fullData.size as number) || 0,
+          total_size: (fullData.total_size as number) || (fullData.size as number) || 0,
+          total_size_human: (fullData.total_size_human as string) || '',
+          total_layers: detail.total_layers || 0,
+          layers: (fullData.layers || []) as any[],
+          base_image: detail.base_image,
+          packages: (fullData.packages || []) as any[],
+          total_packages: (fullData.total_packages as number) || 0,
+          env_vars: (fullData.env_vars || []) as any[],
+          exposed_ports: (fullData.exposed_ports || []) as any[],
+          entrypoint: fullData.entrypoint as any,
+          cmd: fullData.cmd as any,
+          security_issues: (fullData.security_issues || []) as any[],
+          secrets_found: (fullData.secrets_found || []) as any[],
+          secrets: (fullData.secrets || fullData.secrets_found || []) as any[],
+          deleted_files: (fullData.deleted_files || []) as any[],
+          ai_analysis: detail.ai_analysis_raw,
+        } as DockerAnalysisResult);
+        setActiveTab(3); // Docker tab
+      }
+      
+      setSuccessMessage(`Loaded report: ${detail.title}`);
+      
     } catch (e: any) {
-      setError(e.message);
+      setError(`Failed to load report: ${e.message}`);
+      setViewingReportId(null);
     } finally {
-      setBinaryLoading(false);
+      setLoadingReportView(false);
     }
   };
+
+  // Clear viewing state and go back to fresh analysis
+  const clearViewingReport = () => {
+    setViewingReportId(null);
+    setBinaryResult(null);
+    setBinaryFile(null);
+    setUnifiedApkResult(null);
+    setApkFile(null);
+    setDockerResult(null);
+    setSelectedImage("");
+  };
+
+  const startBinaryScan = useCallback(() => {
+    if (!binaryFile) return;
+    setBinaryLoading(true);
+    setBinaryResult(null);
+    setBinaryScanProgress(null);
+    setError(null);
+
+    const controller = reverseEngineeringClient.runUnifiedBinaryScan(
+      binaryFile,
+      {
+        includeAi: binaryIncludeAi,
+        includeGhidra,
+        includeGhidraAi,
+        ghidraMaxFunctions,
+        ghidraDecompLimit,
+        ghidraAiMaxFunctions,
+      },
+      (progress) => {
+        setBinaryScanProgress(progress);
+      },
+      (result) => {
+        setBinaryResult(result);
+        setBinaryLoading(false);
+      },
+      (err) => {
+        setError(err);
+        setBinaryLoading(false);
+      },
+      () => {
+        setBinaryLoading(false);
+      }
+    );
+
+    binaryAbortRef.current = controller;
+  }, [
+    binaryFile,
+    binaryIncludeAi,
+    includeGhidra,
+    includeGhidraAi,
+    ghidraMaxFunctions,
+    ghidraDecompLimit,
+    ghidraAiMaxFunctions,
+  ]);
+
+  const cancelBinaryScan = useCallback(() => {
+    binaryAbortRef.current?.abort();
+    setBinaryLoading(false);
+    setBinaryScanProgress(null);
+  }, []);
 
   const analyzeApk = async () => {
     if (!apkFile) return;
     try {
       setApkLoading(true);
       setError(null);
-      const result = await reverseEngineeringClient.analyzeApk(apkFile, includeAi);
+      const result = await reverseEngineeringClient.analyzeApk(apkFile, true);
       setApkResult(result);
     } catch (e: any) {
       setError(e.message);
@@ -7631,7 +10385,7 @@ export default function ReverseEngineeringHub() {
     try {
       setDockerLoading(true);
       setError(null);
-      const result = await reverseEngineeringClient.analyzeDockerImage(selectedImage, includeAi);
+      const result = await reverseEngineeringClient.analyzeDockerImage(selectedImage, true);
       setDockerResult(result);
     } catch (e: any) {
       setError(e.message);
@@ -7641,6 +10395,8 @@ export default function ReverseEngineeringHub() {
   };
 
   return (
+    <LearnPageLayout pageTitle="Reverse Engineering Hub" pageContext={pageContext}>
+    <>
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 3 }}>
@@ -7652,6 +10408,14 @@ export default function ReverseEngineeringHub() {
         >
           <HomeIcon fontSize="small" />
           Home
+        </MuiLink>
+        <MuiLink
+          component={Link}
+          to="/learn"
+          underline="hover"
+          sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+        >
+          Learning Hub
         </MuiLink>
         <Typography color="text.primary" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <BinaryIcon fontSize="small" />
@@ -7705,24 +10469,24 @@ export default function ReverseEngineeringHub() {
               variant={status.apk_analysis ? "filled" : "outlined"}
             />
             <Chip
+              icon={<CodeIcon />}
+              label="Ghidra Decompilation"
+              color={status.ghidra_available ? "success" : "default"}
+              variant={status.ghidra_available ? "filled" : "outlined"}
+            />
+            <Chip
               icon={<DockerIcon />}
               label="Docker Analysis"
               color={status.docker_analysis ? "success" : "default"}
               variant={status.docker_analysis ? "filled" : "outlined"}
             />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={includeAi}
-                  onChange={(e) => setIncludeAi(e.target.checked)}
-                  color="primary"
-                />
-              }
-              label={
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <AiIcon fontSize="small" /> AI Analysis
-                </Box>
-              }
+            {/* AI Analysis is always enabled for best results */}
+            <Chip
+              icon={<AiIcon />}
+              label="AI Analysis Enabled"
+              color="success"
+              variant="filled"
+              size="small"
             />
           </Box>
         )}
@@ -7760,6 +10524,11 @@ export default function ReverseEngineeringHub() {
             iconPosition="start"
           />
           <Tab
+            icon={<SecurityIcon />}
+            label="Vulnerability Hunter"
+            iconPosition="start"
+          />
+          <Tab
             icon={<ApkIcon />}
             label="APK Analyzer"
             iconPosition="start"
@@ -7783,8 +10552,49 @@ export default function ReverseEngineeringHub() {
         </Tabs>
       </Paper>
 
+        {/* Viewing Saved Report Banner */}
+        {viewingReportId && (
+          <Alert 
+            severity="info" 
+            sx={{ mb: 2 }}
+            action={
+              <Button 
+                color="inherit" 
+                size="small" 
+                onClick={clearViewingReport}
+                startIcon={<RefreshIcon />}
+              >
+                New Analysis
+              </Button>
+            }
+          >
+            <Typography variant="body2">
+              <strong>Viewing saved report:</strong> {savedReports.find(r => r.id === viewingReportId)?.title || 'Unknown'}
+            </Typography>
+          </Alert>
+        )}
+
         {/* Binary Tab */}
         <TabPanel value={activeTab} index={0}>
+          <Alert 
+            severity="info" 
+            sx={{ mb: 3, bgcolor: alpha("#f97316", 0.1) }}
+            action={
+              <Button 
+                component={Link} 
+                to="/learn/binary-analysis" 
+                size="small" 
+                startIcon={<SchoolIcon />}
+                sx={{ color: "#f97316" }}
+              >
+                Learning Guide
+              </Button>
+            }
+          >
+            <Typography variant="body2">
+              <strong>New to binary analysis?</strong> Check out our comprehensive guide covering PE/ELF formats, vulnerability types, and VRAgent's AI-powered tools.
+            </Typography>
+          </Alert>
           <Grid container spacing={3}>
             <Grid item xs={12} md={4}>
               <FileDropZone
@@ -7792,6 +10602,7 @@ export default function ReverseEngineeringHub() {
                 onFileSelect={(f) => {
                   setBinaryFile(f);
                   setBinaryResult(null);
+                  setBinaryScanProgress(null);
                 }}
                 label="Upload Binary"
                 description="EXE, DLL, ELF, SO files up to 500MB"
@@ -7807,7 +10618,7 @@ export default function ReverseEngineeringHub() {
                     variant="contained"
                     fullWidth
                     sx={{ mt: 2 }}
-                    onClick={analyzeBinary}
+                    onClick={startBinaryScan}
                     disabled={binaryLoading}
                     startIcon={binaryLoading ? <CircularProgress size={20} /> : <SecurityIcon />}
                   >
@@ -7815,19 +10626,243 @@ export default function ReverseEngineeringHub() {
                   </Button>
                 </Box>
               )}
+
+              <Paper sx={{ p: 2, mt: 3 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Analysis Options
+                </Typography>
+                {!status?.ghidra_available && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    Ghidra not detected. Configure `GHIDRA_HOME` to enable decompilation.
+                  </Alert>
+                )}
+                <FormGroup>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={binaryIncludeAi}
+                        onChange={(e) => setBinaryIncludeAi(e.target.checked)}
+                        disabled={binaryLoading}
+                      />
+                    }
+                    label="Gemini security summary"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={includeGhidra}
+                        onChange={(e) => {
+                          const enabled = e.target.checked;
+                          setIncludeGhidra(enabled);
+                          if (!enabled) {
+                            setIncludeGhidraAi(false);
+                          }
+                        }}
+                        disabled={binaryLoading || !status?.ghidra_available}
+                      />
+                    }
+                    label="Ghidra decompilation"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={includeGhidraAi}
+                        onChange={(e) => setIncludeGhidraAi(e.target.checked)}
+                        disabled={binaryLoading || !includeGhidra}
+                      />
+                    }
+                    label="Gemini function summaries"
+                  />
+                </FormGroup>
+
+                <Divider sx={{ my: 2 }} />
+
+                <Typography variant="caption" color="text.secondary">
+                  Ghidra export limits
+                </Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="body2">Max functions: {ghidraMaxFunctions}</Typography>
+                  <Slider
+                    value={ghidraMaxFunctions}
+                    onChange={(_, value) => setGhidraMaxFunctions(value as number)}
+                    min={50}
+                    max={1000}
+                    step={50}
+                    disabled={binaryLoading || !includeGhidra}
+                  />
+                </Box>
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="body2">Decompile limit: {ghidraDecompLimit} chars</Typography>
+                  <Slider
+                    value={ghidraDecompLimit}
+                    onChange={(_, value) => setGhidraDecompLimit(value as number)}
+                    min={1000}
+                    max={10000}
+                    step={500}
+                    disabled={binaryLoading || !includeGhidra}
+                  />
+                </Box>
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="body2">AI function summaries: {ghidraAiMaxFunctions}</Typography>
+                  <Slider
+                    value={ghidraAiMaxFunctions}
+                    onChange={(_, value) => setGhidraAiMaxFunctions(value as number)}
+                    min={5}
+                    max={50}
+                    step={5}
+                    disabled={binaryLoading || !includeGhidraAi}
+                  />
+                </Box>
+              </Paper>
             </Grid>
             <Grid item xs={12} md={8}>
-              {binaryLoading && (
-                <Box sx={{ textAlign: "center", py: 4 }}>
-                  <CircularProgress />
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Analyzing binary... This may take a moment.
+              {binaryLoading && binaryScanProgress && (
+                <Paper sx={{ p: 3 }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+                    <Box>
+                      <Typography variant="h6">
+                        Analyzing: {binaryFile?.name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {binaryScanProgress.message}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Typography variant="h4" color="primary">
+                        {binaryScanProgress.overall_progress}%
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        onClick={cancelBinaryScan}
+                        startIcon={<StopIcon />}
+                      >
+                        Cancel
+                      </Button>
+                    </Box>
+                  </Box>
+
+                  <LinearProgress
+                    variant="determinate"
+                    value={binaryScanProgress.overall_progress}
+                    sx={{ height: 8, borderRadius: 4, mb: 3 }}
+                  />
+
+                  <Stepper
+                    activeStep={binaryScanProgress.phases.findIndex((p) => p.status === "in_progress")}
+                    orientation="vertical"
+                  >
+                    {binaryScanProgress.phases.map((phase) => (
+                      <Step key={phase.id} completed={phase.status === "completed"}>
+                        <StepLabel
+                          error={phase.status === "error"}
+                          StepIconComponent={() => (
+                            <Box
+                              sx={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: "50%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                bgcolor: phase.status === "completed"
+                                  ? theme.palette.success.main
+                                  : phase.status === "in_progress"
+                                  ? theme.palette.primary.main
+                                  : phase.status === "error"
+                                  ? theme.palette.error.main
+                                  : alpha(theme.palette.action.disabled, 0.3),
+                                color: phase.status === "pending" ? "text.disabled" : "white",
+                              }}
+                            >
+                              {phase.status === "completed" ? (
+                                <CheckIcon sx={{ fontSize: 20 }} />
+                              ) : phase.status === "in_progress" ? (
+                                <CircularProgress size={20} color="inherit" />
+                              ) : phase.status === "error" ? (
+                                <ErrorIcon sx={{ fontSize: 20 }} />
+                              ) : (
+                                React.cloneElement(BINARY_SCAN_PHASE_ICONS[phase.id] as React.ReactElement, { sx: { fontSize: 18 } })
+                              )}
+                            </Box>
+                          )}
+                        >
+                          <Typography fontWeight={phase.status === "in_progress" ? 700 : 500}>
+                            {BINARY_SCAN_PHASE_LABELS[phase.id] || phase.label}
+                          </Typography>
+                        </StepLabel>
+                        <StepContent>
+                          <Typography variant="body2" color="text.secondary">
+                            {phase.description}
+                          </Typography>
+                          {phase.status === "in_progress" && (
+                            <LinearProgress sx={{ mt: 1.5, borderRadius: 1 }} />
+                          )}
+                          {phase.status === "completed" && phase.details && (
+                            <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: "block" }}>
+                              {phase.details}
+                            </Typography>
+                          )}
+                          {phase.status === "error" && phase.details && (
+                            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: "block" }}>
+                              {phase.details}
+                            </Typography>
+                          )}
+                        </StepContent>
+                      </Step>
+                    ))}
+                  </Stepper>
+                </Paper>
+              )}
+              {binaryLoading && !binaryScanProgress && (
+                <Paper sx={{ p: 4, textAlign: "center" }}>
+                  <CircularProgress size={60} sx={{ mb: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    Starting binary analysis...
                   </Typography>
-                </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Preparing upload and analysis environment
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    onClick={cancelBinaryScan}
+                    startIcon={<StopIcon />}
+                    sx={{ mt: 2 }}
+                  >
+                    Cancel
+                  </Button>
+                </Paper>
               )}
               {binaryResult && !binaryLoading && (
                 <>
-                  <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+                  <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2, gap: 1, flexWrap: "wrap" }}>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      startIcon={exportingBinary ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      onClick={(e) => setBinaryExportAnchor(e.currentTarget)}
+                      disabled={exportingBinary}
+                    >
+                      Export
+                    </Button>
+                    <Menu
+                      anchorEl={binaryExportAnchor}
+                      open={Boolean(binaryExportAnchor)}
+                      onClose={() => setBinaryExportAnchor(null)}
+                    >
+                      <MenuItem onClick={() => exportBinaryResult("markdown")}>
+                        Export as Markdown
+                      </MenuItem>
+                      <MenuItem onClick={() => exportBinaryResult("pdf")}>
+                        Export as PDF
+                      </MenuItem>
+                      <MenuItem onClick={() => exportBinaryResult("docx")}>
+                        Export as Word
+                      </MenuItem>
+                    </Menu>
                     <Button
                       variant="contained"
                       color="success"
@@ -7867,115 +10902,184 @@ export default function ReverseEngineeringHub() {
           </Grid>
         </TabPanel>
 
-        {/* APK Tab */}
+        {/* Vulnerability Hunter Tab */}
         <TabPanel value={activeTab} index={1}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
-              <FileDropZone
-                accept=".apk,.aab"
-                onFileSelect={(f) => {
-                  setApkFile(f);
-                  setApkResult(null);
-                }}
-                label="Upload APK"
-                description="Android APK or AAB files up to 500MB"
-                icon={<ApkIcon sx={{ fontSize: 48 }} />}
-                disabled={apkLoading}
-              />
-              {apkFile && (
-                <Box sx={{ mt: 2 }}>
-                  <Alert severity="info">
-                    Selected: <strong>{apkFile.name}</strong> ({(apkFile.size / (1024 * 1024)).toFixed(1)} MB)
-                  </Alert>
+          <VulnerabilityHunter />
+        </TabPanel>
+
+        {/* APK Tab - Unified Scanner */}
+        <TabPanel value={activeTab} index={2}>
+          <Alert 
+            severity="info" 
+            sx={{ mb: 3, bgcolor: alpha("#22c55e", 0.1) }}
+            action={
+              <Button 
+                component={Link} 
+                to="/learn/apk-analysis" 
+                size="small" 
+                startIcon={<SchoolIcon />}
+                sx={{ color: "#22c55e" }}
+              >
+                Learning Guide
+              </Button>
+            }
+          >
+            <Typography variant="body2">
+              <strong>New to APK analysis?</strong> Check out our comprehensive guide covering Android security, permissions, attack surfaces, and 40+ VRAgent analysis tools.
+            </Typography>
+          </Alert>
+          {/* Scanner or Results */}
+          {!unifiedApkResult ? (
+            <UnifiedApkScanner
+              apkFile={apkFile}
+              onFileSelect={(f) => {
+                setApkFile(f);
+                setUnifiedApkResult(null);
+                setUnifiedJadxSessionId(null);
+                setAutoSavedReport(false);
+              }}
+              onScanComplete={(result) => {
+                setUnifiedApkResult(result);
+                // Auto-save the report
+                if (result && apkFile) {
+                  autoSaveUnifiedResult(result, apkFile.name);
+                }
+                // Also set legacy state for compatibility with save functions
+                if (result) {
+                  setApkResult({
+                    filename: result.filename,
+                    package_name: result.package_name,
+                    version_name: result.version_name,
+                    version_code: result.version_code,
+                    min_sdk: result.min_sdk,
+                    target_sdk: result.target_sdk,
+                    permissions: result.permissions.map(p => ({ ...p })) as any,
+                    dangerous_permissions_count: result.dangerous_permissions_count,
+                    components: result.components as any,
+                    strings_count: 0,
+                    secrets: result.secrets as any,
+                    urls: result.urls,
+                    native_libraries: result.native_libraries,
+                    security_issues: result.security_issues as any,
+                    ai_analysis: undefined,
+                    ai_report_functionality: result.ai_functionality_report,
+                    ai_report_security: result.ai_security_report,
+                    ai_architecture_diagram: result.ai_architecture_diagram,
+                    activities: [],
+                    services: [],
+                    receivers: [],
+                    providers: [],
+                    uses_features: [],
+                    debuggable: false,
+                    allow_backup: false,
+                  });
+                }
+              }}
+              onJadxSessionReady={(sessionId) => {
+                setUnifiedJadxSessionId(sessionId);
+              }}
+            />
+          ) : (
+            <Box>
+              {/* Results Header with Actions */}
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, flexWrap: "wrap", gap: 2 }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setUnifiedApkResult(null);
+                    setUnifiedJadxSessionId(null);
+                    setApkFile(null);
+                    setApkResult(null);
+                    setAutoSavedReport(false);
+                  }}
+                  startIcon={<RefreshIcon />}
+                >
+                  Analyze New APK
+                </Button>
+                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                  {autoSavedReport && (
+                    <Chip 
+                      icon={<CheckIcon />} 
+                      label="Auto-saved" 
+                      color="success" 
+                      size="small" 
+                      variant="outlined"
+                    />
+                  )}
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    startIcon={exportingUnified ? <CircularProgress size={20} /> : <DownloadIcon />}
+                    onClick={(e) => setUnifiedExportAnchor(e.currentTarget)}
+                    disabled={exportingUnified}
+                  >
+                    Export
+                  </Button>
+                  <Menu
+                    anchorEl={unifiedExportAnchor}
+                    open={Boolean(unifiedExportAnchor)}
+                    onClose={() => setUnifiedExportAnchor(null)}
+                  >
+                    <MenuItem onClick={() => exportUnifiedApkResult("markdown")}>
+                      📝 Export as Markdown
+                    </MenuItem>
+                    <MenuItem onClick={() => exportUnifiedApkResult("pdf")}>
+                      📄 Export as PDF
+                    </MenuItem>
+                    <MenuItem onClick={() => exportUnifiedApkResult("docx")}>
+                      📑 Export as Word
+                    </MenuItem>
+                  </Menu>
                   <Button
                     variant="contained"
-                    fullWidth
-                    sx={{ mt: 2 }}
-                    onClick={analyzeApk}
-                    disabled={apkLoading}
-                    startIcon={apkLoading ? <CircularProgress size={20} /> : <SecurityIcon />}
+                    color="success"
+                    startIcon={savingReport ? <CircularProgress size={20} /> : <SaveIcon />}
+                    onClick={saveApkReport}
+                    disabled={savingReport}
                   >
-                    {apkLoading ? "Scanning..." : "Quick Security Scan"}
+                    {savingReport ? "Saving..." : "Save Again"}
                   </Button>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block", textAlign: "center" }}>
-                    Fast metadata extraction • Permissions • Components • Secrets
-                  </Typography>
                 </Box>
-              )}
-            </Grid>
-            <Grid item xs={12} md={8}>
-              {apkLoading && (
-                <Box sx={{ textAlign: "center", py: 4 }}>
-                  <CircularProgress />
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Analyzing APK... Extracting manifest and DEX files.
-                  </Typography>
-                </Box>
-              )}
-
-              {/* Quick Scan Results - Appears FIRST */}
-              {apkResult && !apkLoading && (
-                <>
-                  <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-                    <Button
-                      variant="contained"
-                      color="success"
-                      startIcon={savingReport ? <CircularProgress size={20} /> : <SaveIcon />}
-                      onClick={saveApkReport}
-                      disabled={savingReport}
-                    >
-                      {savingReport ? "Saving..." : "Save Report"}
-                    </Button>
-                  </Box>
-                  <ApkResults result={apkResult} jadxResult={jadxResult} apkFile={apkFile} />
-                </>
-              )}
+              </Box>
               
-              {/* Deep Code Analysis (JADX) - Only appears AFTER Quick Scan has completed */}
-              {apkFile && !apkLoading && apkResult && (
-                <Box id="advanced-apk-analysis" sx={{ mt: 4, scrollMarginTop: "80px" }}>
+              {/* Unified Results */}
+              <UnifiedApkResults
+                result={unifiedApkResult}
+                jadxSessionId={unifiedJadxSessionId}
+                apkFile={apkFile}
+                onBrowseSource={() => {
+                  // Scroll to JADX browser section if needed
+                  const jadxSection = document.getElementById("jadx-source-browser");
+                  if (jadxSection) jadxSection.scrollIntoView({ behavior: "smooth" });
+                }}
+                onEnhancedSecurityComplete={(result) => setEnhancedSecurityResult(result)}
+              />
+              
+              {/* JADX Source Browser - Now integrated */}
+              {unifiedJadxSessionId && apkFile && (
+                <Box id="jadx-source-browser" sx={{ mt: 4, scrollMarginTop: "80px" }}>
                   <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <CodeIcon color="primary" /> Deep Code Analysis (JADX)
+                    <CodeIcon color="primary" /> Browse Decompiled Source
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Full source code decompilation • Search & navigate code • Crypto audit • Component mapping
+                    Navigate the decompiled Java source code • Search classes & methods • Analyze crypto usage
                   </Typography>
                   <JadxDecompiler 
                     apkFile={apkFile} 
                     onDecompilationComplete={(result) => setJadxResult(result)}
+                    initialSessionId={unifiedJadxSessionId}
+                    initialSourceTree={unifiedApkResult?.source_tree}
+                    initialTotalClasses={unifiedApkResult?.total_classes}
+                    initialTotalFiles={unifiedApkResult?.total_files}
                   />
-                  
-                  {/* Deep Analysis Reports - Appear after JADX decompilation completes */}
-                  {jadxResult && apkResult && (
-                    <DeepAnalysisReports 
-                      jadxResult={jadxResult} 
-                      quickScanResult={apkResult}
-                      onFunctionalityReportGenerated={setAiFunctionalityReport}
-                      onSecurityReportGenerated={setAiSecurityReport}
-                    />
-                  )}
                 </Box>
               )}
-              {!apkFile && !apkResult && (
-                <Box sx={{ textAlign: "center", py: 8, color: "text.secondary" }}>
-                  <ApkIcon sx={{ fontSize: 64, opacity: 0.3 }} />
-                  <Typography variant="h6" sx={{ mt: 2 }}>
-                    Upload an Android APK to analyze
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    <strong>Quick Scan:</strong> Extract permissions, components, secrets, and URLs
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Deep Analysis:</strong> Decompile to Java, search code, audit crypto
-                  </Typography>
-                </Box>
-              )}
-            </Grid>
-          </Grid>
+            </Box>
+          )}
         </TabPanel>
 
         {/* Docker Tab */}
-        <TabPanel value={activeTab} index={2}>
+        <TabPanel value={activeTab} index={3}>
           {!status?.docker_available ? (
             <Alert severity="warning">
               Docker is not available. Please install Docker to use this feature.
@@ -8085,12 +11189,12 @@ export default function ReverseEngineeringHub() {
         </TabPanel>
 
         {/* Hex Viewer Tab */}
-        <TabPanel value={activeTab} index={3}>
+        <TabPanel value={activeTab} index={4}>
           <HexViewer />
         </TabPanel>
 
         {/* Saved Reports Tab */}
-        <TabPanel value={activeTab} index={4}>
+        <TabPanel value={activeTab} index={5}>
           <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Typography variant="h6">
               Saved Analysis Reports
@@ -8190,7 +11294,29 @@ export default function ReverseEngineeringHub() {
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                          {viewingReportId === report.id && (
+                            <Chip 
+                              label="Viewing" 
+                              size="small" 
+                              color="success" 
+                              sx={{ mr: 1 }}
+                            />
+                          )}
+                          <Tooltip title="View Report">
+                            <IconButton
+                              size="small"
+                              color="success"
+                              onClick={() => viewSavedReport(report.id)}
+                              disabled={loadingReportView}
+                            >
+                              {loadingReportView && viewingReportId === report.id ? (
+                                <CircularProgress size={18} />
+                              ) : (
+                                <ViewIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Export to Markdown">
                             <IconButton
                               size="small"
@@ -8237,5 +11363,21 @@ export default function ReverseEngineeringHub() {
           )}
         </TabPanel>
       </Container>
+
+      {/* Floating AI Chat Panel - appears when APK analysis is complete */}
+      <ApkChatPanel
+        unifiedScanResult={unifiedApkResult}
+        selectedFinding={null}
+        currentSourceCode={null}
+        currentSourceClass={null}
+      />
+
+      {/* Guided Walkthrough Panel - helps users understand the analysis */}
+      <GuidedWalkthrough
+        unifiedScanResult={unifiedApkResult}
+        onNavigateToTab={(tabIndex) => setActiveTab(tabIndex)}
+      />
+    </>
+    </LearnPageLayout>
   );
 }

@@ -70,6 +70,43 @@ const OSINTReconPage = lazy(() => import("./pages/OSINTReconPage"));
 const LateralMovementPage = lazy(() => import("./pages/LateralMovementPage"));
 const ReverseEngineeringHubPage = lazy(() => import("./pages/ReverseEngineeringHubPage"));
 const ApkAnalysisGuidePage = lazy(() => import("./pages/ApkAnalysisGuidePage"));
+const BinaryAnalysisGuidePage = lazy(() => import("./pages/BinaryAnalysisGuidePage"));
+const AndroidReverseEngineeringGuidePage = lazy(() => import("./pages/AndroidReverseEngineeringGuidePage"));
+const PrivilegeEscalationGuidePage = lazy(() => import("./pages/PrivilegeEscalationGuidePage"));
+const CyberSecurityCertificationsPage = lazy(() => import("./pages/CyberSecurityCertificationsPage"));
+const IncidentResponseGuidePage = lazy(() => import("./pages/IncidentResponseGuidePage"));
+const ContainerKubernetesExploitationPage = lazy(() => import("./pages/ContainerKubernetesExploitationPage"));
+const LivingOffTheLandPage = lazy(() => import("./pages/LivingOffTheLandPage"));
+const AntiVirusDetectionPage = lazy(() => import("./pages/AntiVirusDetectionPage"));
+const WindowsPersistenceMechanismsPage = lazy(() => import("./pages/WindowsPersistenceMechanismsPage"));
+const CredentialHarvestingPage = lazy(() => import("./pages/CredentialHarvestingPage"));
+const DataExfiltrationPage = lazy(() => import("./pages/DataExfiltrationPage"));
+const ArpDnsPoisoningPage = lazy(() => import("./pages/ArpDnsPoisoningPage"));
+const PivotingTunnelingPage = lazy(() => import("./pages/PivotingTunnelingPage"));
+const C2FrameworksGuidePage = lazy(() => import("./pages/C2FrameworksGuidePage"));
+const DDoSAttackTechniquesPage = lazy(() => import("./pages/DDoSAttackTechniquesPage"));
+const WirelessPentestingPage = lazy(() => import("./pages/WirelessPentestingPage"));
+const NetworkProtocolExploitationPage = lazy(() => import("./pages/NetworkProtocolExploitationPage"));
+const SQLInjectionPage = lazy(() => import("./pages/SQLInjectionPage"));
+const DeserializationAttacksPage = lazy(() => import("./pages/DeserializationAttacksPage"));
+const ReturnOrientedProgrammingPage = lazy(() => import("./pages/ReturnOrientedProgrammingPage"));
+const Debugging101Page = lazy(() => import("./pages/Debugging101Page"));
+const GhidraGuidePage = lazy(() => import("./pages/GhidraGuidePage"));
+const SSRFGuidePage = lazy(() => import("./pages/SSRFGuidePage"));
+const BufferOverflowGuidePage = lazy(() => import("./pages/BufferOverflowGuidePage"));
+const DockerForensicsGuidePage = lazy(() => import("./pages/DockerForensicsGuidePage"));
+const CareerPathsPage = lazy(() => import("./pages/CareerPathsPage"));
+const SecurityPortfolioPage = lazy(() => import("./pages/SecurityPortfolioPage"));
+const IOSPentestingPage = lazy(() => import("./pages/iOSPentestingPage"));
+const HeapExploitationPage = lazy(() => import("./pages/HeapExploitationPage"));
+const IntegerOverflowPage = lazy(() => import("./pages/IntegerOverflowPage"));
+const OutOfBoundsPage = lazy(() => import("./pages/OutOfBoundsPage"));
+const SIEMFundamentalsPage = lazy(() => import("./pages/SIEMFundamentalsPage"));
+const SOCWorkflowPage = lazy(() => import("./pages/SOCWorkflowPage"));
+const ThreatHuntingPage = lazy(() => import("./pages/ThreatHuntingPage"));
+const CommandInjectionPage = lazy(() => import("./pages/CommandInjectionPage"));
+const XSSGuidePage = lazy(() => import("./pages/XSSGuidePage"));
+const WindowsInternalsREPage = lazy(() => import("./pages/WindowsInternalsREPage"));
 
 // Auth pages
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -77,21 +114,8 @@ const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
-// Animations
-const pulse = keyframes`
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-`;
-
-const shimmer = keyframes`
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
-`;
-
-const float = keyframes`
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-3px); }
-`;
+// Shared animations imported from theme
+import { pulse, shimmer, float } from './theme/animations';
 
 // Icons as inline SVG for simplicity
 const DarkModeIcon = () => (
@@ -510,11 +534,6 @@ function App() {
                 <ReverseEngineeringHubPage />
               </ProtectedRoute>
             } />
-            <Route path="/pcap" element={
-              <ProtectedRoute>
-                <PcapAnalyzerPage />
-              </ProtectedRoute>
-            } />
             
             {/* Public Learn Routes - No authentication required */}
             <Route path="/learn" element={<LearnHubPage />} />
@@ -549,6 +568,43 @@ function App() {
             <Route path="/learn/osint" element={<OSINTReconPage />} />
             <Route path="/learn/lateral-movement" element={<LateralMovementPage />} />
             <Route path="/learn/apk-analysis" element={<ApkAnalysisGuidePage />} />
+            <Route path="/learn/binary-analysis" element={<BinaryAnalysisGuidePage />} />
+            <Route path="/learn/android-reverse-engineering" element={<AndroidReverseEngineeringGuidePage />} />
+            <Route path="/learn/privilege-escalation" element={<PrivilegeEscalationGuidePage />} />
+            <Route path="/learn/certifications" element={<CyberSecurityCertificationsPage />} />
+            <Route path="/learn/career-paths" element={<CareerPathsPage />} />
+            <Route path="/learn/portfolio" element={<SecurityPortfolioPage />} />
+            <Route path="/learn/ios-pentesting" element={<IOSPentestingPage />} />
+            <Route path="/learn/heap-exploitation" element={<HeapExploitationPage />} />
+            <Route path="/learn/integer-overflow" element={<IntegerOverflowPage />} />
+            <Route path="/learn/oob-read-write" element={<OutOfBoundsPage />} />
+            <Route path="/learn/siem" element={<SIEMFundamentalsPage />} />
+            <Route path="/learn/soc-workflow" element={<SOCWorkflowPage />} />
+            <Route path="/learn/threat-hunting" element={<ThreatHuntingPage />} />
+            <Route path="/learn/command-injection" element={<CommandInjectionPage />} />
+            <Route path="/learn/xss" element={<XSSGuidePage />} />
+            <Route path="/learn/incident-response" element={<IncidentResponseGuidePage />} />
+            <Route path="/learn/container-k8s" element={<ContainerKubernetesExploitationPage />} />
+            <Route path="/learn/living-off-the-land" element={<LivingOffTheLandPage />} />
+            <Route path="/learn/anti-virus-detection" element={<AntiVirusDetectionPage />} />
+            <Route path="/learn/windows-persistence" element={<WindowsPersistenceMechanismsPage />} />
+            <Route path="/learn/credential-harvesting" element={<CredentialHarvestingPage />} />
+            <Route path="/learn/data-exfiltration" element={<DataExfiltrationPage />} />
+            <Route path="/learn/arp-dns-poisoning" element={<ArpDnsPoisoningPage />} />
+            <Route path="/learn/pivoting-tunneling" element={<PivotingTunnelingPage />} />
+            <Route path="/learn/c2-frameworks" element={<C2FrameworksGuidePage />} />
+            <Route path="/learn/ddos-techniques" element={<DDoSAttackTechniquesPage />} />
+            <Route path="/learn/wireless-pentesting" element={<WirelessPentestingPage />} />
+            <Route path="/learn/network-protocol-exploitation" element={<NetworkProtocolExploitationPage />} />
+            <Route path="/learn/sql-injection" element={<SQLInjectionPage />} />
+            <Route path="/learn/deserialization-attacks" element={<DeserializationAttacksPage />} />
+            <Route path="/learn/rop" element={<ReturnOrientedProgrammingPage />} />
+            <Route path="/learn/debugging-101" element={<Debugging101Page />} />
+            <Route path="/learn/ghidra" element={<GhidraGuidePage />} />
+            <Route path="/learn/windows-internals" element={<WindowsInternalsREPage />} />
+            <Route path="/learn/ssrf" element={<SSRFGuidePage />} />
+            <Route path="/learn/buffer-overflow" element={<BufferOverflowGuidePage />} />
+            <Route path="/learn/docker-forensics" element={<DockerForensicsGuidePage />} />
           </Routes>
         </Suspense>
       </Container>

@@ -46,6 +46,8 @@ import {
   InputAdornment,
   Collapse,
   Badge,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import {
   Code as CodeIcon,
@@ -92,6 +94,8 @@ import {
   type SmartSearchResult,
   type SmartSearchMatch,
   type AIVulnScanResult,
+  type EnhancedSecurityResult,
+  type EnhancedSecurityFinding,
   type SmaliViewResult,
   type StringExtractionResult,
   type CrossReferenceResult,
@@ -112,6 +116,7 @@ import RadarIcon from "@mui/icons-material/Radar";
 import ManageSearchIcon from "@mui/icons-material/ManageSearch";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import Menu from "@mui/material/Menu";
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import DataArrayIcon from "@mui/icons-material/DataArray";
@@ -147,9 +152,19 @@ const getSeverityColor = (severity: string): string => {
 interface JadxDecompilerProps {
   apkFile: File | null;
   onDecompilationComplete?: (result: JadxDecompilationResult) => void;
+  /** @deprecated Security scan moved to Security Findings tab in main APK results */
+  onEnhancedSecurityComplete?: (result: EnhancedSecurityResult) => void;
+  /** If provided, skip decompilation and use this existing session */
+  initialSessionId?: string;
+  /** Source tree from unified scan - if provided, use it instead of empty tree */
+  initialSourceTree?: Record<string, unknown>;
+  /** Total classes from unified scan */
+  initialTotalClasses?: number;
+  /** Total files from unified scan */
+  initialTotalFiles?: number;
 }
 
-export function JadxDecompiler({ apkFile, onDecompilationComplete }: JadxDecompilerProps) {
+export function JadxDecompiler({ apkFile, onDecompilationComplete, initialSessionId, initialSourceTree, initialTotalClasses, initialTotalFiles }: JadxDecompilerProps) {
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -228,6 +243,33 @@ export function JadxDecompiler({ apkFile, onDecompilationComplete }: JadxDecompi
   // Dependency Graph State
   const [dependencyGraph, setDependencyGraph] = useState<DependencyGraphResult | null>(null);
   const [dependencyGraphLoading, setDependencyGraphLoading] = useState(false);
+
+  // Handle pre-existing session from unified scan
+  useEffect(() => {
+    if (initialSessionId && !result) {
+      // Log for debugging
+      console.log("[JadxDecompiler] Initializing from unified scan:", {
+        sessionId: initialSessionId,
+        sourceTreeKeys: initialSourceTree ? Object.keys(initialSourceTree).length : 0,
+        totalClasses: initialTotalClasses,
+        totalFiles: initialTotalFiles
+      });
+      
+      // We already have a JADX session, create a result using unified scan data
+      setResult({
+        package_name: "",
+        total_classes: initialTotalClasses || 0,
+        total_files: initialTotalFiles || 0,
+        output_directory: initialSessionId,
+        decompilation_time: 0,
+        classes: [],
+        source_tree: initialSourceTree || {},
+        security_issues: [],
+        errors: [],
+        warnings: [],
+      });
+    }
+  }, [initialSessionId, initialSourceTree, initialTotalClasses, initialTotalFiles, result]);
 
   const handleDecompile = async () => {
     if (!apkFile) return;
@@ -2349,245 +2391,6 @@ export function JadxDecompiler({ apkFile, onDecompilationComplete }: JadxDecompi
             )}
           </Paper>
 
-          {/* AI Full Vulnerability Scan */}
-          <Paper sx={{ mb: 2, p: 2, bgcolor: alpha(theme.palette.error.main, 0.05), border: `1px solid ${alpha(theme.palette.error.main, 0.2)}` }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <RadarIcon color="error" />
-                <Typography variant="subtitle2" color="error.main">AI Cross-Class Vulnerability Scan</Typography>
-              </Box>
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <FormControl size="small" sx={{ minWidth: 100 }}>
-                  <Select
-                    value={aiVulnScanType}
-                    onChange={(e) => setAiVulnScanType(e.target.value as "quick" | "deep" | "focused")}
-                    sx={{ height: 32 }}
-                  >
-                    <MenuItem value="quick">⚡ Quick</MenuItem>
-                    <MenuItem value="deep">🔍 Deep</MenuItem>
-                    <MenuItem value="focused">🎯 Focused</MenuItem>
-                  </Select>
-                </FormControl>
-                <Button 
-                  variant="contained" 
-                  color="error"
-                  size="small"
-                  onClick={handleAiVulnScan}
-                  disabled={aiVulnScanLoading}
-                  startIcon={aiVulnScanLoading ? <CircularProgress size={16} /> : <RadarIcon />}
-                >
-                  Full Scan
-                </Button>
-              </Box>
-            </Box>
-
-            {aiVulnScanLoading && (
-              <Box sx={{ textAlign: "center", py: 3 }}>
-                <CircularProgress color="error" />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  AI is scanning entire codebase for vulnerabilities...
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  This may take a minute for large apps
-                </Typography>
-              </Box>
-            )}
-
-            {aiVulnScanResult && !aiVulnScanLoading && (
-              <Box>
-                {/* Overall Risk */}
-                <Box sx={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: 2, 
-                  mb: 2,
-                  p: 1.5,
-                  borderRadius: 1,
-                  bgcolor: alpha(getSeverityColor(aiVulnScanResult.overall_risk), 0.15),
-                  border: `1px solid ${getSeverityColor(aiVulnScanResult.overall_risk)}`
-                }}>
-                  <Chip 
-                    label={`${aiVulnScanResult.overall_risk.toUpperCase()} RISK`} 
-                    sx={{ 
-                      bgcolor: getSeverityColor(aiVulnScanResult.overall_risk),
-                      color: "white",
-                      fontWeight: 700
-                    }} 
-                  />
-                  <Typography variant="body2" color="grey.300">
-                    {aiVulnScanResult.summary}
-                  </Typography>
-                </Box>
-
-                {/* Risk Summary */}
-                <Grid container spacing={1} sx={{ mb: 2 }}>
-                  <Grid item xs={3}>
-                    <Paper sx={{ p: 1, textAlign: "center", bgcolor: alpha("#dc2626", 0.1) }}>
-                      <Typography variant="h5" color="error">{aiVulnScanResult.risk_summary.critical}</Typography>
-                      <Typography variant="caption">Critical</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={3}>
-                    <Paper sx={{ p: 1, textAlign: "center", bgcolor: alpha("#ea580c", 0.1) }}>
-                      <Typography variant="h5" sx={{ color: "#ea580c" }}>{aiVulnScanResult.risk_summary.high}</Typography>
-                      <Typography variant="caption">High</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={3}>
-                    <Paper sx={{ p: 1, textAlign: "center", bgcolor: alpha("#ca8a04", 0.1) }}>
-                      <Typography variant="h5" sx={{ color: "#ca8a04" }}>{aiVulnScanResult.risk_summary.medium}</Typography>
-                      <Typography variant="caption">Medium</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={3}>
-                    <Paper sx={{ p: 1, textAlign: "center", bgcolor: alpha("#16a34a", 0.1) }}>
-                      <Typography variant="h5" color="success.main">{aiVulnScanResult.risk_summary.low}</Typography>
-                      <Typography variant="caption">Low</Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
-
-                {/* Vulnerabilities */}
-                {aiVulnScanResult.vulnerabilities.length > 0 && (
-                  <Accordion defaultExpanded sx={{ mb: 2 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body2" color="error.main">
-                        🔴 Vulnerabilities ({aiVulnScanResult.vulnerabilities.length})
-                      </Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      {aiVulnScanResult.vulnerabilities.map((vuln, idx) => (
-                        <Accordion 
-                          key={idx} 
-                          sx={{ 
-                            bgcolor: alpha(getSeverityColor(vuln.severity), 0.1),
-                            "&:before": { display: "none" },
-                            mb: 1
-                          }}
-                        >
-                          <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                              <Chip 
-                                label={vuln.severity} 
-                                size="small"
-                                sx={{ 
-                                  bgcolor: getSeverityColor(vuln.severity),
-                                  color: "white",
-                                  fontSize: "0.65rem",
-                                  height: 20
-                                }} 
-                              />
-                              <Typography variant="body2" fontWeight={600}>
-                                {vuln.title}
-                              </Typography>
-                              {vuln.cwe_id && (
-                                <Chip label={vuln.cwe_id} size="small" variant="outlined" sx={{ height: 18, fontSize: "0.6rem" }} />
-                              )}
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                              {vuln.description}
-                            </Typography>
-                            <Typography variant="caption" color="info.main" sx={{ display: "block", mb: 1 }}>
-                              📍 {vuln.affected_class} → {vuln.affected_method}
-                            </Typography>
-                            {vuln.code_snippet && (
-                              <Box sx={{ 
-                                p: 1, 
-                                bgcolor: alpha(theme.palette.background.paper, 0.3),
-                                borderRadius: 1,
-                                fontFamily: "monospace",
-                                fontSize: "0.75rem",
-                                color: "warning.main",
-                                mb: 1
-                              }}>
-                                {vuln.code_snippet}
-                              </Box>
-                            )}
-                            {vuln.impact && (
-                              <Typography variant="caption" color="error.main" sx={{ display: "block" }}>
-                                ⚡ Impact: {vuln.impact}
-                              </Typography>
-                            )}
-                            {vuln.remediation && (
-                              <Typography variant="caption" color="success.main" sx={{ display: "block" }}>
-                                💡 Fix: {vuln.remediation}
-                              </Typography>
-                            )}
-                          </AccordionDetails>
-                        </Accordion>
-                      ))}
-                    </AccordionDetails>
-                  </Accordion>
-                )}
-
-                {/* Attack Chains */}
-                {aiVulnScanResult.attack_chains.length > 0 && (
-                  <Accordion sx={{ mb: 2 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body2" color="warning.main">
-                        ⛓️ Attack Chains ({aiVulnScanResult.attack_chains.length})
-                      </Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      {aiVulnScanResult.attack_chains.map((chain, idx) => (
-                        <Paper key={idx} sx={{ p: 2, mb: 1, bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              {chain.name}
-                            </Typography>
-                            <Chip 
-                              label={chain.likelihood} 
-                              size="small" 
-                              color={chain.likelihood === "high" ? "error" : chain.likelihood === "medium" ? "warning" : "info"}
-                            />
-                          </Box>
-                          <Box sx={{ pl: 2, borderLeft: `2px solid ${theme.palette.warning.main}` }}>
-                            {chain.steps.map((step, sidx) => (
-                              <Typography key={sidx} variant="body2" sx={{ mb: 0.5 }}>
-                                {sidx + 1}. {step}
-                              </Typography>
-                            ))}
-                          </Box>
-                          <Typography variant="caption" color="error.main" sx={{ mt: 1, display: "block" }}>
-                            💥 Impact: {chain.impact}
-                          </Typography>
-                        </Paper>
-                      ))}
-                    </AccordionDetails>
-                  </Accordion>
-                )}
-
-                {/* Recommendations */}
-                {aiVulnScanResult.recommendations.length > 0 && (
-                  <Accordion>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body2" color="success.main">
-                        💡 Recommendations ({aiVulnScanResult.recommendations.length})
-                      </Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <List dense>
-                        {aiVulnScanResult.recommendations.map((rec, idx) => (
-                          <ListItem key={idx}>
-                            <ListItemIcon sx={{ minWidth: 32 }}>
-                              <CheckIcon fontSize="small" color="success" />
-                            </ListItemIcon>
-                            <ListItemText 
-                              primary={rec}
-                              primaryTypographyProps={{ variant: "body2", color: "text.secondary" }}
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </AccordionDetails>
-                  </Accordion>
-                )}
-              </Box>
-            )}
-          </Paper>
-
           {/* Search Results */}
           {searchResults && searchResults.total_results > 0 && (
             <Accordion sx={{ mb: 2 }}>
@@ -3764,6 +3567,8 @@ export function ManifestVisualizer({ apkFile, autoStart = false }: ManifestVisua
   const [selectedNode, setSelectedNode] = useState<ManifestNode | null>(null);
   const [showMermaid, setShowMermaid] = useState(true);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
+  const [useAI, setUseAI] = useState(true);
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
 
   const handleVisualize = useCallback(async () => {
     if (!apkFile) return;
@@ -3772,14 +3577,16 @@ export function ManifestVisualizer({ apkFile, autoStart = false }: ManifestVisua
     setError(null);
     
     try {
-      const res = await reverseEngineeringClient.getManifestVisualization(apkFile);
+      const res = useAI 
+        ? await reverseEngineeringClient.getManifestVisualizationAI(apkFile)
+        : await reverseEngineeringClient.getManifestVisualization(apkFile);
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Visualization failed");
     } finally {
       setLoading(false);
     }
-  }, [apkFile]);
+  }, [apkFile, useAI]);
 
   // Auto-start when prop is set and we have an APK file
   useEffect(() => {
@@ -3809,6 +3616,7 @@ export function ManifestVisualizer({ apkFile, autoStart = false }: ManifestVisua
     <Paper sx={{ p: 3 }}>
       <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <TreeIcon color="primary" /> Manifest Visualization
+        {useAI && <Chip label="AI Enhanced" size="small" color="secondary" />}
       </Typography>
       
       {!result && (
@@ -3820,8 +3628,15 @@ export function ManifestVisualizer({ apkFile, autoStart = false }: ManifestVisua
               <li>Identify exported components (entry points)</li>
               <li>View dangerous permissions at a glance</li>
               <li>Generate Mermaid diagrams for documentation</li>
+              {useAI && <li><strong>AI Analysis:</strong> Component purposes and security assessment</li>}
             </ul>
           </Alert>
+
+          <FormControlLabel
+            control={<Switch checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />}
+            label="AI-Enhanced Analysis (slower but provides security insights)"
+            sx={{ mb: 2 }}
+          />
           
           <Button
             variant="contained"
@@ -3830,7 +3645,7 @@ export function ManifestVisualizer({ apkFile, autoStart = false }: ManifestVisua
             disabled={!apkFile || loading}
             fullWidth
           >
-            {loading ? "Analyzing Manifest..." : "Visualize Manifest"}
+            {loading ? (useAI ? "AI Analyzing Manifest..." : "Analyzing Manifest...") : "Visualize Manifest"}
           </Button>
         </Box>
       )}
@@ -3843,6 +3658,62 @@ export function ManifestVisualizer({ apkFile, autoStart = false }: ManifestVisua
 
       {result && (
         <Box sx={{ mt: 2 }}>
+          {/* AI Analysis Section */}
+          {result.ai_analysis && (
+            <Box sx={{ mb: 3 }}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => setShowAIAnalysis(!showAIAnalysis)}
+                startIcon={<AutoAwesomeIcon />}
+                sx={{ mb: 1 }}
+              >
+                {showAIAnalysis ? "Hide" : "Show"} AI Analysis
+              </Button>
+              <Collapse in={showAIAnalysis}>
+                <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.secondary.main, 0.05), border: `1px solid ${theme.palette.secondary.main}` }}>
+                  <Typography variant="subtitle2" color="secondary" gutterBottom>
+                    🤖 AI App Overview
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 2 }}>
+                    {result.ai_analysis}
+                  </Typography>
+                  
+                  {result.security_assessment && (
+                    <>
+                      <Typography variant="subtitle2" color="error" gutterBottom>
+                        🛡️ Security Assessment
+                      </Typography>
+                      <Typography variant="body2" component="div" sx={{ mb: 2 }}>
+                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>
+                          {typeof result.security_assessment === 'string' 
+                            ? result.security_assessment 
+                            : JSON.stringify(result.security_assessment, null, 2)}
+                        </pre>
+                      </Typography>
+                    </>
+                  )}
+                  
+                  {result.component_purposes && Object.keys(result.component_purposes).length > 0 && (
+                    <>
+                      <Typography variant="subtitle2" color="primary" gutterBottom>
+                        🎯 Component Purposes
+                      </Typography>
+                      <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+                        {Object.entries(result.component_purposes).map(([comp, purpose], idx) => (
+                          <Box key={idx} sx={{ mb: 1 }}>
+                            <Typography variant="caption" fontWeight={600}>{comp.split('.').pop()}:</Typography>
+                            <Typography variant="body2" color="text.secondary">{purpose}</Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </>
+                  )}
+                </Paper>
+              </Collapse>
+            </Box>
+          )}
+
           {/* Header Info */}
           <Paper sx={{ p: 2, mb: 3, bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
             <Grid container spacing={2}>
@@ -4064,9 +3935,10 @@ export function ManifestVisualizer({ apkFile, autoStart = false }: ManifestVisua
 interface AttackSurfaceMapProps {
   apkFile: File | null;
   autoStart?: boolean;
+  onResult?: (result: AttackSurfaceMapResult) => void;
 }
 
-export function AttackSurfaceMap({ apkFile, autoStart = false }: AttackSurfaceMapProps) {
+export function AttackSurfaceMap({ apkFile, autoStart = false, onResult }: AttackSurfaceMapProps) {
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -4084,12 +3956,16 @@ export function AttackSurfaceMap({ apkFile, autoStart = false }: AttackSurfaceMa
     try {
       const res = await reverseEngineeringClient.getAttackSurfaceMap(apkFile);
       setResult(res);
+      // Notify parent of the result
+      if (onResult) {
+        onResult(res);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
       setLoading(false);
     }
-  }, [apkFile]);
+  }, [apkFile, onResult]);
 
   // Auto-start when prop is set and we have an APK file
   useEffect(() => {
@@ -4496,6 +4372,8 @@ export function ObfuscationAnalyzer({ apkFile, autoStart = false }: ObfuscationA
   const [result, setResult] = useState<ObfuscationAnalysisResult | null>(null);
   const [selectedTab, setSelectedTab] = useState(0);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
+  const [useAI, setUseAI] = useState(true);
+  const [showAISummary, setShowAISummary] = useState(false);
 
   const handleAnalyze = useCallback(async () => {
     if (!apkFile) return;
@@ -4504,14 +4382,16 @@ export function ObfuscationAnalyzer({ apkFile, autoStart = false }: ObfuscationA
     setError(null);
     
     try {
-      const res = await reverseEngineeringClient.analyzeObfuscation(apkFile);
+      const res = useAI
+        ? await reverseEngineeringClient.analyzeObfuscationAI(apkFile)
+        : await reverseEngineeringClient.analyzeObfuscation(apkFile);
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
       setLoading(false);
     }
-  }, [apkFile]);
+  }, [apkFile, useAI]);
 
   // Auto-start when prop is set and we have an APK file
   useEffect(() => {
@@ -4538,6 +4418,7 @@ export function ObfuscationAnalyzer({ apkFile, autoStart = false }: ObfuscationA
     <Paper sx={{ p: 3 }}>
       <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <LayersIcon color="secondary" /> Obfuscation Analysis
+        {useAI && <Chip label="AI Enhanced" size="small" color="secondary" />}
       </Typography>
       
       {!result && (
@@ -4549,8 +4430,15 @@ export function ObfuscationAnalyzer({ apkFile, autoStart = false }: ObfuscationA
               <li>Identify string encryption patterns</li>
               <li>Analyze control flow obfuscation</li>
               <li>Get deobfuscation strategies and Frida hooks</li>
+              {useAI && <li><strong>AI Analysis:</strong> Tool identification and custom deobfuscation strategies</li>}
             </ul>
           </Alert>
+
+          <FormControlLabel
+            control={<Switch checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />}
+            label="AI-Enhanced Analysis (slower but provides smarter strategies)"
+            sx={{ mb: 2 }}
+          />
           
           <Button
             variant="contained"
@@ -4560,14 +4448,14 @@ export function ObfuscationAnalyzer({ apkFile, autoStart = false }: ObfuscationA
             disabled={!apkFile || loading}
             fullWidth
           >
-            {loading ? "Analyzing Obfuscation..." : "Analyze Obfuscation"}
+            {loading ? (useAI ? "AI Analyzing Obfuscation..." : "Analyzing Obfuscation...") : "Analyze Obfuscation"}
           </Button>
           
           {loading && (
             <Box sx={{ mt: 2 }}>
               <LinearProgress color="secondary" />
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                Scanning bytecode patterns and class structures...
+                {useAI ? "AI analyzing bytecode patterns and code samples..." : "Scanning bytecode patterns and class structures..."}
               </Typography>
             </Box>
           )}
@@ -4582,6 +4470,59 @@ export function ObfuscationAnalyzer({ apkFile, autoStart = false }: ObfuscationA
 
       {result && (
         <Box sx={{ mt: 2 }}>
+          {/* AI Analysis Summary */}
+          {result.ai_analysis_summary && (
+            <Box sx={{ mb: 3 }}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => setShowAISummary(!showAISummary)}
+                startIcon={<AutoAwesomeIcon />}
+                sx={{ mb: 1 }}
+              >
+                {showAISummary ? "Hide" : "Show"} AI Analysis
+              </Button>
+              <Collapse in={showAISummary}>
+                <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.secondary.main, 0.05), border: `1px solid ${theme.palette.secondary.main}` }}>
+                  <Typography variant="subtitle2" color="secondary" gutterBottom>
+                    🤖 AI Analysis Summary
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 2 }}>
+                    {result.ai_analysis_summary}
+                  </Typography>
+                  
+                  {result.reverse_engineering_difficulty && (
+                    <>
+                      <Typography variant="subtitle2" color="warning.main" gutterBottom>
+                        ⚡ Reverse Engineering Difficulty
+                      </Typography>
+                      <Chip 
+                        label={result.reverse_engineering_difficulty.toUpperCase()}
+                        color={
+                          result.reverse_engineering_difficulty.includes('difficult') ? 'error' :
+                          result.reverse_engineering_difficulty.includes('moderate') || result.reverse_engineering_difficulty.includes('challenging') ? 'warning' :
+                          'success'
+                        }
+                        sx={{ mb: 2 }}
+                      />
+                    </>
+                  )}
+                  
+                  {result.ai_recommended_approach && (
+                    <>
+                      <Typography variant="subtitle2" color="primary" gutterBottom>
+                        🎯 Recommended Approach
+                      </Typography>
+                      <Typography variant="body2">
+                        {result.ai_recommended_approach}
+                      </Typography>
+                    </>
+                  )}
+                </Paper>
+              </Collapse>
+            </Box>
+          )}
+
           {/* Obfuscation Score Header */}
           <Paper 
             sx={{ 

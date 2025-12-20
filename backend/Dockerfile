@@ -36,6 +36,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     whois \
     ca-certificates \
     gnupg \
+    fontconfig \
+    fonts-dejavu-core \
+    libfreetype6 \
+    libharfbuzz0b \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/* \
@@ -77,6 +81,17 @@ RUN wget -q -O /tmp/jadx.zip https://github.com/skylot/jadx/releases/download/v1
     && chmod +x /opt/jadx/bin/jadx /opt/jadx/bin/jadx-gui \
     && ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx \
     && rm /tmp/jadx.zip
+
+# Install Ghidra (binary analysis and decompilation)
+ENV GHIDRA_VERSION=11.2.1 \
+    GHIDRA_DATE=20241105 \
+    GHIDRA_HOME=/opt/ghidra
+
+RUN wget -q -O /tmp/ghidra.zip https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/ghidra_${GHIDRA_VERSION}_PUBLIC_${GHIDRA_DATE}.zip \
+    && unzip -q /tmp/ghidra.zip -d /opt \
+    && mv /opt/ghidra_${GHIDRA_VERSION}_PUBLIC ${GHIDRA_HOME} \
+    && chmod +x ${GHIDRA_HOME}/support/analyzeHeadless \
+    && rm /tmp/ghidra.zip
 
 # Install ESLint and security plugins globally for scanning
 RUN npm install -g eslint eslint-plugin-security @eslint/js

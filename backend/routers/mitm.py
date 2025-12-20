@@ -3,11 +3,13 @@ Man-in-the-Middle Workbench Router
 API endpoints for MITM proxy management.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, Dict, List, Any
 
+from ..core.auth import get_current_active_user
+from ..models.models import User
 from ..services.mitm_service import (
     mitm_service, 
     analyze_mitm_traffic,
@@ -52,7 +54,7 @@ class RuleConfig(BaseModel):
 
 
 @router.post("/proxies")
-async def create_proxy(config: ProxyConfig):
+async def create_proxy(config: ProxyConfig, current_user: User = Depends(get_current_active_user)):
     """Create a new MITM proxy instance"""
     try:
         result = mitm_service.create_proxy(

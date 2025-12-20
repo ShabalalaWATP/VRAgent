@@ -45,6 +45,49 @@ import TrendingFlatIcon from "@mui/icons-material/TrendingFlat";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WarningIcon from "@mui/icons-material/Warning";
 import SecurityIcon from "@mui/icons-material/Security";
+import LearnPageLayout from "../components/LearnPageLayout";
+
+// Page context for AI chat
+const pageContext = `This is a comprehensive Cyber Threat Intelligence (CTI) page covering:
+
+1. Threat Actors Database:
+- Nation-State APT groups (APT28, APT29, Lazarus Group, APT41, Hafnium, etc.)
+- Ransomware Groups (LockBit, BlackCat/ALPHV, Cl0p, Wizard Spider, etc.)
+- Cybercrime Organizations (FIN7, Evil Corp, Scattered Spider)
+- Hacktivists and their campaigns
+- Actor profiles with TTPs, tools, targets, and notable campaigns
+
+2. CTI Methodology & Frameworks:
+- Intelligence Cycle (Direction, Collection, Processing, Analysis, Dissemination)
+- Diamond Model of Intrusion Analysis
+- Attribution Confidence Levels
+- STIX & TAXII Standards
+- Traffic Light Protocol (TLP)
+- Admiralty Code for source reliability
+- Cognitive Biases in Analysis
+- Analysis Techniques (ACH, Link Analysis, etc.)
+
+3. IOCs & MITRE ATT&CK:
+- Indicator of Compromise types (Hashes, IPs, Domains, URLs, etc.)
+- MITRE ATT&CK Tactics and Techniques
+- Common Malware Families
+- Pyramid of Pain concept
+
+4. Threat Landscape (2024-2025):
+- Current threat trends and statistics
+- Emerging threats (AI-powered attacks, supply chain, identity attacks)
+- Geopolitical cyber context (Ukraine, China-Taiwan, Middle East, DPRK)
+
+5. Tracking & Tools:
+- Tracking methods and pivot techniques
+- Intelligence sources (free and commercial)
+- Government CTI resources
+
+6. Defensive Intelligence:
+- Defensive recommendations by actor type
+- Detection priority matrix
+- Incident response quick reference
+- Threat hunting hypotheses`;
 import {
   actorCategories,
   ctiMethodology,
@@ -99,6 +142,7 @@ export default function CyberThreatIntelPage() {
   }, [searchQuery, allActors]);
 
   return (
+    <LearnPageLayout pageTitle="Cyber Threat Intelligence" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -1304,5 +1348,6 @@ export default function CyberThreatIntelPage() {
         </>
       )}
     </Container>
+    </LearnPageLayout>
   );
 }

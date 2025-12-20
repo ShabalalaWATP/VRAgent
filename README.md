@@ -5,7 +5,7 @@ An end-to-end platform for automated security vulnerability scanning and analysi
 - **Network Security Analysis**: Run Nmap scans and analyze PCAP files with AI-powered insights
 - **Reverse Engineering Hub**: Analyze binaries (PE/ELF), Android APKs, and Docker images with AI-powered insights
 - **AI-Powered Reports**: Google Gemini generates detailed exploitability narratives, attack scenarios, and remediation guidance
-- **Interactive Learning Hub**: Educational content covering security fundamentals, attack frameworks, and pentesting methodologies
+- **Interactive Learning Hub**: 68 educational topics across 10 categories covering security fundamentals, attack frameworks, vulnerability research, and pentesting methodologies with AI-powered chat assistant on every page
 
 ## 🎯 Features
 
@@ -142,47 +142,144 @@ VRAgent integrates **14 specialized security scanners** for comprehensive vulner
 - **Improved Exploitability Display**: Clean card-based layout with colored sections for attack narrative, impact, PoC, and mitigations
 
 ### Learning Hub
-VRAgent includes a comprehensive **Security Learning Hub** with educational content for security professionals:
+VRAgent includes a comprehensive **Security Learning Hub** with **68 learning topics** across **10 categories** for security professionals at all levels:
+
+#### AI Chat Assistant
+Every learning page includes an **AI-powered chat assistant** that can answer questions about the current topic:
+- **Context-Aware**: AI understands the specific content on each page
+- **Interactive Learning**: Ask follow-up questions, request examples, or clarify concepts
+- **Gemini-Powered**: Uses Google Gemini for accurate, educational responses
+- **Conversation History**: Chat maintains context within each page session
+- **Suggested Questions**: Quick-start questions based on page content
+- **Copy Responses**: Easily copy AI responses for notes or reference
+
+#### 🛡️ About VRAgent (16 topics)
+Complete guides to VRAgent's tools and capabilities:
 
 | Topic | Description |
 |-------|-------------|
 | **How Scanning Works** | The 9-step pipeline VRAgent uses to analyze code |
 | **AI Analysis Explained** | How Gemini AI transforms findings into intelligence |
 | **VRAgent Architecture** | Docker services, data models, and system design |
-| **Cyber Kill Chain** | Lockheed Martin's 7-phase attack framework |
-| **MITRE ATT&CK** | Adversary tactics and techniques (14 tactics, 200+ techniques) |
+| **Network Analysis Hub Guide** | 8 tools: Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Fuzzer, MITM |
+| **Wireshark PCAP Guide** | Packet capture analysis, display filters, protocol dissection |
+| **Nmap Scanner Guide** | Port scanning, service detection, NSE scripts |
+| **SSL/TLS Scanner Guide** | 12 CVE checks, certificate validation, cipher analysis |
+| **DNS Analyzer Guide** | Enumeration, subdomain discovery, email security (SPF/DMARC/DKIM) |
+| **Traceroute Analyzer Guide** | Network path analysis, hop-by-hop diagnostics |
+| **API Endpoint Tester Guide** | AI Auto-Test with CIDR scanning, JWT/WebSocket testing |
+| **Fuzzer Tool Guide** | Smart Detection, session management, payload modes |
+| **MITM Workbench Guide** | Traffic interception, AI-powered rule creation |
+| **Reverse Engineering Hub Guide** | APK analysis, binary inspection, Docker forensics |
+| **APK Analysis Guide** | Permissions, certificates, manifest parsing, attack surface |
+| **Binary Analysis Guide** | PE/ELF inspection, strings, imports, disassembly |
+| **Docker Layer Analysis Guide** | Layer inspection, secret detection, Dockerfile reconstruction |
+
+#### 🌐 Network Security (4 topics)
+Advanced network security concepts:
+
+| Topic | Description |
+|-------|-------------|
+| **Network Protocol Exploitation** | Protocol abuse patterns, detection signals, hardening |
+| **ARP/DNS Poisoning** | Spoofing risks, detection signals, defensive monitoring |
+| **DDoS Attack Techniques** | Volumetric, protocol, application layer attacks, mitigation |
+| **Wireless Pentesting** | WiFi security (WEP/WPA), evil twin attacks, Bluetooth, RF protocols |
+
+#### 🔬 Reverse Engineering (4 topics)
+Reverse engineering fundamentals:
+
+| Topic | Description |
+|-------|-------------|
+| **Debugging 101** | Breakpoints, stepping, memory inspection for beginners |
+| **Ghidra Reverse Engineering** | NSA's open-source RE tool: disassembly, decompilation, scripting |
+| **Android Reverse Engineering** | APK structure, JADX, Frida, static/dynamic analysis |
+| **Windows Internals for RE** | PE format, TEB/PEB, API patterns, hooking, DLL injection |
+
+#### 🔍 Vulnerability Research (8 topics)
+Memory corruption, exploit development, and vulnerability analysis:
+
+| Topic | Description |
+|-------|-------------|
+| **Buffer Overflow** | Stack/heap overflows, exploitation techniques, protections |
+| **Return-Oriented Programming (ROP)** | ROP concepts, risks, and modern mitigations |
+| **Deserialization Attacks** | Unsafe object parsing, detection, safer serialization |
+| **Fuzzing Deep Dive** | AFL++, libFuzzer, coverage-guided fuzzing, crash triage |
+| **CVE, CWE, CVSS & EPSS** | Vulnerability identification and scoring systems |
+| **Heap Exploitation** | UAF, double-free, heap spray, tcache poisoning, House techniques |
+| **Integer Overflows & Underflows** | Arithmetic bugs, signed/unsigned issues, width truncation |
+| **Out-of-Bounds Read/Write** | Array violations, info leaks, arbitrary R/W primitives |
+
+#### 🕸️ Web Security (8 topics)
+Web application security testing:
+
+| Topic | Description |
+|-------|-------------|
 | **OWASP Top 10** | The 10 most critical web application security risks |
-| **OWASP Mobile Top 10** | Mobile application security risks |
-| **CVE, CWE & CVSS** | Vulnerability identification and scoring systems |
-| **Pentest Methodology** | Step-by-step penetration testing guide |
-| **Mobile Pentesting** | iOS and Android security testing |
-| **API Security** | Securing REST, GraphQL, and WebSocket APIs |
-| **Auth & Crypto** | Authentication, encryption, and key management |
-| **Data & Secrets** | Protecting sensitive information |
-| **Fuzzing Guide** | Automated vulnerability discovery techniques |
-| **Reverse Engineering** | Binary analysis and malware techniques |
-| **Security Glossary** | 100+ security terms and definitions |
-| **Security Commands** | Essential CLI tools (nmap, burp, metasploit, etc.) |
-| **Cyber Threat Intelligence** | Threat actors, CTI methodology, tracking tools, and intelligence frameworks |
-| **Lateral Movement** | Windows/Linux pivoting, LOLBins, credential attacks, cloud pivoting, evasion techniques, and tools reference |
+| **Web Pentesting Guide** | Comprehensive methodology from recon to reporting |
+| **SQL Injection (SQLi)** | SQLi mechanics, detection signals, secure fixes |
+| **Server-Side Request Forgery (SSRF)** | Cloud metadata theft, internal service access, bypass techniques |
+| **API Security Testing** | REST & GraphQL security: BOLA, auth bypass, injection |
+| **Auth & Crypto Foundations** | Authentication, JWT, OAuth, TLS, access control |
+| **Command Injection** | OS command execution, shell metacharacters, prevention |
+| **Cross-Site Scripting (XSS)** | Reflected, stored, DOM XSS, payloads, CSP prevention |
 
-#### Network Analysis Learning Pages
+#### ⚔️ Offensive Security / Red Team (12 topics)
+Attack methodologies and adversary emulation:
+
 | Topic | Description |
 |-------|-------------|
-| **Network Analysis Hub Guide** | Complete guide to VRAgent's network security tools with use cases and workflows |
-| **Wireshark Essentials** | Beginner-friendly guide to packet analysis, display/capture filters, and security use cases |
-| **Nmap Essentials** | Comprehensive Nmap guide covering scan types, NSE scripts, timing, and real-world scenarios |
-| **SSL/TLS Security Guide** | SSL/TLS scanning, certificate validation, CVE detection, and cipher analysis |
-| **DNS Reconnaissance Guide** | Complete guide to DNS enumeration, record types, email security (SPF/DMARC/DKIM), and zone transfers |
-| **Traceroute Guide** | Network path analysis, latency interpretation, troubleshooting, and security implications |
+| **Cyber Kill Chain** | Lockheed Martin's 7-phase attack framework |
+| **MITRE ATT&CK** | 14 tactics, 200+ techniques knowledge base |
+| **C2 Frameworks** | Cobalt Strike, Sliver, Havoc, infrastructure, OPSEC |
+| **Privilege Escalation** | Linux/Windows privesc: SUID, sudo, kernel exploits, GTFOBins |
+| **Lateral Movement** | Network pivoting, Windows protocols, LOLBins, credential attacks |
+| **Living off the Land** | LOLBAS/GTFOBins fundamentals, detection signals |
+| **Windows Persistence Mechanisms** | Run keys, services, scheduled tasks enumeration |
+| **Pivoting & Tunneling** | Traffic routing, tunnels, detection, defenses |
+| **Credential Harvesting** | Credential risks, storage locations, detection, prevention |
+| **Data Exfiltration** | Common exfil paths, detection signals, prevention |
+| **OSINT & Reconnaissance** | Subdomain enumeration, email discovery, Google dorks |
+| **Container & Kubernetes Exploitation** | Runtime misconfigurations, RBAC, escape techniques |
 
-#### Reverse Engineering Learning Pages
+#### 🛡️ Defensive Security / Blue Team (8 topics)
+Threat intelligence, incident response, and defensive monitoring:
+
 | Topic | Description |
 |-------|-------------|
-| **Reverse Engineering Hub Guide** | Complete guide to VRAgent's RE tools: binary analysis, APK inspection, Docker forensics |
-| **APK Analysis Guide** | Android app analysis: permissions, certificates, manifest parsing, attack surface mapping |
-| **Binary Analysis Guide** | PE/ELF inspection: strings, imports, Rich headers, disassembly, malware indicators |
-| **Docker Layer Analysis Guide** | Container forensics: layer inspection, secret detection, Dockerfile reconstruction |
+| **Cyber Threat Intelligence** | 70+ threat actors, attribution frameworks, tracking methods |
+| **Incident Response** | NIST-based IR: 6 phases, playbooks, detection strategies |
+| **Digital Forensics** | Disk imaging, memory analysis, timeline creation, artifacts |
+| **Antivirus Detection** | Signatures, behavior monitoring, platform checks |
+| **Data & Secrets Guide** | File uploads, data storage, logs, backups, secrets hunting |
+| **SIEM Fundamentals** | Log collection, correlation, alerting: Splunk, Elastic, Sentinel |
+| **SOC Analyst Workflow** | Triage, investigation, escalation, shift handoffs |
+| **Threat Hunting Fundamentals** | Hypothesis-driven hunting, data sources, ATT&CK mapping |
+
+#### 📱 Mobile Security (3 topics)
+Mobile application security testing:
+
+| Topic | Description |
+|-------|-------------|
+| **iOS Pentesting** | Static/dynamic analysis, Frida, jailbreak bypass, data storage |
+| **OWASP Mobile Top 10** | Critical security risks for mobile applications (2024) |
+| **Mobile App Pentesting** | Android & iOS: Frida, SSL pinning bypass, data storage |
+
+#### 🏆 Career & Certifications (3 topics)
+Career development resources:
+
+| Topic | Description |
+|-------|-------------|
+| **Cyber Security Certifications** | SANS, OffSec, CompTIA, CREST, CEH certification map |
+| **Cybersecurity Career Paths** | Red Team, Blue Team, Security Engineering, GRC tracks |
+| **Building a Security Portfolio** | GitHub projects, CTF, blog writing, bug bounty work |
+
+#### 📚 Quick Reference (2 topics)
+Handy references for assessments:
+
+| Topic | Description |
+|-------|-------------|
+| **Security Glossary** | 120+ cybersecurity terms with definitions |
+| **Commands Reference** | Linux, PowerShell, Nmap, Wireshark commands |
 
 ### Reports & Exports
 - **Multiple Export Formats**: Generate professional reports in:
@@ -468,12 +565,12 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
 VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries, APKs, and Docker images:
 
 #### Binary Analysis (PE/ELF)
-- **Multi-Format Support**: Analyze Windows executables (PE), Linux binaries (ELF), and DLLs
+- **Multi-Format Support**: Analyze Windows executables (PE), Linux binaries (ELF), DLLs, and shared objects
 - **String Extraction**: Extract ASCII and Unicode strings with context
   - Configurable minimum length filtering
   - Automatic categorization (URLs, paths, registry keys, IP addresses)
   - Interesting string highlighting (passwords, API keys, credentials)
-- **Import Analysis**: List imported functions and libraries
+- **Import/Export Analysis**: List imported and exported functions
   - DLL dependency mapping
   - Suspicious import detection (process injection, crypto, network)
   - Library version identification
@@ -483,18 +580,125 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
   - Build artifact analysis
 - **ELF Symbol Extraction**: Function and object symbols
 - **Binary Metadata**: File size, architecture, entry point, sections
-- **AI-Powered Analysis**: Gemini AI generates:
-  - Binary purpose identification
-  - Suspicious behavior indicators
-  - Malware family classification hints
-  - Recommended next analysis steps
+
+#### AI-Powered Vulnerability Hunter
+- **Unified Binary Scanning**: Comprehensive multi-phase security analysis
+  - Automatic vulnerability detection across multiple categories
+  - Memory corruption (buffer overflow, use-after-free, double-free)
+  - Authentication bypass, hardcoded credentials
+  - Injection vulnerabilities (command, SQL, format string)
+  - Cryptographic weaknesses
+  - Real-time progress streaming via SSE
+  - Cancelable long-running scans
+- **AI Vulnerability Analysis**: Deep inspection of detected issues
+  - CVSS scoring with attack vector analysis
+  - Exploitability assessment (complexity, privileges required)
+  - Root cause analysis
+  - Remediation recommendations
+- **Purpose Analysis**: AI identifies what the binary does
+  - Behavioral classification
+  - Suspicious indicator detection
+  - Malware family hints
+
+#### AI Decompiler Enhancement
+- **Code Enhancement**: Transform raw disassembly into readable code
+  - Function purpose identification
+  - Variable naming suggestions
+  - Control flow explanation
+  - Security annotation highlighting
+- **Smart Symbol Renaming**: AI-suggested meaningful names
+  - Function rename suggestions based on behavior
+  - Variable type inference
+  - Pattern-based naming (crypto, network, file I/O)
+- **Natural Language Search**: Find code by description
+  - "Find the function that handles authentication"
+  - "Show me code that opens network sockets"
+  - Semantic search across disassembly
+
+#### Symbolic Execution Traces
+- **Path Constraint Analysis**: Track execution paths through code
+  - Control flow graph (CFG) generation
+  - Basic block enumeration with code preview
+  - Branch condition tracking
+- **Taint Analysis**: Follow user input through the binary
+  - Source identification (network, file, user input)
+  - Taint propagation tracking
+  - Dangerous sink detection
+- **Symbolic Execution Integration**: Combined with AI Decompiler
+  - Code annotations with reachability info
+  - "This variable is user-controlled and reaches dangerous sink"
+  - Path-aware vulnerability assessment
+- **Execution Path Visualization**:
+  - Path description with feasibility analysis
+  - Block sequence visualization
+  - Constraint display for each path
+
+#### Live Attack Simulation
+- **Real-Time Attack Modeling**: Simulate attacks against the binary
+  - Multiple attack scenarios (buffer overflow, ROP, heap exploitation)
+  - Step-by-step attack progression
+  - Success probability estimation
+- **Defense Assessment**: Evaluate protections
+  - ASLR, DEP/NX, Stack Canaries, RELRO detection
+  - Bypass technique suggestions
+  - Protection effectiveness scoring
+- **Attack Timeline**: Visualize attack phases
+  - Reconnaissance → Initial Access → Exploitation → Post-Exploitation
+
+#### PoC Exploit Generation
+- **Automated PoC Creation**: Generate proof-of-concept exploits
+  - Python exploit templates
+  - Payload generation
+  - Environment setup instructions
+- **Multiple PoC Generation**: Batch create exploits for all vulnerabilities
+  - Priority-based generation
+  - Customizable templates
+  - Testing guidance
+
+#### Hex Editor & Low-Level Analysis
+- **Interactive Hex Viewer**: Browse binary at byte level
+  - Offset-based navigation
+  - ASCII/Unicode interpretation
+  - Copy selections to clipboard
+- **Pattern Search**: Find byte patterns in binaries
+  - Hex string search
+  - ASCII/Unicode text search
+  - Regex pattern matching
+- **Entropy Analysis**: Detect packed/encrypted sections
+  - Section-by-section entropy calculation
+  - Visual entropy map
+  - Packer/crypter detection hints
+
+#### Analysis Notes & Collaboration
+- **Interactive Notes**: Annotate your analysis
+  - Create notes linked to specific addresses/functions
+  - Tagging and categorization
+  - Export notes to Markdown
+- **AI Chat**: Discuss findings with Gemini AI
+  - Ask questions about the binary
+  - Get explanations of assembly code
+  - Request analysis of specific functions
+- **Report Management**: Save and organize analyses
+  - Save analysis results to database
+  - View historical reports
+  - Export as Markdown, PDF, or DOCX
 
 #### APK Analysis (Android)
+- **Unified APK Scanning**: Comprehensive multi-phase security analysis
+  - Real-time progress streaming via SSE
+  - Cancelable long-running scans
+  - Automatic vulnerability detection across all components
+- **JADX Decompilation**: Full Java source code recovery
+  - Browse decompiled class files
+  - Search across decompiled code
+  - Download complete decompiled source as ZIP
+  - Session management for large APKs
 - **Manifest Parsing**: Complete AndroidManifest.xml analysis
   - Package name, version, SDK targets
   - Declared permissions with risk categorization
   - Exported components (activities, services, receivers, providers)
   - Intent filters and deep links
+  - AI-enhanced manifest visualization with Mermaid diagrams
 - **Certificate Analysis**: APK signing verification
   - Certificate chain validation
   - SHA-1/SHA-256 fingerprints
@@ -505,22 +709,29 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
   - Permission group categorization
   - Over-permission warnings
   - Privacy-sensitive permission flags
+  - Detailed permission-to-risk mapping
 - **Component Security**:
   - Exported component enumeration
   - Intent filter analysis for attack surface
   - Content provider URI exposure
   - Broadcast receiver analysis
-- **Quick AI Analysis**: One-click AI summary
-  - What does this app do?
-  - Quick security findings
-  - Risk assessment
-- **Advanced Analysis Tools**:
+  - Component map visualization
+- **AI-Powered Analysis Tools**:
+  - **AI Vulnerability Scanner**: Deep code analysis for security issues
+  - **AI Code Explanation**: Understand what code does in plain English
+  - **AI Code Search**: Natural language queries to find code patterns
+  - **Threat Model Generation**: STRIDE-based threat modeling
+  - **Exploit Suggestions**: AI-generated attack vectors with PoC guidance
+  - **Analysis Walkthrough**: Step-by-step guided analysis
+  - **AI Chat**: Interactive discussion about APK findings
+- **Advanced Security Analysis**:
   - **Attack Surface Map**: Comprehensive attack vector identification
     - Exported activities with deep link analysis
     - Content provider URI patterns
     - Intent handler analysis
     - ADB exploitation commands
     - Mermaid attack tree visualization
+    - AI-enhanced attack surface analysis
   - **Obfuscation Analysis**: Detect code protection
     - ProGuard/R8 detection
     - DexGuard commercial protection
@@ -529,8 +740,32 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
     - Class naming analysis
     - Deobfuscation strategy recommendations
     - Frida hook generation
+    - AI-enhanced obfuscation analysis
+  - **Cryptographic Audit**: Find crypto weaknesses
+    - Weak algorithm detection (MD5, SHA1, DES)
+    - Hardcoded keys and IVs
+    - Insecure random number usage
+    - Certificate pinning analysis
+  - **Library CVE Scanner**: Third-party library vulnerabilities
+    - Detect embedded libraries
+    - OSV database lookup for CVEs
+    - Version-specific vulnerability matching
+  - **Enhanced Security Scan**: Combined deep analysis
+    - All security checks in one scan
+    - Exportable detailed reports
+- **Code Analysis Tools**:
+  - **Data Flow Analysis**: Track sensitive data through the app
+  - **Call Graph Generation**: Visualize method relationships
+  - **Cross-Reference Analysis**: Find all usages of methods/classes
+  - **Symbol Lookup**: Quick navigation to definitions
+  - **Smali View**: Low-level bytecode inspection
+  - **String Extraction**: Find all strings with categorization
+  - **Network Endpoint Discovery**: Extract URLs, IPs, API endpoints
+  - **Dependency Graph**: Visualize package dependencies
 - **Report Management**: Save, view, and delete APK analysis reports
 - **Export Options**: Download reports as Markdown, PDF, or DOCX
+  - Export chat conversations
+  - Export enhanced security results
 
 #### Docker Layer Analysis
 - **Image Inspection**: Pull and analyze Docker images
@@ -1086,6 +1321,12 @@ You have two options:
    - Quick reference tables
    - Links to external resources
    - Practical tips and best practices
+4. **Use the AI Chat Assistant** (floating button in bottom-right):
+   - Click the chat bubble icon to expand
+   - Ask questions about the current topic
+   - Get explanations, examples, or clarifications
+   - View suggested questions for quick start
+   - Copy AI responses to your notes
 
 ---
 
@@ -1584,6 +1825,12 @@ The frontend will be available at http://localhost:5173
 | `GET` | `/reports/{id}/export/sbom/spdx` | Export SBOM (SPDX) |
 | `POST` | `/reports/{id}/chat` | Chat with AI about findings/exploits |
 
+### Learning Hub
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/learn/chat` | AI chat for learning pages (context-aware) |
+
 ### Webhooks
 
 | Method | Endpoint | Description |
@@ -1674,23 +1921,90 @@ The frontend will be available at http://localhost:5173
 
 ### Reverse Engineering
 
+#### Binary Analysis
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/reverse/status` | Check RE tools availability (jadx, radare2, strings) |
+| `GET` | `/reverse/status` | Check RE tools availability (capstone, pyelftools, strings) |
 | `POST` | `/reverse/binary/analyze` | Analyze PE/ELF binary (strings, imports, metadata) |
-| `POST` | `/reverse/binary/disassemble` | Disassemble binary functions |
-| `POST` | `/reverse/binary/ai-analyze` | AI-powered binary analysis |
-| `POST` | `/reverse/apk/analyze` | Full APK analysis (manifest, permissions, certs) |
-| `POST` | `/reverse/apk/quick-summary` | Quick AI summary of APK |
-| `POST` | `/reverse/apk/attack-surface` | Generate attack surface map |
-| `POST` | `/reverse/apk/obfuscation-analysis` | Detect obfuscation techniques |
-| `POST` | `/reverse/apk/ai-analyze` | AI-powered APK security analysis |
-| `GET` | `/reverse/apk/reports` | List saved APK reports |
-| `GET` | `/reverse/apk/reports/{id}` | Get specific APK report |
-| `DELETE` | `/reverse/apk/reports/{id}` | Delete APK report |
-| `GET` | `/reverse/apk/reports/{id}/export/{format}` | Export report (markdown/pdf/docx) |
-| `POST` | `/reverse/docker/analyze` | Analyze Docker image layers |
-| `POST` | `/reverse/docker/ai-analyze` | AI-powered Docker analysis |
+| `POST` | `/reverse/binary/unified-scan` | Comprehensive multi-phase vulnerability scan (SSE streaming) |
+| `POST` | `/reverse/binary/unified-scan/{id}/cancel` | Cancel running unified scan |
+| `POST` | `/reverse/binary/vulnerability-hunt` | AI-powered vulnerability hunting |
+| `POST` | `/reverse/binary/vulnerability-hunt/{id}/cancel` | Cancel vulnerability hunt |
+| `POST` | `/reverse/binary/analyze-purpose` | AI analysis of binary purpose |
+| `POST` | `/reverse/binary/enhance-code` | AI decompiler enhancement |
+| `POST` | `/reverse/binary/enhance-code-symbolic` | AI enhancement with symbolic execution data |
+| `POST` | `/reverse/binary/symbolic-trace` | Symbolic execution trace analysis |
+| `POST` | `/reverse/binary/nl-search` | Natural language code search |
+| `POST` | `/reverse/binary/smart-rename` | AI-suggested symbol renaming |
+| `POST` | `/reverse/binary/simulate-attack` | Live attack simulation |
+| `POST` | `/reverse/binary/generate-poc` | Generate single PoC exploit |
+| `POST` | `/reverse/binary/generate-pocs` | Generate multiple PoC exploits |
+| `POST` | `/reverse/binary/entropy` | Entropy analysis for packer detection |
+| `POST` | `/reverse/binary/export-from-result` | Export analysis results |
+| `POST` | `/reverse/chat` | AI chat about analysis |
+| `POST` | `/reverse/notes/create` | Create analysis note |
+| `POST` | `/reverse/notes/list` | List analysis notes |
+| `POST` | `/reverse/notes/update` | Update analysis note |
+| `POST` | `/reverse/notes/export` | Export notes |
+| `POST` | `/reverse/reports` | Save analysis report |
+| `GET` | `/reverse/reports` | List saved reports |
+| `GET` | `/reverse/reports/{id}` | Get specific report |
+| `GET` | `/reverse/reports/{id}/export` | Export report (markdown/pdf/docx) |
+
+#### Hex Editor
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/reverse/hex-upload` | Upload binary for hex viewing |
+| `GET` | `/reverse/hex/{id}` | Get hex view of binary |
+| `GET` | `/reverse/hex/{id}/search` | Search patterns in binary |
+
+#### APK Analysis
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/reverse/apk/unified-scan` | Comprehensive APK security scan (SSE streaming) |
+| `POST` | `/reverse/apk/unified-scan/{id}/cancel` | Cancel running APK scan |
+| `POST` | `/reverse/apk/decompile` | JADX decompilation |
+| `GET` | `/reverse/apk/decompile/{id}/source/{path}` | Get decompiled source file |
+| `GET` | `/reverse/apk/decompile/{id}/search` | Search decompiled code |
+| `POST` | `/reverse/apk/decompile/{id}/ai-diagrams` | Generate AI diagrams |
+| `POST` | `/reverse/apk/decompile/ai/explain` | AI code explanation |
+| `POST` | `/reverse/apk/decompile/ai/vulnerabilities` | AI vulnerability analysis |
+| `POST` | `/reverse/apk/decompile/dataflow` | Data flow analysis |
+| `POST` | `/reverse/apk/decompile/callgraph` | Call graph generation |
+| `POST` | `/reverse/apk/decompile/smart-search` | Smart semantic search |
+| `POST` | `/reverse/apk/decompile/ai-vulnscan` | AI vulnerability scan |
+| `POST` | `/reverse/apk/decompile/library-cve-scan` | Library CVE scanning |
+| `POST` | `/reverse/apk/decompile/enhanced-security` | Enhanced security analysis |
+| `POST` | `/reverse/apk/decompile/smali` | Smali bytecode view |
+| `POST` | `/reverse/apk/decompile/strings` | String extraction |
+| `POST` | `/reverse/apk/decompile/xref` | Cross-reference analysis |
+| `POST` | `/reverse/apk/decompile/permissions` | Permission analysis |
+| `POST` | `/reverse/apk/decompile/network-endpoints` | Network endpoint extraction |
+| `POST` | `/reverse/apk/decompile/crypto-audit` | Cryptographic audit |
+| `POST` | `/reverse/apk/decompile/component-map` | Component mapping |
+| `POST` | `/reverse/apk/decompile/dependency-graph` | Dependency graph |
+| `POST` | `/reverse/apk/decompile/symbol-lookup` | Symbol lookup |
+| `POST` | `/reverse/apk/decompile/download-zip` | Download decompiled source |
+| `POST` | `/reverse/apk/manifest-visualization` | Manifest visualization |
+| `POST` | `/reverse/apk/manifest-visualization/ai-enhanced` | AI-enhanced manifest analysis |
+| `POST` | `/reverse/apk/attack-surface` | Attack surface mapping |
+| `POST` | `/reverse/apk/decompile/attack-surface-ai` | AI attack surface analysis |
+| `POST` | `/reverse/apk/obfuscation-analysis` | Obfuscation detection |
+| `POST` | `/reverse/apk/obfuscation-analysis/ai-enhanced` | AI obfuscation analysis |
+| `POST` | `/reverse/apk/threat-model` | Threat model generation |
+| `POST` | `/reverse/apk/exploit-suggestions` | Exploit suggestions |
+| `POST` | `/reverse/apk/walkthrough` | Analysis walkthrough |
+| `POST` | `/reverse/apk/chat` | AI chat about APK |
+| `POST` | `/reverse/apk/code/explain` | Code explanation |
+| `POST` | `/reverse/apk/code/search-ai` | AI code search |
+| `POST` | `/reverse/apk/export` | Export APK analysis |
+| `POST` | `/reverse/apk/export-from-result` | Export from result |
+
+#### Docker Analysis
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/reverse/analyze-docker/{image}` | Analyze Docker image layers |
+| `GET` | `/reverse/docker-images` | List local Docker images |
 
 Full interactive documentation available at `/docs` when running the backend.
 
@@ -1819,8 +2133,8 @@ VRAgent/
             ├── DNSAnalyzerPage.tsx      # DNS reconnaissance & enumeration
             ├── TracerouteAnalyzerPage.tsx # Traceroute visualization
             ├── ReverseEngineeringHubPage.tsx # Binary/APK/Docker analysis
-            ├── LearnHubPage.tsx         # Security learning hub
-            └── [Learning Pages]         # Educational content (26+ topics)
+            ├── LearnHubPage.tsx         # Security learning hub (68 topics, 10 categories)
+            └── [Learning Pages]         # Educational content pages
         └── components/
             ├── NetworkTopologyGraph.tsx # D3.js network visualization
             └── [Other Components]       # Form components, progress indicators
@@ -2113,444 +2427,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [gosec](https://securego.io/) - Go security checker
 - [SpotBugs](https://spotbugs.github.io/) - Java static analysis
 - [ESLint](https://eslint.org/) - JavaScript/TypeScript linting
-
----
-
-## 📋 Changelog
-
-### December 10, 2025 (Latest)
-
-#### MITM Workbench - AI-Powered Enhancements
-
-**Natural Language Rule Creation:**
-- New AI-powered rule creation from plain English descriptions
-- Supports commands like:
-  - "Block all requests to analytics.google.com"
-  - "Add a 2 second delay to all API responses"
-  - "Remove the Authorization header from all requests"
-  - "Replace all prices with $0.00"
-  - "Add X-Debug-Mode: true header"
-- Pattern-based fallback when Gemini AI is unavailable
-- Auto-apply option to instantly add rules to proxy
-- Clickable example suggestions in the UI
-
-**Real-Time AI Suggestions:**
-- AI analyzes captured traffic and suggests security tests
-- Automatic detection of:
-  - Authentication headers (Bearer tokens, Basic auth)
-  - JSON API endpoints
-  - CORS configurations
-  - Cookies and session tokens
-  - Admin/sensitive paths
-  - Form submissions
-- Categorized suggestions: Security, Performance, Debug, Learning
-- Priority levels: High, Medium, Low
-- Quick-apply buttons for instant rule creation
-- Traffic analysis summary panel
-
-**Backend Implementation:**
-- New `create_rule_from_natural_language()` function in mitm_service.py
-- New `get_ai_traffic_suggestions()` function for traffic analysis
-- Pattern matching fallback for common rule types
-- Two new API endpoints:
-  - `POST /mitm/ai/create-rule` - Natural language rule creation
-  - `GET /mitm/proxies/{proxy_id}/ai-suggestions` - AI suggestions
-
-**Frontend UI:**
-- Natural Language input panel with AI icon
-- Rule creation result display with interpretation
-- AI Suggestions panel with categorized cards
-- Traffic summary showing detected patterns
-- Example chips for quick input
-
----
-
-### December 9, 2025
-
-#### API Endpoint Tester - Major Enhancement
-
-**9 Specialized Testing Tabs:**
-- Tab reorganization for better workflow organization
-- New AI Auto-Test tab with CIDR network scanning capabilities
-- Dedicated JWT Testing tab for token security analysis
-- Unified Results tab with multi-format export support
-- All tabs now support export to JSON, Markdown, PDF, and DOCX
-
-**AI Auto-Test with CIDR Network Scanning:**
-- Enter a CIDR range (e.g., 192.168.1.0/24) for automated discovery
-- Supports networks up to /16 (65,536 hosts)
-- Configurable max_hosts limit to control scan scope
-- Overall timeout and per-host timeout settings to prevent crashes
-- Concurrent connection control for performance tuning
-- Automatic HTTP service discovery on common ports
-- Batch security testing of all discovered services
-
-**Network Discovery Improvements:**
-- Fixed timeout handling to prevent crashes on large scans
-- Added max_hosts parameter (default: 256)
-- Added overall_timeout parameter (default: 300 seconds)
-- Better error handling for unreachable hosts
-- Progress indication during discovery
-
-**JWT Testing Tab:**
-- Token decoding with header and payload display
-- Algorithm analysis (detects weak algorithms like none, HS256)
-- Claim validation (exp, iat, nbf, iss, aud)
-- Signature verification guidance
-- Export JWT analysis results
-
-**WebSocket Testing Enhancements:**
-- Added export buttons for WebSocket test results
-- Export to JSON, Markdown, PDF, or DOCX formats
-- Full backend support with WebSocket-specific export functions
-
-**Results Tab Improvements:**
-- Fixed bug where AI Auto-Test results weren't displayed
-- Now shows results from whichever test was run (Auto-Test, Test Builder, etc.)
-- Added "No Results Yet" placeholder when no tests have been run
-- Export buttons for all result types
-
-**Updated API Endpoints:**
-- `POST /api-tester/auto-test` - AI Auto-Test with CIDR support
-- `POST /api-tester/network-discovery` - Network discovery with timeout params
-- `POST /api-tester/export/websocket` - Export WebSocket results
-- `POST /api-tester/export/jwt-result` - Export JWT analysis
-
----
-
-#### WHOIS Lookup - New Feature in DNS Reconnaissance
-
-**Domain WHOIS Lookup:**
-- Registrar and registration URL
-- Creation, expiration, and update dates
-- Name servers with copy functionality
-- Domain status codes (clientTransferProhibited, etc.)
-- Registrant organization and country (when not privacy-protected)
-- DNSSEC signing status
-- Raw WHOIS data toggle
-
-**IP WHOIS Lookup:**
-- Network name and CIDR range
-- ASN (Autonomous System Number) and ASN name
-- Organization that owns the IP block
-- Country of registration
-- Regional Internet Registry (ARIN, RIPE, APNIC, LACNIC, AFRINIC)
-- Abuse contact email for incident reporting
-- Raw WHOIS data toggle
-
-**Backend Implementation:**
-- New `is_whois_available()` function checks system `whois` command
-- `WhoisDomainResult` and `WhoisIPResult` dataclasses for structured data
-- `run_whois_domain()` and `run_whois_ip()` functions with regex parsing
-- Docker container updated with `whois` package installed
-
-**API Endpoints:**
-- `GET /dns/whois/status` - Check WHOIS availability
-- `POST /dns/whois/domain` - Domain WHOIS lookup
-- `POST /dns/whois/ip` - IP address WHOIS lookup
-
-**Frontend UI:**
-- New "WHOIS Lookup" tab in DNS Reconnaissance page
-- Toggle between Domain and IP lookup modes
-- Quick lookup suggestions (google.com, 8.8.8.8, etc.)
-- Parsed results displayed in organized cards
-- Color-coded sections for different data types
-- Raw WHOIS data accordion
-- Copy to clipboard functionality
-
-**Documentation Updates:**
-- DNS Guide page updated with WHOIS section
-- Network Analysis Hub guide updated
-- README API reference updated
-
----
-
-### December 8, 2025
-
-#### SSL/TLS Scanner - Major Enhancement
-
-**Certificate Chain Validation:**
-- Trust verification against 20+ root CAs (DigiCert, Let's Encrypt, GlobalSign, Amazon Trust Services, etc.)
-- Chain completeness checking and intermediate certificate validation
-- Self-signed detection with explicit trust status reporting
-
-**Known Vulnerability Detection (12 CVEs):**
-- POODLE (CVE-2014-3566) - SSL 3.0 padding oracle attack
-- BEAST (CVE-2011-3389) - CBC cipher attack on TLS 1.0
-- CRIME (CVE-2012-4929) - TLS compression vulnerability
-- BREACH (CVE-2013-3587) - HTTP compression attack
-- Heartbleed (CVE-2014-0160) - OpenSSL memory disclosure
-- FREAK (CVE-2015-0204) - Export cipher downgrade attack
-- Logjam (CVE-2015-4000) - Diffie-Hellman export vulnerability
-- DROWN (CVE-2016-0800) - SSL 2.0 cross-protocol attack
-- ROBOT (CVE-2017-13099) - RSA Bleichenbacher oracle
-- Lucky13 (CVE-2013-0169) - CBC timing side-channel
-- Sweet32 (CVE-2016-2183) - 64-bit block cipher birthday attack
-- ROCA (CVE-2017-15361) - Weak RSA key generation in Infineon chips
-
-**AI Exploitation Analysis:**
-- Offensive security-focused AI reports with attack scenarios
-- Tool recommendations (testssl.sh, sslscan, Nmap NSE, OpenSSL, Metasploit)
-- Step-by-step exploitation guidance for penetration testers
-- Real-world impact assessment and evasion techniques
-
-**Export Functionality:**
-- Markdown export for documentation and wikis
-- PDF reports for client deliverables
-- Word (DOCX) export for editable reports
-- Includes certificate details, vulnerabilities, chain validation, and AI analysis
-
-**New Learning Page:**
-- Comprehensive SSL/TLS Security Guide at `/learn/ssl-tls`
-- Explains all 12 CVEs with full descriptions and mitigations
-- Protocol version security assessment (SSL 2.0-TLS 1.3)
-- Cipher suite analysis categories and best practices
-- Remediation guidance and industry recommendations
-
-**Frontend Enhancements:**
-- Vulnerability detection table with severity chips and CVE/CVSS info
-- Certificate chain validation display with trust status
-- Tabbed AI analysis interface for organized viewing
-- Export dropdown with format selection
-
----
-
-### December 8, 2025
-
-#### Network Analysis Hub - New Features
-
-**SSL/TLS Scanner:**
-- New dedicated SSL/TLS security scanner accessible from Network Analysis Hub
-- **Multi-Target Scanning**: Scan multiple hosts simultaneously with parallel execution
-- **Certificate Analysis**:
-  - Subject, issuer, validity period with expiration warnings
-  - Subject Alternative Names (SANs)
-  - Key size and algorithm assessment
-  - Self-signed certificate detection
-- **Protocol Security**:
-  - Detects deprecated protocols (SSLv2, SSLv3, TLS 1.0, TLS 1.1)
-  - Known vulnerability flagging (POODLE, BEAST, DROWN, FREAK, CRIME)
-- **Cipher Suite Analysis**:
-  - Weak cipher detection (RC4, DES, 3DES, MD5, NULL, EXPORT)
-  - Perfect Forward Secrecy (PFS) support check
-- **Complete Frontend UI**: Full-featured SSL Scanner page at `/network/ssl`
-- **AI Analysis**: Gemini AI generates comprehensive security reports
-
-**Deep Protocol Decoders for PCAP:**
-- New `protocol_decoder_service.py` with pyshark integration
-- **Credential Extraction**:
-  - HTTP Basic Authentication decoding
-  - FTP credentials (USER/PASS commands)
-  - SMTP authentication
-  - Telnet session credentials
-  - Generic API key/token extraction from TCP payloads
-- **HTTP Transaction Analysis**:
-  - Request/response pairing
-  - Security header analysis
-  - Sensitive form field detection
-  - API endpoint cataloging
-- **DNS Query Analysis**:
-  - Suspicious pattern detection (tunneling, DGA domains)
-  - Unusual TLD flagging
-  - High-entropy subdomain detection
-- **Protocol Reconstruction**: FTP, SMTP, Telnet session analysis
-
-**Network Topology Graph:**
-- New D3.js-powered interactive network visualization component
-- **Force-Directed Layout**: Physics-based node positioning
-- **Interactive Controls**:
-  - Zoom and pan
-  - Draggable nodes
-  - Toggle labels on/off
-  - Adjustable link strength
-- **Visual Indicators**:
-  - Node shapes by type (circle/rect/diamond)
-  - Risk-based coloring (red/orange/yellow/green)
-  - Hover tooltips with details
-- Reusable component for PCAP and Nmap analyzer pages
-
-**New Dependencies:**
-- Backend: `cryptography>=41.0`, `pyshark>=0.6`
-- Frontend: `d3@^7.8.5`, `@types/d3@^7.4.3`
-
----
-
-### December 7, 2025
-
-#### Codebase Map Enhancements
-
-**AI Code Explanation:**
-- New "Explain with AI" button in code preview header (sparkle icon)
-- Uses Google Gemini 2.0 Flash to analyze and explain code files
-- Provides:
-  - Overview of what the file does
-  - Key functions and classes explained
-  - Security concerns highlighted (especially if findings exist)
-  - Code quality observations
-- Results displayed in collapsible panel with markdown rendering
-- Loading state with visual feedback during analysis
-
-**Full-Text Code Search:**
-- Added search mode toggle (File | Code) next to the search input
-- **File mode** (default): Searches file names as before
-- **Code mode**: Searches actual code content across all files
-- Press Enter or click the search icon to execute content search
-- Results show:
-  - File path
-  - Line number
-  - Matching content with search term highlighted
-- Click any result to jump directly to that file and line
-- Up to 100 matches returned per search
-
-**Additional Codebase Map Features (this session):**
-- Copy Code Button - One-click code copying with visual confirmation
-- Heatmap Overlay - Toggle button to visualize finding density on treemap
-- Finding Trends Sparkline - Mini chart showing finding history per file over scans
-- TODO/FIXME Scanner - Detects and displays code comment markers (TODO, FIXME, HACK, XXX, BUG)
-
----
-
-### December 7, 2025
-
-#### Docker & Infrastructure as Code Scanning
-
-**Docker Security Scanner:**
-- New `docker_scan_service.py` for comprehensive container security
-- **Dockerfile Linting**: 15+ security rules (DS001-DS015)
-  - Running as root, hardcoded secrets, missing HEALTHCHECK
-  - Using `latest` tag, sensitive ports, ADD vs COPY
-- **Image Scanning**: Integration with Trivy and Grype for CVE detection
-- **Docker Compose Analysis**: Multi-container security review
-- Automatic detection of Dockerfiles and docker-compose.yml
-
-**Infrastructure as Code Scanner:**
-- New `iac_scan_service.py` for infrastructure security
-- **Multi-Framework Support**:
-  - Terraform (.tf, .tfvars)
-  - Kubernetes (manifests, Helm charts)
-  - CloudFormation (JSON/YAML templates)
-  - ARM Templates (Azure)
-- **40+ Built-in Rules** (IAC001-IAC040+)
-- **Tool Integration**: Checkov and tfsec when available
-- Automatic framework detection
-
-#### Performance & Analysis Improvements
-
-**Parallel Phase Execution:**
-- Major scan phases now run concurrently (2-3x faster)
-- `ParallelPhaseTracker` for thread-safe progress tracking
-- SAST + Docker + IaC + Dependencies run in parallel
-- Automatic result aggregation
-
-**Scanner Deduplication:**
-- New `deduplication_service.py` merges duplicate findings
-- Cross-scanner matching (Semgrep + Bandit, etc.)
-- Location-based and content-based deduplication
-- Preserves highest severity rating
-
-**Transitive Dependency Analysis:**
-- New `transitive_deps_service.py` builds full dependency trees
-- Detects vulnerabilities in indirect dependencies
-- Shows dependency path to vulnerable package
-- Depth tracking for prioritization
-
-**Reachability Analysis:**
-- New `reachability_service.py` for call graph analysis
-- Determines if vulnerable functions are actually called
-- Reduces false positives for unused vulnerable code
-- Language-aware analysis for Python, JavaScript, Java, Go
-
-**CISA KEV Integration:**
-- Flags CVEs in CISA's Known Exploited Vulnerabilities catalog
-- `kev_in_wild` field on findings
-- Priority indicator for actively exploited vulnerabilities
-
-#### Frontend Updates
-
-**Improved Scan Progress Display:**
-- All new phases visible in real-time progress
-- Categorized phase display with icons
-- Expandable categories for detailed sub-phase tracking
-- Visual status indicators (complete/active/pending)
-
----
-
-### December 6, 2025
-
-#### Network Analysis Enhancements
-
-**Nmap Analyzer - New Features:**
-- **AI Chat Integration**: Added ability to chat with Gemini AI about Nmap scan results
-  - Floating chat window appears after scan completion
-  - Full context of scan results, hosts, findings, and AI report provided to the LLM
-  - Suggested questions to help users get started
-  - Markdown rendering for formatted AI responses
-  - Conversation history maintained within session
-
-- **Saved Reports Tab**: New tab to view and manage saved Nmap reports
-  - Table displaying all saved Nmap reports with title, date, risk level, and findings count
-  - View button to load and display any saved report
-  - Delete button with confirmation to remove reports
-  - Automatic refresh when switching to the tab
-
-**Bug Fixes:**
-- Fixed Nmap live scan crash (white screen) caused by:
-  - Property name mismatch: backend returns `host.ports` but frontend was accessing `host.open_ports`
-  - Object rendering error: `network_overview` is an object but was being rendered directly as text
-  - Null safety: Added fallback for undefined `findings` array
-
-**PCAP Analyzer:**
-- **AI Chat Integration**: Added chat feature to discuss PCAP analysis results with Gemini
-- **Report Persistence**: PCAP analysis reports are now saved to the database for later retrieval
-
-**Backend API:**
-- New endpoint: `POST /network/chat` - Chat with AI about network analysis results
-  - Supports both Nmap and PCAP analysis types
-  - Accepts message, conversation history, and scan context
-  - Returns AI-generated response with full context awareness
-
----
-
-### December 7, 2025
-
-#### VR Scan Chat Integration
-
-**New Feature: AI Chat for Vulnerability Reports**
-- Added interactive chat window to VR Scan report pages (Findings and Exploitability tabs)
-- Chat with Gemini AI about scan findings, attack chains, and exploit scenarios
-- Full context awareness - LLM receives:
-  - All findings grouped by severity (Critical, High, Medium, Low, Info)
-  - AI analysis summary (false positives, severity adjustments)
-  - Attack chains identified during analysis
-  - Exploit scenarios with narratives and mitigations
-- Suggested questions to help users get started
-- Conversation history maintained for multi-turn discussions
-- Context-aware UI: Blue header for Findings tab, Red header for Exploitability tab
-
-**Backend API:**
-- New endpoint: `POST /reports/{id}/chat` - Chat with AI about VR Scan results
-  - Accepts message, conversation history, and context tab (findings/exploitability)
-  - Returns AI-generated response with full report context
-
-#### Learning Hub Documentation Updates
-
-**Updated Pages with Accurate Technical Details:**
-
-- **How Scanning Works** (`/learn/scanning`):
-  - Documented accurate 9-phase parallel scanning pipeline
-  - Added all 9 scanners including Trivy (Docker) and Checkov/tfsec (IaC)
-  - Updated statistics: 30+ languages, 2500+ rules, 50+ secret patterns
-  - Added Docker and IaC scanning sections with rule examples
-
-- **AI Analysis Explained** (`/learn/ai-analysis`):
-  - Documented hybrid heuristics + LLM approach
-  - Added heuristic patterns for false positive detection and severity adjustment
-  - Explained MAX_FINDINGS_FOR_LLM=50 batching strategy
-  - Documented 16+ built-in exploit templates
-  - Added background summary generation details
-
-- **VRAgent Architecture** (`/learn/architecture`):
-  - Expanded to 18 backend services (added Docker, IaC, AI Analysis services)
-  - Updated 13-step request flow with parallel execution
-  - Added pgvector, Semgrep, Trivy, Checkov to technology stack
-  - Documented embedding storage and reuse strategy

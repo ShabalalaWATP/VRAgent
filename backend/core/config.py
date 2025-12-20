@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Default to Gemini 2.5 Flash - best balance of cost and capability
     # Other options: gemini-2.5-flash, gemini-3-pro-preview (most capable)
     gemini_model_id: str = Field("gemini-2.5-flash", validation_alias="GEMINI_MODEL_ID")
+    # Ghidra configuration (optional, for binary decompilation)
+    ghidra_home: str = Field("", validation_alias="GHIDRA_HOME")
+    ghidra_headless_path: str = Field("", validation_alias="GHIDRA_HEADLESS_PATH")
     environment: str = Field("development", validation_alias="ENVIRONMENT")
     
     # Authentication settings
@@ -33,6 +36,11 @@ class Settings(BaseSettings):
     
     # File upload settings
     max_upload_size: int = Field(100 * 1024 * 1024, validation_alias="MAX_UPLOAD_SIZE")  # 100MB default
+
+    # Reverse engineering signature settings
+    yara_rules_path: str = Field("backend/yara_rules", validation_alias="YARA_RULES_PATH")
+    capa_path: str = Field("capa", validation_alias="CAPA_PATH")
+    enable_capa: bool = Field(True, validation_alias="ENABLE_CAPA")
     
     # LLM cost optimization settings
     max_embedding_chunks: int = Field(500, validation_alias="MAX_EMBEDDING_CHUNKS")  # Max chunks to embed

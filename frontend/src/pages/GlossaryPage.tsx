@@ -19,10 +19,43 @@ import {
   Card,
   CardContent,
 } from "@mui/material";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SearchIcon from "@mui/icons-material/Search";
+import LearnPageLayout from "../components/LearnPageLayout";
+
+// Page context for AI chat
+const pageContext = `This is a comprehensive Cybersecurity Glossary page containing 300+ security terms organized by categories:
+- Vulnerability Types (SQL Injection, XSS, CSRF, RCE, SSRF, XXE, Buffer Overflow, etc.)
+- Security Concepts (Zero-Day, Attack Surface, Defense in Depth, Zero Trust, Threat Modeling, etc.)
+- Frameworks & Standards (CVE, CWE, CVSS, EPSS, OWASP Top 10, MITRE ATT&CK, NIST, ISO 27001, etc.)
+- Tools & Techniques (SAST, DAST, SCA, SBOM, Fuzzing, WAF, IDS, SIEM, etc.)
+- Cryptography (Encryption, Hashing, PKI, TLS/SSL, Digital Signatures, AES, RSA, etc.)
+- Attack Types (Phishing, Ransomware, DDoS, Supply Chain, Credential Stuffing, etc.)
+- Incident Response (DFIR, IOC, IOA, Threat Hunting, SOC, Chain of Custody, etc.)
+- Authentication & Access (MFA, SSO, OAuth, JWT, RBAC, IAM, Kerberos, etc.)
+- Cloud Security (CSPM, CASB, Shared Responsibility, Container Security, etc.)
+- Network Security (Firewall, IPS, VPN, Network Segmentation, DNS Security, etc.)
+- Security Organizations & Groups (APT groups, government cyber units, security vendors)
+- Security Tools (Ghidra, IDA Pro, Burp Suite, Metasploit, Wireshark, etc.)
+- Operating Systems & Platforms (Kali Linux, Windows security, cloud platforms)
+- Professional Disciplines (Red Team, Blue Team, Penetration Testing, Malware Analysis, etc.)
+- Cyber Education & Certifications (OSCP, SANS courses, CompTIA, etc.)
+- Emerging Technologies (Blockchain, Quantum Computing, 5G Security, Confidential Computing, etc.)
+- Web3 Security (DeFi, Smart Contracts, Flash Loans, MEV, Cryptojacking, etc.)
+- Privacy & Anonymity (Tor, VPN, Metadata, Differential Privacy, GDPR, etc.)
+- Malware Types (RATs, Rootkits, Worms, Fileless Malware, Infostealers, etc.)
+- ICS/OT Security (SCADA, PLCs, Modbus, Purdue Model, Air Gaps, etc.)
+- Wireless Security (WPA3, KRACK, Evil Twin, IMSI Catcher, Bluetooth, etc.)
+- API Security (BOLA, IDOR, Rate Limiting, GraphQL, OpenAPI, etc.)
+- DevOps Security (CI/CD, GitOps, Secrets Management, Container Scanning, etc.)
+- Data Security (DLP, Data Classification, Tokenization, Encryption at Rest, etc.)
+- Identity Security (PAM, Federation, Machine Identity, Access Reviews, etc.)
+- Risk & Compliance (HIPAA, CCPA, FedRAMP, Risk Assessment, Security Audit, etc.)
+- Physical Security (Tailgating, Mantraps, Biometrics, CCTV, etc.)
+- Security Testing (Black/White/Gray Box, Rules of Engagement, PoC, etc.)
+Users can search terms, filter by category, and explore related terms.`;
 
 interface GlossaryTerm {
   term: string;
@@ -30,6 +63,15 @@ interface GlossaryTerm {
   category: string;
   relatedTerms?: string[];
 }
+
+const normalizeSearchText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const buildSearchText = (term: GlossaryTerm) =>
+  normalizeSearchText([term.term, term.definition, term.category, ...(term.relatedTerms ?? [])].join(" "));
 
 const glossaryTerms: GlossaryTerm[] = [
   // Vulnerability Types
@@ -90,7 +132,6 @@ const glossaryTerms: GlossaryTerm[] = [
   { term: "Static Application Security Testing (SAST)", definition: "Analyzing source code, bytecode, or binary code to identify security vulnerabilities without executing the program. 'White-box' testing that finds issues early in development.", category: "Tools & Techniques", relatedTerms: ["DAST", "SCA", "Code Review"] },
   { term: "Dynamic Application Security Testing (DAST)", definition: "Testing a running application for vulnerabilities by simulating attacks. 'Black-box' testing that finds runtime issues like injection flaws and authentication problems.", category: "Tools & Techniques", relatedTerms: ["SAST", "IAST", "Web Scanner"] },
   { term: "Software Composition Analysis (SCA)", definition: "Identifying open source and third-party components in a codebase, then detecting known vulnerabilities, licensing issues, and outdated dependencies.", category: "Tools & Techniques", relatedTerms: ["SBOM", "Dependency", "Supply Chain"] },
-  { term: "SBOM (Software Bill of Materials)", definition: "A formal record of the components used to build a software artifact, including libraries, frameworks, and their versions. Essential for supply chain security and vulnerability tracking.", category: "Tools & Techniques", relatedTerms: ["SCA", "Supply Chain", "Dependency Management"] },
   { term: "Fuzzing", definition: "An automated testing technique that provides invalid, unexpected, or random data as input to a program to discover bugs, crashes, and security vulnerabilities.", category: "Tools & Techniques", relatedTerms: ["Testing", "Buffer Overflow", "Input Validation"] },
   { term: "Code Review", definition: "Systematic examination of source code to find security vulnerabilities, bugs, and code quality issues. Can be manual or assisted by automated tools.", category: "Tools & Techniques", relatedTerms: ["SAST", "Peer Review", "Security Audit"] },
   { term: "Web Application Firewall (WAF)", definition: "A security solution that monitors, filters, and blocks HTTP traffic to and from a web application. Protects against common attacks like XSS, SQLi, and CSRF.", category: "Tools & Techniques", relatedTerms: ["Firewall", "IDS/IPS", "DDoS Protection"] },
@@ -393,8 +434,6 @@ const glossaryTerms: GlossaryTerm[] = [
   { term: "Tails", definition: "Privacy-focused live operating system designed to leave no trace. Routes all traffic through Tor for anonymity.", category: "Operating Systems & Platforms", relatedTerms: ["Privacy", "Tor", "Linux"] },
   { term: "Qubes OS", definition: "Security-oriented operating system using Xen hypervisor to isolate applications in separate VMs (qubes) for compartmentalization.", category: "Operating Systems & Platforms", relatedTerms: ["Virtualization", "Isolation", "Security"] },
   { term: "BSD (Berkeley Software Distribution)", definition: "Family of Unix-like operating systems including FreeBSD, OpenBSD, and NetBSD. OpenBSD is renowned for security focus and code auditing.", category: "Operating Systems & Platforms", relatedTerms: ["Unix", "OpenBSD", "FreeBSD"] },
-  { term: "Docker", definition: "Platform for developing, shipping, and running applications in containers. Provides isolation and reproducibility for security testing environments.", category: "Operating Systems & Platforms", relatedTerms: ["Containers", "Kubernetes", "DevOps"] },
-  { term: "Kubernetes", definition: "Container orchestration platform for automating deployment, scaling, and management of containerized applications. Security requires RBAC, network policies, and secrets management.", category: "Operating Systems & Platforms", relatedTerms: ["Docker", "Container Security", "Cloud Native"] },
   { term: "VMware", definition: "Virtualization platform for running multiple operating systems. Essential for malware analysis sandboxes and security lab environments.", category: "Operating Systems & Platforms", relatedTerms: ["Virtualization", "ESXi", "Security Lab"] },
   { term: "VirtualBox", definition: "Free, open-source virtualization software from Oracle. Popular for security research, malware analysis, and CTF environments.", category: "Operating Systems & Platforms", relatedTerms: ["Virtualization", "VMware", "Sandbox"] },
   { term: "WSL (Windows Subsystem for Linux)", definition: "Compatibility layer for running Linux binary executables natively on Windows. Enables Linux security tools in Windows environments.", category: "Operating Systems & Platforms", relatedTerms: ["Windows", "Linux", "Bash"] },
@@ -428,10 +467,6 @@ const glossaryTerms: GlossaryTerm[] = [
   { term: "curl", definition: "Command-line tool for transferring data with URLs. Essential for API testing, web requests, and security testing automation.", category: "Programming & Shell", relatedTerms: ["HTTP", "API Testing", "Web Security"] },
 
   // Technologies & Protocols
-  { term: "OAuth 2.0", definition: "Authorization framework that lets applications obtain limited access to user accounts on an HTTP service via access tokens and scopes.", category: "Technologies & Protocols", relatedTerms: ["OpenID Connect", "JWT", "Scopes"] },
-  { term: "OpenID Connect (OIDC)", definition: "Identity layer on top of OAuth 2.0 that uses ID Tokens (JWT) for authentication and user claims.", category: "Technologies & Protocols", relatedTerms: ["OAuth 2.0", "JWT", "SAML"] },
-  { term: "SAML", definition: "Security Assertion Markup Language used for exchanging authentication and authorization data between parties, commonly for SSO in enterprises.", category: "Technologies & Protocols", relatedTerms: ["SSO", "Federation", "OIDC"] },
-  { term: "JWT (JSON Web Token)", definition: "Compact, URL-safe token format with signed claims (JWS) and optional encryption (JWE). Commonly used in OAuth/OIDC.", category: "Technologies & Protocols", relatedTerms: ["OAuth 2.0", "OIDC", "JWS"] },
   { term: "mTLS (Mutual TLS)", definition: "TLS setup where both client and server present certificates, enabling strong mutual authentication.", category: "Technologies & Protocols", relatedTerms: ["TLS", "PKI", "Client Certificate"] },
   { term: "FIDO2 / WebAuthn", definition: "Passwordless authentication standards using public-key cryptography and authenticators (security keys, platform authenticators).", category: "Technologies & Protocols", relatedTerms: ["2FA", "Passkeys", "U2F"] },
   { term: "Service Mesh", definition: "Dedicated infrastructure layer for service-to-service communication (e.g., Istio/Linkerd) providing mTLS, policy, and telemetry.", category: "Technologies & Protocols", relatedTerms: ["Kubernetes", "Envoy", "Zero Trust"] },
@@ -483,7 +518,6 @@ const glossaryTerms: GlossaryTerm[] = [
   { term: "JA3 / JA3S", definition: "TLS client/server fingerprinting techniques based on TLS handshake parameters for detecting malicious traffic.", category: "Detection & Response", relatedTerms: ["TLS", "Network Detection", "Fingerprinting"] },
   { term: "PCAP", definition: "Packet capture file format used to store network traffic for analysis with tools like Wireshark or Zeek.", category: "Detection & Response", relatedTerms: ["Wireshark", "Zeek", "Network Forensics"] },
   { term: "Zeek", definition: "Network security monitor that generates rich logs and detections from traffic, complementing packet captures.", category: "Detection & Response", relatedTerms: ["PCAP", "IDS", "Bro Scripts"] },
-  { term: "YARA", definition: "Pattern-matching language for classifying files or processes (often malware).", category: "Detection & Response", relatedTerms: ["Malware Analysis", "Signatures", "Rules"] },
   { term: "Sigma", definition: "Generic, SIEM-agnostic signature format that can be converted to platform-specific detection queries.", category: "Detection & Response", relatedTerms: ["SIEM", "Detection Engineering", "Sigma Rules"] },
   { term: "Syslog", definition: "Standard log forwarding protocol widely used for centralizing logs and feeding SIEMs.", category: "Detection & Response", relatedTerms: ["SIEM", "Logging", "Event Pipeline"] },
 
@@ -534,22 +568,10 @@ const glossaryTerms: GlossaryTerm[] = [
   { term: "OPSEC (Operations Security)", definition: "Practices to avoid detection during engagements (limiting indicators, safe domains, staging).", category: "Penetration Testing", relatedTerms: ["Red Team", "Evasion", "Logging"] },
   { term: "Payload Staging", definition: "Splitting payloads into stager + stage to reduce size and bypass controls.", category: "Penetration Testing", relatedTerms: ["Loader", "Dropper", "Evasion"] },
   { term: "Living off the Land (LOTL)", definition: "Abusing built-in tools (PowerShell, WMI, certutil) to avoid dropping binaries.", category: "Penetration Testing", relatedTerms: ["LOLBAS", "Evasion", "Red Team"] },
-  { term: "Kerberoasting", definition: "Requesting Kerberos service tickets (TGS) and cracking them offline to recover service account passwords.", category: "Penetration Testing", relatedTerms: ["Active Directory", "Kerberos", "Credential Access"] },
   { term: "AS-REP Roasting", definition: "Abusing accounts without Kerberos pre-auth to request AS-REP messages and crack them offline.", category: "Penetration Testing", relatedTerms: ["Kerberos", "Active Directory", "Credential Access"] },
   { term: "Pass-the-Hash (PtH)", definition: "Using NTLM hashes directly for authentication in Windows/AD environments.", category: "Penetration Testing", relatedTerms: ["NTLM", "Lateral Movement", "Credential Access"] },
-  { term: "BloodHound", definition: "Graph-based tool to analyze Active Directory relationships and attack paths.", category: "Penetration Testing", relatedTerms: ["Active Directory", "Privilege Escalation", "Neo4j"] },
-  { term: "Responder", definition: "Tool that poisons LLMNR/NBNS/mDNS to capture NTLM hashes on local networks.", category: "Penetration Testing", relatedTerms: ["LLMNR", "NBNS", "Hash Capture"] },
   { term: "CrackMapExec", definition: "Post-exploitation tool for enumerating and exploiting Active Directory at scale.", category: "Penetration Testing", relatedTerms: ["Active Directory", "Automation", "SMB"] },
-  { term: "nmap", definition: "Network scanner for host discovery and service enumeration; supports NSE scripts.", category: "Penetration Testing", relatedTerms: ["Reconnaissance", "Scanning", "NSE"] },
-  { term: "Burp Suite", definition: "Web security testing platform with proxying, scanning, Repeater, and Intruder.", category: "Penetration Testing", relatedTerms: ["Web Security", "Proxy", "OWASP"] },
-  { term: "ffuf", definition: "Fast web fuzzer for directories, parameters, and virtual hosts.", category: "Penetration Testing", relatedTerms: ["Web Fuzzing", "Wordlists", "Bruteforce"] },
-  { term: "sqlmap", definition: "Automated SQL injection tool to detect and exploit SQLi and enumerate databases.", category: "Penetration Testing", relatedTerms: ["SQLi", "Database", "Automation"] },
-  { term: "Metasploit", definition: "Framework for developing and executing exploits, payloads, and post-exploitation modules.", category: "Penetration Testing", relatedTerms: ["Exploit", "Payload", "Post-Exploitation"] },
   { term: "Payload Obfuscation", definition: "Techniques to hide payloads from detection (packing, encryption, string encoding).", category: "Penetration Testing", relatedTerms: ["Evasion", "Loader", "Packers"] },
-  { term: "Cobalt Strike", definition: "Commercial C2 framework used for red teaming; also abused by threat actors.", category: "Penetration Testing", relatedTerms: ["C2", "Beacon", "OPSEC"] },
-  { term: "Sliver", definition: "Open-source C2 framework for red team operations and implants.", category: "Penetration Testing", relatedTerms: ["C2", "Implant", "Beacon"] },
-  { term: "Empire", definition: "PowerShell/SharpShell-based C2 framework for post-exploitation and lateral movement.", category: "Penetration Testing", relatedTerms: ["C2", "PowerShell", "Post-Exploitation"] },
-  { term: "Mimikatz", definition: "Tool for extracting credentials and manipulating Windows authentication (Pass-the-Hash/Ticket).", category: "Penetration Testing", relatedTerms: ["Credential Access", "LSASS", "Kerberos"] },
   { term: "Silver Ticket", definition: "Forged Kerberos service ticket created with a service account hash targeting specific SPNs.", category: "Penetration Testing", relatedTerms: ["Kerberos", "Active Directory", "Credential Access"] },
   { term: "Golden Ticket", definition: "Forged Kerberos TGT created with the KRBTGT hash, granting domain-wide access.", category: "Penetration Testing", relatedTerms: ["Kerberos", "Active Directory", "Privilege Escalation"] },
 
@@ -610,6 +632,197 @@ const glossaryTerms: GlossaryTerm[] = [
   { term: "Responsible Disclosure", definition: "Practice of privately reporting vulnerabilities to vendors before public disclosure. Allows time for patches while balancing transparency and security.", category: "Professional Disciplines", relatedTerms: ["Bug Bounty", "CVE", "Vulnerability Research"] },
   { term: "Security Consulting", definition: "Providing expert security advice and services to organizations. Includes assessments, architecture review, and strategic guidance.", category: "Professional Disciplines", relatedTerms: ["Penetration Testing", "Assessment", "Advisory"] },
   { term: "Detection Engineering", definition: "Creating and tuning detection rules for security monitoring. Involves writing SIEM queries, developing behavioral analytics, and reducing false positives.", category: "Professional Disciplines", relatedTerms: ["SIEM", "Blue Team", "Sigma Rules"] },
+
+  // Additional Cyber & Tech Terms
+  // Emerging Technologies
+  { term: "Blockchain", definition: "Distributed ledger technology where data is stored in blocks linked cryptographically. Foundation for cryptocurrencies and smart contracts with applications in supply chain and identity verification.", category: "Emerging Technologies", relatedTerms: ["Smart Contract", "Cryptocurrency", "Distributed Ledger"] },
+  { term: "Smart Contract", definition: "Self-executing code stored on a blockchain that automatically enforces agreement terms when conditions are met. Vulnerabilities include reentrancy, integer overflow, and access control issues.", category: "Emerging Technologies", relatedTerms: ["Blockchain", "Solidity", "DeFi"] },
+  { term: "Quantum Computing", definition: "Computing paradigm using quantum-mechanical phenomena like superposition and entanglement. Threatens current cryptography (RSA, ECC) while enabling new cryptographic methods (QKD).", category: "Emerging Technologies", relatedTerms: ["Post-Quantum Cryptography", "Shor's Algorithm", "Cryptography"] },
+  { term: "Post-Quantum Cryptography", definition: "Cryptographic algorithms resistant to quantum computer attacks. NIST is standardizing algorithms like CRYSTALS-Kyber (key exchange) and CRYSTALS-Dilithium (signatures).", category: "Emerging Technologies", relatedTerms: ["Quantum Computing", "Lattice Cryptography", "NIST"] },
+  { term: "Edge Computing", definition: "Processing data near its source rather than in centralized data centers. Reduces latency but introduces security challenges for distributed devices.", category: "Emerging Technologies", relatedTerms: ["IoT", "Fog Computing", "Latency"] },
+  { term: "5G Security", definition: "Security considerations for fifth-generation cellular networks. Issues include network slicing isolation, base station spoofing, and subscriber identity protection.", category: "Emerging Technologies", relatedTerms: ["Mobile Security", "Network Slicing", "IMSI Catcher"] },
+  { term: "Digital Twin", definition: "Virtual replica of physical systems used for simulation and monitoring. Security concerns include data integrity, model poisoning, and unauthorized access to sensitive replicas.", category: "Emerging Technologies", relatedTerms: ["IoT", "ICS", "Simulation"] },
+  { term: "Homomorphic Encryption", definition: "Encryption scheme allowing computation on encrypted data without decryption. Enables privacy-preserving computation in cloud environments.", category: "Emerging Technologies", relatedTerms: ["Encryption", "Privacy", "Cloud Security"] },
+  { term: "Confidential Computing", definition: "Hardware-based isolation protecting data during processing using secure enclaves (Intel SGX, AMD SEV). Enables trusted execution in untrusted environments.", category: "Emerging Technologies", relatedTerms: ["Secure Enclave", "TEE", "Cloud Security"] },
+  { term: "Zero-Knowledge Proof (ZKP)", definition: "Cryptographic method proving knowledge of a value without revealing the value itself. Used in privacy-preserving authentication and blockchain applications.", category: "Emerging Technologies", relatedTerms: ["Privacy", "Cryptography", "Blockchain"] },
+  
+  // Web3 & Cryptocurrency Security
+  { term: "DeFi (Decentralized Finance)", definition: "Financial services built on blockchain without traditional intermediaries. Security risks include flash loan attacks, rug pulls, oracle manipulation, and smart contract vulnerabilities.", category: "Web3 Security", relatedTerms: ["Smart Contract", "Flash Loan Attack", "Oracle"] },
+  { term: "Flash Loan Attack", definition: "Exploit using uncollateralized loans that must be repaid in the same transaction. Used to manipulate prices, drain liquidity pools, or exploit vulnerable protocols.", category: "Web3 Security", relatedTerms: ["DeFi", "Smart Contract", "Arbitrage"] },
+  { term: "Rug Pull", definition: "Scam where project creators abandon a project and abscond with investor funds. Common in DeFi and NFT projects with anonymous teams.", category: "Web3 Security", relatedTerms: ["DeFi", "Exit Scam", "Smart Contract"] },
+  { term: "Bridge Attack", definition: "Exploiting vulnerabilities in cross-chain bridges that transfer assets between blockchains. Notable attacks include Ronin Network ($624M) and Wormhole ($320M).", category: "Web3 Security", relatedTerms: ["DeFi", "Cross-Chain", "Smart Contract"] },
+  { term: "MEV (Maximal Extractable Value)", definition: "Profit extractable by miners/validators through transaction ordering. Leads to frontrunning, sandwich attacks, and transaction reordering on Ethereum.", category: "Web3 Security", relatedTerms: ["Frontrunning", "Blockchain", "Ethereum"] },
+  { term: "Wallet Security", definition: "Protecting cryptocurrency wallets and private keys. Includes hardware wallets, multisig, seed phrase protection, and defense against phishing.", category: "Web3 Security", relatedTerms: ["Hardware Wallet", "Private Key", "Seed Phrase"] },
+  { term: "NFT Security", definition: "Security considerations for Non-Fungible Tokens. Risks include metadata manipulation, wash trading, phishing for approvals, and smart contract vulnerabilities.", category: "Web3 Security", relatedTerms: ["Smart Contract", "Phishing", "Digital Assets"] },
+  { term: "Cryptojacking", definition: "Unauthorized use of computing resources to mine cryptocurrency. Delivered through malware, compromised websites, or vulnerable servers.", category: "Web3 Security", relatedTerms: ["Cryptocurrency", "Malware", "Resource Abuse"] },
+  { term: "51% Attack", definition: "Attack where an entity controls majority of blockchain mining/staking power, enabling double-spending or transaction reversal. More feasible on smaller chains.", category: "Web3 Security", relatedTerms: ["Blockchain", "Double Spending", "Consensus"] },
+  { term: "Seed Phrase", definition: "Mnemonic phrase (usually 12-24 words) used to recover cryptocurrency wallets. Must be stored securely offline; compromise leads to total fund loss.", category: "Web3 Security", relatedTerms: ["Wallet Security", "Private Key", "BIP-39"] },
+
+  // Privacy & Anonymity
+  { term: "Tor (The Onion Router)", definition: "Anonymity network routing traffic through multiple encrypted relays. Used for privacy protection, censorship circumvention, and accessing .onion hidden services.", category: "Privacy & Anonymity", relatedTerms: ["Dark Web", "Anonymity", "Hidden Services"] },
+  { term: "Dark Web", definition: "Portion of the internet accessible only through specialized software like Tor. Hosts legitimate privacy-focused services and illicit marketplaces.", category: "Privacy & Anonymity", relatedTerms: ["Tor", "Deep Web", "Hidden Services"] },
+  { term: "VPN (Virtual Private Network)", definition: "Encrypted tunnel between device and VPN server providing privacy and bypassing geographic restrictions. Does not provide complete anonymity.", category: "Privacy & Anonymity", relatedTerms: ["Encryption", "Tunneling", "Privacy"] },
+  { term: "I2P (Invisible Internet Project)", definition: "Anonymous overlay network alternative to Tor focused on internal services (eepsites). Uses garlic routing for message bundling.", category: "Privacy & Anonymity", relatedTerms: ["Tor", "Anonymity", "Overlay Network"] },
+  { term: "Mix Network", definition: "Anonymous communication method using intermediary servers that mix and relay messages to obscure traffic patterns and sender identity.", category: "Privacy & Anonymity", relatedTerms: ["Tor", "Anonymity", "Traffic Analysis"] },
+  { term: "Traffic Analysis", definition: "Examining network patterns to derive information without accessing content. Can reveal communication relationships even with encryption.", category: "Privacy & Anonymity", relatedTerms: ["Metadata", "Surveillance", "Tor"] },
+  { term: "Metadata", definition: "Data about data - information like timestamps, sender/receiver, location, duration rather than content. Often reveals as much as content itself.", category: "Privacy & Anonymity", relatedTerms: ["Traffic Analysis", "Privacy", "Surveillance"] },
+  { term: "Data Minimization", definition: "Privacy principle of collecting and retaining only data necessary for specific purposes. Required by GDPR and other privacy regulations.", category: "Privacy & Anonymity", relatedTerms: ["GDPR", "Privacy by Design", "Data Protection"] },
+  { term: "Privacy by Design", definition: "Framework embedding privacy into system design from the start. Seven foundational principles developed by Ann Cavoukian.", category: "Privacy & Anonymity", relatedTerms: ["GDPR", "Data Minimization", "Security by Design"] },
+  { term: "Differential Privacy", definition: "Mathematical framework for sharing aggregate information while protecting individual privacy. Used by Apple and Google for telemetry.", category: "Privacy & Anonymity", relatedTerms: ["Privacy", "Data Analysis", "Anonymization"] },
+  { term: "PII (Personally Identifiable Information)", definition: "Information that can identify an individual directly or indirectly. Includes name, SSN, email, IP address, and biometric data.", category: "Privacy & Anonymity", relatedTerms: ["Data Protection", "GDPR", "Privacy"] },
+  { term: "Data Masking", definition: "Obscuring sensitive data by replacing it with fictitious but realistic data. Used in development, testing, and analytics environments.", category: "Privacy & Anonymity", relatedTerms: ["Data Protection", "Anonymization", "Tokenization"] },
+  { term: "Tokenization", definition: "Replacing sensitive data with non-sensitive tokens that map to the original data. Unlike encryption, tokens cannot be reversed without the token vault.", category: "Privacy & Anonymity", relatedTerms: ["Data Masking", "PCI DSS", "Data Protection"] },
+
+  // Malware Types
+  { term: "Trojan Horse", definition: "Malware disguised as legitimate software to trick users into installing it. Unlike viruses, does not self-replicate. Common delivery method for RATs and backdoors.", category: "Malware Types", relatedTerms: ["RAT", "Backdoor", "Malware"] },
+  { term: "Remote Access Trojan (RAT)", definition: "Malware providing remote control over infected systems. Capabilities include keylogging, screen capture, file access, and webcam/microphone activation.", category: "Malware Types", relatedTerms: ["Trojan", "C2", "Backdoor"] },
+  { term: "Worm", definition: "Self-replicating malware that spreads across networks without user interaction. Notable examples include Conficker, WannaCry, and Morris Worm.", category: "Malware Types", relatedTerms: ["Ransomware", "Propagation", "Network Security"] },
+  { term: "Rootkit", definition: "Malware designed to hide its presence and other malicious activity from detection. Operates at kernel level for deep system access.", category: "Malware Types", relatedTerms: ["Kernel", "Stealth", "Persistence"] },
+  { term: "Bootkit", definition: "Rootkit variant that infects boot sector or bootloader to load before the operating system. Survives OS reinstallation.", category: "Malware Types", relatedTerms: ["Rootkit", "MBR", "Secure Boot"] },
+  { term: "Spyware", definition: "Malware that secretly monitors user activity and collects information. Includes keyloggers, screen recorders, and browser trackers.", category: "Malware Types", relatedTerms: ["Keylogger", "Privacy", "Surveillance"] },
+  { term: "Adware", definition: "Software that displays unwanted advertisements. May be bundled with free software or installed through deceptive means.", category: "Malware Types", relatedTerms: ["PUP", "Browser Hijacker", "Malvertising"] },
+  { term: "Keylogger", definition: "Software or hardware that records keystrokes to capture passwords, credentials, and sensitive information typed by users.", category: "Malware Types", relatedTerms: ["Spyware", "Credential Theft", "RAT"] },
+  { term: "Fileless Malware", definition: "Malware that operates entirely in memory without writing files to disk. Uses legitimate tools (PowerShell, WMI) to evade detection.", category: "Malware Types", relatedTerms: ["LOTL", "Memory Forensics", "EDR"] },
+  { term: "Polymorphic Malware", definition: "Malware that changes its code or signature with each infection to evade signature-based detection while maintaining functionality.", category: "Malware Types", relatedTerms: ["Metamorphic", "Evasion", "Signature Detection"] },
+  { term: "Metamorphic Malware", definition: "Malware that rewrites its entire code base each time it propagates. More sophisticated than polymorphic malware, harder to detect.", category: "Malware Types", relatedTerms: ["Polymorphic", "Evasion", "Obfuscation"] },
+  { term: "Logic Bomb", definition: "Malicious code that executes when specific conditions are met (date, user action, system event). Often planted by insiders.", category: "Malware Types", relatedTerms: ["Time Bomb", "Insider Threat", "Sabotage"] },
+  { term: "Wiper", definition: "Destructive malware designed to permanently destroy data on infected systems. Used in sabotage operations (Shamoon, NotPetya, WhisperGate).", category: "Malware Types", relatedTerms: ["Destructive Malware", "Sabotage", "Data Destruction"] },
+  { term: "Infostealer", definition: "Malware focused on extracting valuable data like credentials, cookies, cryptocurrency wallets, and browser data. Examples include RedLine and Raccoon.", category: "Malware Types", relatedTerms: ["Credential Theft", "Data Exfiltration", "Stealer"] },
+  { term: "Banking Trojan", definition: "Malware targeting financial transactions to steal banking credentials and manipulate transactions. Uses web injection and form grabbing techniques.", category: "Malware Types", relatedTerms: ["Trojan", "Financial Crime", "Web Inject"] },
+  { term: "Dropper", definition: "Malware component that downloads and installs other malicious payloads. First stage in multi-stage attacks.", category: "Malware Types", relatedTerms: ["Loader", "Payload", "Multi-Stage"] },
+  { term: "Loader", definition: "Malware that loads additional payloads into memory. Often uses process injection and encryption to evade detection.", category: "Malware Types", relatedTerms: ["Dropper", "Shellcode", "Injection"] },
+  { term: "Backdoor", definition: "Hidden method of bypassing normal authentication or security controls. Can be intentionally planted or result from vulnerabilities.", category: "Malware Types", relatedTerms: ["RAT", "Persistence", "C2"] },
+  { term: "Botnet", definition: "Network of compromised computers controlled by an attacker. Used for DDoS attacks, spam, credential stuffing, and cryptocurrency mining.", category: "Malware Types", relatedTerms: ["DDoS", "C2", "Bot Herder"] },
+  { term: "Crypter", definition: "Tool for encrypting/obfuscating malware to evade antivirus detection. Creates FUD (Fully Undetectable) variants of known malware.", category: "Malware Types", relatedTerms: ["Packer", "Obfuscation", "Evasion"] },
+  { term: "Packer", definition: "Tool that compresses and encrypts executables. Used legitimately for software protection but also to obfuscate malware.", category: "Malware Types", relatedTerms: ["Crypter", "UPX", "Obfuscation"] },
+
+  // ICS/OT Security
+  { term: "ICS (Industrial Control Systems)", definition: "Systems controlling industrial processes in sectors like energy, water, and manufacturing. Includes SCADA, DCS, and PLC components.", category: "ICS/OT Security", relatedTerms: ["SCADA", "OT", "Critical Infrastructure"] },
+  { term: "SCADA", definition: "Supervisory Control and Data Acquisition systems for monitoring and controlling industrial processes across large geographic areas.", category: "ICS/OT Security", relatedTerms: ["ICS", "HMI", "RTU"] },
+  { term: "OT (Operational Technology)", definition: "Hardware and software that monitors and controls physical devices and processes. Distinct from IT with different security priorities (availability over confidentiality).", category: "ICS/OT Security", relatedTerms: ["ICS", "IT/OT Convergence", "Safety Systems"] },
+  { term: "PLC (Programmable Logic Controller)", definition: "Industrial computer controlling manufacturing processes and machinery. Common attack target in ICS environments (Stuxnet targeted Siemens PLCs).", category: "ICS/OT Security", relatedTerms: ["ICS", "Ladder Logic", "SCADA"] },
+  { term: "HMI (Human-Machine Interface)", definition: "Interface allowing operators to interact with industrial control systems. Security concerns include weak authentication and network exposure.", category: "ICS/OT Security", relatedTerms: ["SCADA", "ICS", "Operator Workstation"] },
+  { term: "RTU (Remote Terminal Unit)", definition: "Microprocessor-controlled device interfacing with physical equipment in remote locations, communicating with SCADA master systems.", category: "ICS/OT Security", relatedTerms: ["SCADA", "Telemetry", "Modbus"] },
+  { term: "Modbus", definition: "Serial communication protocol commonly used in ICS environments. Lacks built-in security features like authentication or encryption.", category: "ICS/OT Security", relatedTerms: ["ICS Protocol", "DNP3", "Serial Communication"] },
+  { term: "DNP3 (Distributed Network Protocol)", definition: "Communication protocol used primarily in utilities and water/wastewater. DNP3 Secure Authentication adds cryptographic security.", category: "ICS/OT Security", relatedTerms: ["SCADA", "ICS Protocol", "Utilities"] },
+  { term: "Purdue Model", definition: "Reference architecture for ICS network segmentation with levels from enterprise network (Level 5) to physical process (Level 0).", category: "ICS/OT Security", relatedTerms: ["Network Segmentation", "ICS", "DMZ"] },
+  { term: "Safety Instrumented System (SIS)", definition: "System designed to take a process to a safe state when conditions require it. Critical target for attackers seeking physical damage.", category: "ICS/OT Security", relatedTerms: ["ICS", "Process Safety", "TRITON"] },
+  { term: "Air Gap", definition: "Physical isolation of a network from other networks including the internet. Common in ICS but often bypassed through removable media or insider access.", category: "ICS/OT Security", relatedTerms: ["Network Segmentation", "ICS", "Isolation"] },
+  { term: "IT/OT Convergence", definition: "Integration of information technology and operational technology networks. Creates efficiency but introduces cybersecurity risks to previously isolated systems.", category: "ICS/OT Security", relatedTerms: ["ICS", "Digital Transformation", "Attack Surface"] },
+
+  // Wireless Security
+  { term: "WPA3", definition: "Latest Wi-Fi security protocol with Simultaneous Authentication of Equals (SAE) replacing WPA2's vulnerable 4-way handshake. Provides forward secrecy.", category: "Wireless Security", relatedTerms: ["WiFi Security", "WPA2", "SAE"] },
+  { term: "WPA2", definition: "Wi-Fi Protected Access 2 using AES encryption. Vulnerable to KRACK attacks and offline dictionary attacks against PSK.", category: "Wireless Security", relatedTerms: ["WiFi Security", "KRACK", "WPA3"] },
+  { term: "KRACK (Key Reinstallation Attack)", definition: "Attack exploiting WPA2's 4-way handshake by forcing nonce reuse. Allows traffic decryption and packet injection.", category: "Wireless Security", relatedTerms: ["WPA2", "WiFi Security", "Nonce Reuse"] },
+  { term: "Evil Twin Attack", definition: "Rogue access point mimicking a legitimate network to intercept traffic. Victims connect believing it's the real network.", category: "Wireless Security", relatedTerms: ["WiFi Security", "MitM", "Rogue AP"] },
+  { term: "Wardriving", definition: "Driving around to discover and map wireless networks. Used for security assessments and by attackers to find vulnerable networks.", category: "Wireless Security", relatedTerms: ["WiFi Security", "Reconnaissance", "Kismet"] },
+  { term: "Deauthentication Attack", definition: "Sending forged deauth frames to disconnect clients from wireless networks. Used to capture handshakes or deny service.", category: "Wireless Security", relatedTerms: ["WiFi Security", "DoS", "Handshake Capture"] },
+  { term: "IMSI Catcher", definition: "Device that mimics cell towers to intercept mobile communications and track devices. Also called Stingray after a commercial product.", category: "Wireless Security", relatedTerms: ["Mobile Security", "Surveillance", "5G Security"] },
+  { term: "Bluetooth Security", definition: "Security considerations for Bluetooth including BlueBorne vulnerabilities, Bluesnarfing (data theft), and Bluejacking (spam).", category: "Wireless Security", relatedTerms: ["Mobile Security", "IoT", "Wireless"] },
+  { term: "NFC Security", definition: "Security for Near Field Communication technology used in contactless payments and access cards. Risks include eavesdropping and relay attacks.", category: "Wireless Security", relatedTerms: ["Mobile Security", "Contactless", "RFID"] },
+  { term: "RFID Security", definition: "Security for Radio Frequency Identification systems. Vulnerabilities include cloning, eavesdropping, and replay attacks on access cards.", category: "Wireless Security", relatedTerms: ["NFC Security", "Access Control", "Proximity Cards"] },
+
+  // API Security
+  { term: "OWASP API Security Top 10", definition: "List of most critical API security risks including Broken Object Level Authorization, Broken Authentication, and Excessive Data Exposure.", category: "API Security", relatedTerms: ["OWASP", "REST API", "BOLA"] },
+  { term: "BOLA (Broken Object Level Authorization)", definition: "API vulnerability where users can access objects belonging to other users by manipulating object IDs in requests.", category: "API Security", relatedTerms: ["IDOR", "Authorization", "API Security"] },
+  { term: "IDOR (Insecure Direct Object Reference)", definition: "Access control vulnerability where user-supplied input provides direct access to objects. Common in APIs through predictable resource IDs.", category: "API Security", relatedTerms: ["BOLA", "Authorization", "Access Control"] },
+  { term: "Rate Limiting", definition: "Controlling the number of requests a client can make in a time period. Prevents abuse, brute force attacks, and resource exhaustion.", category: "API Security", relatedTerms: ["API Security", "DoS Prevention", "Throttling"] },
+  { term: "API Key", definition: "Simple authentication token for API access. Should be protected like passwords; insufficient alone for sensitive operations.", category: "API Security", relatedTerms: ["Authentication", "OAuth", "Bearer Token"] },
+  { term: "API Gateway", definition: "Entry point for API traffic handling authentication, rate limiting, request routing, and security policies.", category: "API Security", relatedTerms: ["Microservices", "Load Balancer", "WAF"] },
+  { term: "OpenAPI/Swagger", definition: "Specification for describing REST APIs. Security testing can leverage specs to identify endpoints and parameter types.", category: "API Security", relatedTerms: ["REST API", "Documentation", "API Testing"] },
+  { term: "Mass Assignment", definition: "Vulnerability where APIs bind request parameters directly to object properties without filtering, allowing modification of unintended fields.", category: "API Security", relatedTerms: ["API Security", "Input Validation", "Parameter Binding"] },
+
+  // DevOps & CI/CD Security
+  { term: "CI/CD Pipeline", definition: "Automated workflow for building, testing, and deploying code. Security integration points include SAST, DAST, SCA, and secrets scanning.", category: "DevOps Security", relatedTerms: ["DevSecOps", "Build Pipeline", "Automation"] },
+  { term: "GitOps", definition: "Operational framework using Git as single source of truth for declarative infrastructure and applications. Security requires protecting Git repos and enforcing reviews.", category: "DevOps Security", relatedTerms: ["IaC", "Kubernetes", "Version Control"] },
+  { term: "Secrets Management", definition: "Secure storage and access of credentials, API keys, and certificates. Solutions include HashiCorp Vault, AWS Secrets Manager, and Azure Key Vault.", category: "DevOps Security", relatedTerms: ["Vault", "Credentials", "Key Management"] },
+  { term: "Infrastructure as Code Security", definition: "Scanning IaC templates (Terraform, CloudFormation) for misconfigurations before deployment. Tools include Checkov, tfsec, and KICS.", category: "DevOps Security", relatedTerms: ["IaC", "CSPM", "Static Analysis"] },
+  { term: "Container Image Scanning", definition: "Analyzing container images for vulnerabilities in OS packages and application dependencies. Part of secure container pipeline.", category: "DevOps Security", relatedTerms: ["Container Security", "SBOM", "Trivy"] },
+  { term: "Shift Left Security", definition: "Moving security testing earlier in the development lifecycle. Catches vulnerabilities before production at lower remediation cost.", category: "DevOps Security", relatedTerms: ["DevSecOps", "SAST", "Secure SDLC"] },
+  { term: "Policy as Code", definition: "Defining security and compliance policies in code for automated enforcement. Examples include OPA Rego, Sentinel, and Kyverno.", category: "DevOps Security", relatedTerms: ["OPA", "Compliance", "Automation"] },
+  { term: "Artifact Repository Security", definition: "Securing package repositories (npm, PyPI, Maven). Includes dependency confusion prevention, signature verification, and access control.", category: "DevOps Security", relatedTerms: ["Supply Chain", "Dependency Confusion", "SCA"] },
+  { term: "Dependency Confusion", definition: "Attack exploiting package managers that prioritize public packages over private ones. Attacker publishes malicious public package with internal package name.", category: "DevOps Security", relatedTerms: ["Supply Chain Attack", "npm", "PyPI"] },
+
+  // Security Operations
+  { term: "Alert Fatigue", definition: "Desensitization to security alerts due to high volume or false positives. Leads to missed genuine threats and analyst burnout.", category: "Security Operations", relatedTerms: ["SOC", "SIEM", "False Positive"] },
+  { term: "False Positive", definition: "Alert triggered for benign activity incorrectly classified as malicious. High false positive rates reduce detection effectiveness.", category: "Security Operations", relatedTerms: ["Alert Fatigue", "Detection", "Tuning"] },
+  { term: "False Negative", definition: "Failure to detect actual malicious activity. More dangerous than false positives as threats go unnoticed.", category: "Security Operations", relatedTerms: ["Detection", "Evasion", "Coverage"] },
+  { term: "Runbook", definition: "Documented standard operating procedures for responding to specific alert types or incidents. Enables consistent response.", category: "Security Operations", relatedTerms: ["Playbook", "SOC", "Automation"] },
+  { term: "Security Orchestration", definition: "Connecting and coordinating security tools and processes. Enables automated workflows across disparate security solutions.", category: "Security Operations", relatedTerms: ["SOAR", "Automation", "Integration"] },
+  { term: "Threat Feed", definition: "Stream of threat intelligence data (IOCs, TTPs) for consumption by security tools. Sources include commercial, open source, and ISACs.", category: "Security Operations", relatedTerms: ["Threat Intelligence", "IOC", "STIX/TAXII"] },
+  { term: "STIX/TAXII", definition: "Standards for expressing and exchanging threat intelligence. STIX defines structure; TAXII defines transport. Enables automated intelligence sharing.", category: "Security Operations", relatedTerms: ["Threat Intelligence", "CTI", "Information Sharing"] },
+  { term: "Kill Chain Analysis", definition: "Mapping attacker activity to stages of the kill chain to understand attack progression and identify defense gaps.", category: "Security Operations", relatedTerms: ["Cyber Kill Chain", "MITRE ATT&CK", "Detection"] },
+
+  // Data Security
+  { term: "Data Classification", definition: "Categorizing data based on sensitivity level (public, internal, confidential, restricted). Determines required protection controls.", category: "Data Security", relatedTerms: ["DLP", "Data Protection", "Labeling"] },
+  { term: "Data Loss Prevention (DLP)", definition: "Technologies and processes preventing unauthorized data exfiltration. Monitors endpoints, network, and cloud for sensitive data movement.", category: "Data Security", relatedTerms: ["Data Classification", "Exfiltration", "Content Inspection"] },
+  { term: "Data Exfiltration", definition: "Unauthorized transfer of data from an organization. Methods include cloud storage, DNS tunneling, steganography, and physical media.", category: "Data Security", relatedTerms: ["Data Loss Prevention", "Insider Threat", "C2"] },
+  { term: "Database Activity Monitoring (DAM)", definition: "Monitoring database access to detect unauthorized queries, privilege abuse, and data theft. Provides visibility into database activity.", category: "Data Security", relatedTerms: ["Database Security", "Audit", "Access Monitoring"] },
+  { term: "Data Sovereignty", definition: "Requirement that data be stored and processed within specific geographic boundaries. Driven by regulations like GDPR and national security concerns.", category: "Data Security", relatedTerms: ["GDPR", "Compliance", "Data Residency"] },
+  { term: "Right to be Forgotten", definition: "GDPR right requiring organizations to delete personal data upon request. Creates challenges for backup, archival, and distributed systems.", category: "Data Security", relatedTerms: ["GDPR", "Privacy", "Data Deletion"] },
+  { term: "Encryption at Rest", definition: "Encrypting data stored on disk, databases, or storage media. Protects against physical theft and unauthorized access to storage.", category: "Data Security", relatedTerms: ["Encryption", "Data Protection", "Key Management"] },
+  { term: "Encryption in Transit", definition: "Encrypting data during transmission over networks. Implemented via TLS/SSL, IPsec, or application-layer encryption.", category: "Data Security", relatedTerms: ["TLS", "Data Protection", "Network Security"] },
+
+  // Identity Security
+  { term: "Identity Governance", definition: "Framework for managing digital identities including provisioning, certification, and access request workflows.", category: "Identity Security", relatedTerms: ["IAM", "Access Review", "Lifecycle Management"] },
+  { term: "Access Review/Certification", definition: "Periodic review of user access rights to ensure appropriateness. Required by regulations and essential for least privilege.", category: "Identity Security", relatedTerms: ["Identity Governance", "Compliance", "Least Privilege"] },
+  { term: "Privileged Access Management (PAM)", definition: "Controls for protecting privileged accounts with elevated access. Features include password vaulting, session recording, and just-in-time access.", category: "Identity Security", relatedTerms: ["IAM", "Privilege Escalation", "Admin Accounts"] },
+  { term: "Just-in-Time Access", definition: "Granting elevated privileges only when needed and for limited duration. Reduces standing privilege exposure.", category: "Identity Security", relatedTerms: ["PAM", "Least Privilege", "Zero Trust"] },
+  { term: "Service Account", definition: "Non-human account used by applications and services. Often over-privileged and poorly managed, making them prime attack targets.", category: "Identity Security", relatedTerms: ["IAM", "Secrets Management", "Machine Identity"] },
+  { term: "Machine Identity", definition: "Digital identities for workloads, services, and devices. Includes certificates, API keys, and tokens requiring lifecycle management.", category: "Identity Security", relatedTerms: ["PKI", "Service Account", "Secrets Management"] },
+  { term: "Federation", definition: "Establishing trust between identity providers to enable SSO across organizational boundaries. Protocols include SAML and OIDC.", category: "Identity Security", relatedTerms: ["SSO", "SAML", "Identity Provider"] },
+  { term: "Directory Services", definition: "Centralized databases storing identity and access information. Examples include Active Directory, LDAP directories, and cloud directories.", category: "Identity Security", relatedTerms: ["Active Directory", "LDAP", "IAM"] },
+
+  // Risk & Compliance
+  { term: "Risk Assessment", definition: "Process of identifying, analyzing, and evaluating risks. Considers likelihood, impact, and existing controls to prioritize mitigation.", category: "Risk & Compliance", relatedTerms: ["Threat Modeling", "Risk Management", "Vulnerability Assessment"] },
+  { term: "Risk Appetite", definition: "Amount and type of risk an organization is willing to accept in pursuit of objectives. Guides security investment decisions.", category: "Risk & Compliance", relatedTerms: ["Risk Management", "Risk Tolerance", "Business Risk"] },
+  { term: "Residual Risk", definition: "Risk remaining after controls are implemented. Should align with risk appetite; if not, additional controls needed.", category: "Risk & Compliance", relatedTerms: ["Risk Assessment", "Controls", "Risk Acceptance"] },
+  { term: "Control Framework", definition: "Structured set of controls for managing security risks. Examples include NIST CSF, CIS Controls, and ISO 27002.", category: "Risk & Compliance", relatedTerms: ["Security Controls", "NIST", "Compliance"] },
+  { term: "Security Audit", definition: "Independent assessment of security controls against standards or regulations. Can be internal or performed by third parties.", category: "Risk & Compliance", relatedTerms: ["Compliance", "Assessment", "Attestation"] },
+  { term: "Penetration Test Report", definition: "Documentation of penetration testing findings including vulnerabilities, risk ratings, exploitation evidence, and remediation recommendations.", category: "Risk & Compliance", relatedTerms: ["Penetration Testing", "Vulnerability Report", "Remediation"] },
+  { term: "Compensating Control", definition: "Alternative security measure when primary control cannot be implemented. Must provide equivalent protection.", category: "Risk & Compliance", relatedTerms: ["Security Controls", "Risk Mitigation", "Compliance"] },
+  { term: "Exception Management", definition: "Process for documenting and approving deviations from security policies. Requires risk assessment, time limits, and executive approval.", category: "Risk & Compliance", relatedTerms: ["Policy", "Risk Acceptance", "Governance"] },
+  { term: "Security Metrics", definition: "Quantitative measurements of security performance and risk. Examples include patch compliance, MTTD/MTTR, and phishing click rates.", category: "Risk & Compliance", relatedTerms: ["KPI", "Reporting", "Security Posture"] },
+  { term: "HIPAA", definition: "Health Insurance Portability and Accountability Act - US regulation protecting healthcare data (PHI). Requires safeguards and breach notification.", category: "Risk & Compliance", relatedTerms: ["Compliance", "Healthcare", "PHI"] },
+  { term: "FERPA", definition: "Family Educational Rights and Privacy Act - US law protecting student education records. Applies to educational institutions receiving federal funds.", category: "Risk & Compliance", relatedTerms: ["Compliance", "Education", "Privacy"] },
+  { term: "CCPA/CPRA", definition: "California Consumer Privacy Act and Privacy Rights Act - state privacy laws giving consumers rights over personal information similar to GDPR.", category: "Risk & Compliance", relatedTerms: ["Privacy", "Compliance", "Data Protection"] },
+  { term: "GLBA", definition: "Gramm-Leach-Bliley Act - US regulation requiring financial institutions to protect consumer financial information.", category: "Risk & Compliance", relatedTerms: ["Financial Services", "Compliance", "Privacy"] },
+  { term: "FedRAMP", definition: "Federal Risk and Authorization Management Program - US government program for cloud security assessment and authorization.", category: "Risk & Compliance", relatedTerms: ["Cloud Security", "Compliance", "Government"] },
+
+  // Physical & Operational Security
+  { term: "Tailgating", definition: "Unauthorized person following an authorized person through a secure entrance. Defeated by mantraps and security awareness training.", category: "Physical Security", relatedTerms: ["Social Engineering", "Access Control", "Physical Security"] },
+  { term: "Piggybacking", definition: "Similar to tailgating but with the authorized person's knowledge/consent. Still a security violation.", category: "Physical Security", relatedTerms: ["Tailgating", "Social Engineering", "Physical Security"] },
+  { term: "Mantrap", definition: "Physical access control with two interlocking doors ensuring only authorized individuals pass through. Prevents tailgating.", category: "Physical Security", relatedTerms: ["Access Control", "Physical Security", "Tailgating"] },
+  { term: "CCTV", definition: "Closed-circuit television for surveillance and security monitoring. Increasingly integrated with analytics and access control systems.", category: "Physical Security", relatedTerms: ["Surveillance", "Physical Security", "Monitoring"] },
+  { term: "Dumpster Diving", definition: "Searching through trash to find sensitive information like documents, hardware, or credentials. Countered by shredding and secure disposal.", category: "Physical Security", relatedTerms: ["Social Engineering", "OSINT", "Data Destruction"] },
+  { term: "Clean Desk Policy", definition: "Requiring employees to clear desks of sensitive materials when unattended. Prevents unauthorized access to information.", category: "Physical Security", relatedTerms: ["Physical Security", "Policy", "Data Protection"] },
+  { term: "Secure Disposal", definition: "Properly destroying sensitive data and media. Includes shredding, degaussing, and certified destruction services.", category: "Physical Security", relatedTerms: ["Data Destruction", "Media Sanitization", "Compliance"] },
+  { term: "Biometric Authentication", definition: "Using biological characteristics (fingerprint, face, iris, voice) for authentication. More resistant to credential theft than passwords.", category: "Physical Security", relatedTerms: ["Authentication", "MFA", "Access Control"] },
+
+  // Security Testing
+  { term: "Black Box Testing", definition: "Security testing without knowledge of internal implementation. Simulates external attacker perspective.", category: "Security Testing", relatedTerms: ["White Box", "Gray Box", "Penetration Testing"] },
+  { term: "White Box Testing", definition: "Security testing with full knowledge of source code and architecture. Enables thorough analysis but differs from real-world attack conditions.", category: "Security Testing", relatedTerms: ["Black Box", "Code Review", "SAST"] },
+  { term: "Gray Box Testing", definition: "Security testing with partial knowledge, typically user-level access. Balance between black and white box approaches.", category: "Security Testing", relatedTerms: ["Black Box", "White Box", "Penetration Testing"] },
+  { term: "Assumed Breach", definition: "Testing methodology assuming attackers have already gained initial access. Tests internal defenses and detection capabilities.", category: "Security Testing", relatedTerms: ["Red Team", "Purple Team", "Post-Exploitation"] },
+  { term: "Scope", definition: "Boundaries defining what systems, networks, and attack types are authorized during security testing. Critical for legal protection.", category: "Security Testing", relatedTerms: ["Rules of Engagement", "Penetration Testing", "Authorization"] },
+  { term: "Rules of Engagement", definition: "Guidelines governing security testing including scope, timing, communication, and prohibited actions. Documented before testing begins.", category: "Security Testing", relatedTerms: ["Scope", "Penetration Testing", "Authorization"] },
+  { term: "Proof of Concept (PoC)", definition: "Demonstration that a vulnerability is exploitable. Used to validate findings and communicate risk without causing damage.", category: "Security Testing", relatedTerms: ["Exploit", "Vulnerability", "Validation"] },
+
+  // Miscellaneous Technical Terms
+  { term: "Sandboxing", definition: "Isolating programs in restricted environments to limit potential damage. Used for malware analysis, browser security, and application isolation.", category: "Security Concepts", relatedTerms: ["Isolation", "Malware Analysis", "Container"] },
+  { term: "Canary Token", definition: "Decoy credentials or files that trigger alerts when accessed, detecting unauthorized access or breach. Also called honeytokens.", category: "Detection & Response", relatedTerms: ["Honeypot", "Detection", "Deception"] },
+  { term: "Honeypot", definition: "Decoy system designed to attract and detect attackers. Provides intelligence on attack techniques and early warning of intrusions.", category: "Detection & Response", relatedTerms: ["Canary Token", "Deception", "Threat Intelligence"] },
+  { term: "Honeynet", definition: "Network of honeypots simulating an entire network environment. Provides more realistic deception and richer intelligence.", category: "Detection & Response", relatedTerms: ["Honeypot", "Deception", "Network Security"] },
+  { term: "Deception Technology", definition: "Security approach using decoys, traps, and misdirection to detect and confuse attackers. Complements traditional detection.", category: "Detection & Response", relatedTerms: ["Honeypot", "Canary Token", "Detection"] },
+  { term: "Blue-Green Deployment", definition: "Deployment strategy maintaining two identical environments for zero-downtime updates. Security considerations include environment synchronization and rollback.", category: "DevOps Security", relatedTerms: ["CI/CD", "Deployment", "Rollback"] },
+  { term: "Canary Deployment", definition: "Gradually rolling out changes to a small subset of users before full deployment. Limits blast radius of security issues.", category: "DevOps Security", relatedTerms: ["CI/CD", "Feature Flags", "Risk Mitigation"] },
+  { term: "Immutable Infrastructure", definition: "Infrastructure paradigm where servers are never modified after deployment. Changes require replacement. Prevents configuration drift and persistent threats.", category: "DevOps Security", relatedTerms: ["IaC", "Containers", "Configuration Management"] },
+  { term: "Chaos Engineering", definition: "Deliberately introducing failures to test system resilience. Security applications include testing incident response and failover procedures.", category: "DevOps Security", relatedTerms: ["Resilience", "Testing", "Fault Injection"] },
+  { term: "SRE (Site Reliability Engineering)", definition: "Discipline applying software engineering to operations. Security responsibilities include reliability of security controls and incident response.", category: "DevOps Security", relatedTerms: ["DevOps", "Reliability", "Operations"] },
+  { term: "Observability", definition: "Ability to understand system state from external outputs (logs, metrics, traces). Essential for security monitoring and incident investigation.", category: "Security Operations", relatedTerms: ["Monitoring", "Telemetry", "SIEM"] },
+  { term: "Telemetry", definition: "Automated collection and transmission of data from remote sources. Security uses include endpoint monitoring, cloud metrics, and performance data.", category: "Security Operations", relatedTerms: ["EDR", "Monitoring", "Observability"] },
+  { term: "Log Aggregation", definition: "Centralizing logs from multiple sources for analysis. Foundation for SIEM, compliance, and incident investigation.", category: "Security Operations", relatedTerms: ["SIEM", "Logging", "Elasticsearch"] },
+  { term: "Log Retention", definition: "Policies defining how long logs are stored. Balances compliance requirements, investigation needs, and storage costs.", category: "Security Operations", relatedTerms: ["Compliance", "SIEM", "Data Retention"] },
 ];
 
 const categories = [...new Set(glossaryTerms.map((t) => t.category))];
@@ -626,17 +839,26 @@ export default function GlossaryPage() {
     if (selectedCategory > 0) {
       terms = terms.filter((t) => t.category === categories[selectedCategory - 1]);
     }
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      terms = terms.filter(
-        (t) =>
-          t.term.toLowerCase().includes(query) ||
-          t.definition.toLowerCase().includes(query) ||
-          t.relatedTerms?.some((r) => r.toLowerCase().includes(query))
-      );
+    const normalizedQuery = normalizeSearchText(searchQuery);
+    if (normalizedQuery) {
+      const tokens = normalizedQuery.split(" ").filter(Boolean);
+      terms = terms.filter((t) => {
+        const haystack = buildSearchText(t);
+        return tokens.every((token) => haystack.includes(token));
+      });
     }
-    return terms.sort((a, b) => a.term.localeCompare(b.term));
+    return terms.slice().sort((a, b) => a.term.localeCompare(b.term));
   }, [selectedCategory, searchQuery]);
+
+  useEffect(() => {
+    if (filteredTerms.length === 0) {
+      setSelectedTerm(null);
+      return;
+    }
+    if (!selectedTerm || !filteredTerms.some((term) => term.term === selectedTerm.term)) {
+      setSelectedTerm(filteredTerms[0]);
+    }
+  }, [filteredTerms, selectedTerm]);
 
   const handleRelatedTermClick = (termName: string) => {
     const found = glossaryTerms.find((t) => t.term.toLowerCase().includes(termName.toLowerCase()));
@@ -650,6 +872,7 @@ export default function GlossaryPage() {
   const getCategoryStats = (cat: string) => glossaryTerms.filter((t) => t.category === cat).length;
 
   return (
+    <LearnPageLayout pageTitle="Cybersecurity Glossary" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -833,5 +1056,6 @@ export default function GlossaryPage() {
         </Grid>
       </Grid>
     </Container>
+    </LearnPageLayout>
   );
 }

@@ -7,7 +7,7 @@ from backend.core.config import settings
 from backend.core.database import Base, engine
 from backend.core.exceptions import VRAgentError
 from backend.core.logging import get_logger
-from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering
+from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering, learn_chat
 from backend import models  # noqa: F401  # ensure models are registered
 
 logger = get_logger(__name__)
@@ -96,6 +96,7 @@ app.include_router(vulnhuntr.router, tags=["vulnhuntr"])
 app.include_router(agentic_scan.router, tags=["agentic-ai-scan"])
 app.include_router(findings.router, tags=["findings"])
 app.include_router(reverse_engineering.router, tags=["reverse-engineering"])
+app.include_router(learn_chat.router, prefix="/api", tags=["learn-chat"])
 
 
 @app.get("/health")

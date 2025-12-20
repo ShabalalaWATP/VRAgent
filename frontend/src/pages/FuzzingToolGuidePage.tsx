@@ -51,6 +51,7 @@ import BarChartIcon from "@mui/icons-material/BarChart";
 import StorageIcon from "@mui/icons-material/Storage";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import LearnPageLayout from "../components/LearnPageLayout";
 import CodeIcon from "@mui/icons-material/Code";
 import LinkIcon from "@mui/icons-material/Link";
 import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
@@ -168,7 +169,10 @@ export default function FuzzingToolGuidePage() {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
+  const pageContext = `This page is the VRAgent Fuzzing Tool Guide covering fuzzing capabilities, smart detection signatures for SQL injection/XSS/command injection/path traversal, session management, request configuration, response analysis, payload wordlists, and advanced fuzzing techniques.`;
+
   return (
+    <LearnPageLayout pageTitle="Fuzzing Tool Guide" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
@@ -1284,5 +1288,6 @@ export default function FuzzingToolGuidePage() {
         </Box>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

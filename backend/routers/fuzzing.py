@@ -15,7 +15,8 @@ import asyncio
 
 from sqlalchemy.orm import Session
 from backend.core.database import get_db
-from backend.models.models import FuzzingSession
+from backend.core.auth import get_current_active_user
+from backend.models.models import FuzzingSession, User
 
 from backend.services.fuzzing_service import (
     FuzzConfig,
@@ -66,7 +67,7 @@ class ExportRequest(BaseModel):
 
 
 @router.post("/run", response_model=Dict[str, Any])
-async def run_fuzzer(request: FuzzRequest):
+async def run_fuzzer(request: FuzzRequest, current_user: User = Depends(get_current_active_user)):
     """
     Run a complete fuzzing session.
     

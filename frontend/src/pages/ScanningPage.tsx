@@ -20,6 +20,7 @@ import {
   Divider,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -43,209 +44,241 @@ interface ScanPhase {
   icon: React.ReactNode;
   duration: string;
   color: string;
+  progressRange: string;
 }
 
 const scanPhases: ScanPhase[] = [
   {
-    name: "Code Acquisition",
+    name: "Archive Extraction",
     description:
-      "Your code is securely retrieved and prepared for analysis with protection against archive-based attacks.",
+      "Your uploaded ZIP/TAR archive is securely extracted to an isolated sandbox directory with protection against archive-based attacks.",
     details: [
-      "Git repositories are cloned using secure HTTPS or SSH protocols",
-      "ZIP/TAR archives are extracted to an isolated sandbox directory",
+      "ZIP/TAR/GZ archives extracted to isolated /tmp sandbox directory",
       "Zip bomb protection limits extraction to 500MB and 10,000 files max",
-      "Path traversal protection validates all extracted file paths",
-      "Streaming extraction handles large codebases efficiently",
-      "Binary files (images, executables, media) are automatically excluded",
+      "Path traversal protection validates all extracted file paths (../../ blocked)",
+      "Binary files auto-excluded: .png, .jpg, .exe, .dll, .wasm, .pyc, .min.js",
+      "Directories skipped: node_modules, __pycache__, .git, venv, dist, build",
+      "Max file size: 1MB per file (larger files skipped as likely generated)",
     ],
     outputs: [
-      "Project directory structure map",
-      "Detected languages and their file counts",
-      "Repository metadata (commits, branches, remotes)",
-      "File size and complexity metrics",
+      "Extracted source directory",
+      "File count and skip statistics",
     ],
     icon: <StorageIcon />,
     duration: "5-30 sec",
+    progressRange: "0-5%",
     color: "#6366f1",
   },
   {
-    name: "Code Parsing & Chunking",
+    name: "Parallel File Processing",
     description:
-      "Source files are intelligently parsed and chunked for embedding generation and security-relevant prioritization.",
+      "Source files are processed in parallel using ThreadPoolExecutor with MAX_FILE_PROCESSORS workers for I/O-bound file reading.",
     details: [
-      "Files parsed with streaming for memory-efficient processing",
-      "Code split into semantic chunks (max 500 tokens per chunk)",
-      "Security-relevant code prioritized: authentication, crypto, database queries",
-      "Intelligent splitting respects function/class boundaries when possible",
-      "Chunks buffered and batch-inserted for database efficiency",
-      "Language detection determines which scanners to run",
+      "ThreadPoolExecutor with 8-16 parallel workers (2x CPU cores)",
+      "Files split into semantic chunks (~500 tokens each, max 50 per file)",
+      "Language detection for 60+ file types determines scanner selection",
+      "Content hash computed (SHA-256) for embedding reuse detection",
+      "Chunks buffered (100 at a time) and batch-inserted to PostgreSQL",
+      "MAX_TOTAL_CHUNKS limit (configurable) prevents memory exhaustion",
+      "Static pattern checks run inline: eval(), exec(), shell=True, passwords",
     ],
-    tools: ["Custom streaming parser", "Chunk buffer (100 chunks)", "Batch database inserts"],
+    tools: ["ThreadPoolExecutor", "SHA-256 hashing", "AST parsing"],
     outputs: [
       "Code chunks with file/line references",
-      "Language breakdown with percentages",
-      "Framework and library detection",
-      "Entry point mapping for attack surface",
+      "Language breakdown (Python, JS, Go, etc.)",
+      "Initial static pattern findings",
     ],
     icon: <CodeIcon />,
     duration: "10-60 sec",
+    progressRange: "5-30%",
     color: "#8b5cf6",
   },
   {
     name: "Embedding Generation",
     description:
-      "Vector embeddings are generated for code chunks, enabling semantic search and AI-powered code understanding.",
+      "Vector embeddings are generated for code chunks using Gemini, with smart reuse from previous scans when code is unchanged.",
     details: [
-      "Uses Gemini gemini-embedding-001 model (768 dimensions)",
-      "Embeddings reused from previous scans when code unchanged",
-      "Content hash comparison enables smart embedding reuse",
-      "Security-relevant code chunks prioritized for embedding",
-      "Stored in PostgreSQL with pgvector for similarity search",
+      "Gemini text-embedding-004 model (768-dimensional vectors)",
+      "Existing embeddings queried by (file_path, start_line, code_hash) key",
+      "Unchanged code chunks reuse embeddings from previous scans",
+      "Only new/modified chunks sent to Gemini API (cost optimization)",
+      "Stored in PostgreSQL with pgvector extension for similarity search",
       "Can be disabled via SKIP_EMBEDDINGS=true for faster scans",
     ],
-    tools: ["Gemini Embedding API", "pgvector extension", "Content hashing"],
+    tools: ["Gemini Embedding API", "pgvector", "Content hash comparison"],
     outputs: [
       "768-dimension embeddings per chunk",
-      "Embedding reuse statistics",
-      "Vector-ready for semantic queries",
+      "Reuse statistics (X reused, Y generated)",
+      "Vector-indexed chunks for semantic search",
     ],
     icon: <LayersIcon />,
     duration: "20-60 sec",
+    progressRange: "30-45%",
     color: "#ec4899",
   },
   {
     name: "Parallel Scan Phases",
     description:
-      "SAST scanners, Docker scanning, IaC scanning, and dependency parsing all run concurrently using ThreadPoolExecutor.",
+      "Four independent phases run concurrently: SAST scanners, Docker scanning, IaC scanning, and dependency parsing—all using ThreadPoolExecutor.",
     details: [
-      "7 SAST scanners run in parallel with configurable MAX_PARALLEL_SCANNERS",
-      "Docker scanning: Trivy for image vulns + custom Dockerfile linting rules",
-      "IaC scanning: Checkov and tfsec for Terraform, K8s, CloudFormation, ARM",
-      "Dependency parsing for 8 ecosystems runs concurrently",
-      "Each phase reports progress independently via ParallelPhaseTracker",
-      "Scanner availability checked before execution to skip unavailable tools",
+      "ParallelPhaseTracker coordinates progress across 4 concurrent phases",
+      "SAST: Up to 11 scanners run in parallel (Semgrep, Bandit, gosec, etc.)",
+      "Smart scanner selection: Only runs scanners for detected languages",
+      "Docker: Trivy image scanning + custom Dockerfile linting rules",
+      "IaC: Checkov + tfsec for Terraform, K8s, CloudFormation, Helm, ARM",
+      "Dependencies: Parsed from package.json, requirements.txt, go.mod, Cargo.toml, etc.",
+      "Per-scanner timeout (configurable) prevents hanging on large codebases",
     ],
-    tools: ["Semgrep", "Bandit", "ESLint", "gosec", "SpotBugs", "clang-tidy", "Cppcheck", "PHPCS Security", "Brakeman", "Cargo Audit", "Secrets", "Trivy", "Checkov", "tfsec"],
+    tools: ["Semgrep", "Bandit", "ESLint", "gosec", "SpotBugs", "clang-tidy", "Cppcheck", "PHPCS", "Brakeman", "Cargo Audit", "Secret Scanner", "Trivy", "Checkov", "tfsec"],
     outputs: [
-      "SAST findings from all applicable scanners",
-      "Docker vulnerability and misconfiguration findings",
+      "SAST findings from applicable scanners",
+      "Docker vulnerability + misconfiguration findings",
       "IaC security issues with framework detection",
       "Dependency list with versions and ecosystems",
     ],
     icon: <SecurityIcon />,
     duration: "60-300 sec",
+    progressRange: "45-70%",
     color: "#10b981",
   },
   {
     name: "Cross-Scanner Deduplication",
     description:
-      "Findings from multiple scanners are deduplicated to eliminate redundant reports of the same vulnerability.",
+      "Findings from multiple scanners are deduplicated to eliminate redundant reports of the same vulnerability at the same location.",
     details: [
-      "Same file+line+type findings merged across scanners",
-      "Scanner sources preserved for audit trail",
-      "Severity taken from highest-confidence scanner",
-      "Duplicate count tracked in dedup_stats",
-      "Preserves unique findings while reducing noise",
+      "Matching by file_path + line_number + vulnerability_type",
+      "Scanner sources preserved in merged finding for audit trail",
+      "Severity taken from highest-confidence scanner in merge",
+      "Cross-file correlation detects related issues (e.g., same auth bypass in multiple files)",
+      "Dedup stats tracked: X findings → Y after merging Z duplicates",
     ],
     outputs: [
       "Deduplicated findings list",
-      "Merge statistics (X duplicates merged)",
-      "Unified severity ratings",
+      "Merge statistics (duplicates_merged count)",
+      "Cross-file correlations (related issues)",
     ],
     icon: <AssessmentIcon />,
     duration: "2-5 sec",
+    progressRange: "70-72%",
     color: "#0891b2",
   },
   {
     name: "Transitive Dependency Analysis",
     description:
-      "Parses lock files to build complete dependency trees, identifying vulnerable transitive dependencies.",
+      "Lock files are parsed to build complete dependency trees, identifying whether vulnerabilities are in direct or transitive dependencies.",
     details: [
-      "Parses package-lock.json, yarn.lock, pnpm-lock.yaml for npm",
-      "Parses poetry.lock, Pipfile.lock for Python",
-      "Parses go.sum for Go module dependencies",
-      "Identifies which vulnerable packages are direct vs transitive",
-      "Calculates dependency depth for prioritization",
-      "Maps vulnerable paths from your code to the affected package",
+      "npm: package-lock.json, yarn.lock, pnpm-lock.yaml",
+      "Python: poetry.lock, Pipfile.lock, pip freeze",
+      "Go: go.sum for module dependency resolution",
+      "Rust: Cargo.lock for crate dependency trees",
+      "Calculates dependency depth (1 = direct, 2+ = transitive)",
+      "Maps vulnerable path: your-code → direct-dep → vulnerable-transitive-dep",
     ],
     tools: ["Lock file parsers", "Dependency tree builder", "Path analyzer"],
     outputs: [
-      "Complete dependency tree per ecosystem",
+      "Dependency tree per ecosystem",
       "Direct vs transitive classification",
-      "Vulnerable dependency paths",
+      "Dependency chain for each vulnerability",
     ],
     icon: <BugReportIcon />,
     duration: "5-15 sec",
+    progressRange: "72-77%",
     color: "#f59e0b",
   },
   {
-    name: "CVE Lookup & Enrichment",
+    name: "CVE Lookup & Parallel Enrichment",
     description:
-      "Dependencies are queried against multiple vulnerability databases, then enriched with detailed CVE information.",
+      "Dependencies are batch-queried against OSV.dev, then enriched in parallel with NVD, EPSS, and CISA KEV data.",
     details: [
-      "Batch queries OSV.dev API (100 deps per request) for CVE/GHSA matches",
-      "Parallel enrichment fetches NVD, EPSS, and CISA KEV data simultaneously",
-      "NVD provides full CVSS v3/v4 vectors and CWE classifications",
-      "EPSS scores show real-world exploitation probability (0-100%)",
-      "CISA KEV (Known Exploited Vulnerabilities) flags actively exploited CVEs",
-      "KEV vulnerabilities automatically escalated to HIGH severity",
+      "OSV.dev API batch queries (100 deps/request) for CVE/GHSA matches",
+      "Parallel enrichment: NVD + EPSS + KEV fetched concurrently",
+      "NVD: Full CVSS v3/v4 vectors, CWE classifications, descriptions",
+      "EPSS: Real-world exploitation probability (0-100%) and percentile",
+      "CISA KEV: Known Exploited Vulnerabilities actively attacked in the wild",
+      "KEV vulnerabilities auto-escalated to HIGH severity",
+      "Combined priority score merges CVSS + EPSS + KEV for triage",
     ],
-    tools: ["OSV.dev API", "NVD API", "EPSS API", "CISA KEV"],
+    tools: ["OSV.dev API", "NVD API", "FIRST EPSS API", "CISA KEV catalog"],
     outputs: [
       "CVE matches with descriptions",
       "CVSS scores (0.0-10.0) with vectors",
       "EPSS probability and percentile",
-      "KEV status for prioritization",
-      "Combined priority score",
+      "KEV flag for active exploitation",
+      "Combined priority label (Critical/High/Medium/Low)",
     ],
     icon: <VpnKeyIcon />,
     duration: "30-90 sec",
+    progressRange: "78-89%",
     color: "#ef4444",
   },
   {
     name: "Reachability Analysis",
     description:
-      "Determines whether vulnerable dependencies are actually used in reachable code paths.",
+      "Determines whether vulnerable dependencies are actually imported and called in your code, enabling smarter severity adjustment.",
     details: [
-      "Analyzes import statements to find which packages are actually imported",
-      "Checks if vulnerable package functions are called in your code",
-      "Marks unreachable vulnerabilities for deprioritization",
-      "Reduces false positives from unused dependencies",
-      "Provides reachability summary (X reachable, Y unreachable)",
+      "Scans import statements: import X, from X import Y, require('X')",
+      "Checks if vulnerable package modules/functions are called",
+      "Confidence levels: high (import found), medium (similar name), low (no evidence)",
+      "Unreachable vulns with high confidence: severity downgraded (critical → medium)",
+      "Provides reachability summary: X reachable, Y unreachable",
     ],
-    tools: ["Import analyzer", "Call graph builder", "Reachability checker"],
+    tools: ["Import analyzer", "Call site detector", "Reachability checker"],
     outputs: [
       "Reachability status per vulnerability",
-      "Import evidence for reachable vulns",
-      "Unreachable vuln count for filtering",
+      "Import locations and call locations",
+      "Severity adjustments for unreachable vulns",
     ],
     icon: <DescriptionIcon />,
     duration: "10-30 sec",
+    progressRange: "84-86%",
     color: "#7c3aed",
   },
   {
-    name: "AI Analysis & Report",
+    name: "AI-Enhanced Analysis",
     description:
-      "Google Gemini AI analyzes findings for false positives, attack chains, and generates exploit scenarios in the background.",
+      "Google Gemini AI analyzes top findings for false positives, discovers attack chains, and optionally correlates with Agentic AI scan results.",
     details: [
-      "Heuristic false positive detection runs first (test files, mock code, suppression comments)",
-      "Severity adjustment for context (auth checks, admin-only, internal endpoints)",
-      "Attack chain discovery combines related findings into exploitable paths",
-      "LLM analysis limited to MAX_FINDINGS=50 most critical vulnerabilities",
-      "AI summaries generated in background after scan completes",
-      "Pre-built exploit templates for 16+ vuln types (SQLi, XSS, RCE, etc.)",
+      "Heuristic FP detection first: test files, mock code, __test__, suppression comments",
+      "Context-aware severity: auth checks present, admin-only routes, internal endpoints",
+      "Attack chain discovery: Combines related findings into exploitable paths",
+      "LLM analysis for top 20 most critical findings (configurable MAX_LLM_FINDINGS)",
+      "Agentic AI corroboration: If agentic scan ran, cross-references findings",
+      "Findings with FP score ≥0.6 (and not agentic-corroborated) marked for filtering",
     ],
-    tools: ["Gemini 2.0 Flash", "Heuristic patterns", "Exploit templates"],
+    tools: ["Gemini 2.0 Flash", "Heuristic patterns", "Agentic correlation"],
     outputs: [
-      "Executive security summary",
-      "False positive assessments",
-      "Attack chain mappings",
-      "Exploit scenarios with PoC outlines",
-      "Remediation guidance",
+      "False positive scores (0.0-1.0) with reasons",
+      "Attack chain mappings with impact/likelihood",
+      "Severity adjustments with explanations",
+      "Agentic corroboration status",
     ],
     icon: <PsychologyIcon />,
     duration: "30-120 sec",
+    progressRange: "90-94%",
     color: "#dc2626",
+  },
+  {
+    name: "Report Generation & Webhooks",
+    description:
+      "Final report is compiled with all findings, AI analysis, and statistics. Webhooks notify external systems of scan completion.",
+    details: [
+      "Report aggregates: findings, attack chains, AI summary, scan stats",
+      "Sensitive data inventory: Scans for PII, credentials, API keys in code",
+      "Scan stats include: deduplication, transitive analysis, reachability, Docker, IaC",
+      "Webhooks: POST to configured URLs with project_id, findings_count, severity_counts",
+      "WebSocket broadcast: 'complete' phase with total findings and duration",
+    ],
+    tools: ["Report service", "Sensitive data scanner", "Webhook notifier"],
+    outputs: [
+      "Complete scan report with all metadata",
+      "Sensitive data inventory",
+      "Webhook notifications sent",
+      "Scan duration and performance stats",
+    ],
+    icon: <AssessmentIcon />,
+    duration: "5-10 sec",
+    progressRange: "94-100%",
+    color: "#059669",
   },
 ];
 
@@ -254,8 +287,9 @@ const scannerDetails = [
     name: "Semgrep",
     languages: ["Python", "JavaScript", "TypeScript", "Go", "Java", "Ruby", "PHP", "C", "C++", "C#", "Kotlin", "Rust", "30+ total"],
     description:
-      "VRAgent's primary SAST scanner. Lightweight semantic analysis with 2000+ security rules. Supports OWASP Top 10, CWE Top 25, and framework-specific patterns.",
+      "VRAgent's primary SAST scanner. Lightweight semantic analysis with 2000+ security rules. Runs on all projects as fallback coverage.",
     strengths: ["30+ languages", "2000+ rules", "Taint tracking", "Low false positives", "SARIF output"],
+    smartSelection: "Always runs (universal coverage)",
     whatItFinds: [
       "SQL Injection (CWE-89)",
       "Cross-Site Scripting (CWE-79)",
@@ -272,8 +306,9 @@ const scannerDetails = [
     name: "Bandit",
     languages: ["Python"],
     description:
-      "Python-specific security linter with AST-based analysis. Excellent for detecting Python-idiomatic vulnerabilities like pickle deserialization and subprocess shell injection.",
+      "Python-specific security linter with AST-based analysis. Only runs when Python files detected in project.",
     strengths: ["Python-native AST", "Low overhead", "Confidence scoring", "Extensive rules"],
+    smartSelection: "Runs when: 'python' in detected languages",
     whatItFinds: [
       "eval() and exec() usage",
       "Hardcoded passwords",
@@ -290,8 +325,9 @@ const scannerDetails = [
     name: "ESLint Security",
     languages: ["JavaScript", "TypeScript", "JSX", "TSX"],
     description:
-      "eslint-plugin-security for JavaScript/TypeScript. Detects DOM-based XSS, prototype pollution, and Node.js-specific vulnerabilities.",
+      "eslint-plugin-security for JavaScript/TypeScript. Only runs when JS/TS files detected.",
     strengths: ["Native JS/TS", "React support", "IDE integration", "Auto-fixable rules"],
+    smartSelection: "Runs when: 'javascript' or 'typescript' in detected languages",
     whatItFinds: [
       "eval() and Function()",
       "Prototype pollution",
@@ -308,8 +344,9 @@ const scannerDetails = [
     name: "gosec",
     languages: ["Go"],
     description:
-      "Go Security Checker inspects Go source code by AST scanning. Excellent for detecting Go-specific issues like improper TLS configuration.",
+      "Go Security Checker inspects Go source code by AST scanning. Only runs when Go files detected.",
     strengths: ["Go-native AST", "Fast scanning", "Low false positives", "SARIF output"],
+    smartSelection: "Runs when: 'go' in detected languages",
     whatItFinds: [
       "Hardcoded credentials",
       "SQL injection",
@@ -326,8 +363,9 @@ const scannerDetails = [
     name: "SpotBugs + FindSecBugs",
     languages: ["Java", "Kotlin", "Scala", "Groovy"],
     description:
-      "SpotBugs with FindSecBugs plugin analyzes JVM bytecode for security issues. Detects Spring-specific vulnerabilities and OWASP risks.",
+      "SpotBugs with FindSecBugs plugin analyzes JVM bytecode. Only runs when Java/Kotlin files detected.",
     strengths: ["Bytecode analysis", "Spring support", "300+ patterns", "Maven/Gradle integration"],
+    smartSelection: "Runs when: 'java' or 'kotlin' in detected languages",
     whatItFinds: [
       "SQL/LDAP/XPath Injection",
       "Command Injection",
@@ -341,11 +379,12 @@ const scannerDetails = [
     color: "#ef4444",
   },
   {
-    name: "clang-tidy",
+    name: "clang-tidy + Cppcheck",
     languages: ["C", "C++", "Objective-C"],
     description:
-      "Clang-based linter with security-focused checks. Critical for memory safety issues that can lead to RCE or information disclosure.",
+      "Two complementary scanners: clang-tidy for compiler-integrated analysis, Cppcheck for additional coverage. Only run when C/C++ files detected.",
     strengths: ["Compiler-integrated", "Memory analysis", "Buffer checks", "Standards compliance"],
+    smartSelection: "Runs when: 'c' or 'cpp' in detected languages",
     whatItFinds: [
       "Buffer overflows (CWE-120)",
       "Format string vulnerabilities",
@@ -359,11 +398,67 @@ const scannerDetails = [
     color: "#8b5cf6",
   },
   {
+    name: "PHPCS Security + Progpilot",
+    languages: ["PHP", "PHTML"],
+    description:
+      "PHP security scanning with CodeSniffer security rules and Progpilot taint analysis. Only runs when PHP files detected.",
+    strengths: ["Taint analysis", "WordPress patterns", "Framework detection", "Code style security"],
+    smartSelection: "Runs when: 'php' in detected languages",
+    whatItFinds: [
+      "SQL Injection",
+      "XSS vulnerabilities",
+      "File inclusion",
+      "Code injection",
+      "CSRF vulnerabilities",
+      "Insecure file operations",
+      "WordPress security issues",
+      "Laravel/Symfony misconfigs",
+    ],
+    color: "#777bb4",
+  },
+  {
+    name: "Brakeman",
+    languages: ["Ruby", "Rails", "ERB"],
+    description:
+      "Ruby on Rails security scanner with framework-specific checks. Only runs when Ruby files detected.",
+    strengths: ["Rails-specific", "Fast analysis", "Low false positives", "CI integration"],
+    smartSelection: "Runs when: 'ruby' in detected languages",
+    whatItFinds: [
+      "SQL Injection",
+      "Cross-site Scripting",
+      "Mass Assignment",
+      "Command Injection",
+      "Unsafe redirects",
+      "Session settings",
+      "File access issues",
+      "Insecure dependencies",
+    ],
+    color: "#cc342d",
+  },
+  {
+    name: "Cargo Audit",
+    languages: ["Rust"],
+    description:
+      "Rust crate vulnerability scanner using RustSec Advisory Database. Only runs when Rust files detected.",
+    strengths: ["RustSec database", "Cargo.lock parsing", "CVSS scores", "Fast scanning"],
+    smartSelection: "Runs when: 'rust' in detected languages",
+    whatItFinds: [
+      "Known CVEs in dependencies",
+      "Unmaintained crates",
+      "Yanked versions",
+      "Memory safety issues",
+      "Cryptographic weaknesses",
+      "RUSTSEC advisories",
+    ],
+    color: "#dea584",
+  },
+  {
     name: "Secret Scanner",
     languages: ["All files"],
     description:
-      "Custom regex-based scanner with 50+ patterns for API keys, tokens, and credentials. High-confidence patterns minimize false positives.",
+      "Custom regex-based scanner with 50+ patterns for API keys, tokens, and credentials. Always runs on all projects.",
     strengths: ["50+ patterns", "Multi-cloud", "Private keys", "Database strings"],
+    smartSelection: "Always runs (all projects)",
     whatItFinds: [
       "AWS Access Keys & Secrets",
       "Azure/GCP Service Keys",
@@ -380,8 +475,9 @@ const scannerDetails = [
     name: "Trivy (Docker)",
     languages: ["Dockerfiles", "Container Images"],
     description:
-      "Trivy scans Docker images for OS-level vulnerabilities. Combined with custom Dockerfile linting rules for misconfigurations.",
+      "Trivy scans Docker images for OS-level vulnerabilities. Custom Dockerfile linting rules check for misconfigurations.",
     strengths: ["Image scanning", "OS vulns", "Config checks", "Fast scanning"],
+    smartSelection: "Runs when: Dockerfile or docker-compose.yml detected",
     whatItFinds: [
       "Vulnerable base images",
       "Outdated OS packages",
@@ -396,10 +492,11 @@ const scannerDetails = [
   },
   {
     name: "Checkov + tfsec (IaC)",
-    languages: ["Terraform", "Kubernetes", "CloudFormation", "Helm", "ARM"],
+    languages: ["Terraform", "Kubernetes", "CloudFormation", "Helm", "ARM", "Bicep"],
     description:
       "Infrastructure as Code scanning for cloud misconfigurations. Detects issues in Terraform, K8s manifests, and cloud templates.",
     strengths: ["Multi-framework", "Cloud-native", "Policy-as-code", "CIS benchmarks"],
+    smartSelection: "Runs when: .tf, .yaml (K8s), cloudformation, or ARM templates detected",
     whatItFinds: [
       "Public S3 buckets",
       "Unencrypted storage",
@@ -415,17 +512,20 @@ const scannerDetails = [
 ];
 
 const scannerStats = [
-  { label: "Languages", value: "30+", icon: <CodeIcon /> },
-  { label: "SAST Rules", value: "2,500+", icon: <BugReportIcon /> },
+  { label: "Languages", value: "60+", icon: <CodeIcon /> },
+  { label: "SAST Scanners", value: "11", icon: <SecurityIcon /> },
   { label: "Secret Patterns", value: "50+", icon: <VpnKeyIcon /> },
-  { label: "CVE Database", value: "250K+", icon: <SecurityIcon /> },
+  { label: "CVE Databases", value: "4", icon: <BugReportIcon /> },
 ];
 
 export default function ScanningPage() {
   const theme = useTheme();
   const navigate = useNavigate();
 
+  const pageContext = `VRAgent scanning methodology page. This page explains the comprehensive security scanning process including static analysis (SAST), dependency scanning (SCA), secret detection, infrastructure scanning, and AI-enhanced analysis. Users can learn about each scan phase and the tools used.`;
+
   return (
+    <LearnPageLayout pageTitle="VRAgent Scanning" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -486,14 +586,14 @@ export default function ScanningPage() {
           </Typography>
         </Box>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          When you initiate a scan, your code passes through <strong>9 distinct phases</strong>, with SAST, Docker, IaC, and dependency scanning running in <strong>parallel</strong> for maximum performance. The entire process typically takes <strong>2-8 minutes</strong> depending on codebase size.
+          When you initiate a scan, your code passes through <strong>10 distinct phases</strong>. The key innovation is <strong>Phase 4</strong> where SAST, Docker, IaC, and dependency scanning all run <strong>in parallel</strong> using ThreadPoolExecutor. Smart scanner selection only runs scanners for detected languages, optimizing scan time.
         </Typography>
         
         {/* Visual Pipeline */}
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, justifyContent: "center" }}>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, justifyContent: "center", mb: 3 }}>
           {scanPhases.map((phase, index) => (
             <Box key={phase.name} sx={{ display: "flex", alignItems: "center" }}>
-              <Tooltip title={`${phase.name} (${phase.duration})`}>
+              <Tooltip title={`${phase.name} (${phase.progressRange})`}>
                 <Box
                   sx={{
                     width: 44,
@@ -520,15 +620,38 @@ export default function ScanningPage() {
             </Box>
           ))}
         </Box>
+
+        {/* Key Architecture Points */}
+        <Divider sx={{ my: 2 }} />
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#10b981", 0.1) }}>
+              <Typography variant="subtitle2" fontWeight="bold" color="#10b981">⚡ Parallel Execution</Typography>
+              <Typography variant="body2">ThreadPoolExecutor runs SAST (11 scanners), Docker, IaC, and deps concurrently. ParallelPhaseTracker coordinates progress.</Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#8b5cf6", 0.1) }}>
+              <Typography variant="subtitle2" fontWeight="bold" color="#8b5cf6">🎯 Smart Selection</Typography>
+              <Typography variant="body2">Language detection determines which scanners run. No Python files? Bandit skipped. Saves time on multi-language repos.</Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#ef4444", 0.1) }}>
+              <Typography variant="subtitle2" fontWeight="bold" color="#ef4444">🔄 Embedding Reuse</Typography>
+              <Typography variant="body2">Content hash (SHA-256) enables reuse of embeddings from previous scans when code unchanged. Reduces API costs.</Typography>
+            </Box>
+          </Grid>
+        </Grid>
       </Paper>
 
       {/* Scanning Pipeline */}
       <Paper sx={{ p: 4, mb: 5, borderRadius: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 4 }}>
-          📊 The 9-Phase Scanning Pipeline
+          📊 The 10-Phase Scanning Pipeline
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Phases 1-3 run sequentially, then Phase 4 runs all scanning types in parallel (SAST, Docker, IaC, Dependencies), followed by sequential enrichment and AI analysis.
+          Phases 1-3 run sequentially (extraction → parsing → embeddings). <strong>Phase 4 runs SAST/Docker/IaC/Deps in parallel</strong> using ThreadPoolExecutor with ParallelPhaseTracker. Phases 5-10 run sequentially for dedup, enrichment, and AI analysis.
         </Typography>
 
         <Stepper orientation="vertical">
@@ -561,6 +684,12 @@ export default function ScanningPage() {
                     label={phase.duration}
                     size="small"
                     sx={{ bgcolor: alpha(phase.color, 0.1), color: phase.color, fontWeight: 600 }}
+                  />
+                  <Chip
+                    label={phase.progressRange}
+                    size="small"
+                    variant="outlined"
+                    sx={{ borderColor: alpha(phase.color, 0.5), color: phase.color, fontWeight: 500, fontSize: "0.7rem" }}
                   />
                 </Box>
               </StepLabel>
@@ -621,8 +750,11 @@ export default function ScanningPage() {
             🛠️ Security Scanner Arsenal
           </Typography>
         </Box>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          VRAgent employs 9 specialized security scanners covering SAST, secrets, Docker, and IaC. All scanners run in parallel using ThreadPoolExecutor with configurable concurrency.
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+          VRAgent employs <strong>12 specialized security scanners</strong> covering SAST, secrets, Docker, and IaC. All applicable scanners run in parallel using ThreadPoolExecutor with configurable MAX_PARALLEL_SCANNERS (default: 2× CPU cores).
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 4, p: 2, borderRadius: 2, bgcolor: alpha(theme.palette.info.main, 0.05), border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
+          💡 <strong>Smart Scanner Selection:</strong> Language detection via file extensions determines which scanners run. No Python files? Bandit is skipped. No Go files? gosec is skipped. This optimizes scan time while ensuring coverage for detected languages.
         </Typography>
 
         {scannerDetails.map((scanner) => (
@@ -641,7 +773,14 @@ export default function ScanningPage() {
               </Box>
             </AccordionSummary>
             <AccordionDetails>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>{scanner.description}</Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>{scanner.description}</Typography>
+              {scanner.smartSelection && (
+                <Box sx={{ mb: 2, p: 1.5, borderRadius: 1, bgcolor: alpha(scanner.color, 0.05), border: `1px dashed ${alpha(scanner.color, 0.3)}` }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: scanner.color }}>
+                    🎯 Smart Selection: <span style={{ fontWeight: 400 }}>{scanner.smartSelection}</span>
+                  </Typography>
+                </Box>
+              )}
               <Grid container spacing={3}>
                 <Grid item xs={12} md={4}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "success.main" }}>💪 Strengths</Typography>
@@ -707,5 +846,6 @@ export default function ScanningPage() {
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

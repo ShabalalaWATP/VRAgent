@@ -28,6 +28,7 @@ import {
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import LearnPageLayout from "../components/LearnPageLayout";
 import SearchIcon from "@mui/icons-material/Search";
 import LaunchIcon from "@mui/icons-material/Launch";
 
@@ -116,7 +117,10 @@ export default function CveCweCvssPage() {
 
   const severity = getCVSSSeverity(cvssScore);
 
+  const pageContext = `This page covers CVE/CWE/CVSS vulnerability classification systems. CVE (Common Vulnerabilities and Exposures) provides unique identifiers for security vulnerabilities. CWE (Common Weakness Enumeration) categorizes software weaknesses. CVSS (Common Vulnerability Scoring System) rates vulnerability severity. Current tab: ${selectedTab === 0 ? 'CVE' : selectedTab === 1 ? 'CWE' : 'CVSS'}. ${cweSearch ? `CWE search: ${cweSearch}.` : ''} CVSS calculator score: ${cvssScore} (${severity.label}).`;
+
   return (
+    <LearnPageLayout pageTitle="CVE/CWE/CVSS Reference" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -479,5 +483,6 @@ export default function CveCweCvssPage() {
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

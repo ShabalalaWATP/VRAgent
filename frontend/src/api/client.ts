@@ -4543,6 +4543,70 @@ export type BinaryMetadataResult = {
   // PE-specific fields
   rich_header?: RichHeader;
   imphash?: string;
+  tls_callbacks?: number[];
+  mitigations?: Record<string, any>;
+  resource_summary?: {
+    types?: Array<{
+      type: string;
+      count: number;
+      size: number;
+    }>;
+    total_count?: number;
+    total_size?: number;
+    has_manifest?: boolean;
+    has_version_info?: boolean;
+  };
+  version_info?: Record<string, string>;
+  authenticode?: {
+    signed?: boolean;
+    status?: string;
+    certificate_offset?: number;
+    directory_size?: number;
+    certificate_size?: number;
+    revision?: string;
+    certificate_type_id?: string;
+    certificate_type?: string;
+  } | null;
+  overlay?: {
+    offset: number;
+    size: number;
+  } | null;
+  pe_delay_imports?: Array<{
+    dll: string;
+    count: number;
+    imports: Array<{
+      name: string;
+      ordinal?: number;
+    }>;
+  }>;
+  pe_relocations?: {
+    total_blocks?: number;
+    total_entries?: number;
+    blocks?: Array<{
+      base_rva: number;
+      size: number;
+      entries_count: number;
+      entries: Array<{ rva: number; type: number }>;
+    }>;
+  };
+  pe_debug?: {
+    count?: number;
+    entries?: Array<{
+      type: string;
+      size: number;
+      timestamp: number;
+      signature?: string;
+      guid?: string;
+      age?: number;
+      pdb_path?: string;
+    }>;
+  };
+  pe_data_directories?: Array<{
+    name: string;
+    virtual_address: number;
+    size: number;
+  }>;
+  pe_manifest?: string | null;
   // ELF-specific fields
   interpreter?: string;
   linked_libraries?: string[];
@@ -4550,6 +4614,43 @@ export type BinaryMetadataResult = {
   stack_canary?: boolean;
   nx_enabled?: boolean;
   pie_enabled?: boolean;
+  elf_dynamic?: {
+    soname?: string | null;
+    rpath?: string | null;
+    runpath?: string | null;
+    flags?: string[];
+    flags_1?: string[];
+    needed?: string[];
+  };
+  elf_relocations?: {
+    total?: number;
+    sections?: Array<{
+      name: string;
+      relocations: number;
+      type: string;
+    }>;
+  };
+  elf_version_info?: {
+    definitions?: Array<{
+      name?: string | null;
+      index?: number | null;
+      flags?: number | null;
+    }>;
+    requirements?: Array<{
+      file?: string | null;
+      versions?: string[];
+    }>;
+  };
+  elf_build_id?: string | null;
+  elf_program_headers?: Array<{
+    type: string;
+    offset: number;
+    vaddr: number;
+    filesz: number;
+    memsz: number;
+    flags: string;
+    align: number;
+  }>;
 };
 
 // ELF Symbol
@@ -4612,6 +4713,63 @@ export type SuspiciousIndicator = {
   details?: any;
 };
 
+export type YaraMatch = {
+  rule: string;
+  tags?: string[];
+  meta?: Record<string, string>;
+  strings?: string[];
+};
+
+export type CapaSummary = {
+  rule_count?: number;
+  capabilities?: string[];
+  namespaces?: string[];
+  attacks?: string[];
+  mbc?: string[];
+  analysis_meta?: Record<string, any>;
+  error?: string;
+};
+
+export type DeobfuscatedString = {
+  method: string;
+  original: string;
+  decoded: string;
+  confidence: number;
+  key?: number;
+};
+
+export type GhidraProgramInfo = {
+  name?: string;
+  language_id?: string;
+  compiler_spec?: string;
+  processor?: string;
+  image_base?: string;
+};
+
+export type GhidraFunctionResult = {
+  name: string;
+  entry: string;
+  size: number;
+  is_thunk?: boolean;
+  called_functions?: string[];
+  decompiled?: string;
+};
+
+export type GhidraAnalysisResult = {
+  program?: GhidraProgramInfo;
+  functions_total?: number;
+  functions?: GhidraFunctionResult[];
+  error?: string;
+};
+
+export type GhidraAISummary = {
+  name?: string;
+  entry?: string;
+  size?: number;
+  summary?: string;
+  error?: string;
+};
+
 export type BinaryAnalysisResult = {
   filename: string;
   metadata: BinaryMetadataResult;
@@ -4621,6 +4779,10 @@ export type BinaryAnalysisResult = {
   exports: string[];
   secrets: SecretResult[];
   suspicious_indicators: SuspiciousIndicator[];
+  fuzzy_hashes?: Record<string, string | null>;
+  yara_matches?: YaraMatch[];
+  capa_summary?: CapaSummary | null;
+  deobfuscated_strings?: DeobfuscatedString[];
   // Enhanced ELF fields
   symbols?: ELFSymbolResult[];
   disassembly?: DisassemblyResult;
@@ -4635,6 +4797,8 @@ export type BinaryAnalysisResult = {
     error?: string;
   };
   ai_analysis?: string;
+  ghidra_analysis?: GhidraAnalysisResult;
+  ghidra_ai_summaries?: GhidraAISummary[];
   error?: string;
 };
 
@@ -5103,6 +5267,145 @@ export type ApkAnalysisResult = {
   error?: string;
 };
 
+// ============================================================================
+// Unified APK Scan Types (SSE Progress Streaming)
+// ============================================================================
+
+export type UnifiedApkScanPhase = {
+  id: string;
+  label: string;
+  description: string;
+  status: "pending" | "in_progress" | "completed" | "error";
+  progress: number;
+  details?: string;
+  started_at?: string;
+  completed_at?: string;
+};
+
+export type UnifiedApkScanProgress = {
+  scan_id: string;
+  current_phase: string;
+  overall_progress: number;
+  phases: UnifiedApkScanPhase[];
+  message: string;
+  error?: string;
+};
+
+export type UnifiedApkScanResult = {
+  scan_id: string;
+  package_name: string;
+  version_name?: string;
+  version_code?: number;
+  min_sdk?: number;
+  target_sdk?: number;
+  
+  // Quick Analysis Results
+  permissions: Array<{ name: string; is_dangerous: boolean; description: string }>;
+  dangerous_permissions_count: number;
+  components: Array<{ name: string; component_type: string; is_exported: boolean; intent_filters: string[] }>;
+  secrets: Array<{ type: string; value: string; masked_value: string; severity: string }>;
+  urls: string[];
+  native_libraries: string[];
+  security_issues: Array<{ category: string; severity: string; description: string }>;
+  
+  // JADX Decompilation Results
+  jadx_session_id?: string;
+  total_classes: number;
+  total_files: number;
+  classes_summary: Array<{
+    class_name: string;
+    package_name: string;
+    file_path: string;
+    line_count: number;
+    is_activity: boolean;
+    is_service: boolean;
+    security_issues_count: number;
+  }>;
+  source_tree?: Record<string, unknown>;
+  jadx_security_issues: Array<Record<string, unknown>>;
+  decompilation_time: number;
+  
+  // AI Analysis Results
+  ai_functionality_report?: string;
+  ai_security_report?: string;
+  ai_architecture_diagram?: string;
+  ai_attack_surface_map?: string;
+  
+  // Decompiled Source Code Security Findings (pattern-based scanners)
+  decompiled_code_findings?: Array<DecompiledCodeFinding>;
+  decompiled_code_summary?: DecompiledCodeSummary;
+  
+  // Metadata
+  scan_time: number;
+  filename: string;
+  file_size: number;
+};
+
+// Type for individual decompiled code security finding
+export type DecompiledCodeFinding = {
+  scanner: string;
+  category: string;
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  title: string;
+  description: string;
+  class_name: string;
+  file_path: string;
+  line_number: number;
+  code_snippet: string;
+  context_before: string;
+  context_after: string;
+  exploitation: string;
+  remediation: string;
+  cwe_id?: string;
+  confidence: 'high' | 'medium' | 'low';
+};
+
+// Summary of decompiled code scan
+export type DecompiledCodeSummary = {
+  total_findings: number;
+  by_severity: Record<string, number>;
+  by_scanner: Record<string, number>;
+  by_category: Record<string, number>;
+  files_scanned: number;
+};
+
+export type UnifiedApkScanEvent = 
+  | { type: "progress"; data: UnifiedApkScanProgress }
+  | { type: "result"; data: UnifiedApkScanResult }
+  | { type: "error"; error: string }
+  | { type: "cancelled" }
+  | { type: "done" };
+
+// ============================================================================
+// Unified Binary Scan Types (SSE Progress Streaming)
+// ============================================================================
+
+export type UnifiedBinaryScanPhase = {
+  id: string;
+  label: string;
+  description: string;
+  status: "pending" | "in_progress" | "completed" | "error";
+  progress: number;
+  details?: string;
+  started_at?: string;
+  completed_at?: string;
+};
+
+export type UnifiedBinaryScanProgress = {
+  scan_id: string;
+  current_phase: string;
+  overall_progress: number;
+  phases: UnifiedBinaryScanPhase[];
+  message: string;
+  error?: string;
+};
+
+export type UnifiedBinaryScanEvent =
+  | { type: "progress"; data: UnifiedBinaryScanProgress }
+  | { type: "result"; data: BinaryAnalysisResult }
+  | { type: "error"; error: string }
+  | { type: "done" };
+
 // Docker Analysis Types
 export type DockerLayerResult = {
   id: string;
@@ -5147,6 +5450,7 @@ export type ReverseEngineeringStatus = {
   apk_analysis: boolean;
   docker_analysis: boolean;
   jadx_available: boolean;
+  ghidra_available: boolean;
   docker_available: boolean;
   message: string;
 };
@@ -5418,6 +5722,227 @@ export type CodeSearchAIResponse = {
   suggestions: string[];
 };
 
+// ============================================================================
+// AI Vulnerability Hunter Types
+// ============================================================================
+
+export type VulnerabilityHuntPhase = {
+  id: string;
+  label: string;
+  description: string;
+  status: "pending" | "in_progress" | "completed" | "error";
+  progress: number;
+  details?: string;
+  started_at?: string;
+  completed_at?: string;
+};
+
+export type VulnerabilityHuntProgress = {
+  scan_id: string;
+  current_phase: string;
+  overall_progress: number;
+  phases: VulnerabilityHuntPhase[];
+  message: string;
+  targets_identified: number;
+  vulnerabilities_found: number;
+};
+
+export type VulnerabilityFinding = {
+  id: string;
+  title: string;
+  severity: "critical" | "high" | "medium" | "low";
+  category: string;
+  cwe_id?: string;
+  cvss_estimate: number;
+  function_name: string;
+  entry_address: string;
+  description: string;
+  technical_details: string;
+  proof_of_concept: string;
+  exploitation_steps: string[];
+  remediation: string;
+  confidence: number;
+  ai_reasoning: string;
+  code_snippet: string;
+};
+
+export type VulnerabilityHuntResult = {
+  scan_id: string;
+  filename: string;
+  passes_completed: number;
+  total_functions_analyzed: number;
+  targets_identified: number;
+  vulnerabilities: VulnerabilityFinding[];
+  attack_surface_summary: {
+    total_functions: number;
+    functions_with_dangerous_calls: number;
+    categories_detected: string[];
+    dangerous_function_counts: Record<string, number>;
+  };
+  hunting_log: Array<{
+    timestamp: string;
+    type: string;
+    message: string;
+    details?: Record<string, unknown>;
+  }>;
+  executive_summary: string;
+  risk_score: number;
+  recommended_focus_areas: string[];
+};
+
+export type VulnerabilityHuntEvent =
+  | { type: "progress"; data: VulnerabilityHuntProgress }
+  | { type: "result"; data: VulnerabilityHuntResult }
+  | { type: "error"; error: string }
+  | { type: "done" };
+
+export type VulnerabilityHuntOptions = {
+  focusCategories?: string[];
+  maxPasses?: number;
+  maxTargetsPerPass?: number;
+  ghidraMaxFunctions?: number;
+  ghidraDecompLimit?: number;
+};
+
+// ============================================================================
+// Binary Purpose Analysis Types ("What does this Binary do?")
+// ============================================================================
+
+export type BinaryPurposeProgress = {
+  phase: string;
+  progress: number;
+  message: string;
+};
+
+export type SuspiciousBehavior = {
+  behavior: string;
+  severity: "low" | "medium" | "high" | "critical";
+  indicator: string;
+};
+
+export type BinaryPurposeAnalysis = {
+  filename: string;
+  purpose_summary: string;
+  detailed_description: string;
+  category: string;
+  functionality: string[];
+  capabilities: Record<string, string[]>;
+  api_usage: Record<string, string[]>;
+  suspicious_behaviors: SuspiciousBehavior[];
+  data_handling: {
+    reads?: string[];
+    writes?: string[];
+    stores?: string[];
+  };
+  network_activity: {
+    has_network?: boolean;
+    protocols?: string[];
+    purposes?: string[];
+  };
+  file_operations: {
+    creates_files?: boolean;
+    modifies_files?: boolean;
+    deletes_files?: boolean;
+    targets?: string[];
+  };
+  process_operations: {
+    spawns_processes?: boolean;
+    injects_code?: boolean;
+    purposes?: string[];
+  };
+  crypto_usage: {
+    uses_crypto?: boolean;
+    algorithms?: string[];
+    purposes?: string[];
+  };
+  ui_type: string;
+  confidence: number;
+  analysis_notes: string[];
+};
+
+export type BinaryPurposeEvent =
+  | { type: "progress"; data: BinaryPurposeProgress }
+  | { type: "result"; data: BinaryPurposeAnalysis }
+  | { type: "error"; error: string }
+  | { type: "done" };
+
+// ============================================================================
+// PoC Exploit Generation Types
+// ============================================================================
+
+export type PoCExploit = {
+  vuln_id: string;
+  vuln_title: string;
+  exploit_type: string;
+  language: string;
+  code: string;
+  description: string;
+  prerequisites: string[];
+  usage_instructions: string;
+  expected_outcome: string;
+  limitations: string[];
+  safety_notes: string[];
+  tested_on: string;
+  reliability: "low" | "medium" | "high";
+  evasion_notes: string[];
+};
+
+export type PoCGenerationResult = {
+  success: boolean;
+  exploits: PoCExploit[];
+  generation_log: string[];
+  warnings: string[];
+  disclaimer: string;
+};
+
+export type PoCGenerationOptions = {
+  target_platform?: "linux" | "windows" | "both";
+  exploit_style?: "python" | "c" | "shellcode";
+  include_shellcode?: boolean;
+};
+
+// ============================================================================
+// Analysis Chat Types (reuses ChatMessage from PCAP)
+// ============================================================================
+
+export type AnalysisChatRequest = {
+  message: string;
+  conversation_history: ChatMessage[];
+  analysis_context: {
+    binary_info?: Record<string, unknown>;
+    purpose_analysis?: BinaryPurposeAnalysis | null;
+    vulnerabilities?: VulnerabilityFinding[];
+    poc_exploits?: PoCExploit[];
+    attack_surface?: Record<string, unknown>;
+    hunt_result?: Partial<VulnerabilityHuntResult>;
+  };
+};
+
+export type AnalysisChatResponse = {
+  response: string;
+  error?: string | null;
+};
+
+// ============================================================================
+// Notes Types
+// ============================================================================
+
+export type AnalysisNote = {
+  id: string;
+  content: string;
+  vulnerability_id?: string | null;
+  category: "general" | "vulnerability" | "poc" | "remediation";
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type NotesStore = {
+  session_id: string;
+  binary_name: string;
+  notes: AnalysisNote[];
+  created_at: string;
+};
+
 // Reverse Engineering API Client
 export const reverseEngineeringClient = {
   /**
@@ -5435,11 +5960,500 @@ export const reverseEngineeringClient = {
   },
 
   /**
+   * Perform unified APK scan with SSE progress streaming.
+   * Combines: manifest analysis, secret detection, JADX decompilation, and AI reports.
+   * 
+   * @param file - The APK file to analyze
+   * @param onProgress - Callback for progress updates
+   * @param onResult - Callback when scan completes with full result
+   * @param onError - Callback on error
+   * @returns Abort controller to cancel the scan
+   */
+  runUnifiedApkScan: (
+    file: File,
+    onProgress: (progress: UnifiedApkScanProgress) => void,
+    onResult: (result: UnifiedApkScanResult) => void,
+    onError: (error: string) => void,
+    onDone?: () => void,
+  ): { abort: () => void; scanId: string | null } => {
+    const abortController = new AbortController();
+    let scanId: string | null = null;
+    
+    const runScan = async () => {
+      const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      
+      const form = new FormData();
+      form.append("file", file);
+      
+      try {
+        const resp = await fetch(`${API_URL}/reverse/apk/unified-scan`, {
+          method: "POST",
+          headers,
+          body: form,
+          signal: abortController.signal,
+        });
+        
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(text || resp.statusText);
+        }
+        
+        const reader = resp.body?.getReader();
+        if (!reader) throw new Error("No response body");
+        
+        const decoder = new TextDecoder();
+        let buffer = "";
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+          
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const event = JSON.parse(line.substring(6)) as UnifiedApkScanEvent;
+                
+                if (event.type === "progress") {
+                  scanId = event.data.scan_id;
+                  onProgress(event.data);
+                } else if (event.type === "result") {
+                  onResult(event.data);
+                } else if (event.type === "error") {
+                  onError(event.error);
+                } else if (event.type === "done") {
+                  onDone?.();
+                }
+              } catch (e) {
+                console.error("Failed to parse SSE event:", e);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") {
+          onError((e as Error).message || "Scan failed");
+        }
+      }
+    };
+    
+    runScan();
+    
+    return {
+      abort: () => {
+        abortController.abort();
+        // Also cancel on server if we have a scan ID
+        if (scanId) {
+          const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+          const headers: HeadersInit = { "Content-Type": "application/json" };
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+          fetch(`${API_URL}/reverse/apk/unified-scan/${scanId}/cancel`, {
+            method: "POST",
+            headers,
+          }).catch(() => {});
+        }
+      },
+      get scanId() { return scanId; },
+    };
+  },
+
+  /**
+   * Perform unified Binary scan with SSE progress streaming.
+   */
+  runUnifiedBinaryScan: (
+    file: File,
+    options: {
+      includeAi?: boolean;
+      includeGhidra?: boolean;
+      ghidraMaxFunctions?: number;
+      ghidraDecompLimit?: number;
+      includeGhidraAi?: boolean;
+      ghidraAiMaxFunctions?: number;
+    },
+    onProgress: (progress: UnifiedBinaryScanProgress) => void,
+    onResult: (result: BinaryAnalysisResult) => void,
+    onError: (error: string) => void,
+    onDone?: () => void,
+  ): { abort: () => void; scanId: string | null } => {
+    const abortController = new AbortController();
+    let scanId: string | null = null;
+
+    const runScan = async () => {
+      const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const form = new FormData();
+      form.append("file", file);
+
+      const params = new URLSearchParams({
+        include_ai: String(options.includeAi ?? true),
+        include_ghidra: String(options.includeGhidra ?? true),
+        ghidra_max_functions: String(options.ghidraMaxFunctions ?? 200),
+        ghidra_decomp_limit: String(options.ghidraDecompLimit ?? 4000),
+        include_ghidra_ai: String(options.includeGhidraAi ?? true),
+        ghidra_ai_max_functions: String(options.ghidraAiMaxFunctions ?? 20),
+      });
+
+      try {
+        const resp = await fetch(`${API_URL}/reverse/binary/unified-scan?${params}`, {
+          method: "POST",
+          headers,
+          body: form,
+          signal: abortController.signal,
+        });
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(text || resp.statusText);
+        }
+
+        const reader = resp.body?.getReader();
+        if (!reader) throw new Error("No response body");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const event = JSON.parse(line.substring(6)) as UnifiedBinaryScanEvent;
+                if (event.type === "progress") {
+                  scanId = event.data.scan_id;
+                  onProgress(event.data);
+                } else if (event.type === "result") {
+                  onResult(event.data);
+                } else if (event.type === "error") {
+                  onError(event.error);
+                } else if (event.type === "done") {
+                  onDone?.();
+                }
+              } catch (e) {
+                console.error("Failed to parse SSE event:", e);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") {
+          onError((e as Error).message || "Scan failed");
+        }
+      }
+    };
+
+    runScan();
+
+    return {
+      abort: () => {
+        abortController.abort();
+        if (scanId) {
+          const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+          const headers: HeadersInit = { "Content-Type": "application/json" };
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+          fetch(`${API_URL}/reverse/binary/unified-scan/${scanId}/cancel`, {
+            method: "POST",
+            headers,
+          }).catch(() => {});
+        }
+      },
+      get scanId() { return scanId; },
+    };
+  },
+
+  /**
+   * Run AI-powered vulnerability hunt with SSE progress streaming.
+   * Performs multi-pass analysis: reconnaissance, AI triage, and deep analysis.
+   */
+  runVulnerabilityHunt: (
+    file: File,
+    options: VulnerabilityHuntOptions,
+    onProgress: (progress: VulnerabilityHuntProgress) => void,
+    onResult: (result: VulnerabilityHuntResult) => void,
+    onError: (error: string) => void,
+    onDone?: () => void,
+  ): { abort: () => void; scanId: string | null } => {
+    const abortController = new AbortController();
+    let scanId: string | null = null;
+
+    const runHunt = async () => {
+      const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const form = new FormData();
+      form.append("file", file);
+
+      const params = new URLSearchParams({
+        max_passes: String(options.maxPasses ?? 3),
+        max_targets_per_pass: String(options.maxTargetsPerPass ?? 20),
+        ghidra_max_functions: String(options.ghidraMaxFunctions ?? 500),
+        ghidra_decomp_limit: String(options.ghidraDecompLimit ?? 8000),
+      });
+      
+      if (options.focusCategories && options.focusCategories.length > 0) {
+        params.set("focus_categories", options.focusCategories.join(","));
+      }
+
+      try {
+        const resp = await fetch(`${API_URL}/reverse/binary/vulnerability-hunt?${params}`, {
+          method: "POST",
+          headers,
+          body: form,
+          signal: abortController.signal,
+        });
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(text || resp.statusText);
+        }
+
+        const reader = resp.body?.getReader();
+        if (!reader) throw new Error("No response body");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const event = JSON.parse(line.substring(6)) as VulnerabilityHuntEvent;
+
+                if (event.type === "progress") {
+                  scanId = event.data.scan_id;
+                  onProgress(event.data);
+                } else if (event.type === "result") {
+                  onResult(event.data);
+                } else if (event.type === "error") {
+                  onError(event.error);
+                } else if (event.type === "done") {
+                  onDone?.();
+                }
+              } catch (e) {
+                console.error("Failed to parse SSE event:", e);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") {
+          onError((e as Error).message || "Hunt failed");
+        }
+      }
+    };
+
+    runHunt();
+
+    return {
+      abort: () => {
+        abortController.abort();
+        if (scanId) {
+          const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+          const headers: HeadersInit = { "Content-Type": "application/json" };
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+          fetch(`${API_URL}/reverse/binary/vulnerability-hunt/${scanId}/cancel`, {
+            method: "POST",
+            headers,
+          }).catch(() => {});
+        }
+      },
+      get scanId() { return scanId; },
+    };
+  },
+
+  /**
+   * Analyze what a binary does ("What does this Binary do?")
+   * Returns SSE stream with progress and final analysis.
+   */
+  analyzeBinaryPurpose: (
+    file: File,
+    useGhidra: boolean = true,
+    onProgress: (progress: BinaryPurposeProgress) => void,
+    onResult: (result: BinaryPurposeAnalysis) => void,
+    onError: (error: string) => void,
+    onDone?: () => void,
+  ): { abort: () => void } => {
+    const abortController = new AbortController();
+
+    const runAnalysis = async () => {
+      const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const form = new FormData();
+      form.append("file", file);
+
+      const params = new URLSearchParams({
+        use_ghidra: String(useGhidra),
+      });
+
+      try {
+        const resp = await fetch(`${API_URL}/reverse/binary/analyze-purpose?${params}`, {
+          method: "POST",
+          headers,
+          body: form,
+          signal: abortController.signal,
+        });
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(text || resp.statusText);
+        }
+
+        const reader = resp.body?.getReader();
+        if (!reader) throw new Error("No response body");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const event = JSON.parse(line.substring(6)) as BinaryPurposeEvent;
+
+                if (event.type === "progress") {
+                  onProgress(event.data);
+                } else if (event.type === "result") {
+                  onResult(event.data);
+                } else if (event.type === "error") {
+                  onError(event.error);
+                } else if (event.type === "done") {
+                  onDone?.();
+                }
+              } catch (e) {
+                console.error("Failed to parse SSE event:", e);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") {
+          onError((e as Error).message || "Analysis failed");
+        }
+      }
+    };
+
+    runAnalysis();
+
+    return {
+      abort: () => abortController.abort(),
+    };
+  },
+
+  /**
+   * Generate a proof-of-concept exploit for a vulnerability
+   */
+  generatePoCExploit: async (
+    vulnerability: VulnerabilityFinding,
+    options: PoCGenerationOptions = {}
+  ): Promise<PoCExploit> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const resp = await fetch(`${API_URL}/reverse/binary/generate-poc`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        vulnerability,
+        target_platform: options.target_platform ?? "linux",
+        exploit_style: options.exploit_style ?? "python",
+        include_shellcode: options.include_shellcode ?? false,
+      }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.json();
+  },
+
+  /**
+   * Generate proof-of-concept exploits for multiple vulnerabilities
+   */
+  generateMultiplePoCExploits: async (
+    vulnerabilities: VulnerabilityFinding[],
+    options: PoCGenerationOptions = {}
+  ): Promise<PoCGenerationResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const resp = await fetch(`${API_URL}/reverse/binary/generate-pocs`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        vulnerabilities,
+        target_platform: options.target_platform ?? "linux",
+        exploit_style: options.exploit_style ?? "python",
+      }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.json();
+  },
+
+  /**
    * Analyze a binary executable file (EXE, ELF, DLL)
    */
   analyzeBinary: async (
     file: File,
-    includeAi: boolean = true
+    options: {
+      includeAi?: boolean;
+      includeGhidra?: boolean;
+      ghidraMaxFunctions?: number;
+      ghidraDecompLimit?: number;
+      includeGhidraAi?: boolean;
+      ghidraAiMaxFunctions?: number;
+    } = {}
   ): Promise<BinaryAnalysisResult> => {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     const headers: HeadersInit = {};
@@ -5449,7 +6463,14 @@ export const reverseEngineeringClient = {
     const form = new FormData();
     form.append("file", file);
 
-    const params = new URLSearchParams({ include_ai: String(includeAi) });
+    const params = new URLSearchParams({
+      include_ai: String(options.includeAi ?? true),
+      include_ghidra: String(options.includeGhidra ?? true),
+      ghidra_max_functions: String(options.ghidraMaxFunctions ?? 200),
+      ghidra_decomp_limit: String(options.ghidraDecompLimit ?? 4000),
+      include_ghidra_ai: String(options.includeGhidraAi ?? true),
+      ghidra_ai_max_functions: String(options.ghidraAiMaxFunctions ?? 20),
+    });
     const resp = await fetch(`${API_URL}/reverse/analyze-binary?${params}`, {
       method: "POST",
       headers,
@@ -5604,6 +6625,102 @@ export const reverseEngineeringClient = {
       method: "POST",
       headers,
       body: JSON.stringify(resultData),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.blob();
+  },
+
+  /**
+   * Export unified APK scan result to Markdown, PDF, or Word format
+   */
+  exportUnifiedApkScan: async (
+    result: UnifiedApkScanResult,
+    format: "markdown" | "pdf" | "docx"
+  ): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    // Convert unified result to the format expected by the export endpoint
+    const exportData = {
+      package_name: result.package_name,
+      version_name: result.version_name,
+      version_code: result.version_code,
+      min_sdk: result.min_sdk,
+      target_sdk: result.target_sdk,
+      permissions: result.permissions,
+      components: result.components,
+      secrets: result.secrets,
+      urls: result.urls,
+      native_libraries: result.native_libraries,
+      security_issues: result.security_issues,
+      ai_report_functionality: result.ai_functionality_report,
+      ai_report_security: result.ai_security_report,
+      ai_architecture_diagram: result.ai_architecture_diagram,
+      // JADX deep scan data
+      jadx_total_classes: result.total_classes,
+      jadx_total_files: result.total_files,
+      jadx_security_issues: result.jadx_security_issues,
+      classes_summary: result.classes_summary,
+    };
+
+    const params = new URLSearchParams({ format, report_type: "both" });
+    const resp = await fetch(`${API_URL}/reverse/apk/export-from-result?${params}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(exportData),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.blob();
+  },
+
+  /**
+   * Export binary analysis result to Markdown, PDF, or Word format
+   */
+  exportBinaryResult: async (
+    result: BinaryAnalysisResult,
+    format: "markdown" | "pdf" | "docx"
+  ): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const exportData = {
+      filename: result.filename,
+      metadata: result.metadata,
+      strings_count: result.strings_count,
+      strings_sample: result.strings_sample,
+      imports: result.imports,
+      exports: result.exports,
+      secrets: result.secrets,
+      suspicious_indicators: result.suspicious_indicators,
+      ai_analysis: result.ai_analysis,
+      ghidra_analysis: result.ghidra_analysis,
+      ghidra_ai_summaries: result.ghidra_ai_summaries,
+      error: result.error,
+    };
+
+    const params = new URLSearchParams({ format });
+    const resp = await fetch(`${API_URL}/reverse/binary/export-from-result?${params}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(exportData),
     });
 
     if (!resp.ok) {
@@ -6036,6 +7153,29 @@ export const reverseEngineeringClient = {
     if (!resp.ok) throw new Error(await resp.text());
   },
 
+  /**
+   * Generate AI-powered architecture diagram from decompiled source
+   */
+  generateArchitectureDiagram: async (
+    sessionId: string
+  ): Promise<{ architecture_diagram: string | null; generation_time: number; error?: string }> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const params = new URLSearchParams({
+      include_architecture: "true",
+      include_data_flow: "false",
+    });
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/${sessionId}/ai-diagrams?${params}`, {
+      method: "POST",
+      headers,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
   // ================== AI Code Analysis API ==================
 
   /**
@@ -6178,6 +7318,7 @@ export const reverseEngineeringClient = {
 
   /**
    * AI-powered vulnerability scan across multiple classes
+   * Note: This can take several minutes for deep scans
    */
   aiVulnScan: async (
     outputDirectory: string,
@@ -6191,17 +7332,118 @@ export const reverseEngineeringClient = {
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    const resp = await fetch(`${API_URL}/reverse/apk/decompile/ai-vulnscan`, {
+    
+    // Use AbortController with 10 minute timeout for AI scans
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutes
+    
+    try {
+      const resp = await fetch(`${API_URL}/reverse/apk/decompile/ai-vulnscan`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          output_directory: outputDirectory,
+          scan_type: scanType,
+          focus_areas: focusAreas,
+        }),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    } catch (e) {
+      clearTimeout(timeoutId);
+      if ((e as Error).name === 'AbortError') {
+        throw new Error("AI vulnerability scan timed out after 10 minutes. Try 'quick' scan type for faster results.");
+      }
+      throw e;
+    }
+  },
+
+  /**
+   * Enhanced security scan combining pattern-based, AI, and CVE analysis
+   * This is the recommended comprehensive security analysis
+   */
+  enhancedSecurityScan: async (
+    outputDirectory: string,
+    options: {
+      includeAiScan?: boolean;
+      includeCveLookup?: boolean;
+      aiScanType?: "quick" | "deep" | "focused";
+    } = {}
+  ): Promise<EnhancedSecurityResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    
+    // Use AbortController with 10 minute timeout for comprehensive scans
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutes
+    
+    try {
+      const resp = await fetch(`${API_URL}/reverse/apk/decompile/enhanced-security`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          output_directory: outputDirectory,
+          include_ai_scan: options.includeAiScan ?? true,
+          include_cve_lookup: options.includeCveLookup ?? true,
+          ai_scan_type: options.aiScanType ?? "quick",
+        }),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    } catch (e) {
+      clearTimeout(timeoutId);
+      if ((e as Error).name === 'AbortError') {
+        throw new Error("Enhanced security scan timed out after 10 minutes. Try disabling AI scan for faster results.");
+      }
+      throw e;
+    }
+  },
+
+  /**
+   * Export enhanced security results to Markdown, PDF, or Word
+   */
+  exportEnhancedSecurity: async (
+    results: EnhancedSecurityResult,
+    format: "markdown" | "pdf" | "docx",
+    options: {
+      includeCodeSnippets?: boolean;
+      includeAttackChains?: boolean;
+    } = {}
+  ): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    
+    const resp = await fetch(`${API_URL}/reverse/apk/decompile/enhanced-security/export`, {
       method: "POST",
       headers,
       body: JSON.stringify({
-        output_directory: outputDirectory,
-        scan_type: scanType,
-        focus_areas: focusAreas,
+        results,
+        format,
+        include_code_snippets: options.includeCodeSnippets ?? true,
+        include_attack_chains: options.includeAttackChains ?? true,
       }),
     });
+    
     if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return resp.blob();
   },
 
   // ================== Smali View API ==================
@@ -6397,6 +7639,40 @@ export const reverseEngineeringClient = {
     return resp.json();
   },
 
+  /**
+   * AI-enhanced manifest visualization with component analysis
+   */
+  getManifestVisualizationAI: async (file: File): Promise<ManifestVisualizationResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min timeout
+
+    try {
+      const resp = await fetch(`${API_URL}/reverse/apk/manifest-visualization/ai-enhanced`, {
+        method: "POST",
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('AI manifest analysis timed out. Try again or use basic analysis.');
+      }
+      throw error;
+    }
+  },
+
   // ================== Attack Surface Map API ==================
 
   /**
@@ -6416,7 +7692,8 @@ export const reverseEngineeringClient = {
     const timeoutId = setTimeout(() => controller.abort(), 900000);
 
     try {
-      const resp = await fetch(`${API_URL}/reverse/apk/attack-surface`, {
+      // Always include AI analysis for source code-based attack tree generation
+      const resp = await fetch(`${API_URL}/reverse/apk/attack-surface?include_ai_analysis=true`, {
         method: "POST",
         headers,
         body: formData,
@@ -6466,6 +7743,40 @@ export const reverseEngineeringClient = {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error('Obfuscation analysis timed out after 15 minutes. Please try a smaller APK.');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * AI-enhanced obfuscation analysis with code pattern recognition
+   */
+  analyzeObfuscationAI: async (file: File): Promise<ObfuscationAnalysisResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 min timeout for AI
+
+    try {
+      const resp = await fetch(`${API_URL}/reverse/apk/obfuscation-analysis/ai-enhanced`, {
+        method: "POST",
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('AI obfuscation analysis timed out. Try again or use basic analysis.');
       }
       throw error;
     }
@@ -6599,6 +7910,699 @@ export const reverseEngineeringClient = {
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
+
+  // ================== AI Chat API ==================
+
+  /**
+   * Chat with AI about vulnerability analysis results
+   */
+  chatAboutAnalysis: async (request: AnalysisChatRequest): Promise<AnalysisChatResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Notes API ==================
+
+  /**
+   * Create a new note for an analysis session
+   */
+  createNote: async (
+    sessionId: string,
+    binaryName: string,
+    content: string,
+    category: "general" | "vulnerability" | "poc" | "remediation" = "general",
+    vulnerabilityId?: string
+  ): Promise<AnalysisNote> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/notes/create`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        session_id: sessionId,
+        binary_name: binaryName,
+        content,
+        category,
+        vulnerability_id: vulnerabilityId || null,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * List all notes for an analysis session
+   */
+  listNotes: async (sessionId: string): Promise<NotesStore> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const params = new URLSearchParams({ session_id: sessionId });
+    const resp = await fetch(`${API_URL}/reverse/notes/list?${params}`, {
+      method: "POST",
+      headers,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Update an existing note
+   */
+  updateNote: async (sessionId: string, noteId: string, content: string): Promise<AnalysisNote> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/notes/update`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        session_id: sessionId,
+        note_id: noteId,
+        content,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Delete a note
+   */
+  deleteNote: async (sessionId: string, noteId: string): Promise<void> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/notes/delete`, {
+      method: "DELETE",
+      headers,
+      body: JSON.stringify({
+        session_id: sessionId,
+        note_id: noteId,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+  },
+
+  /**
+   * Export notes in specified format
+   */
+  exportNotes: async (
+    sessionId: string, 
+    format: "markdown" | "json" | "txt" = "markdown"
+  ): Promise<{ format: string; content: string; filename: string }> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/notes/export`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        session_id: sessionId,
+        format,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // AI Decompiler Enhancement
+  // ============================================================================
+
+  /**
+   * Enhance decompiled code with AI
+   * - Renames variables intelligently (var_14 → encryptionKey)
+   * - Adds inline comments explaining code blocks
+   * - Identifies data structures
+   * - Suggests original function names
+   * - Annotates security vulnerabilities
+   */
+  enhanceCode: async (
+    code: string,
+    functionName: string = "unknown",
+    binaryContext?: {
+      imports?: string[];
+      strings?: string[];
+      architecture?: string;
+    },
+    enhancementLevel: "basic" | "standard" | "full" = "full",
+    includeSecurityAnalysis: boolean = true
+  ): Promise<EnhanceCodeResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/binary/enhance-code`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        code,
+        function_name: functionName,
+        binary_context: binaryContext,
+        enhancement_level: enhancementLevel,
+        include_security_analysis: includeSecurityAnalysis,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Natural Language Binary Search
+  // ============================================================================
+
+  /**
+   * Search across decompiled functions using natural language
+   * Examples:
+   * - "Find the function that handles network authentication"
+   * - "Show me code that writes to files"
+   * - "Where is the encryption key derived?"
+   */
+  naturalLanguageSearch: async (
+    query: string,
+    functions: Array<{
+      name?: string;
+      function_name?: string;
+      code?: string;
+      decompiled?: string;
+      address?: string;
+      entry_point?: string;
+    }>,
+    maxResults: number = 10,
+    includeExplanations: boolean = true,
+    searchScope: "all" | "security" | "network" | "crypto" | "file_io" = "all"
+  ): Promise<NaturalLanguageSearchResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/binary/nl-search`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query,
+        functions,
+        max_results: maxResults,
+        include_explanations: includeExplanations,
+        search_scope: searchScope,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get AI-powered function rename suggestion
+   */
+  smartRename: async (
+    functionCode: string,
+    currentName: string = "FUN_00401000",
+    contextHints?: string
+  ): Promise<SmartRenameResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const params = new URLSearchParams({
+      function_code: functionCode,
+      current_name: currentName,
+    });
+    if (contextHints) {
+      params.append("context_hints", contextHints);
+    }
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/binary/smart-rename?${params}`, {
+      method: "POST",
+      headers,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Simulate an attack on a discovered vulnerability
+   * Returns step-by-step attack simulation with register/memory states
+   */
+  simulateAttack: async (
+    vulnerability: Record<string, unknown>,
+    targetCode?: string,
+    binaryContext?: { architecture?: string; imports?: string[] },
+    simulationDepth: "quick" | "standard" | "comprehensive" = "standard"
+  ): Promise<AttackSimulationResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/binary/simulate-attack`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        vulnerability,
+        target_code: targetCode,
+        binary_context: binaryContext,
+        simulation_depth: simulationDepth,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Perform symbolic execution trace analysis on decompiled code
+   * Returns control flow, paths, taint analysis, and vulnerability assessment
+   */
+  symbolicTrace: async (
+    code: string,
+    functionName?: string,
+    entryPoint?: string,
+    options?: {
+      inputSources?: string[];
+      dangerousSinks?: string[];
+      maxPaths?: number;
+      maxDepth?: number;
+      binaryContext?: Record<string, unknown>;
+    }
+  ): Promise<SymbolicTraceResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/binary/symbolic-trace`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        code,
+        function_name: functionName || "unknown",
+        entry_point: entryPoint,
+        input_sources: options?.inputSources,
+        dangerous_sinks: options?.dangerousSinks,
+        max_paths: options?.maxPaths,
+        max_depth: options?.maxDepth,
+        binary_context: options?.binaryContext,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Enhance decompiled code with symbolic execution data integration
+   * Combines standard enhancement with taint annotations and path info
+   */
+  enhanceCodeWithSymbolic: async (
+    code: string,
+    functionName?: string,
+    symbolicTrace?: SymbolicTraceResponse | null,
+    options?: {
+      binaryContext?: Record<string, unknown>;
+      enhancementLevel?: "basic" | "standard" | "full";
+    }
+  ): Promise<SymbolicEnhancedCodeResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/binary/enhance-code-symbolic`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        code,
+        function_name: functionName || "unknown",
+        symbolic_trace: symbolicTrace,
+        binary_context: options?.binaryContext,
+        enhancement_level: options?.enhancementLevel || "full",
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+// ============================================================================
+// AI Enhancement Types
+// ============================================================================
+
+export type EnhancedVariable = {
+  original_name: string;
+  suggested_name: string;
+  inferred_type: string;
+  confidence: number;
+  reasoning: string;
+};
+
+export type EnhancedCodeBlock = {
+  start_line: number;
+  end_line: number;
+  purpose: string;
+  security_notes?: string | null;
+};
+
+export type DataStructure = {
+  name: string;
+  inferred_type: string;
+  fields: Array<{ name: string; type: string }>;
+  usage_context: string;
+};
+
+export type SecurityAnnotation = {
+  line: number;
+  severity: "info" | "low" | "medium" | "high" | "critical";
+  issue_type: string;
+  description: string;
+  cwe_id?: string | null;
+};
+
+export type EnhanceCodeResponse = {
+  original_code: string;
+  enhanced_code: string;
+  suggested_function_name: string;
+  function_purpose: string;
+  variables: EnhancedVariable[];
+  code_blocks: EnhancedCodeBlock[];
+  data_structures: DataStructure[];
+  security_annotations: SecurityAnnotation[];
+  complexity_score: number;
+  readability_improvement: number;
+  inline_comments_added: number;
+  api_calls_identified: Array<{ name: string; purpose: string; line?: number }>;
+};
+
+export type SearchMatch = {
+  function_name: string;
+  address?: string | null;
+  relevance_score: number;
+  match_reason: string;
+  code_snippet: string;
+  key_indicators: string[];
+  security_relevant: boolean;
+  category: string;
+};
+
+export type NaturalLanguageSearchResponse = {
+  query: string;
+  interpreted_query: string;
+  total_functions_searched: number;
+  matches: SearchMatch[];
+  search_suggestions: string[];
+  categories_found: Record<string, number>;
+};
+
+export type SmartRenameResponse = {
+  suggested_name: string;
+  confidence: number;
+  reasoning: string;
+  alternative_names: string[];
+  detected_purpose: string;
+  naming_convention: string;
+};
+
+// ============================================================================
+// Live Attack Simulation Types
+// ============================================================================
+
+export type RegisterState = {
+  name: string;
+  value: string;
+  description?: string | null;
+  is_controlled: boolean;
+};
+
+export type MemoryRegion = {
+  address: string;
+  size: number;
+  label: string;
+  state: "normal" | "corrupted" | "overwritten" | "controlled";
+  content_preview?: string | null;
+};
+
+export type AttackStep = {
+  step_number: number;
+  phase: "setup" | "trigger" | "corruption" | "control" | "payload" | "execution";
+  title: string;
+  description: string;
+  technical_detail: string;
+  code_location?: string | null;
+  registers: RegisterState[];
+  memory_regions: MemoryRegion[];
+  attacker_input?: string | null;
+  visual_indicator: "info" | "warning" | "danger" | "success";
+};
+
+export type ExploitPrimitive = {
+  name: string;
+  description: string;
+  prerequisites: string[];
+  achieved_at_step: number;
+};
+
+export type AttackMitigation = {
+  name: string;
+  description: string;
+  effectiveness: "blocks" | "hinders" | "ineffective";
+  bypass_possible: boolean;
+  bypass_technique?: string | null;
+};
+
+export type AttackSimulationResponse = {
+  vulnerability_title: string;
+  vulnerability_type: string;
+  severity: string;
+  
+  attack_summary: string;
+  success_probability: number;
+  required_conditions: string[];
+  
+  total_steps: number;
+  steps: AttackStep[];
+  
+  exploit_primitives: ExploitPrimitive[];
+  final_impact: string;
+  
+  mitigations: AttackMitigation[];
+  detection_opportunities: string[];
+  
+  real_world_examples: string[];
+  cve_references: string[];
+  difficulty_rating: "trivial" | "easy" | "moderate" | "hard" | "expert";
+};
+
+// ============================================================================
+// Symbolic Execution Trace Types
+// ============================================================================
+
+export type PathConstraint = {
+  variable: string;
+  operator: "==" | "!=" | ">" | "<" | ">=" | "<=" | "contains" | "matches";
+  value: string;
+  description: string;
+  is_satisfiable: boolean;
+};
+
+export type TaintedVariable = {
+  name: string;
+  source: string;
+  taint_type: "direct" | "derived" | "partial";
+  propagation_chain: string[];
+  reaches_sink: boolean;
+  sink_name?: string | null;
+};
+
+export type BasicBlock = {
+  id: string;
+  start_address: string;
+  end_address: string;
+  instructions_count: number;
+  code_preview: string;
+  is_entry: boolean;
+  is_exit: boolean;
+  is_reachable: boolean;
+  predecessors: string[];
+  successors: string[];
+  dominates: string[];
+  tainted_at_entry: string[];
+};
+
+export type ExecutionPath = {
+  path_id: string;
+  blocks: string[];
+  constraints: PathConstraint[];
+  probability: number;
+  is_feasible: boolean;
+  leads_to_vulnerability: boolean;
+  vulnerability_type?: string | null;
+  tainted_at_end: TaintedVariable[];
+  path_description: string;
+  interesting_operations: string[];
+};
+
+export type SymbolicState = {
+  location: string;
+  variables: Record<string, string>;
+  memory_regions: Record<string, string>;
+  constraints: PathConstraint[];
+  tainted: string[];
+};
+
+export type DangerousSink = {
+  function_name: string;
+  address: string;
+  sink_type: "memory" | "command" | "format" | "file" | "network";
+  severity: "critical" | "high" | "medium" | "low";
+  tainted_arguments: number[];
+  reachable_from: string[];
+  description: string;
+  cwe_id?: string | null;
+};
+
+export type SymbolicTraceRequest = {
+  code: string;
+  function_name?: string;
+  entry_point?: string | null;
+  input_sources?: string[];
+  dangerous_sinks?: string[];
+  max_paths?: number;
+  max_depth?: number;
+  binary_context?: Record<string, unknown> | null;
+};
+
+export type SymbolicTraceResponse = {
+  function_name: string;
+  analysis_summary: string;
+  
+  // Control Flow
+  total_basic_blocks: number;
+  basic_blocks: BasicBlock[];
+  entry_block: string;
+  exit_blocks: string[];
+  
+  // Paths
+  total_paths_analyzed: number;
+  feasible_paths: number;
+  vulnerable_paths: number;
+  paths: ExecutionPath[];
+  
+  // Taint Analysis
+  input_sources_found: string[];
+  tainted_variables: TaintedVariable[];
+  dangerous_sinks_reached: DangerousSink[];
+  taint_summary: string;
+  
+  // Symbolic States
+  symbolic_states: SymbolicState[];
+  
+  // Security Assessment
+  reachability_score: number;
+  vulnerability_score: number;
+  recommended_focus_areas: string[];
+  
+  // Integration data for AI Decompiler
+  path_annotations: Record<string, string>;
+  taint_annotations: Record<string, string>;
+};
+
+// Enhanced Code with Symbolic Integration
+export type SymbolicEnhanceCodeRequest = {
+  code: string;
+  function_name?: string;
+  symbolic_trace?: SymbolicTraceResponse | null;
+  binary_context?: Record<string, unknown> | null;
+  enhancement_level?: "basic" | "standard" | "full";
+};
+
+export type TaintAnnotation = {
+  line: number;
+  variable: string;
+  taint_source: string;
+  taint_type: string;
+  annotation: string;
+};
+
+export type PathAnnotation = {
+  line: number;
+  paths: string[];
+  constraint: string;
+  annotation: string;
+};
+
+export type ConstraintAnnotation = {
+  block: string;
+  constraint: string;
+  satisfiable: boolean;
+  annotation: string;
+};
+
+export type SymbolicEnhancedCodeResponse = {
+  original_code: string;
+  enhanced_code: string;
+  suggested_function_name: string;
+  function_purpose: string;
+  
+  // Standard enhancements
+  variables: EnhancedVariable[];
+  code_blocks: EnhancedCodeBlock[];
+  data_structures: DataStructure[];
+  security_annotations: SecurityAnnotation[];
+  
+  // Symbolic execution enhancements
+  taint_annotations: TaintAnnotation[];
+  path_annotations: PathAnnotation[];
+  reachability_info: Record<string, boolean>;
+  constraint_annotations: ConstraintAnnotation[];
+  
+  // Summary
+  complexity_score: number;
+  vulnerability_paths_highlighted: number;
+  tainted_sinks_marked: number;
+  integration_quality: "poor" | "fair" | "good" | "excellent" | "unknown";
 };
 
 // Report types
@@ -6655,6 +8659,8 @@ export interface SaveREReportRequest {
   ai_functionality_report?: string;
   ai_security_report?: string;
   ai_privacy_report?: string;
+  ai_architecture_diagram?: string;
+  ai_attack_surface_map?: string;
   ai_threat_model?: Record<string, unknown>;
   ai_vuln_scan_result?: Record<string, unknown>;
   ai_chat_history?: Array<Record<string, unknown>>;
@@ -6721,6 +8727,8 @@ export interface REReportDetail extends REReportSummary {
   ai_functionality_report?: string;
   ai_security_report?: string;
   ai_privacy_report?: string;
+  ai_architecture_diagram?: string;
+  ai_attack_surface_map?: string;
   ai_threat_model?: Record<string, unknown>;
   ai_vuln_scan_result?: Record<string, unknown>;
   ai_chat_history?: Array<Record<string, unknown>>;
@@ -7040,6 +9048,90 @@ export type AIVulnScanResult = {
 };
 
 // ============================================================================
+// Enhanced Security Analysis Types (Combined Pattern + AI + CVE)
+// ============================================================================
+
+export type EnhancedSecurityFinding = {
+  source: "pattern" | "ai" | "cve";
+  detection_method: string;
+  title: string;
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  category: string;
+  affected_class: string;
+  affected_method?: string;
+  description: string;
+  code_snippet?: string;
+  line_number?: number;
+  impact?: string;
+  remediation?: string;
+  cve_id?: string;
+  cvss_score?: number;
+  cwe_id?: string;
+  affected_library?: string;
+  attack_vector?: string;
+  exploitation_potential?: string;
+  references?: string[];
+};
+
+export type EnhancedAttackChain = {
+  name: string;
+  steps: string[];
+  impact: string;
+  likelihood: "high" | "medium" | "low";
+  classes_involved: string[];
+};
+
+export type EnhancedSecurityRiskSummary = {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+};
+
+export type EnhancedSecurityMetadata = {
+  pattern_scan_enabled: boolean;
+  ai_scan_enabled: boolean;
+  cve_lookup_enabled: boolean;
+  classes_scanned: number;
+  libraries_detected: number;
+  cves_found: number;
+  ai_scan_error?: string;
+  cve_lookup_error?: string;
+};
+
+export type OffensivePlanSummary = {
+  threat_assessment: string;
+  attack_surface_summary: string;
+  primary_attack_vectors: Array<{
+    vector: string;
+    description: string;
+    prerequisites: string;
+    likelihood: "high" | "medium" | "low";
+    impact: string;
+  }>;
+  recommended_test_scenarios: string[];
+  priority_targets: string[];
+  risk_rating: "critical" | "high" | "medium" | "low";
+  confidence_level: "high" | "medium" | "low";
+};
+
+export type EnhancedSecurityResult = {
+  pattern_findings: EnhancedSecurityFinding[];
+  ai_findings: EnhancedSecurityFinding[];
+  cve_findings: EnhancedSecurityFinding[];
+  combined_findings: EnhancedSecurityFinding[];
+  attack_chains: EnhancedAttackChain[];
+  risk_summary: EnhancedSecurityRiskSummary;
+  overall_risk: "critical" | "high" | "medium" | "low" | "none";
+  recommendations: string[];
+  executive_summary: string;
+  analysis_metadata: EnhancedSecurityMetadata;
+  offensive_plan_summary?: OffensivePlanSummary | null;
+  error?: string;
+};
+
+// ============================================================================
 // Smali View Types
 // ============================================================================
 
@@ -7263,6 +9355,11 @@ export type ManifestVisualizationResult = {
   main_activity?: string;
   deep_link_schemes: string[];
   mermaid_diagram: string;
+  // AI-enhanced fields
+  ai_analysis?: string;
+  component_purposes?: Record<string, string>;
+  security_assessment?: string;
+  intent_filter_analysis?: Record<string, unknown>;
 };
 
 // ============================================================================
@@ -7392,6 +9489,11 @@ export type ObfuscationAnalysisResult = {
   
   analysis_time: number;
   warnings: string[];
+  
+  // AI-enhanced fields
+  ai_analysis_summary?: string;
+  reverse_engineering_difficulty?: string;
+  ai_recommended_approach?: string;
 };
 
 // ============================================================================

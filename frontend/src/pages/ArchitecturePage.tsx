@@ -24,6 +24,7 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -70,11 +71,11 @@ const backendServices: ServiceInfo[] = [
     file: "scan_service.py",
     description: "Orchestrates the entire scanning pipeline with parallel phase execution using ThreadPoolExecutor.",
     responsibilities: [
-      "Manages the 9-phase scanning workflow with progress tracking",
-      "Runs SAST, Docker, IaC, and dependency scanning in parallel",
-      "Coordinates embedding generation with reuse from previous scans",
-      "Handles cross-scanner deduplication of findings",
-      "Broadcasts real-time progress via WebSocket",
+      "Manages the 14-phase scanning workflow with progress tracking",
+      "Runs SAST, Docker, IaC, and dependency scanning in parallel (Phase 4-7)",
+      "Smart scanner selection based on detected languages",
+      "ParallelPhaseTracker coordinates concurrent phase progress",
+      "Broadcasts real-time progress via WebSocket + Redis pub/sub",
     ],
     dependencies: ["codebase_service", "dependency_service", "semgrep_service", "docker_scan_service", "iac_scan_service"],
     color: "#3b82f6",
@@ -98,7 +99,7 @@ const backendServices: ServiceInfo[] = [
     description: "Generates vector embeddings using Gemini for semantic code search.",
     responsibilities: [
       "Uses gemini-embedding-001 model (768 dimensions)",
-      "Content hash comparison enables embedding reuse",
+      "SHA-256 content hashing enables embedding reuse",
       "Batch processing for efficient API usage",
       "Stored in PostgreSQL with pgvector extension",
       "Can be disabled via SKIP_EMBEDDINGS for faster scans",
@@ -239,13 +240,13 @@ const backendServices: ServiceInfo[] = [
   {
     name: "AI Analysis Service",
     file: "ai_analysis_service.py",
-    description: "Heuristic + LLM analysis for false positives, severity adjustment, and summaries.",
+    description: "Three-stage analysis: heuristics, Agentic corroboration, then LLM for complex cases.",
     responsibilities: [
-      "Heuristic patterns detect obvious false positives",
-      "Severity adjustment for context (auth, admin, internal)",
-      "Attack chain discovery from related findings",
-      "LLM analysis limited to MAX_FINDINGS=50",
-      "Background summary generation after scan completes",
+      "Heuristic patterns detect obvious false positives (test files, mock code)",
+      "Agentic AI corroboration cross-references scanner + agentic findings",
+      "Severity adjustment for context (auth, admin, ORM, parameterized queries)",
+      "8 pre-defined attack chain patterns for multi-vuln exploits",
+      "LLM analysis limited to MAX_FINDINGS=50 most critical",
     ],
     color: "#8b5cf6",
   },
@@ -379,7 +380,18 @@ export default function ArchitecturePage() {
     </Box>
   );
 
+  const pageContext = `This page covers VRAgent's system architecture including:
+- High-level architecture overview and design principles
+- Frontend components built with React, TypeScript, and MUI
+- Backend services using FastAPI, Python, and async patterns
+- Database architecture with PostgreSQL, Redis, and Elasticsearch
+- Security architecture and authentication flows
+- Integration patterns and API design
+- Deployment options and containerization
+- Interactive component diagrams for each layer`;
+
   return (
+    <LearnPageLayout pageTitle="VRAgent Architecture" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
@@ -562,25 +574,25 @@ export default function ArchitecturePage() {
             {
               title: "Real-time Updates",
               icon: <WebhookIcon />,
-              description: "WebSocket connections provide live scan progress. Redis pub/sub enables worker-to-API communication.",
+              description: "WebSocket + Redis pub/sub provide live progress. ParallelPhaseTracker coordinates concurrent phase updates.",
               color: "#f59e0b",
             },
             {
-              title: "AI-Augmented Analysis",
+              title: "Three-Stage AI Analysis",
               icon: <PsychologyIcon />,
-              description: "Google Gemini generates exploit narratives and code summaries. Results are cached to minimize API costs.",
+              description: "Heuristics → Agentic corroboration → LLM (Gemini). Cross-references SAST findings with deep AI scan to reduce false positives.",
               color: "#8b5cf6",
             },
             {
-              title: "Multi-Scanner Pipeline",
+              title: "Smart Scanner Selection",
               icon: <SecurityIcon />,
-              description: "Language-specific scanners run in parallel for comprehensive coverage. Results are normalized into a common format.",
+              description: "Language detection triggers appropriate scanners. 12+ scanners run in parallel via ThreadPoolExecutor (2× CPU cores).",
               color: "#ef4444",
             },
             {
-              title: "Vector Database Ready",
+              title: "Embedding Reuse",
               icon: <StorageIcon />,
-              description: "PostgreSQL with pgvector extension enables semantic search over code. Embeddings are generated via Gemini.",
+              description: "SHA-256 content hashing enables embedding reuse between scans. pgvector stores 768-dim Gemini embeddings.",
               color: "#336791",
             },
           ].map((item) => (
@@ -619,16 +631,17 @@ export default function ArchitecturePage() {
               { step: 1, action: "User clicks 'Start Scan'", component: "Frontend", detail: "POST /projects/{id}/scan" },
               { step: 2, action: "API creates ScanRun record", component: "Backend", detail: "Status: PENDING" },
               { step: 3, action: "Job enqueued to Redis", component: "Backend → Redis", detail: "RQ job with scan_run_id" },
-              { step: 4, action: "Worker picks up job", component: "Worker", detail: "Starts 9-phase pipeline" },
-              { step: 5, action: "Code extracted & chunked", component: "Worker", detail: "Zip bomb + path traversal protection" },
-              { step: 6, action: "Embeddings generated (or reused)", component: "Worker → Gemini", detail: "768-dim vectors via gemini-embedding-001" },
-              { step: 7, action: "Parallel scan phases execute", component: "Worker", detail: "SAST + Docker + IaC + Deps concurrently" },
-              { step: 8, action: "Findings deduplicated", component: "Worker", detail: "Cross-scanner merge" },
-              { step: 9, action: "CVE lookup + enrichment", component: "Worker → OSV/NVD/EPSS/KEV", detail: "Parallel enrichment for all vulns" },
-              { step: 10, action: "Reachability analysis", component: "Worker", detail: "Import analysis for unused deps" },
-              { step: 11, action: "AI analysis (heuristics + LLM)", component: "Worker → Gemini", detail: "Top 50 findings to LLM" },
-              { step: 12, action: "Scan complete, webhooks fired", component: "Worker", detail: "Status: COMPLETED" },
-              { step: 13, action: "Background summary generation", component: "Worker → Gemini", detail: "Async after scan for instant exports" },
+              { step: 4, action: "Worker picks up job", component: "Worker", detail: "Starts 14-phase pipeline" },
+              { step: 5, action: "Phase 1: Extract archive (0-5%)", component: "Worker", detail: "Zip bomb + path traversal protection" },
+              { step: 6, action: "Phase 2: Parse & chunk files (5-30%)", component: "Worker", detail: "Parallel file processing with ThreadPoolExecutor" },
+              { step: 7, action: "Phase 3: Generate embeddings (30-45%)", component: "Worker → Gemini", detail: "SHA-256 hash reuse, gemini-embedding-001" },
+              { step: 8, action: "Phase 4-7: Parallel scan phases (45-72%)", component: "Worker", detail: "SAST + Docker + IaC + Deps concurrently" },
+              { step: 9, action: "Phase 8: Deduplicate findings (70-72%)", component: "Worker", detail: "Cross-scanner merge" },
+              { step: 10, action: "Phase 9-10: Transitive deps (72-77%)", component: "Worker", detail: "Lock file parsing, dependency trees" },
+              { step: 11, action: "Phase 11: CVE + parallel enrichment (78-88%)", component: "Worker → OSV/NVD/EPSS/KEV", detail: "Parallel API calls for all vulns" },
+              { step: 12, action: "Phase 12: Reachability analysis (84-86%)", component: "Worker", detail: "Import analysis for unused deps" },
+              { step: 13, action: "Phase 13: AI analysis (90-94%)", component: "Worker → Gemini", detail: "Heuristics + Agentic corroboration + LLM" },
+              { step: 14, action: "Phase 14: Generate report (94-100%)", component: "Worker", detail: "Risk score, findings saved, webhooks fired" },
             ].map((item) => (
               <Box key={item.step} sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
                 <Chip
@@ -1026,36 +1039,40 @@ async def run_scanners(project_path: str, languages: set[str]):
       {/* Scan Pipeline */}
       <TabPanel value={tabValue} index={5}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-          The 9-Phase Scan Pipeline
+          The 14-Phase Scan Pipeline
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          The pipeline uses parallel execution where possible. Phases 1-3 are sequential, Phase 4 runs all scanning types concurrently, then phases 5-9 are sequential with parallel API calls.
+          The pipeline uses parallel execution where possible. Phases 1-3 are sequential, Phases 4-7 run all scanning types concurrently, then phases 8-14 run with parallel API calls for enrichment.
         </Typography>
 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {[
-            { phase: 1, name: "Code Acquisition", desc: "Clone repo or extract archive with zip bomb + path traversal protection", duration: "5-30s", service: "git_service / codebase_service" },
-            { phase: 2, name: "Code Parsing & Chunking", desc: "Stream parse files, create semantic chunks (500 tokens max)", duration: "10-60s", service: "codebase_service" },
-            { phase: 3, name: "Embedding Generation", desc: "gemini-embedding-001 (768 dims), reuses unchanged embeddings", duration: "20-60s", service: "embedding_service" },
-            { phase: 4, name: "Parallel Scan Phases", desc: "SAST + Docker + IaC + Dependencies run concurrently via ThreadPoolExecutor", duration: "60-300s", service: "scan_service → all scanners" },
-            { phase: 5, name: "Cross-Scanner Deduplication", desc: "Merge same file+line+type findings from multiple scanners", duration: "2-5s", service: "deduplication_service" },
-            { phase: 6, name: "Transitive Dependency Analysis", desc: "Parse lock files to build full dependency trees", duration: "5-15s", service: "transitive_deps_service" },
-            { phase: 7, name: "CVE Lookup + Parallel Enrichment", desc: "OSV.dev → then NVD + EPSS + CISA KEV in parallel", duration: "30-90s", service: "cve_service → nvd/epss_service" },
-            { phase: 8, name: "Reachability Analysis", desc: "Check if vulnerable deps are actually imported/used", duration: "10-30s", service: "reachability_service" },
-            { phase: 9, name: "AI Analysis", desc: "Heuristics first, then LLM for top 50 findings + exploit templates", duration: "30-120s", service: "ai_analysis_service" },
-          ].map((phase, i) => (
+            { phase: 1, name: "Code Extraction", desc: "Extract archive with zip bomb (500MB) + path traversal protection", duration: "5-30s", service: "codebase_service", progress: "0-5%", parallel: false },
+            { phase: 2, name: "File Parsing & Chunking", desc: "Parallel file processing with ThreadPoolExecutor (2× CPU cores)", duration: "10-60s", service: "codebase_service", progress: "5-30%", parallel: false },
+            { phase: 3, name: "Embedding Generation", desc: "gemini-embedding-001 (768 dims), SHA-256 hash enables reuse", duration: "20-60s", service: "embedding_service", progress: "30-45%", parallel: false },
+            { phase: "4-7", name: "Parallel Scan Phases", desc: "SAST + Docker + IaC + Dependencies run concurrently via ParallelPhaseTracker", duration: "60-300s", service: "scan_service → all scanners", progress: "45-72%", parallel: true },
+            { phase: 8, name: "Cross-Scanner Deduplication", desc: "Merge same file+line+type findings from multiple scanners", duration: "2-5s", service: "deduplication_service", progress: "70-72%", parallel: false },
+            { phase: 9, name: "Save Dependencies", desc: "Store parsed dependencies from parallel phase", duration: "1-2s", service: "dependency_service", progress: "72-75%", parallel: false },
+            { phase: 10, name: "Transitive Analysis", desc: "Parse lock files (package-lock, yarn.lock, poetry.lock, etc.)", duration: "5-15s", service: "transitive_deps_service", progress: "75-77%", parallel: false },
+            { phase: 11, name: "CVE Lookup", desc: "OSV.dev batch queries (100 deps/request) for all dependencies", duration: "10-30s", service: "cve_service", progress: "78-82%", parallel: false },
+            { phase: "11b", name: "Transitive Enrichment", desc: "Map CVEs to direct vs transitive dependencies", duration: "2-5s", service: "transitive_deps_service", progress: "82-84%", parallel: false },
+            { phase: "11c", name: "Reachability Analysis", desc: "Check if vulnerable deps are actually imported/used in code", duration: "10-30s", service: "reachability_service", progress: "84-86%", parallel: false },
+            { phase: 12, name: "Parallel Enrichment", desc: "EPSS + NVD + CISA KEV in parallel for all CVEs", duration: "20-60s", service: "epss_service, nvd_service", progress: "86-88%", parallel: true },
+            { phase: 13, name: "AI Analysis", desc: "Heuristics → Agentic corroboration → LLM (top 50) + attack chains", duration: "30-120s", service: "ai_analysis_service", progress: "90-94%", parallel: false },
+            { phase: 14, name: "Report Generation", desc: "Risk score calculation, findings saved, webhooks fired", duration: "5-15s", service: "report_service", progress: "94-100%", parallel: false },
+          ].map((phase, i, arr) => (
             <Paper
-              key={phase.phase}
+              key={String(phase.phase)}
               sx={{
                 p: 3,
                 borderRadius: 3,
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+                border: `1px solid ${alpha(phase.parallel ? "#10b981" : theme.palette.primary.main, 0.2)}`,
                 display: "flex",
                 alignItems: "flex-start",
                 gap: 3,
                 transition: "all 0.2s",
                 "&:hover": {
-                  borderColor: theme.palette.primary.main,
+                  borderColor: phase.parallel ? "#10b981" : theme.palette.primary.main,
                   transform: "translateX(8px)",
                 },
               }}
@@ -1065,35 +1082,36 @@ async def run_scanners(project_path: str, languages: set[str]):
                   width: 48,
                   height: 48,
                   borderRadius: "50%",
-                  bgcolor: phase.phase === 4 ? alpha("#10b981", 0.15) : alpha(theme.palette.primary.main, 0.15),
+                  bgcolor: phase.parallel ? alpha("#10b981", 0.15) : alpha(theme.palette.primary.main, 0.15),
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
-                <Typography variant="h6" sx={{ fontWeight: 800, color: phase.phase === 4 ? "#10b981" : "primary.main" }}>
+                <Typography variant="body1" sx={{ fontWeight: 800, color: phase.parallel ? "#10b981" : "primary.main", fontSize: "0.9rem" }}>
                   {phase.phase}
                 </Typography>
               </Box>
               <Box sx={{ flex: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, fontSize: "1rem" }}>
                   {phase.name}
-                  {phase.phase === 4 && <Chip label="PARALLEL" size="small" sx={{ ml: 1, bgcolor: "#10b981", color: "white", fontSize: "0.65rem" }} />}
+                  {phase.parallel && <Chip label="PARALLEL" size="small" sx={{ ml: 1, bgcolor: "#10b981", color: "white", fontSize: "0.6rem" }} />}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   {phase.desc}
                 </Typography>
                 <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                  <Chip label={phase.duration} size="small" sx={{ fontSize: "0.7rem" }} />
+                  <Chip label={phase.progress} size="small" sx={{ fontSize: "0.65rem", bgcolor: alpha("#6366f1", 0.1) }} />
+                  <Chip label={phase.duration} size="small" sx={{ fontSize: "0.65rem" }} />
                   <Chip
                     label={phase.service}
                     size="small"
-                    sx={{ fontSize: "0.7rem", fontFamily: "monospace", bgcolor: alpha(theme.palette.primary.main, 0.1) }}
+                    sx={{ fontSize: "0.65rem", fontFamily: "monospace", bgcolor: alpha(theme.palette.primary.main, 0.1) }}
                   />
                 </Box>
               </Box>
-              {i < 8 && (
+              {i < arr.length - 1 && (
                 <Typography
                   sx={{
                     color: "text.disabled",
@@ -1159,5 +1177,6 @@ async def run_scanners(project_path: str, languages: set[str]):
         </Box>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

@@ -20,6 +20,7 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import GpsFixedIcon from "@mui/icons-material/GpsFixed";
@@ -265,7 +266,10 @@ export default function KillChainPage() {
   const navigate = useNavigate();
   const [expandedPhase, setExpandedPhase] = useState<number | false>(false);
 
+  const pageContext = `Cyber Kill Chain educational page. This page teaches the Lockheed Martin Cyber Kill Chain framework including all 7 phases: Reconnaissance, Weaponization, Delivery, Exploitation, Installation, Command & Control, and Actions on Objectives. It covers attack techniques and defensive measures for each phase.`;
+
   return (
+    <LearnPageLayout pageTitle="Cyber Kill Chain" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -544,5 +548,6 @@ export default function KillChainPage() {
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

@@ -49,6 +49,10 @@ pyshark>=0.6
 pefile>=2023.2.7
 pyelftools>=0.31
 capstone>=5.0.0
+lief>=0.15.1
+yara-python>=4.5.0
+# ssdeep>=3.4  # Requires libfuzzy-dev, optional
+# tlsh>=4.8.2  # Build issues, optional
 
 # APK analysis
 androguard>=3.4.0

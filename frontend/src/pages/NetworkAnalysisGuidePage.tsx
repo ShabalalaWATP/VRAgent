@@ -22,6 +22,7 @@ import {
   keyframes,
 } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 import HubIcon from "@mui/icons-material/Hub";
 import RadarIcon from "@mui/icons-material/Radar";
 import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
@@ -48,6 +49,8 @@ import LockIcon from "@mui/icons-material/Lock";
 import DnsIcon from "@mui/icons-material/Dns";
 import RouteIcon from "@mui/icons-material/Route";
 import ApiIcon from "@mui/icons-material/Api";
+import BoltIcon from "@mui/icons-material/Bolt";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 
 // Animations
 const float = keyframes`
@@ -69,18 +72,29 @@ export default function NetworkAnalysisGuidePage() {
   const theme = useTheme();
   const navigate = useNavigate();
 
+  const pageContext = `This page is the Network Analysis Hub learning guide covering:
+- API Endpoint Tester: OWASP API Top 10 2023 security testing with 10 test categories
+- Nmap Scanner: Port scanning, 30+ high-risk port detection, 9 scan profiles
+- PCAP Analyzer: 7 capture profiles, live capture, deep packet inspection
+- SSL/TLS Analysis: 12 CVE vulnerability checks, cipher suite analysis
+- DNS Intelligence: 9 record types, 150+ subdomain enumeration, email security
+- Traceroute: Cross-platform network path analysis with hop visualization
+- Security Fuzzer: 4 attack modes (Sniper, Battering Ram, Pitchfork, Cluster Bomb)
+- MITM Workbench: Traffic interception with 3 modes and protocol support
+- AI-enhanced analysis powered by Google Gemini for all 8 network tools`;
+
   const features = [
     {
       title: "API Endpoint Tester",
       icon: <ApiIcon sx={{ fontSize: 32 }} />,
       color: "#22c55e",
       gradient: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
-      description: "Comprehensive API security testing with 7 specialized modes including AI-powered network scanning.",
+      description: "OWASP API Top 10 2023 security testing with 10 test categories and AI-powered network scanning.",
       capabilities: [
+        "OWASP API Top 10 2023: BOLA, BFLA, Injection, SSRF, Mass Assignment",
         "AI Auto-Test: CIDR network scanning with automatic service discovery",
-        "Network Discovery: Scan subnets to find HTTP/API services",
-        "WebSocket & JWT security testing",
-        "Batch testing for multiple endpoints",
+        "10 Test Categories: Authentication, Authorization, Injection, SSRF, Rate Limiting",
+        "WebSocket & JWT security testing with token analysis",
         "Export results as JSON, Markdown, PDF, or DOCX",
       ],
       link: "/network/api-tester",
@@ -90,13 +104,13 @@ export default function NetworkAnalysisGuidePage() {
       icon: <RadarIcon sx={{ fontSize: 32 }} />,
       color: "#8b5cf6",
       gradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-      description: "Industry-standard port scanning and service detection with AI-powered insights.",
+      description: "Industry-standard port scanning with 30+ high-risk port detection and AI-powered insights.",
       capabilities: [
-        "Live scanning with 5+ scan profiles (Basic, Quick, Full, Service, OS Detection)",
-        "Upload and analyze existing Nmap XML/text output files",
+        "9+ Scan profiles: Basic, Quick, Full, Service, Aggressive, Stealth, UDP, Comprehensive",
+        "30+ high-risk ports automatically flagged (SSH, RDP, SMB, databases, etc.)",
+        "Upload and analyze existing Nmap XML output files",
         "Target validation for IPs, CIDR ranges, and hostnames",
         "Real-time scan progress with live output streaming",
-        "Vulnerability correlation and CVE lookups",
       ],
       link: "/network/nmap",
     },
@@ -105,12 +119,12 @@ export default function NetworkAnalysisGuidePage() {
       icon: <NetworkCheckIcon sx={{ fontSize: 32 }} />,
       color: "#06b6d4",
       gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
-      description: "Deep packet inspection and traffic analysis for security investigations.",
+      description: "Deep packet inspection with 7 capture profiles and live traffic capture support.",
       capabilities: [
-        "Upload PCAP/PCAPNG files from Wireshark or tcpdump",
-        "Protocol distribution analysis (TCP, UDP, HTTP, DNS, etc.)",
-        "Automatic detection of cleartext credentials",
-        "Suspicious pattern identification (beaconing, data exfil)",
+        "7 Capture profiles: All Traffic, HTTP, DNS, Auth, Email, Database, Suspicious",
+        "Live capture support with tshark integration",
+        "Protocol distribution analysis (TCP, UDP, HTTP, DNS, TLS, etc.)",
+        "Automatic cleartext credential detection and suspicious pattern ID",
         "Connection mapping and traffic flow visualization",
       ],
       link: "/network/pcap",
@@ -120,13 +134,13 @@ export default function NetworkAnalysisGuidePage() {
       icon: <LockIcon sx={{ fontSize: 32 }} />,
       color: "#10b981",
       gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-      description: "Certificate validation, vulnerability detection, and cipher analysis.",
+      description: "12 CVE vulnerability checks and comprehensive cipher suite analysis.",
       capabilities: [
-        "Certificate chain validation against 20+ root CAs",
-        "12 CVE vulnerability checks (Heartbleed, POODLE, BEAST, etc.)",
-        "Weak cipher and protocol detection",
+        "12 Known vulnerabilities: POODLE, BEAST, CRIME, BREACH, Heartbleed, FREAK",
+        "LOGJAM, DROWN, ROBOT, LUCKY13, SWEET32, ROCA detection",
+        "Weak cipher identification (RC4, DES, 3DES, NULL, EXPORT, MD5)",
+        "Certificate chain validation and expiry checking",
         "Perfect Forward Secrecy (PFS) verification",
-        "AI-generated exploitation guidance",
       ],
       link: "/network/ssl",
     },
@@ -135,13 +149,13 @@ export default function NetworkAnalysisGuidePage() {
       icon: <DnsIcon sx={{ fontSize: 32 }} />,
       color: "#f59e0b",
       gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-      description: "Comprehensive DNS enumeration, WHOIS lookup, and email security analysis.",
+      description: "DNS enumeration with 9 record types, 150+ subdomain wordlist, and email security analysis.",
       capabilities: [
-        "All DNS record types (A, AAAA, MX, TXT, NS, SOA, etc.)",
-        "WHOIS lookup for domains and IP addresses",
-        "Subdomain enumeration with customizable wordlists",
-        "Email security analysis (SPF, DMARC, DKIM)",
-        "Zone transfer vulnerability testing",
+        "9 DNS record types: A, AAAA, MX, NS, TXT, SOA, CNAME, SRV, CAA",
+        "150+ common subdomains + extended 250+ subdomain enumeration",
+        "Zone transfer vulnerability testing (AXFR)",
+        "Email security scoring: SPF, DMARC, DKIM, DNSSEC analysis",
+        "WHOIS lookup integration for domains and IPs",
       ],
       link: "/network/dns",
     },
@@ -150,15 +164,45 @@ export default function NetworkAnalysisGuidePage() {
       icon: <RouteIcon sx={{ fontSize: 32 }} />,
       color: "#ec4899",
       gradient: "linear-gradient(135deg, #ec4899 0%, #db2777 100%)",
-      description: "Network path analysis with latency visualization and AI insights.",
+      description: "Network path analysis with hop-by-hop latency and packet loss visualization.",
       capabilities: [
-        "Cross-platform support (Windows tracert, Linux/macOS traceroute)",
-        "Hop-by-hop latency and packet loss analysis",
-        "Interactive path and network graph visualizations",
-        "AI-powered bottleneck and routing analysis",
-        "Quick targets for common DNS and CDN endpoints",
+        "Cross-platform: Windows tracert, Linux/macOS traceroute, MTR fallback",
+        "Configurable: max hops (1-64), timeout, queries per hop (1-10)",
+        "ICMP and UDP probe support with hostname resolution",
+        "ASN and geographic location enrichment (when available)",
+        "Interactive path visualization with AI bottleneck analysis",
       ],
       link: "/network/traceroute",
+    },
+    {
+      title: "Security Fuzzer",
+      icon: <BoltIcon sx={{ fontSize: 32 }} />,
+      color: "#f97316",
+      gradient: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+      description: "Advanced web application fuzzing with 4 attack modes and automatic vulnerability detection.",
+      capabilities: [
+        "4 Attack modes: Sniper, Battering Ram, Pitchfork, Cluster Bomb",
+        "SQL injection, XSS, command injection pattern detection",
+        "Configurable threads, delays, and timeout settings",
+        "Response filtering by status codes and regex patterns",
+        "Full request/response logging with finding extraction",
+      ],
+      link: "/network/fuzzer",
+    },
+    {
+      title: "MITM Workbench",
+      icon: <SwapHorizIcon sx={{ fontSize: 32 }} />,
+      color: "#a855f7",
+      gradient: "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)",
+      description: "Intercept, inspect, and modify network traffic between application components.",
+      capabilities: [
+        "3 Interception modes: Passthrough, Intercept, Auto-Modify",
+        "HTTP, HTTPS, TCP, and WebSocket protocol support",
+        "Custom interception rules with regex matching",
+        "Request/response modification and replay capabilities",
+        "Traffic tagging, filtering, and session notes",
+      ],
+      link: "/network/mitm",
     },
     {
       title: "AI Security Analysis",
@@ -167,8 +211,8 @@ export default function NetworkAnalysisGuidePage() {
       gradient: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
       description: "Google Gemini AI transforms raw network data into actionable intelligence.",
       capabilities: [
-        "Executive summary with key findings",
-        "Risk scoring (0-100) with severity classification",
+        "Executive summary with key findings and risk overview",
+        "Risk scoring (0-100) with Critical/High/Medium/Low classification",
         "Attack surface assessment and exposure analysis",
         "Vulnerable service identification with CVE references",
         "Prioritized remediation recommendations",
@@ -178,14 +222,14 @@ export default function NetworkAnalysisGuidePage() {
     {
       title: "Interactive AI Chat",
       icon: <ChatIcon sx={{ fontSize: 32 }} />,
-      color: "#f59e0b",
-      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-      description: "Have a conversation with AI about your network security findings.",
+      color: "#14b8a6",
+      gradient: "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
+      description: "Conversational AI assistant for deep-dive analysis of your network findings.",
       capabilities: [
-        "Ask follow-up questions about specific findings",
-        "Get tailored remediation guidance for your environment",
-        "Explore attack scenarios and potential impact",
-        "Request deeper analysis on hosts or services",
+        "Context-aware follow-up questions about specific findings",
+        "Environment-specific remediation guidance",
+        "Attack scenario exploration and impact assessment",
+        "Deeper analysis on specific hosts, ports, or services",
         "Full conversation history maintained per report",
       ],
       link: null,
@@ -195,13 +239,13 @@ export default function NetworkAnalysisGuidePage() {
       icon: <StorageIcon sx={{ fontSize: 32 }} />,
       color: "#6366f1",
       gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-      description: "All your network analysis reports saved and organized in one place.",
+      description: "Centralized storage for all network analysis reports with filtering and search.",
       capabilities: [
-        "Automatic save of all scan results to database",
-        "Filter reports by type (Nmap, PCAP, SSL, DNS, Traceroute)",
-        "View historical scans and track changes over time",
-        "Quick access to view or delete reports",
-        "Export reports in multiple formats",
+        "Automatic save of all scan results to PostgreSQL database",
+        "Filter by type: Nmap, PCAP, SSL, DNS, Traceroute, Fuzzer, MITM",
+        "Track security posture changes over time",
+        "Quick view, delete, and re-analyze capabilities",
+        "Project-based organization and tagging",
       ],
       link: "/network",
     },
@@ -210,12 +254,12 @@ export default function NetworkAnalysisGuidePage() {
       icon: <DownloadIcon sx={{ fontSize: 32 }} />,
       color: "#ef4444",
       gradient: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
-      description: "Generate professional reports for stakeholders and documentation.",
+      description: "Generate professional reports for stakeholders and compliance documentation.",
       capabilities: [
-        "Markdown (.md) for technical documentation",
-        "PDF for formal reporting and presentations",
+        "Markdown (.md) for technical documentation and wikis",
+        "PDF for formal reporting and executive presentations",
         "Word (.docx) for editing and customization",
-        "All exports include full AI analysis",
+        "JSON for programmatic integration and automation",
       ],
       link: null,
     },
@@ -224,32 +268,32 @@ export default function NetworkAnalysisGuidePage() {
   const workflowSteps = [
     {
       label: "Choose Your Analysis Type",
-      description: "Select from 5 specialized tools: Nmap for port scanning, PCAP for traffic analysis, SSL/TLS for certificate security, DNS for domain reconnaissance, or Traceroute for path analysis.",
+      description: "Select from 8 specialized tools: Nmap for port scanning, PCAP for traffic analysis, SSL/TLS for certificates, DNS for domain reconnaissance, Traceroute for path analysis, API Tester for endpoint security, Fuzzer for vulnerability discovery, or MITM for traffic interception.",
       icon: <HubIcon />,
     },
     {
       label: "Provide Input Data",
-      description: "Enter targets (IPs, domains, hostnames) or upload existing files. Each tool has quick-start options and pre-configured targets.",
+      description: "Enter targets (IPs, domains, CIDR ranges) or upload existing files (Nmap XML, PCAP). Each tool has quick-start options and pre-configured targets for testing.",
       icon: <CloudUploadIcon />,
     },
     {
       label: "Configure & Execute",
-      description: "Choose scan options (for Nmap) or let automatic analysis begin (for PCAP). Watch real-time progress as your data is processed.",
+      description: "Choose scan profiles, attack modes, or interception rules. Watch real-time progress as your data is processed with live output streaming.",
       icon: <PlayArrowIcon />,
     },
     {
       label: "AI Analysis",
-      description: "Google Gemini AI automatically analyzes results, generating a comprehensive security report with risk scores and findings.",
+      description: "Google Gemini AI automatically analyzes results, generating comprehensive security reports with risk scores, CVE references, and severity classifications.",
       icon: <SmartToyIcon />,
     },
     {
       label: "Review & Investigate",
-      description: "Explore the structured report with executive summary, findings, and recommendations. Use AI chat to dig deeper into specific issues.",
+      description: "Explore structured reports with executive summaries, detailed findings, and recommendations. Use the AI chat panel to dig deeper into specific security issues.",
       icon: <AssessmentIcon />,
     },
     {
       label: "Export & Share",
-      description: "Download professional reports in Markdown, PDF, or DOCX format. All reports are automatically saved for future reference.",
+      description: "Download professional reports in Markdown, PDF, DOCX, or JSON format. All reports are automatically saved to the database for future reference and tracking.",
       icon: <DownloadIcon />,
     },
   ];
@@ -282,6 +326,7 @@ export default function NetworkAnalysisGuidePage() {
   ];
 
   return (
+    <LearnPageLayout pageTitle="Network Analysis Hub" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Link */}
       <Box sx={{ mb: 3 }}>
@@ -436,8 +481,8 @@ export default function NetworkAnalysisGuidePage() {
       {/* Key Stats */}
       <Grid container spacing={3} sx={{ mb: 5 }}>
         {[
-          { value: "6", label: "Analysis Tools", icon: <HubIcon />, color: "#0ea5e9" },
-          { value: "7", label: "API Test Modes", icon: <ApiIcon />, color: "#22c55e" },
+          { value: "8", label: "Analysis Tools", icon: <HubIcon />, color: "#0ea5e9" },
+          { value: "10", label: "API Test Categories", icon: <ApiIcon />, color: "#22c55e" },
           { value: "AI", label: "Powered Analysis", icon: <SmartToyIcon />, color: "#10b981" },
           { value: "4", label: "Export Formats", icon: <DownloadIcon />, color: "#f59e0b" },
         ].map((stat, idx) => (
@@ -667,5 +712,6 @@ export default function NetworkAnalysisGuidePage() {
         </Button>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

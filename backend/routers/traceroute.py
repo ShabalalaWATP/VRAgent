@@ -18,8 +18,10 @@ import re
 import socket
 
 from ..core.database import get_db
-from ..models.models import NetworkAnalysisReport
+from ..core.auth import get_current_active_user
+from ..models.models import NetworkAnalysisReport, User
 from ..core.config import settings
+from fastapi import Depends
 
 logger = logging.getLogger("vragent.backend.routers.traceroute")
 router = APIRouter(prefix="/traceroute", tags=["Traceroute Visualization"])
@@ -487,7 +489,7 @@ async def validate_target(request: dict):
 
 
 @router.post("/run")
-async def run_traceroute_scan(request: TracerouteRequest):
+async def run_traceroute_scan(request: TracerouteRequest, current_user: User = Depends(get_current_active_user)):
     """Run a traceroute scan."""
     # Validate target first
     try:

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
   Typography,
@@ -821,7 +822,10 @@ export default function OwaspMobilePage() {
   const [expandedRisk, setExpandedRisk] = useState<string | false>("m1");
   const [tabValue, setTabValue] = useState(0);
 
+  const pageContext = `This page covers the OWASP Mobile Top 10 security risks for mobile applications. Topics include: improper credential usage, inadequate supply chain security, insecure authentication/authorization, insufficient input/output validation, insecure communication, inadequate privacy controls, insufficient binary protections, security misconfiguration, insecure data storage, and insufficient cryptography. Current tab: ${['All Risks', 'Android', 'iOS'][tabValue] || 'Overview'}. ${expandedRisk ? `Currently viewing risk: ${expandedRisk.toUpperCase()}.` : ''}`;
+
   return (
+    <LearnPageLayout pageTitle="OWASP Mobile Top 10" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -1411,5 +1415,6 @@ export default function OwaspMobilePage() {
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

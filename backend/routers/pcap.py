@@ -16,8 +16,9 @@ from sqlalchemy.orm import Session
 
 from backend.core.logging import get_logger
 from backend.core.database import get_db
+from backend.core.auth import get_current_active_user
 from backend.services import pcap_service
-from backend.models.models import NetworkAnalysisReport
+from backend.models.models import NetworkAnalysisReport, User
 
 router = APIRouter(prefix="/pcap", tags=["pcap"])
 logger = get_logger(__name__)
@@ -115,6 +116,7 @@ async def analyze_pcaps(
     save_report: bool = Query(True, description="Save the analysis report to database"),
     project_id: Optional[int] = Query(None, description="Associate report with a project"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Upload and analyze one or more PCAP files.
@@ -485,6 +487,7 @@ async def list_pcap_reports(
     skip: int = Query(0, ge=0, description="Number of reports to skip"),
     limit: int = Query(20, ge=1, le=100, description="Maximum reports to return"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     List all saved PCAP analysis reports.
@@ -531,6 +534,7 @@ async def list_pcap_reports(
 async def get_pcap_report(
     report_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get full details of a saved PCAP analysis report.
@@ -568,6 +572,7 @@ async def get_pcap_report(
 async def delete_pcap_report(
     report_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Delete a saved PCAP analysis report.

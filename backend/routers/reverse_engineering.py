@@ -12,8 +12,13 @@ import tempfile
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+import asyncio
+import json
+import uuid
+from types import SimpleNamespace
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, Query, Depends
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -29,6 +34,10 @@ logger = get_logger(__name__)
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB - increased for real-world APKs
 ALLOWED_BINARY_EXTENSIONS = {".exe", ".dll", ".so", ".elf", ".bin", ".o", ".dylib", ".mach"}
 ALLOWED_APK_EXTENSIONS = {".apk", ".aab"}
+
+# Store active unified scans for cancellation (must be defined before endpoint functions)
+_unified_scan_sessions: Dict[str, Dict[str, Any]] = {}
+_unified_binary_scan_sessions: Dict[str, Dict[str, Any]] = {}
 
 
 # ============================================================================
@@ -84,6 +93,17 @@ class BinaryMetadataResponse(BaseModel):
     # PE-specific
     rich_header: Optional[RichHeaderResponse] = None
     imphash: Optional[str] = None
+    tls_callbacks: List[int] = []
+    mitigations: Dict[str, Any] = {}
+    resource_summary: Dict[str, Any] = {}
+    version_info: Dict[str, Any] = {}
+    authenticode: Optional[Dict[str, Any]] = None
+    overlay: Optional[Dict[str, Any]] = None
+    pe_delay_imports: List[Dict[str, Any]] = []
+    pe_relocations: Dict[str, Any] = {}
+    pe_debug: Dict[str, Any] = {}
+    pe_data_directories: List[Dict[str, Any]] = []
+    pe_manifest: Optional[str] = None
     # ELF-specific
     relro: Optional[str] = None
     stack_canary: bool = False
@@ -91,6 +111,11 @@ class BinaryMetadataResponse(BaseModel):
     pie_enabled: bool = False
     interpreter: Optional[str] = None
     linked_libraries: List[str] = []
+    elf_dynamic: Dict[str, Any] = {}
+    elf_relocations: Dict[str, Any] = {}
+    elf_version_info: Dict[str, Any] = {}
+    elf_build_id: Optional[str] = None
+    elf_program_headers: List[Dict[str, Any]] = []
 
 
 class HexViewResponse(BaseModel):
@@ -131,7 +156,35 @@ class BinaryAnalysisResponse(BaseModel):
     exports: List[str]
     secrets: List[SecretResponse]
     suspicious_indicators: List[SuspiciousIndicatorResponse]
+    fuzzy_hashes: Dict[str, Optional[str]] = {}
+    yara_matches: List[Dict[str, Any]] = []
+    capa_summary: Optional[Dict[str, Any]] = None
+    deobfuscated_strings: List[Dict[str, Any]] = []
     ai_analysis: Optional[str] = None
+    ghidra_analysis: Optional[Dict[str, Any]] = None
+    ghidra_ai_summaries: Optional[List[Dict[str, Any]]] = None
+    error: Optional[str] = None
+
+
+class UnifiedBinaryScanPhase(BaseModel):
+    """A phase in the unified binary scan."""
+    id: str
+    label: str
+    description: str
+    status: str  # "pending", "in_progress", "completed", "error"
+    progress: int = 0  # 0-100
+    details: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class UnifiedBinaryScanProgress(BaseModel):
+    """Progress update for unified binary scan."""
+    scan_id: str
+    current_phase: str
+    overall_progress: int  # 0-100
+    phases: List[UnifiedBinaryScanPhase]
+    message: str
     error: Optional[str] = None
 
 
@@ -230,6 +283,7 @@ class StatusResponse(BaseModel):
     apk_analysis: bool
     docker_analysis: bool
     jadx_available: bool
+    ghidra_available: bool
     docker_available: bool
     message: str
 
@@ -280,12 +334,18 @@ def get_status():
     """
     docker_available = check_docker_available()
     jadx_available = check_jadx_available()
+    try:
+        from backend.services.ghidra_service import ghidra_available
+        ghidra_ok = ghidra_available()
+    except Exception:
+        ghidra_ok = False
     
     return StatusResponse(
         binary_analysis=True,  # Always available (pure Python)
         apk_analysis=True,     # Basic analysis always available
         docker_analysis=docker_available,
         jadx_available=jadx_available,
+        ghidra_available=ghidra_ok,
         docker_available=docker_available,
         message="Reverse engineering tools ready" if docker_available else "Docker not available - Docker analysis disabled",
     )
@@ -295,6 +355,11 @@ def get_status():
 async def analyze_binary(
     file: UploadFile = File(..., description="Binary file to analyze (EXE, ELF, DLL, SO)"),
     include_ai: bool = Query(True, description="Include AI-powered analysis"),
+    include_ghidra: bool = Query(True, description="Include Ghidra headless decompilation"),
+    ghidra_max_functions: int = Query(200, ge=1, le=2000, description="Max functions to export from Ghidra"),
+    ghidra_decomp_limit: int = Query(4000, ge=200, le=20000, description="Max decompilation chars per function"),
+    include_ghidra_ai: bool = Query(True, description="Include Gemini summaries for decompiled functions"),
+    ghidra_ai_max_functions: int = Query(20, ge=1, le=200, description="Max functions to summarize with Gemini"),
 ):
     """
     Analyze a binary executable file.
@@ -338,7 +403,21 @@ async def analyze_binary(
         
         # Perform analysis
         result = re_service.analyze_binary(tmp_path)
-        
+
+        # Run Ghidra decompilation if requested
+        if include_ghidra:
+            result.ghidra_analysis = re_service.analyze_binary_with_ghidra(
+                tmp_path,
+                max_functions=ghidra_max_functions,
+                decomp_limit=ghidra_decomp_limit,
+            )
+
+            if include_ghidra_ai and result.ghidra_analysis and "error" not in result.ghidra_analysis:
+                result.ghidra_ai_summaries = await re_service.analyze_ghidra_functions_with_ai(
+                    result.ghidra_analysis,
+                    max_functions=ghidra_ai_max_functions,
+                )
+
         # Run AI analysis if requested
         if include_ai and not result.error:
             result.ai_analysis = await re_service.analyze_binary_with_ai(result)
@@ -379,6 +458,17 @@ async def analyze_binary(
                 # PE-specific
                 rich_header=rich_header_response,
                 imphash=result.metadata.imphash,
+                tls_callbacks=result.metadata.tls_callbacks,
+                mitigations=result.metadata.mitigations,
+                resource_summary=result.metadata.resource_summary,
+                version_info=result.metadata.version_info,
+                authenticode=result.metadata.authenticode,
+                overlay=result.metadata.overlay,
+                pe_delay_imports=result.metadata.pe_delay_imports,
+                pe_relocations=result.metadata.pe_relocations,
+                pe_debug=result.metadata.pe_debug,
+                pe_data_directories=result.metadata.pe_data_directories,
+                pe_manifest=result.metadata.pe_manifest,
                 # ELF-specific
                 relro=result.metadata.relro,
                 stack_canary=result.metadata.stack_canary,
@@ -386,6 +476,11 @@ async def analyze_binary(
                 pie_enabled=result.metadata.pie_enabled,
                 interpreter=result.metadata.interpreter,
                 linked_libraries=result.metadata.linked_libraries,
+                elf_dynamic=result.metadata.elf_dynamic,
+                elf_relocations=result.metadata.elf_relocations,
+                elf_version_info=result.metadata.elf_version_info,
+                elf_build_id=result.metadata.elf_build_id,
+                elf_program_headers=result.metadata.elf_program_headers,
             ),
             strings_count=len(result.strings),
             strings_sample=[
@@ -428,7 +523,13 @@ async def analyze_binary(
                 )
                 for ind in result.suspicious_indicators
             ],
+            fuzzy_hashes=result.fuzzy_hashes,
+            yara_matches=result.yara_matches,
+            capa_summary=result.capa_summary,
+            deobfuscated_strings=result.deobfuscated_strings,
             ai_analysis=result.ai_analysis,
+            ghidra_analysis=result.ghidra_analysis,
+            ghidra_ai_summaries=result.ghidra_ai_summaries,
             error=result.error,
         )
         
@@ -442,7 +543,2983 @@ async def analyze_binary(
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-@router.post("/analyze-apk", response_model=ApkAnalysisResponse)
+@router.post("/binary/unified-scan")
+async def unified_binary_scan(
+    file: UploadFile = File(..., description="Binary file to analyze (EXE, ELF, DLL, SO)"),
+    include_ai: bool = Query(True, description="Include AI-powered analysis"),
+    include_ghidra: bool = Query(True, description="Include Ghidra headless decompilation"),
+    ghidra_max_functions: int = Query(200, ge=1, le=2000, description="Max functions to export from Ghidra"),
+    ghidra_decomp_limit: int = Query(4000, ge=200, le=20000, description="Max decompilation chars per function"),
+    include_ghidra_ai: bool = Query(True, description="Include Gemini summaries for decompiled functions"),
+    ghidra_ai_max_functions: int = Query(20, ge=1, le=200, description="Max functions to summarize with Gemini"),
+):
+    """
+    Perform a complete binary analysis with streaming progress updates.
+    This unified scan combines:
+    - Static metadata, strings, imports, secrets
+    - Optional Ghidra decompilation
+    - Optional Gemini function summaries
+    - Optional Gemini overall analysis
+    """
+    filename = file.filename or "unknown"
+    suffix = Path(filename).suffix.lower()
+
+    if suffix not in ALLOWED_BINARY_EXTENSIONS and suffix not in {".bin", ""}:
+        pass
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_binary_unified_"))
+    tmp_path = tmp_dir / filename
+    file_size = 0
+
+    try:
+        with tmp_path.open("wb") as f:
+            while chunk := await file.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                f.write(chunk)
+
+        scan_id = str(uuid.uuid4())
+        _unified_binary_scan_sessions[scan_id] = {"cancelled": False, "tmp_dir": str(tmp_dir)}
+
+        phases: List[UnifiedBinaryScanPhase] = [
+            UnifiedBinaryScanPhase(
+                id="static",
+                label="Static Analysis",
+                description="Extract metadata, strings, imports, and secrets",
+                status="pending",
+            ),
+        ]
+        if include_ghidra:
+            phases.append(UnifiedBinaryScanPhase(
+                id="ghidra",
+                label="Ghidra Decompilation",
+                description="Run headless decompiler and export functions",
+                status="pending",
+            ))
+        if include_ghidra and include_ghidra_ai:
+            phases.append(UnifiedBinaryScanPhase(
+                id="ghidra_ai",
+                label="Ghidra AI Summaries",
+                description="Summarize decompiled functions with Gemini",
+                status="pending",
+            ))
+        if include_ai:
+            phases.append(UnifiedBinaryScanPhase(
+                id="ai_summary",
+                label="AI Security Summary",
+                description="Generate overall Gemini analysis",
+                status="pending",
+            ))
+
+        current_phase_idx = 0
+
+        def make_progress(message: str, phase_progress: int = 0) -> str:
+            nonlocal phases, current_phase_idx
+            overall = (current_phase_idx * 100 // max(len(phases), 1)) + (phase_progress // max(len(phases), 1))
+            progress = UnifiedBinaryScanProgress(
+                scan_id=scan_id,
+                current_phase=phases[current_phase_idx].id,
+                overall_progress=min(overall, 100),
+                phases=phases,
+                message=message,
+            )
+            return f"data: {json.dumps({'type': 'progress', 'data': progress.model_dump()})}\n\n"
+
+        def update_phase(phase_id: str, status: str, details: str = None, progress: int = 0):
+            for p in phases:
+                if p.id == phase_id:
+                    p.status = status
+                    p.progress = progress
+                    if details:
+                        p.details = details
+                    if status == "in_progress" and not p.started_at:
+                        p.started_at = datetime.utcnow().isoformat()
+                    if status in ("completed", "error"):
+                        p.completed_at = datetime.utcnow().isoformat()
+                        p.progress = 100
+
+        async def run_unified_scan():
+            nonlocal current_phase_idx
+            result = None
+            try:
+                if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+
+                current_phase_idx = 0
+                update_phase("static", "in_progress", progress=10)
+                yield make_progress("Analyzing binary...", 10)
+                result = re_service.analyze_binary(tmp_path)
+                update_phase(
+                    "static",
+                    "completed",
+                    f"{len(result.strings)} strings, {len(result.imports)} imports",
+                    100,
+                )
+                yield make_progress("Static analysis complete", 100)
+
+                if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+
+                if include_ghidra:
+                    current_phase_idx = 1
+                    update_phase("ghidra", "in_progress", progress=10)
+                    yield make_progress("Running Ghidra decompilation...", 10)
+                    result.ghidra_analysis = re_service.analyze_binary_with_ghidra(
+                        tmp_path,
+                        max_functions=ghidra_max_functions,
+                        decomp_limit=ghidra_decomp_limit,
+                    )
+                    if result.ghidra_analysis and "error" in result.ghidra_analysis:
+                        update_phase("ghidra", "error", result.ghidra_analysis.get("error"), 100)
+                    else:
+                        fn_total = (result.ghidra_analysis or {}).get("functions_total", 0)
+                        update_phase("ghidra", "completed", f"Exported {fn_total} functions", 100)
+                    yield make_progress("Ghidra decompilation complete", 100)
+
+                    if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                        yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                        yield "data: {\"type\":\"done\"}\n\n"
+                        return
+
+                if include_ghidra and include_ghidra_ai:
+                    current_phase_idx = 2
+                    update_phase("ghidra_ai", "in_progress", progress=10)
+                    yield make_progress("Summarizing functions with Gemini...", 10)
+                    if result and result.ghidra_analysis and "error" not in result.ghidra_analysis:
+                        result.ghidra_ai_summaries = await re_service.analyze_ghidra_functions_with_ai(
+                            result.ghidra_analysis,
+                            max_functions=ghidra_ai_max_functions,
+                        )
+                    update_phase("ghidra_ai", "completed", "Function summaries generated", 100)
+                    yield make_progress("Ghidra AI summaries complete", 100)
+
+                    if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                        yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                        yield "data: {\"type\":\"done\"}\n\n"
+                        return
+
+                if include_ai and result and not result.error:
+                    current_phase_idx = len(phases) - 1
+                    update_phase("ai_summary", "in_progress", progress=10)
+                    yield make_progress("Generating AI security summary...", 10)
+                    result.ai_analysis = await re_service.analyze_binary_with_ai(result)
+                    update_phase("ai_summary", "completed", "AI summary generated", 100)
+                    yield make_progress("AI summary complete", 100)
+
+                if not result:
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Analysis failed'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+
+                rich_header_response = None
+                if result.metadata.rich_header:
+                    rich_header_response = RichHeaderResponse(
+                        entries=[
+                            RichHeaderEntryResponse(
+                                product_id=e.product_id,
+                                build_id=e.build_id,
+                                count=e.count,
+                                product_name=e.product_name,
+                                vs_version=e.vs_version,
+                            )
+                            for e in result.metadata.rich_header.entries
+                        ],
+                        rich_hash=result.metadata.rich_header.rich_hash,
+                        checksum=result.metadata.rich_header.checksum,
+                        raw_data=result.metadata.rich_header.raw_data,
+                        clear_data=result.metadata.rich_header.clear_data,
+                    )
+
+                response = BinaryAnalysisResponse(
+                    filename=result.filename,
+                    metadata=BinaryMetadataResponse(
+                        file_type=result.metadata.file_type,
+                        architecture=result.metadata.architecture,
+                        file_size=result.metadata.file_size,
+                        entry_point=result.metadata.entry_point,
+                        is_packed=result.metadata.is_packed,
+                        packer_name=result.metadata.packer_name,
+                        compile_time=result.metadata.compile_time,
+                        sections=result.metadata.sections,
+                        headers=result.metadata.headers,
+                        rich_header=rich_header_response,
+                        imphash=result.metadata.imphash,
+                        tls_callbacks=result.metadata.tls_callbacks,
+                        mitigations=result.metadata.mitigations,
+                        resource_summary=result.metadata.resource_summary,
+                        version_info=result.metadata.version_info,
+                        authenticode=result.metadata.authenticode,
+                        overlay=result.metadata.overlay,
+                        pe_delay_imports=result.metadata.pe_delay_imports,
+                        pe_relocations=result.metadata.pe_relocations,
+                        pe_debug=result.metadata.pe_debug,
+                        pe_data_directories=result.metadata.pe_data_directories,
+                        pe_manifest=result.metadata.pe_manifest,
+                        relro=result.metadata.relro,
+                        stack_canary=result.metadata.stack_canary,
+                        nx_enabled=result.metadata.nx_enabled,
+                        pie_enabled=result.metadata.pie_enabled,
+                        interpreter=result.metadata.interpreter,
+                        linked_libraries=result.metadata.linked_libraries,
+                        elf_dynamic=result.metadata.elf_dynamic,
+                        elf_relocations=result.metadata.elf_relocations,
+                        elf_version_info=result.metadata.elf_version_info,
+                        elf_build_id=result.metadata.elf_build_id,
+                        elf_program_headers=result.metadata.elf_program_headers,
+                    ),
+                    strings_count=len(result.strings),
+                    strings_sample=[
+                        BinaryStringResponse(
+                            value=s.value[:500],
+                            offset=s.offset,
+                            encoding=s.encoding,
+                            category=s.category,
+                        )
+                        for s in result.strings[:200]
+                    ],
+                    imports=[
+                        ImportedFunctionResponse(
+                            name=imp.name,
+                            library=imp.library,
+                            ordinal=imp.ordinal,
+                            is_suspicious=imp.is_suspicious,
+                            reason=imp.reason,
+                        )
+                        for imp in result.imports
+                    ],
+                    exports=result.exports,
+                    secrets=[
+                        SecretResponse(
+                            type=s["type"],
+                            value=s["value"],
+                            masked_value=s["masked_value"],
+                            severity=s["severity"],
+                            context=s.get("context"),
+                            offset=s.get("offset"),
+                        )
+                        for s in result.secrets
+                    ],
+                    suspicious_indicators=[
+                        SuspiciousIndicatorResponse(
+                            category=ind["category"],
+                            severity=ind["severity"],
+                            description=ind["description"],
+                            details=ind.get("details"),
+                        )
+                        for ind in result.suspicious_indicators
+                    ],
+                    fuzzy_hashes=result.fuzzy_hashes,
+                    yara_matches=result.yara_matches,
+                    capa_summary=result.capa_summary,
+                    deobfuscated_strings=result.deobfuscated_strings,
+                    ai_analysis=result.ai_analysis,
+                    ghidra_analysis=result.ghidra_analysis,
+                    ghidra_ai_summaries=result.ghidra_ai_summaries,
+                    error=result.error,
+                )
+
+                yield f"data: {json.dumps({'type': 'result', 'data': response.model_dump()})}\n\n"
+                yield "data: {\"type\":\"done\"}\n\n"
+
+            except Exception as exc:
+                logger.error(f"Unified binary scan failed: {exc}")
+                yield f"data: {json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
+                yield "data: {\"type\":\"done\"}\n\n"
+            finally:
+                if scan_id in _unified_binary_scan_sessions:
+                    del _unified_binary_scan_sessions[scan_id]
+                if tmp_dir:
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        return StreamingResponse(
+            run_unified_scan(),
+            media_type="text/event-stream",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Unified binary scan failed: {exc}")
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(exc)}")
+
+
+@router.post("/binary/unified-scan/{scan_id}/cancel")
+async def cancel_unified_binary_scan(scan_id: str):
+    """Cancel an in-progress unified binary scan."""
+    if scan_id in _unified_binary_scan_sessions:
+        _unified_binary_scan_sessions[scan_id]["cancelled"] = True
+        return {"message": "Binary scan cancelled"}
+    raise HTTPException(status_code=404, detail="Scan not found")
+
+
+# ============================================================================
+# AI Vulnerability Hunter
+# ============================================================================
+
+# Store active vulnerability hunts for cancellation
+_vulnerability_hunt_sessions: Dict[str, Dict[str, Any]] = {}
+
+
+class VulnerabilityHuntPhase(BaseModel):
+    """A phase in the vulnerability hunt."""
+    id: str
+    label: str
+    description: str
+    status: str  # "pending", "in_progress", "completed", "error"
+    progress: int = 0
+    details: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class VulnerabilityHuntProgress(BaseModel):
+    """Progress update for vulnerability hunt."""
+    scan_id: str
+    current_phase: str
+    overall_progress: int
+    phases: List[VulnerabilityHuntPhase]
+    message: str
+    targets_identified: int = 0
+    vulnerabilities_found: int = 0
+
+
+class VulnerabilityFindingResponse(BaseModel):
+    """A vulnerability finding from the hunt."""
+    id: str
+    title: str
+    severity: str
+    category: str
+    cwe_id: Optional[str] = None
+    cvss_estimate: float
+    function_name: str
+    entry_address: str
+    description: str
+    technical_details: str
+    proof_of_concept: str
+    exploitation_steps: List[str]
+    remediation: str
+    confidence: float
+    ai_reasoning: str
+    code_snippet: str
+
+
+class VulnerabilityHuntResultResponse(BaseModel):
+    """Complete result of a vulnerability hunt."""
+    scan_id: str
+    filename: str
+    passes_completed: int
+    total_functions_analyzed: int
+    targets_identified: int
+    vulnerabilities: List[VulnerabilityFindingResponse]
+    attack_surface_summary: Dict[str, Any]
+    hunting_log: List[Dict[str, Any]]
+    executive_summary: str
+    risk_score: int
+    recommended_focus_areas: List[str]
+
+
+@router.post("/binary/vulnerability-hunt")
+async def vulnerability_hunt(
+    file: UploadFile = File(..., description="Binary file to analyze (EXE, ELF, DLL, SO)"),
+    focus_categories: Optional[str] = Query(
+        None, 
+        description="Comma-separated vulnerability categories to focus on (buffer_overflow,format_string,integer_overflow,use_after_free,command_injection,path_traversal,race_condition,crypto_weakness)"
+    ),
+    max_passes: int = Query(3, ge=1, le=5, description="Maximum analysis passes"),
+    max_targets_per_pass: int = Query(20, ge=5, le=50, description="Max targets to analyze per pass"),
+    ghidra_max_functions: int = Query(500, ge=100, le=2000, description="Max functions for Ghidra to export"),
+    ghidra_decomp_limit: int = Query(8000, ge=2000, le=20000, description="Max decompilation chars per function"),
+):
+    """
+    AI-powered autonomous vulnerability hunting.
+    
+    Performs multi-pass analysis:
+    1. **Pass 1 - Reconnaissance**: Ghidra decompilation + identify dangerous function calls
+    2. **Pass 2 - AI Triage**: AI identifies highest-priority targets for deep analysis
+    3. **Pass 3+ - Deep Analysis**: AI performs thorough vulnerability analysis on each target
+    
+    Streams progress updates via Server-Sent Events.
+    
+    Returns findings with:
+    - Vulnerability details and severity
+    - CWE classification and CVSS estimate
+    - Proof of concept code
+    - Exploitation steps
+    - Remediation recommendations
+    
+    Categories: buffer_overflow, format_string, integer_overflow, use_after_free,
+    command_injection, path_traversal, race_condition, crypto_weakness
+    """
+    filename = file.filename or "unknown"
+    suffix = Path(filename).suffix.lower()
+    
+    if suffix not in ALLOWED_BINARY_EXTENSIONS and suffix not in {".bin", ""}:
+        pass  # Allow any file for analysis
+    
+    tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_vuln_hunt_"))
+    tmp_path = tmp_dir / filename
+    file_size = 0
+    
+    try:
+        with tmp_path.open("wb") as f:
+            while chunk := await file.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                f.write(chunk)
+        
+        scan_id = str(uuid.uuid4())
+        _vulnerability_hunt_sessions[scan_id] = {"cancelled": False, "tmp_dir": str(tmp_dir)}
+        
+        # Parse focus categories
+        categories = None
+        if focus_categories:
+            categories = [c.strip() for c in focus_categories.split(",")]
+        
+        # Build phases
+        phases: List[VulnerabilityHuntPhase] = [
+            VulnerabilityHuntPhase(
+                id="pass1",
+                label="Reconnaissance",
+                description="Ghidra decompilation and attack surface mapping",
+                status="pending",
+            ),
+            VulnerabilityHuntPhase(
+                id="pass2",
+                label="AI Triage",
+                description="AI identifies high-priority targets",
+                status="pending",
+            ),
+        ]
+        for i in range(3, max_passes + 1):
+            phases.append(VulnerabilityHuntPhase(
+                id=f"pass{i}",
+                label=f"Deep Analysis Pass {i-2}",
+                description="AI deep vulnerability analysis",
+                status="pending",
+            ))
+        phases.append(VulnerabilityHuntPhase(
+            id="summary",
+            label="Summary",
+            description="Generate executive summary",
+            status="pending",
+        ))
+        
+        current_phase_idx = 0
+        targets_identified = 0
+        vulns_found = 0
+        
+        def make_progress(message: str, phase_progress: int = 0) -> str:
+            nonlocal phases, current_phase_idx, targets_identified, vulns_found
+            overall = (current_phase_idx * 100 // max(len(phases), 1)) + (phase_progress // max(len(phases), 1))
+            progress = VulnerabilityHuntProgress(
+                scan_id=scan_id,
+                current_phase=phases[current_phase_idx].id,
+                overall_progress=min(overall, 100),
+                phases=phases,
+                message=message,
+                targets_identified=targets_identified,
+                vulnerabilities_found=vulns_found,
+            )
+            return f"data: {json.dumps({'type': 'progress', 'data': progress.model_dump()})}\n\n"
+        
+        def update_phase(phase_id: str, status: str, details: str = None, progress: int = 0):
+            for p in phases:
+                if p.id == phase_id:
+                    p.status = status
+                    p.progress = progress
+                    if details:
+                        p.details = details
+                    if status == "in_progress" and not p.started_at:
+                        p.started_at = datetime.utcnow().isoformat()
+                    if status in ("completed", "error"):
+                        p.completed_at = datetime.utcnow().isoformat()
+                        p.progress = 100
+        
+        async def run_vulnerability_hunt():
+            nonlocal current_phase_idx, targets_identified, vulns_found
+            
+            try:
+                if _vulnerability_hunt_sessions.get(scan_id, {}).get("cancelled"):
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Hunt cancelled'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+                
+                # Progress callback for the hunt
+                async def on_progress(phase: str, progress: int, message: str):
+                    nonlocal current_phase_idx, targets_identified, vulns_found
+                    
+                    # Map service phases to router phases
+                    phase_map = {
+                        "pass1": 0,
+                        "pass2": 1,
+                        "pass3": 2,
+                        "pass4": 3,
+                        "pass5": 4,
+                        "summary": len(phases) - 1,
+                        "complete": len(phases) - 1,
+                    }
+                    if phase in phase_map:
+                        current_phase_idx = min(phase_map[phase], len(phases) - 1)
+                    
+                    # Update phase status
+                    current_id = phases[current_phase_idx].id
+                    if progress == 0:
+                        update_phase(current_id, "in_progress", message, 0)
+                    elif progress >= 100:
+                        update_phase(current_id, "completed", message, 100)
+                    else:
+                        update_phase(current_id, "in_progress", message, progress)
+                
+                # Yield initial progress
+                yield make_progress("Starting AI vulnerability hunt...", 0)
+                
+                # Run the hunt
+                result = await re_service.ai_vulnerability_hunt(
+                    tmp_path,
+                    focus_categories=categories,
+                    max_passes=max_passes,
+                    max_targets_per_pass=max_targets_per_pass,
+                    ghidra_max_functions=ghidra_max_functions,
+                    ghidra_decomp_limit=ghidra_decomp_limit,
+                    on_progress=on_progress,
+                )
+                
+                targets_identified = result.targets_identified
+                vulns_found = len(result.vulnerabilities)
+                
+                # Convert to response
+                response = re_service.vulnerability_hunt_result_to_dict(result)
+                
+                # Final progress
+                update_phase("summary", "completed", f"Found {vulns_found} vulnerabilities", 100)
+                yield make_progress(f"Hunt complete: {vulns_found} vulnerabilities found", 100)
+                
+                # Yield final result
+                yield f"data: {json.dumps({'type': 'result', 'data': response})}\n\n"
+                yield "data: {\"type\":\"done\"}\n\n"
+                
+            except Exception as exc:
+                logger.exception(f"Vulnerability hunt failed: {exc}")
+                yield f"data: {json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
+                yield "data: {\"type\":\"done\"}\n\n"
+            finally:
+                # Cleanup in background
+                try:
+                    if scan_id in _vulnerability_hunt_sessions:
+                        del _vulnerability_hunt_sessions[scan_id]
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+                except:
+                    pass
+        
+        return StreamingResponse(
+            run_vulnerability_hunt(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Vulnerability hunt failed: {exc}")
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Hunt failed: {str(exc)}")
+
+
+@router.post("/binary/vulnerability-hunt/{scan_id}/cancel")
+async def cancel_vulnerability_hunt(scan_id: str):
+    """Cancel an in-progress vulnerability hunt."""
+    if scan_id in _vulnerability_hunt_sessions:
+        _vulnerability_hunt_sessions[scan_id]["cancelled"] = True
+        return {"message": "Vulnerability hunt cancelled"}
+    raise HTTPException(status_code=404, detail="Hunt not found")
+
+
+# ============================================================================
+# Binary Purpose Analysis ("What does this Binary do?")
+# ============================================================================
+
+class BinaryPurposeProgress(BaseModel):
+    """Progress update for binary purpose analysis."""
+    phase: str
+    progress: int
+    message: str
+
+
+class SuspiciousBehavior(BaseModel):
+    """A suspicious behavior identified in the binary."""
+    behavior: str
+    severity: str  # low, medium, high, critical
+    indicator: str
+
+
+class BinaryPurposeResponse(BaseModel):
+    """Response from binary purpose analysis."""
+    filename: str
+    purpose_summary: str
+    detailed_description: str
+    category: str
+    functionality: List[str]
+    capabilities: Dict[str, List[str]]
+    api_usage: Dict[str, List[str]]
+    suspicious_behaviors: List[SuspiciousBehavior]
+    data_handling: Dict[str, Any]
+    network_activity: Dict[str, Any]
+    file_operations: Dict[str, Any]
+    process_operations: Dict[str, Any]
+    crypto_usage: Dict[str, Any]
+    ui_type: str
+    confidence: float
+    analysis_notes: List[str]
+
+
+@router.post("/binary/analyze-purpose")
+async def analyze_binary_purpose(
+    file: UploadFile = File(..., description="Binary file to analyze"),
+    use_ghidra: bool = Query(True, description="Use Ghidra for deeper analysis"),
+):
+    """
+    Analyze a binary to understand what it does.
+    
+    Provides:
+    - Purpose summary and detailed description
+    - Category classification (utility, malware, game, server, etc.)
+    - Functionality list
+    - API usage by category (file, network, process, crypto, etc.)
+    - Suspicious behavior detection
+    - Data handling analysis
+    - Network activity patterns
+    - UI type detection
+    
+    Streams progress updates via Server-Sent Events.
+    """
+    filename = file.filename or "unknown"
+    suffix = Path(filename).suffix.lower()
+    
+    tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_purpose_"))
+    tmp_path = tmp_dir / filename
+    
+    try:
+        # Save file
+        file_size = 0
+        with tmp_path.open("wb") as f:
+            while chunk := await file.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(status_code=400, detail=f"File too large (max {MAX_FILE_SIZE // (1024*1024)}MB)")
+                f.write(chunk)
+        
+        logger.info(f"Analyzing binary purpose: {filename} ({file_size:,} bytes)")
+        
+        # Track progress
+        progress_updates = []
+        
+        async def progress_callback(phase: str, pct: int, msg: str):
+            progress_updates.append({"phase": phase, "progress": pct, "message": msg})
+        
+        # SSE generator
+        async def generate_events():
+            try:
+                # Run analysis in background
+                analysis_task = asyncio.create_task(
+                    re_service.analyze_binary_purpose(
+                        tmp_path,
+                        use_ghidra=use_ghidra,
+                        progress_callback=progress_callback,
+                    )
+                )
+                
+                last_idx = 0
+                while not analysis_task.done():
+                    # Send any new progress updates
+                    while last_idx < len(progress_updates):
+                        update = progress_updates[last_idx]
+                        yield f"data: {json.dumps({'type': 'progress', 'data': update})}\n\n"
+                        last_idx += 1
+                    await asyncio.sleep(0.3)
+                
+                # Get result
+                result = await analysis_task
+                result_dict = re_service.binary_purpose_to_dict(result)
+                
+                yield f"data: {json.dumps({'type': 'result', 'data': result_dict})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                
+            except Exception as e:
+                logger.error(f"Binary purpose analysis failed: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+        
+        return StreamingResponse(
+            generate_events(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
+        
+    except Exception as exc:
+        logger.error(f"Binary purpose analysis failed: {exc}")
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(exc)}")
+
+
+# ============================================================================
+# Proof-of-Concept Exploit Generation
+# ============================================================================
+
+class PoCExploitRequest(BaseModel):
+    """Request to generate a PoC exploit."""
+    vulnerability: Dict[str, Any] = Field(..., description="The vulnerability finding to generate exploit for")
+    target_platform: str = Field("linux", description="Target platform: linux, windows, both")
+    exploit_style: str = Field("python", description="Exploit language: python, c, shellcode")
+    include_shellcode: bool = Field(False, description="Include raw shellcode in exploit")
+
+
+class PoCExploitResponse(BaseModel):
+    """A proof-of-concept exploit."""
+    vuln_id: str
+    vuln_title: str
+    exploit_type: str
+    language: str
+    code: str
+    description: str
+    prerequisites: List[str]
+    usage_instructions: str
+    expected_outcome: str
+    limitations: List[str]
+    safety_notes: List[str]
+    tested_on: str
+    reliability: str
+    evasion_notes: List[str]
+
+
+class MultiplePoCRequest(BaseModel):
+    """Request to generate multiple PoC exploits."""
+    vulnerabilities: List[Dict[str, Any]] = Field(..., description="List of vulnerability findings")
+    target_platform: str = Field("linux", description="Target platform: linux, windows, both")
+    exploit_style: str = Field("python", description="Exploit language: python, c, shellcode")
+
+
+class MultiplePoCResponse(BaseModel):
+    """Response containing multiple PoC exploits."""
+    success: bool
+    exploits: List[PoCExploitResponse]
+    generation_log: List[str]
+    warnings: List[str]
+    disclaimer: str
+
+
+@router.post("/binary/generate-poc", response_model=PoCExploitResponse)
+async def generate_poc_exploit(request: PoCExploitRequest):
+    """
+    Generate a proof-of-concept exploit for a vulnerability.
+    
+    Supports various vulnerability types:
+    - Buffer overflows
+    - Format string bugs
+    - Use-after-free
+    - Command injection
+    - Integer overflows
+    - Path traversal
+    
+    Returns working exploit code with:
+    - Full commented code
+    - Prerequisites and setup instructions
+    - Usage instructions
+    - Expected outcome
+    - Safety notes and legal warnings
+    """
+    logger.info(f"Generating PoC for: {request.vulnerability.get('title', 'unknown')}")
+    
+    try:
+        result = await re_service.generate_poc_exploit(
+            vulnerability=request.vulnerability,
+            target_platform=request.target_platform,
+            exploit_style=request.exploit_style,
+            include_shellcode=request.include_shellcode,
+        )
+        
+        return PoCExploitResponse(
+            vuln_id=result.vuln_id,
+            vuln_title=result.vuln_title,
+            exploit_type=result.exploit_type,
+            language=result.language,
+            code=result.code,
+            description=result.description,
+            prerequisites=result.prerequisites,
+            usage_instructions=result.usage_instructions,
+            expected_outcome=result.expected_outcome,
+            limitations=result.limitations,
+            safety_notes=result.safety_notes,
+            tested_on=result.tested_on,
+            reliability=result.reliability,
+            evasion_notes=result.evasion_notes,
+        )
+        
+    except Exception as e:
+        logger.error(f"PoC generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PoC: {str(e)}")
+
+
+@router.post("/binary/generate-pocs", response_model=MultiplePoCResponse)
+async def generate_multiple_pocs(request: MultiplePoCRequest):
+    """
+    Generate proof-of-concept exploits for multiple vulnerabilities.
+    
+    Batch generates exploits for all provided vulnerabilities.
+    Returns a summary with all generated exploits and any failures.
+    """
+    logger.info(f"Generating PoCs for {len(request.vulnerabilities)} vulnerabilities")
+    
+    try:
+        result = await re_service.generate_multiple_pocs(
+            vulnerabilities=request.vulnerabilities,
+            target_platform=request.target_platform,
+            exploit_style=request.exploit_style,
+        )
+        
+        return MultiplePoCResponse(
+            success=result.success,
+            exploits=[
+                PoCExploitResponse(
+                    vuln_id=e.vuln_id,
+                    vuln_title=e.vuln_title,
+                    exploit_type=e.exploit_type,
+                    language=e.language,
+                    code=e.code,
+                    description=e.description,
+                    prerequisites=e.prerequisites,
+                    usage_instructions=e.usage_instructions,
+                    expected_outcome=e.expected_outcome,
+                    limitations=e.limitations,
+                    safety_notes=e.safety_notes,
+                    tested_on=e.tested_on,
+                    reliability=e.reliability,
+                    evasion_notes=e.evasion_notes,
+                )
+                for e in result.exploits
+            ],
+            generation_log=result.generation_log,
+            warnings=result.warnings,
+            disclaimer=result.disclaimer,
+        )
+        
+    except Exception as e:
+        logger.error(f"Multiple PoC generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PoCs: {str(e)}")
+
+
+# ============================================================================
+# AI Chat for Analysis Context
+# ============================================================================
+
+class ChatMessage(BaseModel):
+    """A single chat message."""
+    role: str  # "user" or "assistant"
+    content: str
+
+class AnalysisChatRequest(BaseModel):
+    """Request for chatting about analysis results."""
+    message: str = Field(..., description="User's question")
+    conversation_history: List[ChatMessage] = Field(default_factory=list, description="Previous messages")
+    analysis_context: Dict[str, Any] = Field(..., description="Analysis context (vulnerabilities, purpose, etc.)")
+
+class AnalysisChatResponse(BaseModel):
+    """Response from the chat endpoint."""
+    response: str
+    error: Optional[str] = None
+
+@router.post("/chat", response_model=AnalysisChatResponse)
+async def chat_about_analysis(request: AnalysisChatRequest):
+    """
+    Chat with AI about vulnerability analysis results.
+    
+    Allows users to ask follow-up questions about:
+    - Discovered vulnerabilities
+    - Binary purpose analysis
+    - PoC exploits
+    - Remediation strategies
+    - Technical details
+    """
+    from backend.core.config import settings
+    
+    if not settings.gemini_api_key:
+        return AnalysisChatResponse(
+            response="",
+            error="Chat unavailable: GEMINI_API_KEY not configured"
+        )
+    
+    try:
+        from google import genai
+        from google.genai import types
+        import json
+        
+        client = genai.Client(api_key=settings.gemini_api_key)
+        
+        # Extract context components
+        binary_info = request.analysis_context.get("binary_info", {})
+        purpose_analysis = request.analysis_context.get("purpose_analysis", {})
+        vulnerabilities = request.analysis_context.get("vulnerabilities", [])
+        poc_exploits = request.analysis_context.get("poc_exploits", [])
+        attack_surface = request.analysis_context.get("attack_surface", {})
+        hunt_result = request.analysis_context.get("hunt_result", {})
+        
+        # Build the system context
+        context = f"""You are an expert binary security analyst and reverse engineering assistant. You have analyzed a binary file and have detailed context about its vulnerabilities, purpose, and security characteristics.
+
+## BINARY ANALYSIS CONTEXT
+
+### Binary Information
+{json.dumps(binary_info, indent=2) if binary_info else "No binary info available."}
+
+### Binary Purpose Analysis
+{json.dumps(purpose_analysis, indent=2) if purpose_analysis else "Not yet analyzed for purpose."}
+
+### Discovered Vulnerabilities ({len(vulnerabilities)} total)
+{json.dumps(vulnerabilities[:10], indent=2) if vulnerabilities else "No vulnerabilities discovered yet."}
+{f"... and {len(vulnerabilities) - 10} more" if len(vulnerabilities) > 10 else ""}
+
+### Generated PoC Exploits ({len(poc_exploits)} total)
+{json.dumps(poc_exploits[:5], indent=2) if poc_exploits else "No PoC exploits generated."}
+
+### Attack Surface Summary
+{json.dumps(attack_surface, indent=2) if attack_surface else "Not yet mapped."}
+
+### Hunt Result Summary
+- Risk Score: {hunt_result.get('risk_score', 'N/A')}
+- Total Functions Analyzed: {hunt_result.get('total_functions_analyzed', 'N/A')}
+- Executive Summary: {hunt_result.get('executive_summary', 'N/A')}
+- Recommended Focus Areas: {json.dumps(hunt_result.get('recommended_focus_areas', []), indent=2)}
+
+---
+
+## YOUR ROLE
+- Answer questions about the vulnerabilities, their severity, and exploitation
+- Explain technical details in a clear way
+- Provide remediation guidance and security best practices
+- Help interpret the analysis results
+- Suggest additional testing or analysis if relevant
+- If asked about exploitation, always remind users that testing should only be done on authorized systems
+
+Be precise, technical when needed, and always reference specific findings from the analysis when relevant. If a question is outside the scope of the analysis, let the user know what information is available."""
+
+        # Build conversation history for multi-turn chat
+        contents = []
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part(text=context + "\n\nThe user's first question is below.")]
+        ))
+        
+        # Add conversation history
+        for msg in request.conversation_history:
+            contents.append(types.Content(
+                role="user" if msg.role == "user" else "model",
+                parts=[types.Part(text=msg.content)]
+            ))
+        
+        # Add current message
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part(text=request.message)]
+        ))
+        
+        # Generate response
+        response = await client.aio.models.generate_content(
+            model=settings.gemini_model_id,
+            contents=contents
+        )
+        
+        return AnalysisChatResponse(response=response.text)
+        
+    except Exception as e:
+        logger.error(f"Analysis chat error: {e}")
+        return AnalysisChatResponse(
+            response="",
+            error=f"Failed to generate response: {str(e)}"
+        )
+
+
+# ============================================================================
+# Notes Management
+# ============================================================================
+
+class AnalysisNote(BaseModel):
+    """A note associated with analysis."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    content: str
+    vulnerability_id: Optional[str] = None
+    category: str = "general"  # general, vulnerability, poc, remediation
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    updated_at: Optional[str] = None
+
+class NotesStore(BaseModel):
+    """Collection of notes for an analysis session."""
+    session_id: str
+    binary_name: str
+    notes: List[AnalysisNote] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+class CreateNoteRequest(BaseModel):
+    """Request to create a new note."""
+    session_id: str
+    binary_name: str
+    content: str
+    vulnerability_id: Optional[str] = None
+    category: str = "general"
+
+class UpdateNoteRequest(BaseModel):
+    """Request to update an existing note."""
+    session_id: str
+    note_id: str
+    content: str
+
+class DeleteNoteRequest(BaseModel):
+    """Request to delete a note."""
+    session_id: str
+    note_id: str
+
+class ExportNotesRequest(BaseModel):
+    """Request to export notes."""
+    session_id: str
+    format: str = "markdown"  # markdown, json, txt
+
+# In-memory storage for notes (in production, use database)
+_notes_storage: Dict[str, NotesStore] = {}
+
+@router.post("/notes/create", response_model=AnalysisNote)
+async def create_note(request: CreateNoteRequest):
+    """Create a new note for the analysis session."""
+    session_id = request.session_id
+    
+    # Initialize session if needed
+    if session_id not in _notes_storage:
+        _notes_storage[session_id] = NotesStore(
+            session_id=session_id,
+            binary_name=request.binary_name
+        )
+    
+    # Create new note
+    note = AnalysisNote(
+        content=request.content,
+        vulnerability_id=request.vulnerability_id,
+        category=request.category
+    )
+    
+    _notes_storage[session_id].notes.append(note)
+    
+    logger.info(f"Created note {note.id} for session {session_id}")
+    return note
+
+
+@router.post("/notes/list", response_model=NotesStore)
+async def list_notes(session_id: str):
+    """List all notes for an analysis session."""
+    if session_id not in _notes_storage:
+        return NotesStore(session_id=session_id, binary_name="Unknown")
+    
+    return _notes_storage[session_id]
+
+
+@router.post("/notes/update", response_model=AnalysisNote)
+async def update_note(request: UpdateNoteRequest):
+    """Update an existing note."""
+    if request.session_id not in _notes_storage:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    store = _notes_storage[request.session_id]
+    for note in store.notes:
+        if note.id == request.note_id:
+            note.content = request.content
+            note.updated_at = datetime.utcnow().isoformat()
+            logger.info(f"Updated note {note.id}")
+            return note
+    
+    raise HTTPException(status_code=404, detail="Note not found")
+
+
+@router.delete("/notes/delete")
+async def delete_note(request: DeleteNoteRequest):
+    """Delete a note."""
+    if request.session_id not in _notes_storage:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    store = _notes_storage[request.session_id]
+    original_length = len(store.notes)
+    store.notes = [n for n in store.notes if n.id != request.note_id]
+    
+    if len(store.notes) == original_length:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    logger.info(f"Deleted note {request.note_id}")
+    return {"status": "deleted", "note_id": request.note_id}
+
+
+@router.post("/notes/export")
+async def export_notes(request: ExportNotesRequest):
+    """Export notes in the specified format."""
+    if request.session_id not in _notes_storage:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    store = _notes_storage[request.session_id]
+    
+    if request.format == "json":
+        return {
+            "format": "json",
+            "content": store.model_dump(),
+            "filename": f"{store.binary_name}_notes.json"
+        }
+    
+    elif request.format == "markdown":
+        md_content = f"# Analysis Notes: {store.binary_name}\n\n"
+        md_content += f"*Session: {store.session_id}*\n"
+        md_content += f"*Created: {store.created_at}*\n\n"
+        
+        # Group by category
+        categories = {}
+        for note in store.notes:
+            cat = note.category
+            if cat not in categories:
+                categories[cat] = []
+            categories[cat].append(note)
+        
+        for category, notes in categories.items():
+            md_content += f"## {category.title()} Notes\n\n"
+            for note in notes:
+                md_content += f"### Note ({note.created_at})\n"
+                if note.vulnerability_id:
+                    md_content += f"*Linked to vulnerability: {note.vulnerability_id}*\n\n"
+                md_content += f"{note.content}\n\n"
+                md_content += "---\n\n"
+        
+        return {
+            "format": "markdown",
+            "content": md_content,
+            "filename": f"{store.binary_name}_notes.md"
+        }
+    
+    else:  # txt
+        txt_content = f"Analysis Notes: {store.binary_name}\n"
+        txt_content += f"Session: {store.session_id}\n"
+        txt_content += f"Created: {store.created_at}\n"
+        txt_content += "=" * 50 + "\n\n"
+        
+        for note in store.notes:
+            txt_content += f"[{note.category.upper()}] {note.created_at}\n"
+            if note.vulnerability_id:
+                txt_content += f"Vulnerability: {note.vulnerability_id}\n"
+            txt_content += "-" * 30 + "\n"
+            txt_content += f"{note.content}\n\n"
+        
+        return {
+            "format": "txt",
+            "content": txt_content,
+            "filename": f"{store.binary_name}_notes.txt"
+        }
+
+
+# ============================================================================
+# AI Decompiler Enhancement
+# ============================================================================
+
+class EnhanceCodeRequest(BaseModel):
+    """Request to enhance decompiled code with AI."""
+    code: str = Field(..., description="Decompiled code to enhance")
+    function_name: str = Field(default="unknown", description="Original function name")
+    binary_context: Optional[Dict[str, Any]] = Field(default=None, description="Additional binary context")
+    enhancement_level: str = Field(default="full", description="Enhancement level: basic, standard, full")
+    include_security_analysis: bool = Field(default=True, description="Include security vulnerability annotations")
+
+
+class EnhancedVariable(BaseModel):
+    """An enhanced/renamed variable."""
+    original_name: str
+    suggested_name: str
+    inferred_type: str
+    confidence: float
+    reasoning: str
+
+
+class EnhancedCodeBlock(BaseModel):
+    """A code block with explanation."""
+    start_line: int
+    end_line: int
+    purpose: str
+    security_notes: Optional[str] = None
+
+
+class DataStructure(BaseModel):
+    """Reconstructed data structure."""
+    name: str
+    inferred_type: str
+    fields: List[Dict[str, str]]
+    usage_context: str
+
+
+class SecurityAnnotation(BaseModel):
+    """Security-related annotation in code."""
+    line: int
+    severity: str  # info, low, medium, high, critical
+    issue_type: str
+    description: str
+    cwe_id: Optional[str] = None
+
+
+class EnhanceCodeResponse(BaseModel):
+    """Response with enhanced decompiled code."""
+    original_code: str
+    enhanced_code: str
+    suggested_function_name: str
+    function_purpose: str
+    variables: List[EnhancedVariable]
+    code_blocks: List[EnhancedCodeBlock]
+    data_structures: List[DataStructure]
+    security_annotations: List[SecurityAnnotation]
+    complexity_score: int  # 1-10
+    readability_improvement: int  # percentage
+    inline_comments_added: int
+    api_calls_identified: List[Dict[str, str]]
+
+
+@router.post("/binary/enhance-code", response_model=EnhanceCodeResponse)
+async def enhance_decompiled_code(request: EnhanceCodeRequest):
+    """
+    AI-powered decompiled code enhancement.
+    
+    Takes Ghidra/IDA decompiled code and makes it human-readable:
+    - Renames variables intelligently (var_14 → encryptionKey)
+    - Adds inline comments explaining code blocks
+    - Identifies and documents data structures
+    - Suggests original function names based on behavior
+    - Annotates security vulnerabilities inline
+    - Identifies API calls and their purposes
+    
+    Enhancement levels:
+    - basic: Variable renaming only
+    - standard: Variables + inline comments
+    - full: Everything including security analysis
+    """
+    from backend.core.config import settings
+    import google.generativeai as genai
+    
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Gemini API key not configured")
+    
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    
+    # Build context
+    context_info = ""
+    if request.binary_context:
+        if "imports" in request.binary_context:
+            context_info += f"\nImported functions: {', '.join(request.binary_context['imports'][:20])}"
+        if "strings" in request.binary_context:
+            context_info += f"\nInteresting strings: {', '.join(request.binary_context['strings'][:10])}"
+        if "architecture" in request.binary_context:
+            context_info += f"\nArchitecture: {request.binary_context['architecture']}"
+    
+    # Determine what to analyze based on enhancement level
+    analyze_security = request.include_security_analysis and request.enhancement_level == "full"
+    analyze_structures = request.enhancement_level in ("standard", "full")
+    
+    prompt = f"""You are an expert reverse engineer and code analyst. Analyze this decompiled code and enhance it for readability.
+
+**Original Function Name:** {request.function_name}
+**Enhancement Level:** {request.enhancement_level}
+{context_info}
+
+**Decompiled Code:**
+```c
+{request.code}
+```
+
+Provide a comprehensive analysis in the following JSON format:
+
+{{
+    "suggested_function_name": "descriptive_name_based_on_behavior",
+    "function_purpose": "Clear description of what this function does",
+    "enhanced_code": "The complete enhanced code with renamed variables and inline comments",
+    "variables": [
+        {{
+            "original_name": "var_14",
+            "suggested_name": "buffer_size",
+            "inferred_type": "size_t",
+            "confidence": 0.85,
+            "reasoning": "Used as size parameter in memcpy"
+        }}
+    ],
+    "code_blocks": [
+        {{
+            "start_line": 1,
+            "end_line": 5,
+            "purpose": "Initialize encryption context",
+            "security_notes": "Uses hardcoded IV - potential weakness"
+        }}
+    ],
+    "data_structures": [
+        {{
+            "name": "connection_info",
+            "inferred_type": "struct",
+            "fields": [{{"name": "socket_fd", "type": "int"}}, {{"name": "buffer", "type": "char*"}}],
+            "usage_context": "Network connection state"
+        }}
+    ],
+    "security_annotations": [
+        {{
+            "line": 12,
+            "severity": "high",
+            "issue_type": "buffer_overflow",
+            "description": "strcpy without bounds checking",
+            "cwe_id": "CWE-120"
+        }}
+    ],
+    "api_calls_identified": [
+        {{
+            "name": "memcpy",
+            "purpose": "Copy decrypted data to output buffer",
+            "line": 15
+        }}
+    ],
+    "complexity_score": 6,
+    "readability_improvement": 75
+}}
+
+Guidelines for enhanced_code:
+1. Replace generic variable names (var_X, param_X) with meaningful names
+2. Add // comments explaining non-obvious operations
+3. Group related operations with block comments
+4. Keep the code syntactically valid C
+5. Preserve the original logic exactly
+{"6. Add security warning comments for dangerous patterns" if analyze_security else ""}
+
+Return ONLY valid JSON, no markdown formatting."""
+
+    try:
+        response = await asyncio.to_thread(
+            lambda: model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.3,
+                    max_output_tokens=8000,
+                )
+            )
+        )
+        
+        result_text = response.text.strip()
+        
+        # Clean up response
+        if result_text.startswith("```json"):
+            result_text = result_text[7:]
+        if result_text.startswith("```"):
+            result_text = result_text[3:]
+        if result_text.endswith("```"):
+            result_text = result_text[:-3]
+        result_text = result_text.strip()
+        
+        result = json.loads(result_text)
+        
+        return EnhanceCodeResponse(
+            original_code=request.code,
+            enhanced_code=result.get("enhanced_code", request.code),
+            suggested_function_name=result.get("suggested_function_name", request.function_name),
+            function_purpose=result.get("function_purpose", "Unknown"),
+            variables=[EnhancedVariable(**v) for v in result.get("variables", [])],
+            code_blocks=[EnhancedCodeBlock(**b) for b in result.get("code_blocks", [])],
+            data_structures=[DataStructure(**d) for d in result.get("data_structures", [])],
+            security_annotations=[SecurityAnnotation(**s) for s in result.get("security_annotations", [])] if analyze_security else [],
+            complexity_score=result.get("complexity_score", 5),
+            readability_improvement=result.get("readability_improvement", 50),
+            inline_comments_added=result.get("enhanced_code", "").count("//") - request.code.count("//"),
+            api_calls_identified=result.get("api_calls_identified", []),
+        )
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse AI response: {e}")
+        # Return basic response
+        return EnhanceCodeResponse(
+            original_code=request.code,
+            enhanced_code=request.code,
+            suggested_function_name=request.function_name,
+            function_purpose="Analysis failed - could not parse AI response",
+            variables=[],
+            code_blocks=[],
+            data_structures=[],
+            security_annotations=[],
+            complexity_score=5,
+            readability_improvement=0,
+            inline_comments_added=0,
+            api_calls_identified=[],
+        )
+    except Exception as e:
+        logger.error(f"Code enhancement failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhancement failed: {str(e)}")
+
+
+# ============================================================================
+# Natural Language Binary Search
+# ============================================================================
+
+class NaturalLanguageSearchRequest(BaseModel):
+    """Request for natural language search across binary."""
+    query: str = Field(..., description="Natural language search query")
+    functions: List[Dict[str, Any]] = Field(..., description="List of functions with their decompiled code")
+    max_results: int = Field(default=10, ge=1, le=50, description="Maximum results to return")
+    include_explanations: bool = Field(default=True, description="Include AI explanations for matches")
+    search_scope: str = Field(default="all", description="Search scope: all, security, network, crypto, file_io")
+
+
+class SearchMatch(BaseModel):
+    """A matching function from natural language search."""
+    function_name: str
+    address: Optional[str] = None
+    relevance_score: float  # 0-1
+    match_reason: str
+    code_snippet: str
+    key_indicators: List[str]
+    security_relevant: bool
+    category: str  # network, crypto, file_io, memory, string, etc.
+
+
+class NaturalLanguageSearchResponse(BaseModel):
+    """Response from natural language binary search."""
+    query: str
+    interpreted_query: str  # How AI understood the query
+    total_functions_searched: int
+    matches: List[SearchMatch]
+    search_suggestions: List[str]  # Related queries user might want
+    categories_found: Dict[str, int]  # Category distribution
+
+
+@router.post("/binary/nl-search", response_model=NaturalLanguageSearchResponse)
+async def natural_language_search(request: NaturalLanguageSearchRequest):
+    """
+    Natural language search across decompiled binary functions.
+    
+    Search by description instead of exact strings:
+    - "Find the function that handles network authentication"
+    - "Show me code that writes to files"
+    - "Where is the encryption key derived?"
+    - "Functions that parse user input"
+    - "Code vulnerable to buffer overflow"
+    
+    The AI semantically searches across all decompiled functions
+    and returns the most relevant matches with explanations.
+    """
+    from backend.core.config import settings
+    import google.generativeai as genai
+    
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Gemini API key not configured")
+    
+    if not request.functions:
+        raise HTTPException(status_code=400, detail="No functions provided to search")
+    
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    
+    # Build function summaries for the AI to search
+    # Limit to prevent token overflow
+    max_funcs = min(len(request.functions), 100)
+    function_summaries = []
+    
+    for i, func in enumerate(request.functions[:max_funcs]):
+        code = func.get("code", func.get("decompiled", ""))[:2000]  # Limit code length
+        name = func.get("name", func.get("function_name", f"func_{i}"))
+        addr = func.get("address", func.get("entry_point", "unknown"))
+        
+        function_summaries.append({
+            "index": i,
+            "name": name,
+            "address": str(addr),
+            "code_preview": code
+        })
+    
+    # Build the search prompt
+    scope_hint = ""
+    if request.search_scope != "all":
+        scope_hints = {
+            "security": "Focus on security-sensitive functions (input validation, auth, crypto, memory operations)",
+            "network": "Focus on network-related functions (sockets, HTTP, DNS, protocols)",
+            "crypto": "Focus on cryptographic functions (encryption, hashing, key management)",
+            "file_io": "Focus on file operations (read, write, open, delete, permissions)",
+        }
+        scope_hint = scope_hints.get(request.search_scope, "")
+    
+    prompt = f"""You are an expert reverse engineer searching through decompiled binary code.
+
+**User's Search Query:** "{request.query}"
+{f"**Search Scope:** {scope_hint}" if scope_hint else ""}
+
+**Functions to Search ({len(function_summaries)} total):**
+
+{json.dumps(function_summaries, indent=2)}
+
+Analyze each function and find the ones that best match the user's query. Consider:
+1. Function behavior and purpose
+2. API calls and system interactions
+3. Data flow and transformations
+4. Security implications
+5. Semantic meaning, not just keyword matching
+
+Return your analysis as JSON:
+
+{{
+    "interpreted_query": "How you understood the user's intent",
+    "matches": [
+        {{
+            "function_index": 0,
+            "function_name": "actual_name",
+            "address": "0x401000",
+            "relevance_score": 0.95,
+            "match_reason": "This function implements network authentication by...",
+            "code_snippet": "Key lines that match the query",
+            "key_indicators": ["calls socket()", "compares credentials", "returns auth token"],
+            "security_relevant": true,
+            "category": "network"
+        }}
+    ],
+    "search_suggestions": [
+        "Related query 1 the user might want",
+        "Related query 2"
+    ],
+    "categories_found": {{
+        "network": 2,
+        "crypto": 1,
+        "file_io": 0
+    }}
+}}
+
+Return up to {request.max_results} most relevant matches, sorted by relevance_score (highest first).
+Only include functions with relevance_score >= 0.3.
+Return ONLY valid JSON, no markdown."""
+
+    try:
+        response = await asyncio.to_thread(
+            lambda: model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.2,
+                    max_output_tokens=4000,
+                )
+            )
+        )
+        
+        result_text = response.text.strip()
+        
+        # Clean up response
+        if result_text.startswith("```json"):
+            result_text = result_text[7:]
+        if result_text.startswith("```"):
+            result_text = result_text[3:]
+        if result_text.endswith("```"):
+            result_text = result_text[:-3]
+        result_text = result_text.strip()
+        
+        result = json.loads(result_text)
+        
+        # Build response matches
+        matches = []
+        for match in result.get("matches", []):
+            idx = match.get("function_index", -1)
+            if 0 <= idx < len(function_summaries):
+                orig_func = function_summaries[idx]
+                matches.append(SearchMatch(
+                    function_name=match.get("function_name", orig_func["name"]),
+                    address=match.get("address", orig_func["address"]),
+                    relevance_score=min(1.0, max(0.0, match.get("relevance_score", 0.5))),
+                    match_reason=match.get("match_reason", "Matched search criteria"),
+                    code_snippet=match.get("code_snippet", orig_func["code_preview"][:500]),
+                    key_indicators=match.get("key_indicators", []),
+                    security_relevant=match.get("security_relevant", False),
+                    category=match.get("category", "unknown"),
+                ))
+        
+        return NaturalLanguageSearchResponse(
+            query=request.query,
+            interpreted_query=result.get("interpreted_query", request.query),
+            total_functions_searched=len(function_summaries),
+            matches=matches[:request.max_results],
+            search_suggestions=result.get("search_suggestions", [])[:5],
+            categories_found=result.get("categories_found", {}),
+        )
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse search response: {e}")
+        return NaturalLanguageSearchResponse(
+            query=request.query,
+            interpreted_query=request.query,
+            total_functions_searched=len(function_summaries),
+            matches=[],
+            search_suggestions=["Try a more specific query", "Use keywords like 'network', 'file', 'crypto'"],
+            categories_found={},
+        )
+    except Exception as e:
+        logger.error(f"Natural language search failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+@router.post("/binary/smart-rename")
+async def smart_rename_function(
+    function_code: str = Query(..., description="Decompiled function code"),
+    current_name: str = Query(default="FUN_00401000", description="Current function name"),
+    context_hints: Optional[str] = Query(default=None, description="Additional context about the binary"),
+):
+    """
+    AI-powered function renaming suggestion.
+    
+    Analyzes decompiled code and suggests a meaningful function name
+    based on the function's behavior, API calls, and data flow.
+    """
+    from backend.core.config import settings
+    import google.generativeai as genai
+    
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Gemini API key not configured")
+    
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    
+    prompt = f"""Analyze this decompiled function and suggest a meaningful name.
+
+**Current Name:** {current_name}
+{f"**Context:** {context_hints}" if context_hints else ""}
+
+**Decompiled Code:**
+```c
+{function_code[:4000]}
+```
+
+Respond with JSON:
+{{
+    "suggested_name": "descriptive_function_name",
+    "confidence": 0.85,
+    "reasoning": "Why this name fits",
+    "alternative_names": ["other_option_1", "other_option_2"],
+    "detected_purpose": "Brief description of what the function does",
+    "naming_convention": "snake_case"
+}}
+
+Use snake_case. Be specific but concise. Examples:
+- "validate_user_credentials" not "check_stuff"
+- "decrypt_aes_buffer" not "crypto_function"
+- "parse_http_headers" not "process_data"
+
+Return ONLY valid JSON."""
+
+    try:
+        response = await asyncio.to_thread(
+            lambda: model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.2,
+                    max_output_tokens=500,
+                )
+            )
+        )
+        
+        result_text = response.text.strip()
+        if result_text.startswith("```"):
+            result_text = result_text.split("```")[1]
+            if result_text.startswith("json"):
+                result_text = result_text[4:]
+        result_text = result_text.strip()
+        
+        result = json.loads(result_text)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Smart rename failed: {e}")
+        return {
+            "suggested_name": current_name,
+            "confidence": 0.0,
+            "reasoning": f"Analysis failed: {str(e)}",
+            "alternative_names": [],
+            "detected_purpose": "Unknown",
+            "naming_convention": "unknown"
+        }
+
+
+# ============================================================================
+# Live Attack Simulation Mode
+# ============================================================================
+
+class AttackSimulationRequest(BaseModel):
+    """Request for attack simulation."""
+    vulnerability: Dict[str, Any] = Field(..., description="The vulnerability finding to simulate")
+    target_code: Optional[str] = Field(None, description="Relevant decompiled code")
+    binary_context: Optional[Dict[str, Any]] = Field(None, description="Binary context (architecture, imports)")
+    simulation_depth: str = Field("standard", description="Depth: quick, standard, or comprehensive")
+
+
+class RegisterState(BaseModel):
+    """CPU register state at a simulation step."""
+    name: str
+    value: str
+    description: Optional[str] = None
+    is_controlled: bool = False  # Whether attacker controls this value
+
+
+class MemoryRegion(BaseModel):
+    """Memory region state at a simulation step."""
+    address: str
+    size: int
+    label: str  # e.g., "stack buffer", "heap chunk", "return address"
+    state: str  # "normal", "corrupted", "overwritten", "controlled"
+    content_preview: Optional[str] = None
+
+
+class AttackStep(BaseModel):
+    """A single step in the attack simulation."""
+    step_number: int
+    phase: str  # "setup", "trigger", "corruption", "control", "payload", "execution"
+    title: str
+    description: str
+    technical_detail: str
+    code_location: Optional[str] = None
+    registers: List[RegisterState] = []
+    memory_regions: List[MemoryRegion] = []
+    attacker_input: Optional[str] = None
+    visual_indicator: str  # "info", "warning", "danger", "success"
+
+
+class ExploitPrimitive(BaseModel):
+    """An exploit primitive that can be achieved."""
+    name: str  # e.g., "arbitrary write", "code execution", "info leak"
+    description: str
+    prerequisites: List[str]
+    achieved_at_step: int
+
+
+class Mitigation(BaseModel):
+    """A mitigation that could prevent the attack."""
+    name: str
+    description: str
+    effectiveness: str  # "blocks", "hinders", "ineffective"
+    bypass_possible: bool
+    bypass_technique: Optional[str] = None
+
+
+class AttackSimulationResponse(BaseModel):
+    """Response containing the full attack simulation."""
+    vulnerability_title: str
+    vulnerability_type: str
+    severity: str
+    
+    # Attack overview
+    attack_summary: str
+    success_probability: float  # 0-1
+    required_conditions: List[str]
+    
+    # Step-by-step simulation
+    total_steps: int
+    steps: List[AttackStep]
+    
+    # What the attacker achieves
+    exploit_primitives: List[ExploitPrimitive]
+    final_impact: str
+    
+    # Defense analysis
+    mitigations: List[Mitigation]
+    detection_opportunities: List[str]
+    
+    # Additional context
+    real_world_examples: List[str]
+    cve_references: List[str]
+    difficulty_rating: str  # "trivial", "easy", "moderate", "hard", "expert"
+
+
+@router.post("/binary/simulate-attack", response_model=AttackSimulationResponse)
+async def simulate_attack(request: AttackSimulationRequest):
+    """
+    Live Attack Simulation Mode.
+    
+    Takes a discovered vulnerability and generates a step-by-step simulation
+    of how an attacker would exploit it. Shows:
+    - Each phase of the attack (setup, trigger, corruption, control, execution)
+    - Register and memory state at each step
+    - What attacker input causes each state change
+    - Exploit primitives achieved
+    - Mitigations and their effectiveness
+    - Real-world examples of similar attacks
+    
+    This helps security teams understand the practical impact of vulnerabilities
+    and prioritize fixes based on exploitability.
+    """
+    from backend.core.config import settings
+    import google.generativeai as genai
+    
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Gemini API key not configured")
+    
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    
+    # Extract vulnerability details
+    vuln = request.vulnerability
+    vuln_type = vuln.get("vulnerability_type", vuln.get("type", vuln.get("title", "Unknown")))
+    vuln_title = vuln.get("title", vuln.get("function_name", f"{vuln_type} Vulnerability"))
+    severity = vuln.get("severity", "medium")
+    technical_details = vuln.get("technical_details", vuln.get("description", ""))
+    poc = vuln.get("proof_of_concept", "")
+    
+    # Build context
+    context_parts = []
+    if request.target_code:
+        context_parts.append(f"**Vulnerable Code:**\n```c\n{request.target_code[:3000]}\n```")
+    if request.binary_context:
+        if request.binary_context.get("architecture"):
+            context_parts.append(f"**Architecture:** {request.binary_context['architecture']}")
+        if request.binary_context.get("imports"):
+            context_parts.append(f"**Key Imports:** {', '.join(request.binary_context['imports'][:15])}")
+    
+    context = "\n".join(context_parts) if context_parts else "No additional context provided."
+    
+    # Determine simulation depth
+    step_count = {"quick": 4, "standard": 6, "comprehensive": 10}.get(request.simulation_depth, 6)
+    
+    prompt = f"""You are an expert exploit developer and security researcher. Generate a detailed, step-by-step attack simulation for this vulnerability.
+
+**Vulnerability Type:** {vuln_type}
+**Title:** {vuln_title}
+**Severity:** {severity}
+
+**Technical Details:**
+{technical_details}
+
+{f"**Proof of Concept:**{chr(10)}{poc}" if poc else ""}
+
+{context}
+
+Generate a realistic attack simulation showing exactly how an attacker would exploit this vulnerability. Be technical and specific.
+
+Respond with JSON (and ONLY JSON, no markdown):
+
+{{
+    "vulnerability_title": "{vuln_title}",
+    "vulnerability_type": "{vuln_type}",
+    "severity": "{severity}",
+    
+    "attack_summary": "A 2-3 sentence summary of the attack",
+    "success_probability": 0.75,
+    "required_conditions": [
+        "Condition 1 needed for exploit",
+        "Condition 2"
+    ],
+    
+    "total_steps": {step_count},
+    "steps": [
+        {{
+            "step_number": 1,
+            "phase": "setup",
+            "title": "Prepare Malicious Input",
+            "description": "The attacker crafts a specially formatted input...",
+            "technical_detail": "Create a buffer of 0x108 bytes followed by the target return address",
+            "code_location": "Line 42: memcpy(local_buf, user_input, input_len)",
+            "registers": [
+                {{"name": "RSP", "value": "0x7fffffffe000", "description": "Stack pointer", "is_controlled": false}},
+                {{"name": "RDI", "value": "0x7fffffffe010", "description": "Destination buffer", "is_controlled": false}}
+            ],
+            "memory_regions": [
+                {{
+                    "address": "0x7fffffffe010",
+                    "size": 256,
+                    "label": "local_buf (stack buffer)",
+                    "state": "normal",
+                    "content_preview": "00 00 00 00 00 00 00 00..."
+                }},
+                {{
+                    "address": "0x7fffffffe110",
+                    "size": 8,
+                    "label": "saved return address",
+                    "state": "normal",
+                    "content_preview": "Address of caller"
+                }}
+            ],
+            "attacker_input": "A * 264 + pack('<Q', 0x401234)",
+            "visual_indicator": "info"
+        }},
+        {{
+            "step_number": 2,
+            "phase": "trigger",
+            "title": "Trigger the Vulnerability",
+            "description": "The vulnerable function is called with oversized input...",
+            "technical_detail": "memcpy copies 280 bytes into 256-byte buffer",
+            "code_location": "Line 42: memcpy(local_buf, user_input, input_len)",
+            "registers": [
+                {{"name": "RDX", "value": "0x118", "description": "Copy size (280 bytes)", "is_controlled": true}}
+            ],
+            "memory_regions": [
+                {{
+                    "address": "0x7fffffffe010",
+                    "size": 256,
+                    "label": "local_buf",
+                    "state": "corrupted",
+                    "content_preview": "41 41 41 41 41 41 41 41..."
+                }}
+            ],
+            "attacker_input": null,
+            "visual_indicator": "warning"
+        }},
+        {{
+            "step_number": 3,
+            "phase": "corruption",
+            "title": "Stack Corruption Occurs",
+            "description": "The overflow overwrites the saved return address...",
+            "technical_detail": "Bytes 256-263 overwrite saved RBP, bytes 264-271 overwrite return address",
+            "code_location": null,
+            "registers": [],
+            "memory_regions": [
+                {{
+                    "address": "0x7fffffffe110",
+                    "size": 8,
+                    "label": "saved return address",
+                    "state": "overwritten",
+                    "content_preview": "34 12 40 00 00 00 00 00"
+                }}
+            ],
+            "attacker_input": null,
+            "visual_indicator": "danger"
+        }},
+        {{
+            "step_number": 4,
+            "phase": "control",
+            "title": "Attacker Gains Control",
+            "description": "When the function returns, execution jumps to attacker-controlled address...",
+            "technical_detail": "RET instruction pops 0x401234 into RIP",
+            "code_location": "Function epilogue: ret",
+            "registers": [
+                {{"name": "RIP", "value": "0x401234", "description": "Instruction pointer", "is_controlled": true}}
+            ],
+            "memory_regions": [],
+            "attacker_input": null,
+            "visual_indicator": "danger"
+        }},
+        {{
+            "step_number": 5,
+            "phase": "payload",
+            "title": "ROP Chain Execution",
+            "description": "The attacker's ROP chain begins executing...",
+            "technical_detail": "First gadget: pop rdi; ret - sets up argument for system()",
+            "code_location": "0x401234 (gadget)",
+            "registers": [
+                {{"name": "RDI", "value": "0x402000", "description": "Pointer to '/bin/sh'", "is_controlled": true}}
+            ],
+            "memory_regions": [],
+            "attacker_input": null,
+            "visual_indicator": "danger"
+        }},
+        {{
+            "step_number": 6,
+            "phase": "execution",
+            "title": "Code Execution Achieved",
+            "description": "The attacker achieves arbitrary code execution...",
+            "technical_detail": "system('/bin/sh') spawns a shell with process privileges",
+            "code_location": "system() in libc",
+            "registers": [
+                {{"name": "RAX", "value": "0x0", "description": "system() return value", "is_controlled": false}}
+            ],
+            "memory_regions": [],
+            "attacker_input": null,
+            "visual_indicator": "success"
+        }}
+    ],
+    
+    "exploit_primitives": [
+        {{
+            "name": "Stack Buffer Overflow",
+            "description": "Overwrite stack data beyond buffer bounds",
+            "prerequisites": ["No stack canaries or canary bypass"],
+            "achieved_at_step": 2
+        }},
+        {{
+            "name": "Return Address Control",
+            "description": "Redirect execution to arbitrary address",
+            "prerequisites": ["Stack overflow reaching return address"],
+            "achieved_at_step": 3
+        }},
+        {{
+            "name": "Arbitrary Code Execution",
+            "description": "Execute attacker-controlled code/ROP chain",
+            "prerequisites": ["Return address control", "Known gadget addresses"],
+            "achieved_at_step": 6
+        }}
+    ],
+    
+    "final_impact": "The attacker achieves remote code execution with the privileges of the vulnerable process, potentially leading to full system compromise.",
+    
+    "mitigations": [
+        {{
+            "name": "Stack Canaries",
+            "description": "Random value placed before return address, checked before function returns",
+            "effectiveness": "blocks",
+            "bypass_possible": true,
+            "bypass_technique": "Information leak to read canary value, or format string to overwrite"
+        }},
+        {{
+            "name": "ASLR",
+            "description": "Randomize memory layout including stack and library addresses",
+            "effectiveness": "hinders",
+            "bypass_possible": true,
+            "bypass_technique": "Information leak or brute force (32-bit)"
+        }},
+        {{
+            "name": "DEP/NX",
+            "description": "Mark stack as non-executable",
+            "effectiveness": "hinders",
+            "bypass_possible": true,
+            "bypass_technique": "Return-Oriented Programming (ROP)"
+        }},
+        {{
+            "name": "Safe Functions",
+            "description": "Use strncpy/memcpy_s with size limits",
+            "effectiveness": "blocks",
+            "bypass_possible": false,
+            "bypass_technique": null
+        }}
+    ],
+    
+    "detection_opportunities": [
+        "Monitor for crashes/segfaults indicating exploitation attempts",
+        "Detect anomalous memory access patterns",
+        "Intrusion detection signatures for known exploit payloads",
+        "Runtime canary violation alerts"
+    ],
+    
+    "real_world_examples": [
+        "CVE-2021-3156 (sudo heap overflow)",
+        "CVE-2017-5638 (Apache Struts RCE)"
+    ],
+    
+    "cve_references": [],
+    
+    "difficulty_rating": "moderate"
+}}
+
+IMPORTANT:
+- Generate realistic register values (use x86-64 conventions)
+- Show actual memory corruption with hex previews
+- Make the attack technically accurate for the vulnerability type
+- Adjust the simulation for the specific vulnerability (buffer overflow, format string, use-after-free, etc.)
+- Include {step_count} detailed steps covering setup through execution
+- Return ONLY valid JSON"""
+
+    try:
+        response = await asyncio.to_thread(
+            lambda: model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.3,
+                    max_output_tokens=8000,
+                )
+            )
+        )
+        
+        result_text = response.text.strip()
+        
+        # Clean up response
+        if result_text.startswith("```json"):
+            result_text = result_text[7:]
+        if result_text.startswith("```"):
+            result_text = result_text[3:]
+        if result_text.endswith("```"):
+            result_text = result_text[:-3]
+        result_text = result_text.strip()
+        
+        result = json.loads(result_text)
+        
+        # Build response with proper validation
+        steps = []
+        for step_data in result.get("steps", []):
+            registers = [RegisterState(**r) for r in step_data.get("registers", [])]
+            memory_regions = [MemoryRegion(**m) for m in step_data.get("memory_regions", [])]
+            steps.append(AttackStep(
+                step_number=step_data.get("step_number", 0),
+                phase=step_data.get("phase", "unknown"),
+                title=step_data.get("title", "Unknown Step"),
+                description=step_data.get("description", ""),
+                technical_detail=step_data.get("technical_detail", ""),
+                code_location=step_data.get("code_location"),
+                registers=registers,
+                memory_regions=memory_regions,
+                attacker_input=step_data.get("attacker_input"),
+                visual_indicator=step_data.get("visual_indicator", "info"),
+            ))
+        
+        exploit_primitives = [
+            ExploitPrimitive(**p) for p in result.get("exploit_primitives", [])
+        ]
+        
+        mitigations = [
+            Mitigation(**m) for m in result.get("mitigations", [])
+        ]
+        
+        return AttackSimulationResponse(
+            vulnerability_title=result.get("vulnerability_title", vuln_title),
+            vulnerability_type=result.get("vulnerability_type", vuln_type),
+            severity=result.get("severity", severity),
+            attack_summary=result.get("attack_summary", "Attack simulation generated"),
+            success_probability=min(1.0, max(0.0, result.get("success_probability", 0.5))),
+            required_conditions=result.get("required_conditions", []),
+            total_steps=len(steps),
+            steps=steps,
+            exploit_primitives=exploit_primitives,
+            final_impact=result.get("final_impact", "Unknown impact"),
+            mitigations=mitigations,
+            detection_opportunities=result.get("detection_opportunities", []),
+            real_world_examples=result.get("real_world_examples", []),
+            cve_references=result.get("cve_references", []),
+            difficulty_rating=result.get("difficulty_rating", "unknown"),
+        )
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse attack simulation response: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate attack simulation")
+    except Exception as e:
+        logger.error(f"Attack simulation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
+
+
+# ============================================================================
+# Symbolic Execution Traces
+# ============================================================================
+
+class PathConstraint(BaseModel):
+    """A constraint on a path (e.g., input must be > 0)."""
+    variable: str
+    operator: str  # "==", "!=", ">", "<", ">=", "<=", "contains", "matches"
+    value: str
+    description: str
+    is_satisfiable: bool = True
+
+
+class TaintedVariable(BaseModel):
+    """A variable that is tainted (derived from user input)."""
+    name: str
+    source: str  # Where the taint originated (e.g., "argv[1]", "read()", "recv()")
+    taint_type: str  # "direct", "derived", "partial"
+    propagation_chain: List[str]  # How taint spread: ["argv[1]", "buffer", "ptr"]
+    reaches_sink: bool = False
+    sink_name: Optional[str] = None  # e.g., "strcpy", "system", "eval"
+
+
+class BasicBlock(BaseModel):
+    """A basic block in the control flow graph."""
+    id: str
+    start_address: str
+    end_address: str
+    instructions_count: int
+    code_preview: str
+    is_entry: bool = False
+    is_exit: bool = False
+    is_reachable: bool = True
+    predecessors: List[str] = []
+    successors: List[str] = []
+    dominates: List[str] = []
+    tainted_at_entry: List[str] = []  # Which variables are tainted when entering this block
+
+
+class ExecutionPath(BaseModel):
+    """A single execution path through the function."""
+    path_id: str
+    blocks: List[str]  # Block IDs in order
+    constraints: List[PathConstraint]  # Constraints to reach this path
+    probability: float  # Estimated likelihood (0-1)
+    is_feasible: bool = True
+    leads_to_vulnerability: bool = False
+    vulnerability_type: Optional[str] = None
+    tainted_at_end: List[TaintedVariable] = []
+    path_description: str
+    interesting_operations: List[str] = []  # Notable things that happen on this path
+
+
+class SymbolicState(BaseModel):
+    """Symbolic state at a specific point in execution."""
+    location: str  # Address or line
+    variables: Dict[str, str]  # Variable name -> symbolic expression
+    memory_regions: Dict[str, str]  # Address range -> description
+    constraints: List[PathConstraint]
+    tainted: List[str]  # Variable names that are tainted
+
+
+class DangerousSink(BaseModel):
+    """A dangerous function that tainted data might reach."""
+    function_name: str
+    address: str
+    sink_type: str  # "memory", "command", "format", "file", "network"
+    severity: str  # "critical", "high", "medium", "low"
+    tainted_arguments: List[int]  # Which arguments are tainted (0-indexed)
+    reachable_from: List[str]  # Path IDs that can reach this sink
+    description: str
+    cwe_id: Optional[str] = None
+
+
+class SymbolicTraceRequest(BaseModel):
+    """Request for symbolic execution trace."""
+    code: str = Field(..., description="Decompiled function code")
+    function_name: str = Field(default="unknown", description="Function name")
+    entry_point: Optional[str] = Field(None, description="Entry point address")
+    input_sources: List[str] = Field(
+        default=["argv", "stdin", "recv", "read", "fgets", "scanf", "getenv"],
+        description="Functions/variables considered as input sources (taint sources)"
+    )
+    dangerous_sinks: List[str] = Field(
+        default=["strcpy", "strcat", "sprintf", "gets", "system", "exec", "eval", "memcpy", "memmove"],
+        description="Dangerous functions to track (taint sinks)"
+    )
+    max_paths: int = Field(default=20, ge=1, le=100, description="Maximum paths to analyze")
+    max_depth: int = Field(default=50, ge=5, le=200, description="Maximum path depth")
+    binary_context: Optional[Dict[str, Any]] = Field(None, description="Additional binary context")
+
+
+class SymbolicTraceResponse(BaseModel):
+    """Response containing symbolic execution trace analysis."""
+    function_name: str
+    analysis_summary: str
+    
+    # Control Flow
+    total_basic_blocks: int
+    basic_blocks: List[BasicBlock]
+    entry_block: str
+    exit_blocks: List[str]
+    
+    # Paths
+    total_paths_analyzed: int
+    feasible_paths: int
+    vulnerable_paths: int
+    paths: List[ExecutionPath]
+    
+    # Taint Analysis
+    input_sources_found: List[str]
+    tainted_variables: List[TaintedVariable]
+    dangerous_sinks_reached: List[DangerousSink]
+    taint_summary: str
+    
+    # Symbolic States (at key points)
+    symbolic_states: List[SymbolicState]
+    
+    # Security Assessment
+    reachability_score: float  # 0-1, how much code is reachable
+    vulnerability_score: float  # 0-1, likelihood of exploitable bugs
+    recommended_focus_areas: List[str]
+    
+    # Integration data for AI Decompiler
+    path_annotations: Dict[str, str]  # line/address -> annotation
+    taint_annotations: Dict[str, str]  # variable -> taint info
+
+
+@router.post("/binary/symbolic-trace", response_model=SymbolicTraceResponse)
+async def analyze_symbolic_trace(request: SymbolicTraceRequest):
+    """
+    AI-powered Symbolic Execution Trace Analysis.
+    
+    Performs comprehensive path and taint analysis on decompiled code:
+    
+    **Control Flow Analysis:**
+    - Identifies all basic blocks and their relationships
+    - Maps control flow graph structure
+    - Determines reachable vs unreachable code
+    
+    **Path Enumeration:**
+    - Enumerates execution paths through the function
+    - Calculates constraints needed to reach each path
+    - Identifies which paths lead to dangerous operations
+    
+    **Taint Analysis:**
+    - Tracks user input from sources (argv, stdin, recv, etc.)
+    - Propagates taint through assignments and operations
+    - Identifies when tainted data reaches dangerous sinks
+    
+    **Integration with AI Decompiler:**
+    - Returns annotations that can be used to enhance code
+    - Marks lines with taint information
+    - Highlights vulnerable paths in the code
+    
+    This analysis helps answer:
+    - "Can user input reach this vulnerable function?"
+    - "What input triggers this specific code path?"
+    - "Which variables are attacker-controlled?"
+    """
+    from backend.core.config import settings
+    import google.generativeai as genai
+    
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Gemini API key not configured")
+    
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    
+    # Build context
+    context_parts = []
+    if request.binary_context:
+        if request.binary_context.get("architecture"):
+            context_parts.append(f"Architecture: {request.binary_context['architecture']}")
+        if request.binary_context.get("imports"):
+            context_parts.append(f"Imports: {', '.join(request.binary_context['imports'][:20])}")
+    context = "\n".join(context_parts) if context_parts else "No additional context."
+    
+    prompt = f"""You are an expert binary analyst performing symbolic execution and taint analysis on decompiled code.
+
+**Function Name:** {request.function_name}
+**Entry Point:** {request.entry_point or "Unknown"}
+
+**Input Sources (Taint Sources):** {", ".join(request.input_sources)}
+**Dangerous Sinks:** {", ".join(request.dangerous_sinks)}
+
+**Binary Context:**
+{context}
+
+**Decompiled Code:**
+```c
+{request.code[:8000]}
+```
+
+Perform comprehensive symbolic execution analysis:
+
+1. **Control Flow Analysis**: Identify basic blocks, their relationships, and the CFG structure
+2. **Path Analysis**: Enumerate distinct execution paths with their constraints
+3. **Taint Analysis**: Track data flow from input sources to dangerous sinks
+4. **Vulnerability Assessment**: Identify paths that lead to exploitable conditions
+
+Respond with JSON (ONLY valid JSON, no markdown):
+
+{{
+    "function_name": "{request.function_name}",
+    "analysis_summary": "Brief summary of the analysis findings",
+    
+    "total_basic_blocks": 8,
+    "basic_blocks": [
+        {{
+            "id": "BB0",
+            "start_address": "0x401000",
+            "end_address": "0x401020",
+            "instructions_count": 12,
+            "code_preview": "if (argc < 2) return -1;",
+            "is_entry": true,
+            "is_exit": false,
+            "is_reachable": true,
+            "predecessors": [],
+            "successors": ["BB1", "BB2"],
+            "dominates": ["BB1", "BB2", "BB3"],
+            "tainted_at_entry": []
+        }},
+        {{
+            "id": "BB1",
+            "start_address": "0x401024",
+            "end_address": "0x401050",
+            "instructions_count": 15,
+            "code_preview": "buffer = malloc(size); strcpy(buffer, argv[1]);",
+            "is_entry": false,
+            "is_exit": false,
+            "is_reachable": true,
+            "predecessors": ["BB0"],
+            "successors": ["BB3"],
+            "dominates": [],
+            "tainted_at_entry": ["argv[1]", "size"]
+        }}
+    ],
+    "entry_block": "BB0",
+    "exit_blocks": ["BB7"],
+    
+    "total_paths_analyzed": 5,
+    "feasible_paths": 4,
+    "vulnerable_paths": 2,
+    "paths": [
+        {{
+            "path_id": "P1",
+            "blocks": ["BB0", "BB1", "BB3", "BB5", "BB7"],
+            "constraints": [
+                {{
+                    "variable": "argc",
+                    "operator": ">=",
+                    "value": "2",
+                    "description": "Program requires at least one argument",
+                    "is_satisfiable": true
+                }},
+                {{
+                    "variable": "strlen(argv[1])",
+                    "operator": ">",
+                    "value": "256",
+                    "description": "Input must overflow the buffer",
+                    "is_satisfiable": true
+                }}
+            ],
+            "probability": 0.3,
+            "is_feasible": true,
+            "leads_to_vulnerability": true,
+            "vulnerability_type": "buffer_overflow",
+            "tainted_at_end": [
+                {{
+                    "name": "buffer",
+                    "source": "argv[1]",
+                    "taint_type": "direct",
+                    "propagation_chain": ["argv[1]", "buffer"],
+                    "reaches_sink": true,
+                    "sink_name": "strcpy"
+                }}
+            ],
+            "path_description": "Main execution path that processes user input and copies to fixed buffer",
+            "interesting_operations": ["malloc allocation", "strcpy without bounds check", "buffer passed to printf"]
+        }}
+    ],
+    
+    "input_sources_found": ["argv[1]", "getenv('HOME')"],
+    "tainted_variables": [
+        {{
+            "name": "buffer",
+            "source": "argv[1]",
+            "taint_type": "direct",
+            "propagation_chain": ["argv[1]", "buffer"],
+            "reaches_sink": true,
+            "sink_name": "strcpy"
+        }},
+        {{
+            "name": "size",
+            "source": "argv[2]",
+            "taint_type": "derived",
+            "propagation_chain": ["argv[2]", "atoi()", "size"],
+            "reaches_sink": true,
+            "sink_name": "malloc"
+        }}
+    ],
+    "dangerous_sinks_reached": [
+        {{
+            "function_name": "strcpy",
+            "address": "0x401030",
+            "sink_type": "memory",
+            "severity": "critical",
+            "tainted_arguments": [1],
+            "reachable_from": ["P1", "P2"],
+            "description": "strcpy called with tainted source from argv[1], destination is 256-byte stack buffer",
+            "cwe_id": "CWE-120"
+        }},
+        {{
+            "function_name": "printf",
+            "address": "0x401080",
+            "sink_type": "format",
+            "severity": "high",
+            "tainted_arguments": [0],
+            "reachable_from": ["P1"],
+            "description": "printf called with tainted format string",
+            "cwe_id": "CWE-134"
+        }}
+    ],
+    "taint_summary": "User input from argv[1] flows directly to strcpy without length validation, allowing buffer overflow. Additionally, the buffer is later used as a printf format string.",
+    
+    "symbolic_states": [
+        {{
+            "location": "0x401024",
+            "variables": {{
+                "argc": "concrete: user-provided",
+                "argv[1]": "symbolic: user_input_0",
+                "buffer": "uninitialized"
+            }},
+            "memory_regions": {{
+                "stack[rbp-0x100]": "256-byte local buffer (uninitialized)"
+            }},
+            "constraints": [
+                {{
+                    "variable": "argc",
+                    "operator": ">=",
+                    "value": "2",
+                    "description": "Passed argument check",
+                    "is_satisfiable": true
+                }}
+            ],
+            "tainted": ["argv[1]"]
+        }}
+    ],
+    
+    "reachability_score": 0.85,
+    "vulnerability_score": 0.75,
+    "recommended_focus_areas": [
+        "The strcpy at 0x401030 is the primary vulnerability - user input copied without bounds checking",
+        "The printf at 0x401080 may allow format string exploitation",
+        "Consider the malloc size being derived from user input - potential integer overflow"
+    ],
+    
+    "path_annotations": {{
+        "0x401024": "⚠️ Taint: argv[1] enters here",
+        "0x401030": "🔴 SINK: strcpy with tainted source, CWE-120",
+        "0x401050": "Taint propagates: buffer now tainted",
+        "0x401080": "🔴 SINK: printf with tainted format, CWE-134"
+    }},
+    "taint_annotations": {{
+        "buffer": "🔴 TAINTED from argv[1] → reaches strcpy, printf",
+        "size": "⚠️ TAINTED from argv[2] → reaches malloc (potential int overflow)",
+        "result": "✅ CLEAN - derived from return value, not user input"
+    }}
+}}
+
+Analysis Guidelines:
+1. Be thorough in identifying ALL paths, not just obvious ones
+2. Track taint precisely through all operations (assignments, arithmetic, casts)
+3. Consider indirect taint (e.g., array index from tainted value)
+4. Identify ALL dangerous sinks the tainted data reaches
+5. Provide actionable annotations for code enhancement
+6. Focus on {request.max_paths} most interesting/vulnerable paths
+7. Generate realistic addresses based on typical binary layouts
+
+Return ONLY valid JSON."""
+
+    try:
+        response = await asyncio.to_thread(
+            lambda: model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.2,
+                    max_output_tokens=12000,
+                )
+            )
+        )
+        
+        result_text = response.text.strip()
+        
+        # Clean up response
+        if result_text.startswith("```json"):
+            result_text = result_text[7:]
+        if result_text.startswith("```"):
+            result_text = result_text[3:]
+        if result_text.endswith("```"):
+            result_text = result_text[:-3]
+        result_text = result_text.strip()
+        
+        result = json.loads(result_text)
+        
+        # Build response with proper validation
+        basic_blocks = [BasicBlock(**bb) for bb in result.get("basic_blocks", [])]
+        
+        paths = []
+        for path_data in result.get("paths", []):
+            constraints = [PathConstraint(**c) for c in path_data.get("constraints", [])]
+            tainted = [TaintedVariable(**t) for t in path_data.get("tainted_at_end", [])]
+            paths.append(ExecutionPath(
+                path_id=path_data.get("path_id", ""),
+                blocks=path_data.get("blocks", []),
+                constraints=constraints,
+                probability=path_data.get("probability", 0.5),
+                is_feasible=path_data.get("is_feasible", True),
+                leads_to_vulnerability=path_data.get("leads_to_vulnerability", False),
+                vulnerability_type=path_data.get("vulnerability_type"),
+                tainted_at_end=tainted,
+                path_description=path_data.get("path_description", ""),
+                interesting_operations=path_data.get("interesting_operations", []),
+            ))
+        
+        tainted_vars = [TaintedVariable(**t) for t in result.get("tainted_variables", [])]
+        
+        dangerous_sinks = [DangerousSink(**s) for s in result.get("dangerous_sinks_reached", [])]
+        
+        symbolic_states = []
+        for state_data in result.get("symbolic_states", []):
+            constraints = [PathConstraint(**c) for c in state_data.get("constraints", [])]
+            symbolic_states.append(SymbolicState(
+                location=state_data.get("location", ""),
+                variables=state_data.get("variables", {}),
+                memory_regions=state_data.get("memory_regions", {}),
+                constraints=constraints,
+                tainted=state_data.get("tainted", []),
+            ))
+        
+        return SymbolicTraceResponse(
+            function_name=result.get("function_name", request.function_name),
+            analysis_summary=result.get("analysis_summary", ""),
+            total_basic_blocks=result.get("total_basic_blocks", len(basic_blocks)),
+            basic_blocks=basic_blocks,
+            entry_block=result.get("entry_block", ""),
+            exit_blocks=result.get("exit_blocks", []),
+            total_paths_analyzed=result.get("total_paths_analyzed", len(paths)),
+            feasible_paths=result.get("feasible_paths", len(paths)),
+            vulnerable_paths=result.get("vulnerable_paths", 0),
+            paths=paths,
+            input_sources_found=result.get("input_sources_found", []),
+            tainted_variables=tainted_vars,
+            dangerous_sinks_reached=dangerous_sinks,
+            taint_summary=result.get("taint_summary", ""),
+            symbolic_states=symbolic_states,
+            reachability_score=min(1.0, max(0.0, result.get("reachability_score", 0.5))),
+            vulnerability_score=min(1.0, max(0.0, result.get("vulnerability_score", 0.0))),
+            recommended_focus_areas=result.get("recommended_focus_areas", []),
+            path_annotations=result.get("path_annotations", {}),
+            taint_annotations=result.get("taint_annotations", {}),
+        )
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse symbolic trace response: {e}")
+        raise HTTPException(status_code=500, detail="Failed to parse symbolic analysis results")
+    except Exception as e:
+        logger.error(f"Symbolic trace analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+# ============================================================================
+# Enhanced Code with Symbolic Data Integration
+# ============================================================================
+
+class EnhanceCodeWithSymbolicRequest(BaseModel):
+    """Request to enhance code with symbolic execution data."""
+    code: str = Field(..., description="Decompiled code to enhance")
+    function_name: str = Field(default="unknown", description="Function name")
+    symbolic_trace: Optional[Dict[str, Any]] = Field(None, description="Symbolic trace data from /binary/symbolic-trace")
+    binary_context: Optional[Dict[str, Any]] = Field(None, description="Additional binary context")
+    enhancement_level: str = Field(default="full", description="Enhancement level: basic, standard, full")
+
+
+class SymbolicEnhancedCodeResponse(BaseModel):
+    """Response with code enhanced using symbolic execution data."""
+    original_code: str
+    enhanced_code: str
+    suggested_function_name: str
+    function_purpose: str
+    
+    # Standard enhancements
+    variables: List[EnhancedVariable]
+    code_blocks: List[EnhancedCodeBlock]
+    data_structures: List[DataStructure]
+    security_annotations: List[SecurityAnnotation]
+    
+    # Symbolic execution enhancements
+    taint_annotations: List[Dict[str, Any]]  # Line-level taint info
+    path_annotations: List[Dict[str, Any]]  # Which paths reach each line
+    reachability_info: Dict[str, bool]  # Line -> is reachable
+    constraint_annotations: List[Dict[str, Any]]  # Input constraints per block
+    
+    # Summary
+    complexity_score: int
+    vulnerability_paths_highlighted: int
+    tainted_sinks_marked: int
+    integration_quality: str  # How well symbolic data enhanced the analysis
+
+
+@router.post("/binary/enhance-code-symbolic", response_model=SymbolicEnhancedCodeResponse)
+async def enhance_code_with_symbolic(request: EnhanceCodeWithSymbolicRequest):
+    """
+    AI-powered code enhancement with symbolic execution integration.
+    
+    This endpoint combines:
+    1. **Standard Enhancement**: Variable renaming, comments, structure detection
+    2. **Symbolic Integration**: Taint annotations, path info, reachability
+    
+    When symbolic_trace data is provided (from /binary/symbolic-trace):
+    - Annotates variables with taint information
+    - Shows which paths reach each code block
+    - Highlights lines where tainted data reaches dangerous sinks
+    - Marks unreachable code
+    - Shows input constraints needed to reach specific lines
+    
+    This creates a comprehensive view that shows:
+    - WHAT the code does (standard enhancement)
+    - HOW data flows through it (taint tracking)
+    - WHICH inputs trigger which behaviors (path constraints)
+    - WHERE vulnerabilities exist (sink annotations)
+    """
+    from backend.core.config import settings
+    import google.generativeai as genai
+    
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Gemini API key not configured")
+    
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    
+    # Build symbolic context
+    symbolic_context = ""
+    if request.symbolic_trace:
+        st = request.symbolic_trace
+        symbolic_context = f"""
+**SYMBOLIC EXECUTION DATA AVAILABLE:**
+
+Taint Summary: {st.get('taint_summary', 'N/A')}
+
+Tainted Variables:
+{json.dumps(st.get('tainted_variables', [])[:10], indent=2)}
+
+Dangerous Sinks Reached:
+{json.dumps(st.get('dangerous_sinks_reached', [])[:5], indent=2)}
+
+Path Annotations:
+{json.dumps(st.get('path_annotations', {}), indent=2)}
+
+Taint Annotations:
+{json.dumps(st.get('taint_annotations', {}), indent=2)}
+
+Vulnerable Paths: {st.get('vulnerable_paths', 0)}
+Vulnerability Score: {st.get('vulnerability_score', 0)}
+
+Recommended Focus Areas:
+{json.dumps(st.get('recommended_focus_areas', []), indent=2)}
+"""
+    
+    # Build binary context
+    binary_context = ""
+    if request.binary_context:
+        if request.binary_context.get("architecture"):
+            binary_context += f"Architecture: {request.binary_context['architecture']}\n"
+        if request.binary_context.get("imports"):
+            binary_context += f"Imports: {', '.join(request.binary_context['imports'][:15])}\n"
+    
+    prompt = f"""You are an expert reverse engineer enhancing decompiled code with symbolic execution insights.
+
+**Function Name:** {request.function_name}
+**Enhancement Level:** {request.enhancement_level}
+
+{binary_context}
+
+{symbolic_context}
+
+**Decompiled Code:**
+```c
+{request.code[:6000]}
+```
+
+Enhance this code by:
+1. Renaming variables based on their usage AND taint status
+2. Adding comments that explain BOTH behavior AND data flow
+3. Marking tainted variables with special annotations
+4. Highlighting lines where tainted data reaches dangerous sinks
+5. Showing path constraints as comments where relevant
+
+Respond with JSON (ONLY valid JSON):
+
+{{
+    "suggested_function_name": "process_user_input_unsafe",
+    "function_purpose": "Processes command-line argument and copies to buffer without validation, vulnerable to overflow",
+    
+    "enhanced_code": "/* FUNCTION: process_user_input_unsafe
+ * PURPOSE: Process user input (VULNERABLE - buffer overflow)
+ * TAINT: argv[1] -> buffer -> strcpy sink
+ * PATHS: 2 paths lead to vulnerable strcpy
+ */
+int process_user_input_unsafe(int argc, char **argv) {{
+    // [PATH CONSTRAINT: argc >= 2 to reach this code]
+    if (argc < 2) {{
+        return -1;  // Early exit path (safe)
+    }}
+    
+    // [TAINT SOURCE] user_input receives tainted data from argv[1]
+    char *user_input = argv[1];  // 🔴 TAINTED: direct from argv
+    
+    // [ALLOCATION] Fixed-size buffer on stack
+    char local_buffer[256];  // ⚠️ Target of overflow
+    
+    // [VULNERABLE SINK] strcpy with tainted source
+    // 🔴 CWE-120: Buffer overflow - no bounds checking
+    // CONSTRAINT: strlen(argv[1]) > 256 triggers overflow
+    strcpy(local_buffer, user_input);  // 🔴 SINK: tainted data
+    
+    // [SECOND SINK] Format string vulnerability
+    // 🔴 CWE-134: Tainted data used as format string
+    printf(local_buffer);  // 🔴 SINK: format string
+    
+    return 0;
+}}",
+    
+    "variables": [
+        {{
+            "original_name": "param_1",
+            "suggested_name": "argc",
+            "inferred_type": "int",
+            "confidence": 0.95,
+            "reasoning": "Standard main() argument count parameter"
+        }},
+        {{
+            "original_name": "param_2",
+            "suggested_name": "argv",
+            "inferred_type": "char**",
+            "confidence": 0.95,
+            "reasoning": "Standard main() argument vector, TAINT SOURCE"
+        }},
+        {{
+            "original_name": "local_108",
+            "suggested_name": "local_buffer",
+            "inferred_type": "char[256]",
+            "confidence": 0.9,
+            "reasoning": "Stack buffer used as strcpy destination, becomes tainted"
+        }}
+    ],
+    
+    "code_blocks": [
+        {{
+            "start_line": 1,
+            "end_line": 4,
+            "purpose": "Argument validation - early exit if no input",
+            "security_notes": "Safe path - exits before processing tainted data"
+        }},
+        {{
+            "start_line": 6,
+            "end_line": 10,
+            "purpose": "Tainted input processing - copies to fixed buffer",
+            "security_notes": "CRITICAL: Buffer overflow vulnerability, tainted data from argv[1] copied without bounds check"
+        }}
+    ],
+    
+    "data_structures": [],
+    
+    "security_annotations": [
+        {{
+            "line": 8,
+            "severity": "critical",
+            "issue_type": "buffer_overflow",
+            "description": "strcpy copies tainted argv[1] to 256-byte buffer without length check",
+            "cwe_id": "CWE-120"
+        }},
+        {{
+            "line": 10,
+            "severity": "high",
+            "issue_type": "format_string",
+            "description": "Tainted buffer used directly as printf format string",
+            "cwe_id": "CWE-134"
+        }}
+    ],
+    
+    "taint_annotations": [
+        {{
+            "line": 6,
+            "variable": "user_input",
+            "taint_source": "argv[1]",
+            "taint_type": "direct",
+            "annotation": "🔴 TAINTED: Direct user input from command line"
+        }},
+        {{
+            "line": 8,
+            "variable": "local_buffer",
+            "taint_source": "argv[1]",
+            "taint_type": "propagated",
+            "annotation": "🔴 TAINTED: Contains copy of tainted argv[1]"
+        }}
+    ],
+    
+    "path_annotations": [
+        {{
+            "line": 3,
+            "paths": ["P1"],
+            "constraint": "argc < 2",
+            "annotation": "Early exit path - safe, no tainted data processed"
+        }},
+        {{
+            "line": 8,
+            "paths": ["P2", "P3"],
+            "constraint": "argc >= 2",
+            "annotation": "Vulnerable path - tainted data reaches strcpy"
+        }}
+    ],
+    
+    "reachability_info": {{
+        "1": true,
+        "2": true,
+        "3": true,
+        "6": true,
+        "8": true,
+        "10": true
+    }},
+    
+    "constraint_annotations": [
+        {{
+            "block": "argument_check",
+            "constraint": "argc >= 2",
+            "satisfiable": true,
+            "annotation": "Requires at least one command-line argument"
+        }},
+        {{
+            "block": "overflow_trigger",
+            "constraint": "strlen(argv[1]) > 256",
+            "satisfiable": true,
+            "annotation": "Triggers buffer overflow when input exceeds buffer size"
+        }}
+    ],
+    
+    "complexity_score": 3,
+    "vulnerability_paths_highlighted": 2,
+    "tainted_sinks_marked": 2,
+    "integration_quality": "excellent"
+}}
+
+Guidelines:
+1. In enhanced_code, add visual markers: 🔴 for sinks, ⚠️ for warnings, ✅ for safe
+2. Include taint flow in function header comment
+3. Add PATH CONSTRAINT comments showing what inputs reach each block
+4. Mark EVERY tainted variable with its source
+5. Highlight ALL dangerous sinks with CWE IDs
+6. Make the code self-documenting for security review
+
+Return ONLY valid JSON."""
+
+    try:
+        response = await asyncio.to_thread(
+            lambda: model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.3,
+                    max_output_tokens=10000,
+                )
+            )
+        )
+        
+        result_text = response.text.strip()
+        
+        # Clean up response
+        if result_text.startswith("```json"):
+            result_text = result_text[7:]
+        if result_text.startswith("```"):
+            result_text = result_text[3:]
+        if result_text.endswith("```"):
+            result_text = result_text[:-3]
+        result_text = result_text.strip()
+        
+        result = json.loads(result_text)
+        
+        return SymbolicEnhancedCodeResponse(
+            original_code=request.code,
+            enhanced_code=result.get("enhanced_code", request.code),
+            suggested_function_name=result.get("suggested_function_name", request.function_name),
+            function_purpose=result.get("function_purpose", "Unknown"),
+            variables=[EnhancedVariable(**v) for v in result.get("variables", [])],
+            code_blocks=[EnhancedCodeBlock(**b) for b in result.get("code_blocks", [])],
+            data_structures=[DataStructure(**d) for d in result.get("data_structures", [])],
+            security_annotations=[SecurityAnnotation(**s) for s in result.get("security_annotations", [])],
+            taint_annotations=result.get("taint_annotations", []),
+            path_annotations=result.get("path_annotations", []),
+            reachability_info=result.get("reachability_info", {}),
+            constraint_annotations=result.get("constraint_annotations", []),
+            complexity_score=result.get("complexity_score", 5),
+            vulnerability_paths_highlighted=result.get("vulnerability_paths_highlighted", 0),
+            tainted_sinks_marked=result.get("tainted_sinks_marked", 0),
+            integration_quality=result.get("integration_quality", "unknown"),
+        )
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse symbolic enhancement response: {e}")
+        raise HTTPException(status_code=500, detail="Failed to parse enhancement results")
+    except Exception as e:
+        logger.error(f"Symbolic code enhancement failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhancement failed: {str(e)}")
+
+
+# ============================================================================
+# APK Analysis
+# ============================================================================
+
 async def analyze_apk(
     file: UploadFile = File(..., description="Android APK file to analyze"),
     include_ai: bool = Query(True, description="Include AI-powered analysis"),
@@ -492,12 +3569,10 @@ async def analyze_apk(
         # Perform analysis
         result = re_service.analyze_apk(tmp_path)
         
-        # Run AI analysis if requested (includes text analysis and diagrams)
+        # Run AI analysis if requested (text analysis only - diagrams are generated after JADX decompilation)
         if include_ai and not result.error:
             result.ai_analysis = await re_service.analyze_apk_with_ai(result)
-            # Generate AI-powered Mermaid diagrams with icons
-            result.ai_architecture_diagram = await re_service.generate_ai_architecture_diagram(result)
-            result.ai_data_flow_diagram = await re_service.generate_ai_data_flow_diagram(result)
+            # Note: Architecture diagram is only generated after JADX decompilation for proper context
         
         # Count dangerous permissions
         dangerous_count = sum(1 for p in result.permissions if p.is_dangerous)
@@ -974,9 +4049,15 @@ class SaveReportRequest(BaseModel):
     ai_functionality_report: Optional[str] = None
     ai_security_report: Optional[str] = None
     ai_privacy_report: Optional[str] = None
+    ai_architecture_diagram: Optional[str] = None
+    ai_attack_surface_map: Optional[str] = None  # Mermaid attack tree diagram
     ai_threat_model: Optional[Dict[str, Any]] = None
     ai_vuln_scan_result: Optional[Dict[str, Any]] = None
     ai_chat_history: Optional[List[Dict[str, Any]]] = None
+    
+    # Library CVE Analysis
+    detected_libraries: Optional[List[Dict[str, Any]]] = None  # Libraries detected in APK
+    library_cves: Optional[List[Dict[str, Any]]] = None  # CVEs found in libraries
     
     # Tags and notes
     tags: Optional[List[str]] = None
@@ -1046,9 +4127,15 @@ class ReportDetailResponse(BaseModel):
     ai_functionality_report: Optional[str] = None
     ai_security_report: Optional[str] = None
     ai_privacy_report: Optional[str] = None
+    ai_architecture_diagram: Optional[str] = None
+    ai_attack_surface_map: Optional[str] = None  # Mermaid attack tree diagram
     ai_threat_model: Optional[Dict[str, Any]] = None
     ai_vuln_scan_result: Optional[Dict[str, Any]] = None
     ai_chat_history: Optional[List[Dict[str, Any]]] = None
+    
+    # Library CVE Analysis
+    detected_libraries: Optional[List[Dict[str, Any]]] = None
+    library_cves: Optional[List[Dict[str, Any]]] = None
     
     tags: Optional[List[str]] = None
     notes: Optional[str] = None
@@ -1140,9 +4227,15 @@ def save_report(
             ai_functionality_report=request.ai_functionality_report,
             ai_security_report=request.ai_security_report,
             ai_privacy_report=request.ai_privacy_report,
+            ai_architecture_diagram=request.ai_architecture_diagram,
+            ai_attack_surface_map=request.ai_attack_surface_map,
             ai_threat_model=request.ai_threat_model,
             ai_vuln_scan_result=request.ai_vuln_scan_result,
             ai_chat_history=request.ai_chat_history,
+            
+            # Library CVE Analysis
+            detected_libraries=request.detected_libraries,
+            library_cves=request.library_cves,
             
             tags=request.tags,
             notes=request.notes,
@@ -1278,9 +4371,15 @@ def get_report(
         ai_functionality_report=report.ai_functionality_report,
         ai_security_report=report.ai_security_report,
         ai_privacy_report=report.ai_privacy_report,
+        ai_architecture_diagram=report.ai_architecture_diagram,
+        ai_attack_surface_map=report.ai_attack_surface_map,
         ai_threat_model=report.ai_threat_model,
         ai_vuln_scan_result=report.ai_vuln_scan_result,
         ai_chat_history=report.ai_chat_history,
+        
+        # Library CVE Analysis
+        detected_libraries=report.detected_libraries,
+        library_cves=report.library_cves,
         
         tags=report.tags,
         notes=report.notes,
@@ -1339,14 +4438,97 @@ def export_saved_report(
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
+@router.post("/binary/export-from-result")
+async def export_binary_report_from_result(
+    result: BinaryAnalysisResponse,
+    format: str = Query(..., description="Export format: markdown, pdf, docx"),
+):
+    """
+    Export a binary analysis result to Markdown, PDF, or Word format.
+    """
+    if format not in ["markdown", "pdf", "docx"]:
+        raise HTTPException(status_code=400, detail="Invalid format. Use: markdown, pdf, docx")
+
+    report = SimpleNamespace(
+        title=f"Binary Analysis: {result.filename}",
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        analysis_type="binary",
+        filename=result.filename,
+        risk_level=None,
+        risk_score=None,
+        file_type=result.metadata.file_type,
+        architecture=result.metadata.architecture,
+        file_size=result.metadata.file_size,
+        is_packed=str(result.metadata.is_packed),
+        packer_name=result.metadata.packer_name,
+        strings_count=result.strings_count,
+        imports_count=len(result.imports),
+        exports_count=len(result.exports),
+        secrets_count=len(result.secrets),
+        suspicious_indicators=[s.model_dump() for s in result.suspicious_indicators],
+        permissions=None,
+        security_issues=None,
+        full_analysis_data={
+            "metadata": result.metadata.model_dump(),
+            "strings_sample": [s.model_dump() for s in result.strings_sample],
+            "imports": [i.model_dump() for i in result.imports],
+            "exports": result.exports,
+            "secrets": [s.model_dump() for s in result.secrets],
+            "ghidra_analysis": result.ghidra_analysis,
+            "ghidra_ai_summaries": result.ghidra_ai_summaries,
+        },
+        ai_analysis_raw=result.ai_analysis,
+        ai_analysis_structured=None,
+        tags=None,
+        notes=None,
+        ai_functionality_report=None,
+        ai_security_report=None,
+        ai_privacy_report=None,
+        ai_architecture_diagram=None,
+        ai_attack_surface_map=None,
+        ai_threat_model=None,
+        ai_vuln_scan_result=None,
+        ai_chat_history=None,
+        detected_libraries=None,
+        library_cves=None,
+    )
+
+    try:
+        content = _generate_full_report_export(report, format)
+        base_name = f"binary_analysis_{result.filename}".replace(" ", "_")
+
+        if format == "markdown":
+            return Response(
+                content=content.encode("utf-8"),
+                media_type="text/markdown",
+                headers={"Content-Disposition": f'attachment; filename="{base_name}.md"'}
+            )
+        if format == "pdf":
+            return Response(
+                content=content,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{base_name}.pdf"'}
+            )
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{base_name}.docx"'}
+        )
+    except Exception as e:
+        logger.error(f"Binary export failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
 def _generate_full_report_export(report, format: str):
-    """Generate full export content for a saved report."""
+    """Generate full export content for a saved report with clean, organized structure."""
     from io import BytesIO
     
-    # Build comprehensive markdown content first
+    # Build comprehensive markdown content with clean structure
+    # Structure: Executive Summary → Security Findings → Architecture → AI Analysis → Attack Surface → Secrets
+    
     md_content = f"""# {report.title}
 
-**Analysis Type:** {report.analysis_type.upper()}
 **Generated:** {report.created_at.strftime('%Y-%m-%d %H:%M:%S')}
 **Risk Level:** {report.risk_level or 'Not Assessed'} ({report.risk_score or 0}/100)
 
@@ -1354,50 +4536,642 @@ def _generate_full_report_export(report, format: str):
 
 """
     
-    # Basic Info Section
+    # =====================================================
+    # SECTION 1: Executive Summary - What Does This APK Do?
+    # =====================================================
+    md_content += """## Executive Summary
+
+"""
+    
+    # Basic identification info (minimal)
     if report.analysis_type == 'apk':
-        md_content += f"""## 📱 APK Information
+        md_content += f"**Package:** `{report.package_name or 'N/A'}` | **Version:** {report.version_name or 'N/A'}\n\n"
+    elif report.analysis_type == 'binary':
+        md_content += f"**Type:** {report.file_type or 'N/A'} | **Architecture:** {report.architecture or 'N/A'}\n\n"
+    elif report.analysis_type == 'docker':
+        md_content += f"**Image:** `{report.image_name or 'N/A'}` | **Base:** {report.base_image or 'N/A'}\n\n"
+    
+    # AI Functionality Report - What the app does
+    if report.ai_functionality_report:
+        md_content += f"""### What This Application Does
+
+{report.ai_functionality_report}
+
+"""
+    elif report.ai_analysis_raw:
+        # Fallback to quick analysis if no functionality report
+        md_content += f"""### Application Overview
+
+{report.ai_analysis_raw}
+
+"""
+    
+    # =====================================================
+    # SECTION 2: Security Findings - Attacker's Perspective
+    # =====================================================
+    md_content += """---
+
+## Security Assessment - Attack Surface Analysis
+
+This section analyzes the application from an attacker's perspective, identifying exploitable weaknesses and potential attack vectors.
+
+"""
+    
+    # AI Security Report (high-level security assessment)
+    if report.ai_security_report:
+        md_content += f"""{report.ai_security_report}
+
+"""
+    
+    # Consolidated security issues summary with attacker focus
+    critical_count = high_count = medium_count = low_count = 0
+    if report.security_issues:
+        for issue in report.security_issues:
+            sev = issue.get('severity', 'info').lower()
+            if sev == 'critical': critical_count += 1
+            elif sev == 'high': high_count += 1
+            elif sev == 'medium': medium_count += 1
+            elif sev == 'low': low_count += 1
+        
+        md_content += f"""### Vulnerability Summary
+
+| Severity | Count | Attack Priority |
+|----------|-------|-----------------|
+| Critical | {critical_count} | Immediate exploitation possible |
+| High | {high_count} | High-value targets |
+| Medium | {medium_count} | Secondary targets |
+| Low | {low_count} | Opportunistic |
+
+"""
+        # List critical and high issues with attacker-focused descriptions
+        critical_high = [i for i in report.security_issues if i.get('severity', '').lower() in ['critical', 'high']]
+        if critical_high:
+            md_content += "### Exploitable Vulnerabilities\n\n"
+            md_content += "*These issues present immediate exploitation opportunities:*\n\n"
+            for issue in critical_high[:15]:
+                severity = issue.get('severity', 'info')
+                title = issue.get('title', issue.get('category', 'Unknown Issue'))
+                md_content += f"#### {title} ({severity.upper()})\n\n"
+                
+                if issue.get('description'):
+                    md_content += f"**Finding:** {issue.get('description')[:300]}\n\n"
+                
+                # Add exploitation context
+                category = issue.get('category', '').lower()
+                if 'sql' in category or 'injection' in category:
+                    md_content += "**Attack Vector:** Database manipulation, data exfiltration, authentication bypass\n\n"
+                elif 'crypto' in category or 'encrypt' in category:
+                    md_content += "**Attack Vector:** Decrypt sensitive data, forge tokens, bypass integrity checks\n\n"
+                elif 'auth' in category or 'permission' in category:
+                    md_content += "**Attack Vector:** Privilege escalation, unauthorized access to protected resources\n\n"
+                elif 'webview' in category or 'javascript' in category:
+                    md_content += "**Attack Vector:** JavaScript injection, steal cookies/tokens, phishing\n\n"
+                elif 'export' in category or 'component' in category:
+                    md_content += "**Attack Vector:** Intent hijacking, data theft via exported components\n\n"
+                elif 'network' in category or 'http' in category:
+                    md_content += "**Attack Vector:** Man-in-the-middle, traffic interception, credential theft\n\n"
+                elif 'secret' in category or 'key' in category or 'credential' in category:
+                    md_content += "**Attack Vector:** Use hardcoded credentials for unauthorized API/service access\n\n"
+                elif 'debug' in category:
+                    md_content += "**Attack Vector:** Attach debugger, inspect memory, modify runtime behavior\n\n"
+                
+                # Include file/location for manual review
+                file_loc = issue.get('file', issue.get('location', issue.get('affected_class', '')))
+                if file_loc:
+                    md_content += f"**Target Location:** `{file_loc}`\n\n"
+    
+    # Dangerous permissions with exploitation context
+    if report.permissions:
+        dangerous = [p for p in report.permissions if p.get('is_dangerous')]
+        if dangerous:
+            md_content += "### Dangerous Permissions - Attack Enablers\n\n"
+            md_content += "*These permissions grant capabilities that can be abused:*\n\n"
+            for p in dangerous[:10]:
+                perm_name = p.get('name', '')
+                md_content += f"- **{perm_name}**\n"
+                
+                # Add exploitation context for common dangerous permissions
+                if 'CAMERA' in perm_name:
+                    md_content += "  - *Exploitation:* Covert photo/video capture, surveillance\n"
+                elif 'MICROPHONE' in perm_name or 'RECORD_AUDIO' in perm_name:
+                    md_content += "  - *Exploitation:* Audio surveillance, conversation recording\n"
+                elif 'LOCATION' in perm_name:
+                    md_content += "  - *Exploitation:* User tracking, location history theft\n"
+                elif 'READ_CONTACTS' in perm_name or 'WRITE_CONTACTS' in perm_name:
+                    md_content += "  - *Exploitation:* Contact list exfiltration, spam distribution\n"
+                elif 'READ_SMS' in perm_name or 'SEND_SMS' in perm_name:
+                    md_content += "  - *Exploitation:* 2FA bypass, premium SMS fraud\n"
+                elif 'READ_EXTERNAL_STORAGE' in perm_name or 'WRITE_EXTERNAL_STORAGE' in perm_name:
+                    md_content += "  - *Exploitation:* Data theft from shared storage, malware staging\n"
+                elif 'READ_CALL_LOG' in perm_name:
+                    md_content += "  - *Exploitation:* Call history surveillance, contact profiling\n"
+                elif 'SYSTEM_ALERT_WINDOW' in perm_name:
+                    md_content += "  - *Exploitation:* Overlay attacks, clickjacking, credential theft\n"
+                else:
+                    md_content += f"  - {p.get('description', 'Review for abuse potential')}\n"
+            md_content += "\n"
+    
+    # =====================================================
+    # SECTION 2B: Known CVEs in Third-Party Libraries
+    # =====================================================
+    if report.library_cves:
+        cves = report.library_cves
+        critical_cves = [c for c in cves if c.get('severity', '').lower() == 'critical']
+        high_cves = [c for c in cves if c.get('severity', '').lower() == 'high']
+        
+        md_content += f"""### Known Vulnerabilities in Dependencies (CVE Lookup)
+
+**Total CVEs Found:** {len(cves)} | **Critical:** {len(critical_cves)} | **High:** {len(high_cves)}
+
+*These are known, published vulnerabilities in the third-party libraries bundled with this application.*
+
+"""
+        
+        # Critical CVEs first - immediate exploitation risk
+        if critical_cves:
+            md_content += "#### Critical CVEs - Immediate Exploitation Risk\n\n"
+            for cve in critical_cves[:10]:
+                cve_id = cve.get('cve_id', 'Unknown')
+                library = cve.get('library', 'Unknown')
+                summary = cve.get('summary', 'No description')[:200]
+                exploitation = cve.get('exploitation_potential', 'Review required')
+                attack_vector = cve.get('attack_vector', 'Unknown')
+                
+                md_content += f"**{cve_id}** in `{library}`\n\n"
+                md_content += f"- **Summary:** {summary}\n"
+                md_content += f"- **CVSS Score:** {cve.get('cvss_score', 'N/A')}\n"
+                md_content += f"- **Exploitation:** {exploitation}\n"
+                md_content += f"- **Attack Vector:** {attack_vector}\n"
+                
+                if cve.get('affected_versions'):
+                    md_content += f"- **Fix:** {', '.join(cve.get('affected_versions', []))}\n"
+                
+                if cve.get('references'):
+                    md_content += f"- **Reference:** {cve.get('references', [''])[0]}\n"
+                
+                md_content += "\n"
+        
+        # High severity CVEs
+        if high_cves:
+            md_content += "#### High Severity CVEs\n\n"
+            for cve in high_cves[:10]:
+                cve_id = cve.get('cve_id', 'Unknown')
+                library = cve.get('library', 'Unknown')
+                summary = cve.get('summary', 'No description')[:150]
+                
+                md_content += f"- **{cve_id}** in `{library}`: {summary}\n"
+                md_content += f"  - CVSS: {cve.get('cvss_score', 'N/A')} | {cve.get('exploitation_potential', '')}\n"
+            
+            md_content += "\n"
+        
+        # Summary table of all CVEs
+        if len(cves) > 0:
+            md_content += "#### All Detected CVEs\n\n"
+            md_content += "| CVE ID | Library | Severity | CVSS |\n"
+            md_content += "|--------|---------|----------|------|\n"
+            for cve in cves[:25]:
+                md_content += f"| {cve.get('cve_id', 'N/A')} | {cve.get('library', 'N/A')[:30]} | {cve.get('severity', 'N/A').upper()} | {cve.get('cvss_score', 'N/A')} |\n"
+            
+            if len(cves) > 25:
+                md_content += f"\n*...and {len(cves) - 25} more CVEs*\n"
+            
+            md_content += "\n"
+    
+    # Detected libraries summary (even if no CVEs)
+    if report.detected_libraries and not report.library_cves:
+        libs = report.detected_libraries
+        high_risk = [l for l in libs if l.get('is_high_risk')]
+        
+        md_content += f"""### Detected Third-Party Libraries
+
+**Total Libraries:** {len(libs)} | **High-Risk Libraries:** {len(high_risk)}
+
+*No known CVEs found in OSV database for the detected library versions.*
+
+"""
+        if high_risk:
+            md_content += "**High-Risk Libraries (historically vulnerable):**\n\n"
+            for lib in high_risk:
+                md_content += f"- `{lib.get('maven_coordinate', 'Unknown')}` - {lib.get('risk_reason', 'Review recommended')}\n"
+            md_content += "\n"
+
+    # =====================================================
+    # SECTION 2C: Binary Static Analysis (Binary only)
+    # =====================================================
+    if report.analysis_type == 'binary':
+        md_content += """---
+
+## Binary Static Analysis
+
+"""
+        md_content += f"**File Type:** {report.file_type or 'N/A'} | **Architecture:** {report.architecture or 'N/A'}\n\n"
+        md_content += f"- **File Size:** {format_size(report.file_size or 0)}\n"
+        md_content += f"- **Strings:** {report.strings_count or 0}\n"
+        md_content += f"- **Imports:** {report.imports_count or 0}\n"
+        md_content += f"- **Exports:** {report.exports_count or 0}\n"
+        md_content += f"- **Secrets:** {report.secrets_count or 0}\n"
+        md_content += f"- **Packed:** {report.is_packed or 'unknown'} {f'({report.packer_name})' if report.packer_name else ''}\n\n"
+
+        if report.suspicious_indicators:
+            md_content += "### Suspicious Indicators\n\n"
+            for indicator in report.suspicious_indicators[:25]:
+                md_content += f"- **{indicator.get('severity', 'info').upper()}** {indicator.get('category', 'Unknown')}: {indicator.get('description', '')}\n"
+            if len(report.suspicious_indicators) > 25:
+                md_content += f"\n*...and {len(report.suspicious_indicators) - 25} more indicators*\n"
+            md_content += "\n"
+
+        ctx = report.full_analysis_data or {}
+        imports = ctx.get("imports", []) if isinstance(ctx, dict) else []
+        suspicious_imports = [i for i in imports if i.get("is_suspicious")]
+        if suspicious_imports:
+            md_content += "### Suspicious Imports\n\n"
+            for imp in suspicious_imports[:30]:
+                md_content += f"- `{imp.get('name')}` ({imp.get('library')}): {imp.get('reason', 'Suspicious API')}\n"
+            if len(suspicious_imports) > 30:
+                md_content += f"\n*...and {len(suspicious_imports) - 30} more suspicious imports*\n"
+            md_content += "\n"
+
+        secrets = ctx.get("secrets", []) if isinstance(ctx, dict) else []
+        if secrets:
+            md_content += "### Potential Secrets\n\n"
+            for s in secrets[:20]:
+                md_content += f"- **{s.get('severity', 'medium').upper()}** {s.get('type')}: `{s.get('masked_value')}`\n"
+            if len(secrets) > 20:
+                md_content += f"\n*...and {len(secrets) - 20} more secrets*\n"
+            md_content += "\n"
+
+        ghidra = ctx.get("ghidra_analysis", {}) if isinstance(ctx, dict) else {}
+        ghidra_ai = ctx.get("ghidra_ai_summaries", []) if isinstance(ctx, dict) else []
+        if ghidra:
+            md_content += "### Ghidra Decompilation\n\n"
+            if ghidra.get("error"):
+                md_content += f"**Ghidra Error:** {ghidra.get('error')}\n\n"
+            else:
+                program = ghidra.get("program", {})
+                md_content += "**Program Metadata**\n\n"
+                md_content += f"- **Name:** `{program.get('name', 'N/A')}`\n"
+                md_content += f"- **Processor:** `{program.get('processor', 'N/A')}`\n"
+                md_content += f"- **Language ID:** `{program.get('language_id', 'N/A')}`\n"
+                md_content += f"- **Compiler Spec:** `{program.get('compiler_spec', 'N/A')}`\n"
+                md_content += f"- **Image Base:** `{program.get('image_base', 'N/A')}`\n\n"
+
+                functions = ghidra.get("functions", []) or []
+                total_functions = ghidra.get("functions_total", len(functions))
+                max_export = 30
+                md_content += f"**Decompiled Functions (showing {min(len(functions), max_export)} of {total_functions})**\n\n"
+
+                summary_map = {}
+                for summary in ghidra_ai or []:
+                    key = f"{summary.get('name')}:{summary.get('entry')}"
+                    summary_map[key] = summary
+
+                for fn in functions[:max_export]:
+                    fn_name = fn.get("name", "unknown")
+                    fn_entry = fn.get("entry", "0x0")
+                    fn_size = fn.get("size", 0)
+                    md_content += f"#### {fn_name} ({fn_entry})\n\n"
+                    md_content += f"- **Size:** {fn_size} bytes\n"
+                    if fn.get("called_functions"):
+                        called = fn.get("called_functions", [])
+                        md_content += f"- **Calls:** {', '.join(called[:12])}"
+                        if len(called) > 12:
+                            md_content += f" (+{len(called) - 12} more)"
+                        md_content += "\n"
+
+                    summary_key = f"{fn_name}:{fn_entry}"
+                    summary = summary_map.get(summary_key)
+                    if summary and summary.get("summary"):
+                        md_content += "\n**Gemini Summary**\n\n"
+                        md_content += f"{summary.get('summary')}\n\n"
+
+                    if fn.get("decompiled"):
+                        md_content += "```c\n"
+                        md_content += f"{fn.get('decompiled')}\n"
+                        md_content += "```\n\n"
+
+                if total_functions > max_export:
+                    md_content += f"*...and {total_functions - max_export} more functions*\n\n"
+    
+    # =====================================================
+    # SECTION 3: Architecture Diagram
+    # =====================================================
+    if report.ai_architecture_diagram:
+        md_content += f"""---
+
+## Application Architecture
+
+The following diagram illustrates the high-level architecture and component relationships within the application.
+
+```mermaid
+{report.ai_architecture_diagram}
+```
+
+"""
+    
+    # =====================================================
+    # SECTION 4: AI Cross-Class Vulnerability Analysis
+    # =====================================================
+    if report.ai_vuln_scan_result:
+        vuln_data = report.ai_vuln_scan_result
+        
+        # Check if we have enhanced security data embedded
+        enhanced_security = vuln_data.get('enhanced_security')
+        
+        if enhanced_security:
+            # Use enhanced security data for the main analysis section
+            md_content += f"""---
+
+## Comprehensive Security Analysis
+
+**Analysis Sources:** Pattern Detection + AI Analysis + CVE Lookup
+
+**Overall Risk Level:** {enhanced_security.get('overall_risk', 'N/A').upper()}
+
+### Executive Summary
+
+{enhanced_security.get('executive_summary', 'No summary available.')}
+
+### Risk Distribution
+
+| Severity | Count |
+|----------|-------|
+| Critical | {enhanced_security.get('risk_summary', {}).get('critical', 0)} |
+| High | {enhanced_security.get('risk_summary', {}).get('high', 0)} |
+| Medium | {enhanced_security.get('risk_summary', {}).get('medium', 0)} |
+| Low | {enhanced_security.get('risk_summary', {}).get('low', 0)} |
+| Info | {enhanced_security.get('risk_summary', {}).get('info', 0)} |
+
+### Analysis Metadata
+
+- **Classes Scanned:** {enhanced_security.get('analysis_metadata', {}).get('classes_scanned', 0)}
+- **Libraries Detected:** {enhanced_security.get('analysis_metadata', {}).get('libraries_detected', 0)}
+- **CVEs Found:** {enhanced_security.get('analysis_metadata', {}).get('cves_found', 0)}
+
+"""
+            # Offensive Plan Summary (AI-generated assessment - this is the main export content)
+            offensive_plan = enhanced_security.get('offensive_plan_summary')
+            if offensive_plan:
+                md_content += """---
+
+## Offensive Security Assessment
+
+"""
+                if offensive_plan.get('threat_assessment'):
+                    md_content += f"""### Threat Assessment
+
+{offensive_plan.get('threat_assessment')}
+
+"""
+                
+                if offensive_plan.get('attack_surface_summary'):
+                    md_content += f"""### Attack Surface
+
+{offensive_plan.get('attack_surface_summary')}
+
+"""
+                
+                # Primary Attack Vectors
+                attack_vectors = offensive_plan.get('primary_attack_vectors', [])
+                if attack_vectors:
+                    md_content += "### Primary Attack Vectors\n\n"
+                    for i, vector in enumerate(attack_vectors, 1):
+                        md_content += f"#### {i}. {vector.get('vector', 'Unknown')}\n\n"
+                        md_content += f"**Likelihood:** {vector.get('likelihood', 'Unknown')} | "
+                        md_content += f"**Impact:** {vector.get('impact', 'Unknown')}\n\n"
+                        md_content += f"{vector.get('description', '')}\n\n"
+                        if vector.get('prerequisites'):
+                            md_content += f"**Prerequisites:** {vector.get('prerequisites')}\n\n"
+                
+                # Recommended Test Scenarios
+                test_scenarios = offensive_plan.get('recommended_test_scenarios', [])
+                if test_scenarios:
+                    md_content += "### Recommended Penetration Tests\n\n"
+                    for i, scenario in enumerate(test_scenarios, 1):
+                        md_content += f"{i}. {scenario}\n"
+                    md_content += "\n"
+                
+                # Priority Targets
+                priority_targets = offensive_plan.get('priority_targets', [])
+                if priority_targets:
+                    md_content += "### Priority Targets\n\n"
+                    for target in priority_targets:
+                        md_content += f"- {target}\n"
+                    md_content += "\n"
+                
+                # Risk Rating and Confidence
+                md_content += f"""### Assessment Summary
+
+- **Risk Rating:** {offensive_plan.get('risk_rating', 'Unknown').upper()}
+- **Confidence Level:** {offensive_plan.get('confidence_level', 'Unknown')}
+
+"""
+            
+            # Recommendations from enhanced security
+            recommendations = enhanced_security.get('recommendations', [])
+            if recommendations:
+                md_content += "### Remediation Recommendations\n\n"
+                for rec in recommendations:
+                    md_content += f"- {rec}\n"
+                md_content += "\n"
+            
+            # Brief summary of findings (counts only, not individual details)
+            combined_findings = enhanced_security.get('combined_findings', [])
+            if combined_findings:
+                md_content += f"""### Findings Summary
+
+A total of **{len(combined_findings)}** security findings were identified:
+
+"""
+                # Group by severity for count summary
+                for severity in ['critical', 'high', 'medium', 'low']:
+                    severity_findings = [f for f in combined_findings if f.get('severity', '').lower() == severity]
+                    if severity_findings:
+                        # Get unique titles for this severity
+                        unique_titles = list(set(f.get('title', 'Unknown') for f in severity_findings))[:5]
+                        md_content += f"- **{severity.upper()}** ({len(severity_findings)}): {', '.join(unique_titles)}"
+                        if len(severity_findings) > 5:
+                            md_content += f" and {len(severity_findings) - 5} more"
+                        md_content += "\n"
+                
+                md_content += "\n*Note: Individual findings are available in the application for detailed review.*\n\n"
+        
+        else:
+            # Fall back to original AI vuln scan format
+            md_content += f"""---
+
+## AI Deep Vulnerability Analysis
+
+**Classes Analyzed:** {vuln_data.get('classes_scanned', 0)} | **Overall Risk:** {vuln_data.get('overall_risk', 'N/A')}
+
+### Risk Distribution
+- Critical: {vuln_data.get('risk_summary', {}).get('critical', 0)}
+- High: {vuln_data.get('risk_summary', {}).get('high', 0)}
+- Medium: {vuln_data.get('risk_summary', {}).get('medium', 0)}
+- Low: {vuln_data.get('risk_summary', {}).get('low', 0)}
+
+"""
+            if vuln_data.get('vulnerabilities'):
+                md_content += "### Key Vulnerabilities\n\n"
+                for vuln in vuln_data.get('vulnerabilities', [])[:15]:
+                    severity = vuln.get('severity', 'N/A')
+                    md_content += f"#### {vuln.get('title', 'Vulnerability')} ({severity.upper()})\n\n"
+                    md_content += f"- **Category:** {vuln.get('category', 'N/A')}\n"
+                    if vuln.get('cwe_id'):
+                        md_content += f"- **CWE:** {vuln.get('cwe_id')}\n"
+                    md_content += f"- **Description:** {vuln.get('description', 'N/A')}\n"
+                    
+                    # Include affected class/method for manual code review
+                    affected_class = vuln.get('affected_class', '')
+                    affected_method = vuln.get('affected_method', '')
+                    if affected_class:
+                        md_content += f"- **Affected Class:** `{affected_class}`\n"
+                    if affected_method:
+                        md_content += f"- **Affected Method:** `{affected_method}`\n"
+                    
+                    # Include code snippet if available
+                    if vuln.get('code_snippet'):
+                        snippet = vuln.get('code_snippet', '')[:500]
+                        md_content += f"- **Code to Review:**\n```java\n{snippet}\n```\n"
+                    
+                    if vuln.get('impact'):
+                        md_content += f"- **Impact:** {vuln.get('impact')}\n"
+                    if vuln.get('remediation'):
+                        md_content += f"- **Remediation:** {vuln.get('remediation')}\n"
+                    md_content += "\n"
+        
+        # Attack chains if available (fallback for non-enhanced data)
+        if not enhanced_security and vuln_data.get('attack_chains'):
+            md_content += "### Attack Chains\n\n"
+            for chain in vuln_data.get('attack_chains', [])[:5]:
+                md_content += f"#### {chain.get('name', 'Attack Chain')}\n\n"
+                md_content += f"**Likelihood:** {chain.get('likelihood', 'Unknown')} | **Impact:** {chain.get('impact', 'Unknown')}\n\n"
+                if chain.get('steps'):
+                    md_content += "**Steps:**\n"
+                    for i, step in enumerate(chain.get('steps', []), 1):
+                        md_content += f"{i}. {step}\n"
+                md_content += "\n"
+        
+        # Recommendations for further research (fallback for non-enhanced data)
+        if not enhanced_security and vuln_data.get('recommendations'):
+            md_content += "### Recommendations for Further Analysis\n\n"
+            for rec in vuln_data.get('recommendations', []):
+                md_content += f"- {rec}\n"
+            md_content += "\n"
+    
+    # =====================================================
+    # SECTION 5: Attack Surface Map
+    # =====================================================
+    if report.ai_attack_surface_map:
+        md_content += f"""---
+
+## Attack Surface Map
+
+This attack tree visualizes entry points, vulnerabilities, and potential attack paths discovered through AI analysis of the decompiled source code.
+
+```mermaid
+{report.ai_attack_surface_map}
+```
+
+"""
+    
+    # =====================================================
+    # SECTION 6: Exposed Secrets
+    # =====================================================
+    secrets_found = []
+    
+    # Collect secrets from various sources
+    if report.jadx_data and report.jadx_data.get('secrets'):
+        secrets_found.extend(report.jadx_data.get('secrets', []))
+    
+    if report.security_issues:
+        for issue in report.security_issues:
+            if 'secret' in issue.get('category', '').lower() or 'key' in issue.get('category', '').lower() or 'credential' in issue.get('category', '').lower():
+                secrets_found.append({
+                    'type': issue.get('category', 'Secret'),
+                    'description': issue.get('description', '')[:100],
+                    'location': issue.get('file', issue.get('location', 'Unknown'))
+                })
+    
+    if secrets_found or (report.secrets_count and report.secrets_count > 0):
+        md_content += f"""---
+
+## Exposed Secrets & Credentials
+
+**Total Secrets Found:** {report.secrets_count or len(secrets_found)}
+
+"""
+        if secrets_found:
+            md_content += "| Type | Location | Details |\n|------|----------|--------|\n"
+            for secret in secrets_found[:20]:
+                if isinstance(secret, dict):
+                    stype = secret.get('type', secret.get('category', 'Secret'))
+                    loc = secret.get('location', secret.get('file', 'Unknown'))[:50]
+                    desc = secret.get('description', secret.get('value', ''))[:40]
+                    md_content += f"| {stype} | `{loc}` | {desc}... |\n"
+                else:
+                    md_content += f"| Secret | - | {str(secret)[:50]}... |\n"
+            md_content += "\n"
+            if len(secrets_found) > 20:
+                md_content += f"*...and {len(secrets_found) - 20} more secrets*\n\n"
+    
+    # =====================================================
+    # SECTION 7: Privacy Analysis (if available)
+    # =====================================================
+    if report.ai_privacy_report:
+        md_content += f"""---
+
+## Privacy Analysis
+
+{report.ai_privacy_report}
+
+"""
+    
+    # =====================================================
+    # SECTION 8: Threat Model (if available)
+    # =====================================================
+    if report.ai_threat_model:
+        tm = report.ai_threat_model
+        md_content += """---
+
+## Threat Model
+
+"""
+        if tm.get('threat_actors'):
+            md_content += "### Potential Threat Actors\n\n"
+            for actor in tm.get('threat_actors', [])[:5]:
+                md_content += f"- **{actor.get('name', 'Unknown')}**: {actor.get('description', '')}\n"
+            md_content += "\n"
+        
+        if tm.get('attack_scenarios'):
+            md_content += "### Attack Scenarios\n\n"
+            for scenario in tm.get('attack_scenarios', [])[:3]:
+                md_content += f"**{scenario.get('name', 'Scenario')}:** {scenario.get('description', '')}\n\n"
+    
+    # =====================================================
+    # SECTION 9: Appendix - Technical Details
+    # =====================================================
+    md_content += """---
+
+## Appendix
+
+"""
+    
+    # Analysis metadata
+    if report.analysis_type == 'apk':
+        md_content += f"""### Technical Details
 
 | Property | Value |
 |----------|-------|
 | Package Name | `{report.package_name or 'N/A'}` |
-| Version | {report.version_name or 'N/A'} |
+| Version Name | {report.version_name or 'N/A'} |
 | Min SDK | {report.min_sdk or 'N/A'} |
 | Target SDK | {report.target_sdk or 'N/A'} |
-| Secrets Found | {report.secrets_count or 0} |
 
 """
-    elif report.analysis_type == 'binary':
-        md_content += f"""## 🔧 Binary Information
-
-| Property | Value |
-|----------|-------|
-| File Type | {report.file_type or 'N/A'} |
-| Architecture | {report.architecture or 'N/A'} |
-| File Size | {report.file_size or 'N/A'} bytes |
-| Packed | {report.is_packed or 'Unknown'} |
-| Packer | {report.packer_name or 'N/A'} |
-| Strings Count | {report.strings_count or 0} |
-| Imports Count | {report.imports_count or 0} |
-| Exports Count | {report.exports_count or 0} |
-
-"""
-    elif report.analysis_type == 'docker':
-        md_content += f"""## 🐳 Docker Image Information
-
-| Property | Value |
-|----------|-------|
-| Image Name | `{report.image_name or 'N/A'}` |
-| Image ID | `{report.image_id or 'N/A'}` |
-| Total Layers | {report.total_layers or 0} |
-| Base Image | {report.base_image or 'N/A'} |
-| Secrets Found | {report.secrets_count or 0} |
-
-"""
-
-    # JADX Full Scan Section
+    
+    # JADX stats if available
     if report.jadx_total_classes:
-        md_content += f"""## 🔍 Deep Code Analysis (JADX)
+        md_content += f"""### Code Analysis Statistics
 
 | Metric | Value |
 |--------|-------|
@@ -1405,148 +5179,18 @@ def _generate_full_report_export(report, format: str):
 | Total Files | {report.jadx_total_files:,} |
 
 """
-        if report.jadx_data and report.jadx_data.get('security_issues'):
-            md_content += """### JADX Security Issues
-
-"""
-            for issue in report.jadx_data.get('security_issues', [])[:20]:
-                severity = issue.get('severity', 'info')
-                md_content += f"- **[{severity.upper()}]** {issue.get('title', 'Unknown')}: {issue.get('description', '')[:200]}\n"
-            md_content += "\n"
-
-    # Permissions Section (APK)
-    if report.permissions:
-        md_content += """## 🔐 Permissions
-
-"""
-        dangerous = [p for p in report.permissions if p.get('is_dangerous')]
-        if dangerous:
-            md_content += "### ⚠️ Dangerous Permissions\n\n"
-            for p in dangerous:
-                md_content += f"- **{p.get('name', '')}**: {p.get('description', 'No description')}\n"
-            md_content += "\n"
-        
-        normal = [p for p in report.permissions if not p.get('is_dangerous')]
-        if normal:
-            md_content += "### Normal Permissions\n\n"
-            for p in normal[:10]:  # Limit to 10
-                md_content += f"- {p.get('name', '')}\n"
-            if len(normal) > 10:
-                md_content += f"- *...and {len(normal) - 10} more*\n"
-            md_content += "\n"
-
-    # Security Issues Section
-    if report.security_issues:
-        md_content += """## 🛡️ Security Issues
-
-"""
-        for issue in report.security_issues[:30]:
-            severity = issue.get('severity', 'info')
-            emoji = {'critical': '🔴', 'high': '🟠', 'medium': '🟡', 'low': '🔵'}.get(severity.lower(), '⚪')
-            md_content += f"{emoji} **[{severity.upper()}]** {issue.get('title', issue.get('category', 'Unknown'))}\n"
-            if issue.get('description'):
-                md_content += f"   {issue.get('description')[:300]}\n"
-            md_content += "\n"
-
-    # AI Quick Analysis
-    if report.ai_analysis_raw:
-        md_content += f"""## 🤖 AI Quick Analysis
-
-{report.ai_analysis_raw}
-
-"""
-
-    # AI Functionality Report
-    if report.ai_functionality_report:
-        md_content += f"""## 📱 AI Functionality Report
-
-{report.ai_functionality_report}
-
-"""
-
-    # AI Security Report
-    if report.ai_security_report:
-        md_content += f"""## 🔒 AI Security Report
-
-{report.ai_security_report}
-
-"""
-
-    # AI Privacy Report
-    if report.ai_privacy_report:
-        md_content += f"""## 🔏 AI Privacy Report
-
-{report.ai_privacy_report}
-
-"""
-
-    # AI Vulnerability Scan Results
-    if report.ai_vuln_scan_result:
-        vuln_data = report.ai_vuln_scan_result
-        md_content += f"""## 🎯 AI Cross-Class Vulnerability Scan
-
-**Scan Type:** {vuln_data.get('scan_type', 'N/A')}
-**Classes Scanned:** {vuln_data.get('classes_scanned', 0)}
-**Overall Risk:** {vuln_data.get('overall_risk', 'N/A')}
-
-### Risk Summary
-- Critical: {vuln_data.get('risk_summary', {}).get('critical', 0)}
-- High: {vuln_data.get('risk_summary', {}).get('high', 0)}
-- Medium: {vuln_data.get('risk_summary', {}).get('medium', 0)}
-- Low: {vuln_data.get('risk_summary', {}).get('low', 0)}
-
-"""
-        if vuln_data.get('vulnerabilities'):
-            md_content += "### Vulnerabilities Found\n\n"
-            for vuln in vuln_data.get('vulnerabilities', [])[:20]:
-                md_content += f"#### {vuln.get('title', 'Unknown Vulnerability')}\n"
-                md_content += f"- **Severity:** {vuln.get('severity', 'N/A')}\n"
-                md_content += f"- **Category:** {vuln.get('category', 'N/A')}\n"
-                md_content += f"- **Affected Class:** `{vuln.get('affected_class', 'N/A')}`\n"
-                md_content += f"- **Description:** {vuln.get('description', 'N/A')}\n"
-                if vuln.get('remediation'):
-                    md_content += f"- **Remediation:** {vuln.get('remediation')}\n"
-                md_content += "\n"
-
-    # Threat Model
-    if report.ai_threat_model:
-        tm = report.ai_threat_model
-        md_content += """## 🎭 Threat Model
-
-"""
-        if tm.get('threat_actors'):
-            md_content += "### Threat Actors\n\n"
-            for actor in tm.get('threat_actors', [])[:5]:
-                md_content += f"- **{actor.get('name', 'Unknown')}**: {actor.get('description', '')}\n"
-            md_content += "\n"
-        
-        if tm.get('attack_scenarios'):
-            md_content += "### Attack Scenarios\n\n"
-            for scenario in tm.get('attack_scenarios', [])[:5]:
-                md_content += f"#### {scenario.get('name', 'Scenario')}\n"
-                md_content += f"{scenario.get('description', '')}\n\n"
-
-    # Chat History
-    if report.ai_chat_history:
-        md_content += """## 💬 AI Chat History
-
-"""
-        for msg in report.ai_chat_history[:20]:
-            role = msg.get('role', 'unknown').capitalize()
-            content = msg.get('content', '')[:500]
-            md_content += f"**{role}:**\n{content}\n\n---\n\n"
-
+    
     # Notes
     if report.notes:
-        md_content += f"""## 📝 Notes
+        md_content += f"""### Analyst Notes
 
 {report.notes}
 
 """
-
+    
     # Tags
     if report.tags:
-        md_content += f"""## 🏷️ Tags
+        md_content += f"""### Tags
 
 {', '.join(f'`{tag}`' for tag in report.tags)}
 
@@ -1596,6 +5240,7 @@ def _generate_full_report_export(report, format: str):
             i = 0
             in_code_block = False
             code_content = []
+            code_language = None
             in_table = False
             table_rows = []
             
@@ -1607,20 +5252,45 @@ def _generate_full_report_export(report, format: str):
                     if in_code_block:
                         # End code block
                         if code_content:
-                            code_text = '<br/>'.join(code_content)
-                            story.append(Paragraph(code_text, code_style))
+                            if code_language == 'mermaid':
+                                # Render mermaid as image
+                                mermaid_code = '\n'.join(code_content)
+                                img_bytes = _render_mermaid_to_image(mermaid_code, 'png')
+                                if img_bytes:
+                                    from reportlab.platypus import Image
+                                    img_buffer = BytesIO(img_bytes)
+                                    try:
+                                        img = Image(img_buffer, width=450, height=300)
+                                        img.hAlign = 'CENTER'
+                                        story.append(img)
+                                        story.append(Spacer(1, 10))
+                                    except Exception as img_err:
+                                        logger.warning(f"Failed to add mermaid image to PDF: {img_err}")
+                                        # Fallback to code
+                                        code_text = '<br/>'.join([l.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') for l in code_content])
+                                        story.append(Paragraph(code_text, code_style))
+                                else:
+                                    # Fallback: show as code block
+                                    code_text = '<br/>'.join([l.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') for l in code_content])
+                                    story.append(Paragraph(code_text, code_style))
+                            else:
+                                # Regular code block
+                                code_text = '<br/>'.join([l.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') for l in code_content])
+                                story.append(Paragraph(code_text, code_style))
                             story.append(Spacer(1, 6))
                         code_content = []
+                        code_language = None
                         in_code_block = False
                     else:
                         in_code_block = True
+                        # Check for language specification
+                        lang_match = line.strip()[3:].strip()
+                        code_language = lang_match if lang_match else None
                     i += 1
                     continue
                 
                 if in_code_block:
-                    # Escape HTML entities in code
-                    escaped = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                    code_content.append(escaped)
+                    code_content.append(line)
                     i += 1
                     continue
                 
@@ -1646,8 +5316,18 @@ def _generate_full_report_export(report, format: str):
                     if table_rows:
                         # Create table with proper styling
                         col_count = max(len(row) for row in table_rows)
-                        # Normalize rows
-                        normalized = [row + [''] * (col_count - len(row)) for row in table_rows]
+                        # Normalize rows and clean cell content
+                        normalized = []
+                        for row in table_rows:
+                            cleaned_row = []
+                            for cell in row:
+                                # Strip markdown and escape for PDF
+                                clean = _strip_markdown_formatting(cell)
+                                clean = clean.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                                cleaned_row.append(clean)
+                            # Pad row to match column count
+                            cleaned_row += [''] * (col_count - len(cleaned_row))
+                            normalized.append(cleaned_row)
                         t = Table(normalized, repeatRows=1)
                         t.setStyle(TableStyle([
                             ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
@@ -1666,25 +5346,37 @@ def _generate_full_report_export(report, format: str):
                 
                 # Headers
                 if line.startswith('# '):
-                    text = _format_inline_markdown(line[2:])
+                    text = line[2:]
+                    text = _html_to_reportlab(text) if '<' in text else _format_inline_markdown(text)
                     story.append(Paragraph(text, h1_style))
                 elif line.startswith('## '):
-                    text = _format_inline_markdown(line[3:])
+                    text = line[3:]
+                    text = _html_to_reportlab(text) if '<' in text else _format_inline_markdown(text)
                     story.append(Paragraph(text, h1_style))
                 elif line.startswith('### '):
-                    text = _format_inline_markdown(line[4:])
+                    text = line[4:]
+                    text = _html_to_reportlab(text) if '<' in text else _format_inline_markdown(text)
                     story.append(Paragraph(text, h2_style))
                 elif line.startswith('#### '):
-                    text = _format_inline_markdown(line[5:])
+                    text = line[5:]
+                    text = _html_to_reportlab(text) if '<' in text else _format_inline_markdown(text)
                     story.append(Paragraph(text, h3_style))
                 # Bullet points
                 elif line.strip().startswith('- ') or line.strip().startswith('* ') or line.strip().startswith('• '):
-                    text = _format_inline_markdown(line.strip()[2:])
+                    text = line.strip()[2:]
+                    # Check if content has HTML
+                    if '<' in text and '>' in text:
+                        text = _html_to_reportlab(text)
+                    else:
+                        text = _format_inline_markdown(text)
                     story.append(Paragraph(f"• {text}", bullet_style))
                 # Numbered lists
                 elif re.match(r'^\s*\d+\.\s+', line):
                     text = re.sub(r'^\s*\d+\.\s+', '', line)
-                    text = _format_inline_markdown(text)
+                    if '<' in text and '>' in text:
+                        text = _html_to_reportlab(text)
+                    else:
+                        text = _format_inline_markdown(text)
                     num = re.match(r'^\s*(\d+)\.', line).group(1)
                     story.append(Paragraph(f"{num}. {text}", bullet_style))
                 # Horizontal rule
@@ -1692,7 +5384,12 @@ def _generate_full_report_export(report, format: str):
                     story.append(Spacer(1, 10))
                 # Regular paragraph
                 elif line.strip():
-                    text = _format_inline_markdown(line)
+                    text = line.strip()
+                    # Check if content has HTML tags
+                    if '<' in text and '>' in text:
+                        text = _html_to_reportlab(text)
+                    else:
+                        text = _format_inline_markdown(text)
                     story.append(Paragraph(text, body_style))
                 # Empty line
                 else:
@@ -1738,6 +5435,7 @@ def _generate_full_report_export(report, format: str):
             i = 0
             in_code_block = False
             code_content = []
+            code_language = None
             in_table = False
             table_rows = []
             
@@ -1747,21 +5445,53 @@ def _generate_full_report_export(report, format: str):
                 # Handle code blocks
                 if line.strip().startswith('```'):
                     if in_code_block:
-                        # End code block - add as formatted text
+                        # End code block
                         if code_content:
-                            p = doc.add_paragraph()
-                            p.paragraph_format.left_indent = Inches(0.25)
-                            run = p.add_run('\n'.join(code_content))
-                            run.font.name = 'Consolas'
-                            run.font.size = Pt(9)
-                            # Add shading
-                            shading = OxmlElement('w:shd')
-                            shading.set(qn('w:fill'), 'E8E8E8')
-                            p._p.get_or_add_pPr().append(shading)
+                            if code_language == 'mermaid':
+                                # Render mermaid as image
+                                mermaid_code = '\n'.join(code_content)
+                                img_bytes = _render_mermaid_to_image(mermaid_code, 'png')
+                                if img_bytes:
+                                    try:
+                                        img_buffer = BytesIO(img_bytes)
+                                        doc.add_picture(img_buffer, width=Inches(6))
+                                        # Center the image
+                                        last_para = doc.paragraphs[-1]
+                                        last_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                    except Exception as img_err:
+                                        logger.warning(f"Failed to add mermaid image to Word: {img_err}")
+                                        # Fallback to code
+                                        p = doc.add_paragraph()
+                                        p.paragraph_format.left_indent = Inches(0.25)
+                                        run = p.add_run('\n'.join(code_content))
+                                        run.font.name = 'Consolas'
+                                        run.font.size = Pt(9)
+                                else:
+                                    # Fallback: show as code block
+                                    p = doc.add_paragraph()
+                                    p.paragraph_format.left_indent = Inches(0.25)
+                                    run = p.add_run('\n'.join(code_content))
+                                    run.font.name = 'Consolas'
+                                    run.font.size = Pt(9)
+                            else:
+                                # Regular code block
+                                p = doc.add_paragraph()
+                                p.paragraph_format.left_indent = Inches(0.25)
+                                run = p.add_run('\n'.join(code_content))
+                                run.font.name = 'Consolas'
+                                run.font.size = Pt(9)
+                                # Add shading
+                                shading = OxmlElement('w:shd')
+                                shading.set(qn('w:fill'), 'E8E8E8')
+                                p._p.get_or_add_pPr().append(shading)
                         code_content = []
+                        code_language = None
                         in_code_block = False
                     else:
                         in_code_block = True
+                        # Check for language specification
+                        lang_match = line.strip()[3:].strip()
+                        code_language = lang_match if lang_match else None
                     i += 1
                     continue
                 
@@ -1814,16 +5544,16 @@ def _generate_full_report_export(report, format: str):
                 
                 # Headers
                 if line.startswith('# '):
-                    text = _strip_markdown_formatting(line[2:])
+                    text = _html_to_plain_text(line[2:]) if '<' in line else _strip_markdown_formatting(line[2:])
                     doc.add_heading(text, 1)
                 elif line.startswith('## '):
-                    text = _strip_markdown_formatting(line[3:])
+                    text = _html_to_plain_text(line[3:]) if '<' in line else _strip_markdown_formatting(line[3:])
                     doc.add_heading(text, 1)
                 elif line.startswith('### '):
-                    text = _strip_markdown_formatting(line[4:])
+                    text = _html_to_plain_text(line[4:]) if '<' in line else _strip_markdown_formatting(line[4:])
                     doc.add_heading(text, 2)
                 elif line.startswith('#### '):
-                    text = _strip_markdown_formatting(line[5:])
+                    text = _html_to_plain_text(line[5:]) if '<' in line else _strip_markdown_formatting(line[5:])
                     doc.add_heading(text, 3)
                 # Bullet points
                 elif line.strip().startswith('- ') or line.strip().startswith('* ') or line.strip().startswith('• '):
@@ -1860,23 +5590,132 @@ def _generate_full_report_export(report, format: str):
 
 
 def _format_inline_markdown(text: str) -> str:
-    """Convert inline markdown to ReportLab XML tags."""
+    """Convert inline markdown to ReportLab XML tags for PDF."""
     import re
-    # Bold
-    text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', text)
-    # Italic
-    text = re.sub(r'\*([^*]+)\*', r'<i>\1</i>', text)
-    # Inline code - use different font
-    text = re.sub(r'`([^`]+)`', r'<font face="Courier" size="9">\1</font>', text)
-    # Escape any remaining special chars
-    text = text.replace('&', '&amp;').replace('<b>', '<<<B>>>').replace('</b>', '<<</B>>>')
-    text = text.replace('<i>', '<<<I>>>').replace('</i>', '<<</I>>>')
-    text = text.replace('<font', '<<<FONT').replace('</font>', '<<</FONT>>>')
-    text = text.replace('<', '&lt;').replace('>', '&gt;')
-    text = text.replace('<<<B>>>', '<b>').replace('<<</B>>>', '</b>')
-    text = text.replace('<<<I>>>', '<i>').replace('<<</I>>>', '</i>')
-    text = text.replace('<<<FONT', '<font').replace('<<</FONT>>>', '</font>')
-    return text
+    
+    # First, escape ampersands that aren't already part of entities
+    text = re.sub(r'&(?!amp;|lt;|gt;|quot;|apos;)', '&amp;', text)
+    
+    # Escape < and > that aren't part of our formatting
+    # We'll process markdown first, then escape remaining angle brackets
+    
+    # Process bold markdown: **text**
+    def bold_replace(match):
+        content = match.group(1)
+        # Escape any angle brackets in the content
+        content = content.replace('<', '&lt;').replace('>', '&gt;')
+        return f'<b>{content}</b>'
+    
+    text = re.sub(r'\*\*([^*]+)\*\*', bold_replace, text)
+    
+    # Process italic markdown: *text* (but not **)
+    def italic_replace(match):
+        content = match.group(1)
+        content = content.replace('<', '&lt;').replace('>', '&gt;')
+        return f'<i>{content}</i>'
+    
+    text = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', italic_replace, text)
+    
+    # Process inline code: `text`
+    def code_replace(match):
+        content = match.group(1)
+        content = content.replace('<', '&lt;').replace('>', '&gt;')
+        return f'<font face="Courier" size="9">{content}</font>'
+    
+    text = re.sub(r'`([^`]+)`', code_replace, text)
+    
+    # Now escape any remaining < and > that weren't part of our tags
+    # Split by our known tags and escape content between them
+    parts = re.split(r'(</?b>|</?i>|<font[^>]*>|</font>)', text)
+    result = []
+    for part in parts:
+        if re.match(r'^</?b>$|^</?i>$|^<font[^>]*>$|^</font>$', part):
+            # This is a tag, keep it
+            result.append(part)
+        else:
+            # This is content, escape any remaining angle brackets
+            part = part.replace('<', '&lt;').replace('>', '&gt;')
+            result.append(part)
+    
+    return ''.join(result)
+
+
+def _html_to_reportlab(text: str) -> str:
+    """Convert HTML tags to ReportLab-compatible XML tags."""
+    import re
+    
+    if not text:
+        return ''
+    
+    # First escape ampersands
+    text = re.sub(r'&(?!amp;|lt;|gt;|quot;|nbsp;)', '&amp;', text)
+    
+    # Convert HTML tags to ReportLab equivalents
+    # Bold: <strong> -> <b>
+    text = re.sub(r'<strong>([^<]*)</strong>', r'<b>\1</b>', text)
+    text = re.sub(r'<b>([^<]*)</b>', r'<b>\1</b>', text)
+    
+    # Italic: <em> -> <i>
+    text = re.sub(r'<em>([^<]*)</em>', r'<i>\1</i>', text)
+    
+    # Code: <code> -> monospace font
+    text = re.sub(r'<code>([^<]*)</code>', r'<font face="Courier" size="9">\1</font>', text)
+    
+    # Remove unsupported tags but keep content
+    text = re.sub(r'</?p>', '', text)
+    text = re.sub(r'</?div>', '', text)
+    text = re.sub(r'</?span[^>]*>', '', text)
+    text = re.sub(r'<br\s*/?>', '<br/>', text)
+    
+    # Convert headers to bold
+    text = re.sub(r'<h[1-6][^>]*>([^<]*)</h[1-6]>', r'<b>\1</b>', text)
+    
+    # Handle lists - convert to bullet points
+    text = re.sub(r'<ul[^>]*>', '', text)
+    text = re.sub(r'</ul>', '', text)
+    text = re.sub(r'<ol[^>]*>', '', text)
+    text = re.sub(r'</ol>', '', text)
+    text = re.sub(r'<li[^>]*>([^<]*)</li>', r'• \1<br/>', text)
+    text = re.sub(r'<li[^>]*>', '• ', text)
+    text = re.sub(r'</li>', '<br/>', text)
+    
+    # Remove any remaining HTML tags we don't support
+    text = re.sub(r'<(?!/?b>|/?i>|/?u>|font[^>]*>|/font>|br/>)[^>]+>', '', text)
+    
+    return text.strip()
+
+
+def _html_to_plain_text(text: str) -> str:
+    """Convert HTML to plain text for Word documents."""
+    import re
+    from html import unescape
+    
+    if not text:
+        return ''
+    
+    # Decode HTML entities
+    text = unescape(text)
+    
+    # Replace <br> with newlines
+    text = re.sub(r'<br\s*/?>', '\n', text)
+    
+    # Replace </p> and </div> with newlines
+    text = re.sub(r'</p>', '\n', text)
+    text = re.sub(r'</div>', '\n', text)
+    
+    # Replace </li> with newlines
+    text = re.sub(r'</li>', '\n', text)
+    
+    # Add bullet for list items
+    text = re.sub(r'<li[^>]*>', '• ', text)
+    
+    # Remove all remaining HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Clean up multiple newlines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    return text.strip()
 
 
 def _strip_markdown_formatting(text: str) -> str:
@@ -1885,16 +5724,66 @@ def _strip_markdown_formatting(text: str) -> str:
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
     text = re.sub(r'\*([^*]+)\*', r'\1', text)
     text = re.sub(r'`([^`]+)`', r'\1', text)
-    # Remove emoji codes but keep emoji
+    # Also strip HTML if present
+    text = _html_to_plain_text(text)
     return text.strip()
 
 
+def _render_mermaid_to_image(mermaid_code: str, output_format: str = 'png') -> Optional[bytes]:
+    """
+    Render mermaid diagram code to an image using Kroki API.
+    Returns image bytes or None if rendering fails.
+    """
+    import base64
+    import zlib
+    import httpx
+    
+    try:
+        # Clean up mermaid code
+        mermaid_code = mermaid_code.strip()
+        if not mermaid_code:
+            return None
+        
+        # Kroki API endpoint
+        kroki_url = f"https://kroki.io/mermaid/{output_format}"
+        
+        # Encode the mermaid code for Kroki
+        # Kroki accepts plain text POST or base64 encoded in URL
+        encoded = base64.urlsafe_b64encode(
+            zlib.compress(mermaid_code.encode('utf-8'), 9)
+        ).decode('ascii')
+        
+        # Use GET with encoded diagram (more reliable)
+        url = f"https://kroki.io/mermaid/{output_format}/{encoded}"
+        
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(url)
+            
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.warning(f"Mermaid rendering failed: {response.status_code} - {response.text[:200]}")
+                return None
+                
+    except Exception as e:
+        logger.warning(f"Failed to render mermaid diagram: {e}")
+        return None
+
+
 def _add_formatted_text(paragraph, text: str):
-    """Add text to a Word paragraph with markdown formatting converted."""
+    """Add text to a Word paragraph with markdown/HTML formatting converted."""
     import re
     from docx.shared import Pt
+    from html import unescape
     
-    # Pattern to find bold, italic, and code
+    # First check if text has HTML - convert to plain text
+    if '<' in text and '>' in text:
+        text = _html_to_plain_text(text)
+    
+    # Decode any HTML entities
+    text = unescape(text)
+    
+    # Pattern to find bold, italic, and code (markdown style)
     pattern = r'(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)'
     parts = re.split(pattern, text)
     
@@ -2791,6 +6680,514 @@ async def generate_walkthrough(analysis_context: Dict[str, Any]):
 
 
 # ============================================================================
+# Unified APK Scan Endpoint (SSE Progress Streaming)
+# ============================================================================
+
+class UnifiedApkScanPhase(BaseModel):
+    """A phase in the unified APK scan."""
+    id: str
+    label: str
+    description: str
+    status: str  # "pending", "in_progress", "completed", "error"
+    progress: int = 0  # 0-100
+    details: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class UnifiedApkScanProgress(BaseModel):
+    """Progress update for unified APK scan."""
+    scan_id: str
+    current_phase: str
+    overall_progress: int  # 0-100
+    phases: List[UnifiedApkScanPhase]
+    message: str
+    error: Optional[str] = None
+
+
+class UnifiedApkScanResult(BaseModel):
+    """Complete result from unified APK scan."""
+    scan_id: str
+    package_name: str
+    version_name: Optional[str] = None
+    version_code: Optional[int] = None
+    min_sdk: Optional[int] = None
+    target_sdk: Optional[int] = None
+    
+    # Quick Analysis Results
+    permissions: List[Dict[str, Any]] = []
+    dangerous_permissions_count: int = 0
+    components: List[Dict[str, Any]] = []
+    secrets: List[Dict[str, Any]] = []
+    urls: List[str] = []
+    native_libraries: List[str] = []
+    security_issues: List[Dict[str, Any]] = []
+    
+    # JADX Decompilation Results
+    jadx_session_id: Optional[str] = None
+    total_classes: int = 0
+    total_files: int = 0
+    classes_summary: List[Dict[str, Any]] = []
+    source_tree: Optional[Dict[str, Any]] = None
+    jadx_security_issues: List[Dict[str, Any]] = []
+    decompilation_time: float = 0
+    
+    # AI Analysis Results  
+    ai_functionality_report: Optional[str] = None
+    ai_security_report: Optional[str] = None
+    ai_architecture_diagram: Optional[str] = None
+    ai_attack_surface_map: Optional[str] = None  # Mermaid attack tree diagram
+    
+    # Decompiled Source Code Security Findings (pattern-based scanners)
+    decompiled_code_findings: List[Dict[str, Any]] = []  # Individual vulnerability findings
+    decompiled_code_summary: Dict[str, Any] = {}  # Summary with counts by severity/category
+    
+    # Vulnerability-Specific Frida Hooks (auto-generated from findings)
+    vulnerability_frida_hooks: Optional[Dict[str, Any]] = None  # Targeted Frida scripts
+    
+    # Metadata
+    scan_time: float = 0
+    filename: str = ""
+    file_size: int = 0
+
+
+@router.post("/apk/unified-scan")
+async def unified_apk_scan(
+    file: UploadFile = File(..., description="APK file to analyze"),
+):
+    """
+    Perform a complete APK analysis with streaming progress updates.
+    
+    This unified scan combines:
+    1. Manifest & permission analysis
+    2. Secret & string extraction
+    3. JADX decompilation to Java source
+    4. AI-powered functionality report
+    5. AI-powered security report
+    6. Architecture diagram generation
+    
+    Returns SSE stream with progress updates and final result.
+    """
+    scan_id = str(uuid.uuid4())
+    filename = file.filename or "unknown.apk"
+    suffix = Path(filename).suffix.lower()
+    
+    if suffix not in ALLOWED_APK_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_APK_EXTENSIONS)}"
+        )
+    
+    # Check JADX availability
+    if not check_jadx_available():
+        raise HTTPException(
+            status_code=503,
+            detail="JADX is not available. Full analysis requires JADX."
+        )
+    
+    # Save file to temp location
+    tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_unified_"))
+    tmp_path = tmp_dir / filename
+    
+    file_size = 0
+    try:
+        with tmp_path.open("wb") as f:
+            while chunk := await file.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                f.write(chunk)
+    except Exception as e:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+    
+    logger.info(f"Starting unified APK scan: {filename} ({file_size:,} bytes)")
+    
+    # Initialize scan session
+    _unified_scan_sessions[scan_id] = {
+        "cancelled": False,
+        "tmp_dir": tmp_dir,
+        "file_path": tmp_path,
+    }
+    
+    # Define phases
+    phases = [
+        UnifiedApkScanPhase(
+            id="manifest",
+            label="Manifest Analysis",
+            description="Extracting package info, permissions, and components",
+            status="pending"
+        ),
+        UnifiedApkScanPhase(
+            id="secrets",
+            label="Secret Detection",
+            description="Scanning for hardcoded secrets, URLs, and API keys",
+            status="pending"
+        ),
+        UnifiedApkScanPhase(
+            id="jadx",
+            label="JADX Decompilation",
+            description="Decompiling DEX to Java source code",
+            status="pending"
+        ),
+        UnifiedApkScanPhase(
+            id="ai_functionality",
+            label="AI Functionality Report",
+            description="Generating AI-powered 'What Does This APK Do?' report",
+            status="pending"
+        ),
+        UnifiedApkScanPhase(
+            id="ai_security",
+            label="AI Security Report",
+            description="Generating AI-powered security analysis",
+            status="pending"
+        ),
+        UnifiedApkScanPhase(
+            id="ai_diagram",
+            label="Architecture Diagram",
+            description="Generating visual architecture diagram",
+            status="pending"
+        ),
+    ]
+    
+    async def run_unified_scan():
+        """Generator that yields SSE progress events."""
+        result = UnifiedApkScanResult(
+            scan_id=scan_id,
+            package_name="",
+            filename=filename,
+            file_size=file_size,
+        )
+        start_time = datetime.now()
+        current_phase_idx = 0
+        apk_result = None
+        jadx_result = None
+        
+        def make_progress(message: str, phase_progress: int = 0) -> str:
+            nonlocal phases, current_phase_idx
+            overall = (current_phase_idx * 100 // len(phases)) + (phase_progress // len(phases))
+            progress = UnifiedApkScanProgress(
+                scan_id=scan_id,
+                current_phase=phases[current_phase_idx].id,
+                overall_progress=min(overall, 100),
+                phases=phases,
+                message=message,
+            )
+            return f"data: {json.dumps({'type': 'progress', 'data': progress.model_dump()})}\n\n"
+        
+        def update_phase(phase_id: str, status: str, details: str = None, progress: int = 0):
+            for p in phases:
+                if p.id == phase_id:
+                    p.status = status
+                    p.progress = progress
+                    if details:
+                        p.details = details
+                    if status == "in_progress" and not p.started_at:
+                        p.started_at = datetime.now().isoformat()
+                    if status == "completed":
+                        p.completed_at = datetime.now().isoformat()
+                        p.progress = 100
+                    break
+        
+        try:
+            # Check if cancelled
+            if _unified_scan_sessions.get(scan_id, {}).get("cancelled"):
+                yield f"data: {json.dumps({'type': 'cancelled'})}\n\n"
+                return
+            
+            # =================================================================
+            # Phase 1: Manifest Analysis
+            # =================================================================
+            current_phase_idx = 0
+            update_phase("manifest", "in_progress")
+            yield make_progress("Extracting AndroidManifest.xml...", 10)
+            
+            try:
+                apk_result = re_service.analyze_apk(tmp_path)
+                result.package_name = apk_result.package_name or ""
+                result.version_name = apk_result.version_name
+                result.version_code = apk_result.version_code
+                result.min_sdk = apk_result.min_sdk
+                result.target_sdk = apk_result.target_sdk
+                result.permissions = [
+                    {"name": p.name, "is_dangerous": p.is_dangerous, "description": p.description}
+                    for p in apk_result.permissions
+                ]
+                result.dangerous_permissions_count = sum(1 for p in apk_result.permissions if p.is_dangerous)
+                result.components = [
+                    {"name": c.name, "component_type": c.component_type, "is_exported": c.is_exported, "intent_filters": c.intent_filters}
+                    for c in apk_result.components
+                ]
+                result.native_libraries = apk_result.native_libraries
+                update_phase("manifest", "completed", f"Found {len(result.permissions)} permissions, {len(result.components)} components")
+            except Exception as e:
+                update_phase("manifest", "error", str(e))
+                logger.error(f"Manifest analysis failed: {e}")
+            
+            yield make_progress("Manifest analysis complete", 100)
+            await asyncio.sleep(0.1)  # Allow UI to update
+            
+            # =================================================================
+            # Phase 2: Secret Detection
+            # =================================================================
+            current_phase_idx = 1
+            update_phase("secrets", "in_progress")
+            yield make_progress("Scanning for secrets and URLs...", 10)
+            
+            if apk_result:
+                result.secrets = [
+                    {"type": s["type"], "value": s["value"], "masked_value": s["masked_value"], "severity": s["severity"]}
+                    for s in apk_result.secrets
+                ]
+                result.urls = apk_result.urls[:100]
+                result.security_issues = [
+                    {"category": i["category"], "severity": i["severity"], "description": i["description"]}
+                    for i in apk_result.security_issues
+                ]
+                update_phase("secrets", "completed", f"Found {len(result.secrets)} secrets, {len(result.urls)} URLs")
+            else:
+                update_phase("secrets", "completed", "Skipped - manifest failed")
+            
+            yield make_progress("Secret detection complete", 100)
+            await asyncio.sleep(0.1)
+            
+            # =================================================================
+            # Phase 3: JADX Decompilation
+            # =================================================================
+            current_phase_idx = 2
+            update_phase("jadx", "in_progress")
+            yield make_progress("Starting JADX decompilation (this may take a while)...", 10)
+            
+            try:
+                jadx_result = re_service.decompile_apk_with_jadx(tmp_path)
+                
+                # Store in cache for later queries
+                jadx_session_id = str(uuid.uuid4())
+                _jadx_cache[jadx_session_id] = Path(jadx_result.output_directory)
+                
+                result.jadx_session_id = jadx_session_id
+                result.total_classes = jadx_result.total_classes
+                result.total_files = jadx_result.total_files
+                result.decompilation_time = jadx_result.decompilation_time
+                result.source_tree = jadx_result.source_tree
+                
+                # Log source tree info for debugging
+                logger.info(f"JADX source tree has {len(jadx_result.source_tree)} top-level entries")
+                
+                # Collect security issues
+                all_jadx_issues = []
+                for cls in jadx_result.classes:
+                    all_jadx_issues.extend(cls.security_issues)
+                result.jadx_security_issues = all_jadx_issues[:100]
+                
+                # Classes summary
+                result.classes_summary = [
+                    {
+                        "class_name": c.class_name,
+                        "package_name": c.package_name,
+                        "file_path": c.file_path,
+                        "line_count": c.line_count,
+                        "is_activity": c.is_activity,
+                        "is_service": c.is_service,
+                        "security_issues_count": len(c.security_issues),
+                    }
+                    for c in jadx_result.classes[:500]
+                ]
+                
+                update_phase("jadx", "completed", f"Decompiled {jadx_result.total_classes} classes in {jadx_result.decompilation_time:.1f}s")
+            except Exception as e:
+                update_phase("jadx", "error", str(e))
+                logger.error(f"JADX decompilation failed: {e}", exc_info=True)
+            
+            yield make_progress("JADX decompilation complete", 100)
+            await asyncio.sleep(0.1)
+            
+            # =================================================================
+            # Phase 3b: Decompiled Source Code Security Scan (RUN EARLY for AI context)
+            # =================================================================
+            yield make_progress("Running decompiled code security scanners...", 10)
+            
+            try:
+                if jadx_result and jadx_result.output_directory:
+                    jadx_output_path = Path(jadx_result.output_directory)
+                    if jadx_output_path.exists():
+                        yield make_progress("Scanning WebView, crypto, SQL injection...", 20)
+                        code_scan_results = re_service.scan_decompiled_source_comprehensive(jadx_output_path)
+                        result.decompiled_code_findings = code_scan_results.get("findings", [])
+                        result.decompiled_code_summary = code_scan_results.get("summary", {})
+                        
+                        finding_count = len(result.decompiled_code_findings)
+                        critical_count = code_scan_results.get("summary", {}).get("by_severity", {}).get("critical", 0)
+                        high_count = code_scan_results.get("summary", {}).get("by_severity", {}).get("high", 0)
+                        
+                        logger.info(f"Decompiled code scan found {finding_count} issues ({critical_count} critical, {high_count} high)")
+            except Exception as e:
+                logger.error(f"Decompiled code security scan failed: {e}")
+            
+            yield make_progress("Decompiled code scan complete", 100)
+            await asyncio.sleep(0.1)
+            
+            # =================================================================
+            # Phase 4: AI Functionality Report
+            # =================================================================
+            current_phase_idx = 3
+            update_phase("ai_functionality", "in_progress")
+            yield make_progress("Generating AI functionality report...", 10)
+            
+            try:
+                if apk_result:
+                    # Pass JADX output directory for source code context
+                    jadx_output_path = Path(jadx_result.output_directory) if jadx_result else None
+                    # Pass decompiled code findings for enhanced AI analysis
+                    ai_reports = await re_service.analyze_apk_with_ai(
+                        apk_result, 
+                        jadx_output_path,
+                        decompiled_findings=result.decompiled_code_findings
+                    )
+                    if ai_reports:
+                        result.ai_functionality_report = apk_result.ai_report_functionality
+                update_phase("ai_functionality", "completed", "Report generated")
+            except Exception as e:
+                update_phase("ai_functionality", "error", str(e))
+                logger.error(f"AI functionality report failed: {e}")
+            
+            yield make_progress("AI functionality report complete", 100)
+            await asyncio.sleep(0.1)
+            
+            # =================================================================
+            # Phase 5: AI Security Report
+            # =================================================================
+            current_phase_idx = 4
+            update_phase("ai_security", "in_progress")
+            yield make_progress("Generating AI security report...", 10)
+            
+            try:
+                if apk_result and apk_result.ai_report_security:
+                    result.ai_security_report = apk_result.ai_report_security
+                update_phase("ai_security", "completed", "Report generated")
+            except Exception as e:
+                update_phase("ai_security", "error", str(e))
+                logger.error(f"AI security report failed: {e}")
+            
+            yield make_progress("AI security report complete", 100)
+            await asyncio.sleep(0.1)
+            
+            # =================================================================
+            # Phase 6: Architecture Diagram
+            # =================================================================
+            current_phase_idx = 5
+            update_phase("ai_diagram", "in_progress")
+            yield make_progress("Generating architecture diagram...", 10)
+            
+            try:
+                if apk_result:
+                    # Pass JADX output directory for source code context
+                    jadx_output_path = Path(jadx_result.output_directory) if jadx_result else None
+                    # Get JADX result summary dict for additional context
+                    jadx_summary = None
+                    if jadx_output_path and jadx_output_path.exists():
+                        try:
+                            jadx_summary = re_service.get_jadx_result_summary(jadx_output_path)
+                        except Exception:
+                            pass  # Continue without summary
+                    diagram = await re_service.generate_ai_architecture_diagram(apk_result, jadx_summary, output_dir=jadx_output_path)
+                    result.ai_architecture_diagram = diagram
+                update_phase("ai_diagram", "completed", "Diagram generated")
+            except Exception as e:
+                update_phase("ai_diagram", "error", str(e))
+                logger.error(f"Architecture diagram generation failed: {e}")
+            
+            yield make_progress("Architecture diagram complete", 100)
+            
+            # =================================================================
+            # Phase 6b: Attack Surface Map (AI-powered attack tree)
+            # =================================================================
+            yield make_progress("Generating AI attack surface map...", 10)
+            
+            try:
+                if apk_result:
+                    jadx_output_path = Path(jadx_result.output_directory) if jadx_result else None
+                    if jadx_output_path and jadx_output_path.exists():
+                        # Generate attack surface map first
+                        attack_surface = re_service.generate_attack_surface_map(tmp_path)
+                        # Then generate AI-powered attack tree with decompiled findings
+                        attack_tree = await re_service.generate_ai_attack_tree_mermaid(
+                            attack_surface, 
+                            jadx_output_path,
+                            decompiled_findings=result.decompiled_code_findings
+                        )
+                        result.ai_attack_surface_map = attack_tree
+                        logger.info("Generated AI attack surface map for unified scan")
+            except Exception as e:
+                logger.error(f"Attack surface map generation failed: {e}")
+            
+            yield make_progress("Attack surface map complete", 100)
+            
+            # =================================================================
+            # Phase 6c: Enhanced Frida Hooks (Vulnerability-specific)
+            # =================================================================
+            yield make_progress("Generating vulnerability-specific Frida hooks...", 10)
+            
+            try:
+                if result.decompiled_code_findings and apk_result:
+                    # Generate targeted Frida hooks based on discovered vulnerabilities
+                    vuln_frida_hooks = re_service.generate_vulnerability_specific_frida_hooks(
+                        package_name=apk_result.package_name,
+                        decompiled_findings=result.decompiled_code_findings,
+                        manifest_analysis=apk_result.manifest_analysis if hasattr(apk_result, 'manifest_analysis') else None
+                    )
+                    
+                    if vuln_frida_hooks and vuln_frida_hooks.get("vulnerability_scripts"):
+                        result.vulnerability_frida_hooks = vuln_frida_hooks
+                        hook_count = len(vuln_frida_hooks.get("vulnerability_scripts", []))
+                        logger.info(f"Generated {hook_count} vulnerability-specific Frida scripts")
+            except Exception as e:
+                logger.error(f"Vulnerability Frida hook generation failed: {e}")
+            
+            yield make_progress("Frida hooks generated", 100)
+            
+            # =================================================================
+            # Final Result
+            # =================================================================
+            result.scan_time = (datetime.now() - start_time).total_seconds()
+            
+            yield f"data: {json.dumps({'type': 'result', 'data': result.model_dump()})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Unified scan failed: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        finally:
+            # Cleanup session (but keep JADX cache for browsing)
+            if scan_id in _unified_scan_sessions:
+                del _unified_scan_sessions[scan_id]
+            # Note: Don't delete tmp_dir yet - JADX cache needs it
+    
+    return StreamingResponse(
+        run_unified_scan(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+@router.post("/apk/unified-scan/{scan_id}/cancel")
+async def cancel_unified_scan(scan_id: str):
+    """Cancel an in-progress unified scan."""
+    if scan_id in _unified_scan_sessions:
+        _unified_scan_sessions[scan_id]["cancelled"] = True
+        return {"status": "cancelled"}
+    raise HTTPException(status_code=404, detail="Scan session not found")
+
+
+# ============================================================================
 # JADX Decompilation Endpoints
 # ============================================================================
 
@@ -2834,6 +7231,41 @@ class JadxSearchResponse(BaseModel):
 
 # Store JADX output directories for session
 _jadx_cache: Dict[str, Path] = {}
+
+
+def _resolve_jadx_output_dir(output_directory: str) -> Path:
+    """
+    Resolve output_directory to an actual Path.
+    
+    The output_directory can be either:
+    1. A JADX session ID (UUID) - looked up from _jadx_cache
+    2. A direct filesystem path
+    
+    Returns:
+        Path to the JADX output directory
+        
+    Raises:
+        HTTPException if not found
+    """
+    # First, check if it's a session ID in the cache
+    if output_directory in _jadx_cache:
+        return _jadx_cache[output_directory]
+    
+    # Otherwise, try as a direct path
+    output_path = Path(output_directory)
+    if output_path.exists():
+        return output_path
+    
+    # Check if it's a session ID that looks like a path (backwards compatibility)
+    # Sometimes the frontend might send the session ID
+    for session_id, cached_path in _jadx_cache.items():
+        if str(cached_path) == output_directory or session_id in output_directory:
+            return cached_path
+    
+    raise HTTPException(
+        status_code=404, 
+        detail=f"Decompiled sources not found. Session may have expired. Please run the scan again."
+    )
 
 
 @router.post("/apk/decompile", response_model=JadxDecompilationResponse)
@@ -3105,10 +7537,10 @@ async def generate_ai_diagrams_from_decompilation(
         
         # Generate diagrams (these are async functions)
         if include_architecture:
-            architecture_diagram = await re_service.generate_ai_architecture_diagram(result, jadx_result)
+            architecture_diagram = await re_service.generate_ai_architecture_diagram(result, jadx_result, output_dir=output_dir)
         
         if include_data_flow:
-            data_flow_diagram = await re_service.generate_ai_data_flow_diagram(result, jadx_result)
+            data_flow_diagram = await re_service.generate_ai_data_flow_diagram(result, jadx_result, output_dir=output_dir)
         
         generation_time = time.time() - start_time
         
@@ -3431,9 +7863,7 @@ async def smart_search(request: SmartSearchRequest):
     Returns matches with context and vulnerability classification.
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled sources not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.smart_search(
             output_dir=output_dir,
@@ -3521,9 +7951,7 @@ async def ai_vulnerability_scan(request: AIVulnScanRequest):
         raise HTTPException(status_code=503, detail="AI features require Gemini API key")
     
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled sources not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = await re_service.ai_vulnerability_scan(
             output_dir=output_dir,
@@ -3536,6 +7964,298 @@ async def ai_vulnerability_scan(request: AIVulnScanRequest):
     except Exception as e:
         logger.error(f"AI vulnerability scan failed: {e}")
         raise HTTPException(status_code=500, detail=f"AI vulnerability scan failed: {str(e)}")
+
+
+# ============================================================================
+# Library CVE Scan Endpoint
+# ============================================================================
+
+class LibraryCVEScanRequest(BaseModel):
+    """Request for library CVE scan."""
+    output_directory: str
+    gradle_content: Optional[str] = None  # Optional gradle file content
+
+
+class DetectedLibrary(BaseModel):
+    """A detected library in the APK."""
+    package_prefix: str
+    maven_coordinate: str
+    ecosystem: str
+    version: Optional[str] = None
+    class_count: int = 0
+    is_high_risk: bool = False
+    risk_reason: Optional[str] = None
+
+
+class LibraryCVE(BaseModel):
+    """A CVE found in a library."""
+    library: str
+    library_version: str
+    cve_id: str
+    aliases: List[str] = []
+    summary: str
+    details: str = ""
+    severity: str
+    cvss_score: Optional[float] = None
+    affected_versions: List[str] = []
+    references: List[str] = []
+    published: str = ""
+    modified: str = ""
+    exploitation_potential: str = ""
+    attack_vector: str = ""
+
+
+class LibraryCVEScanResponse(BaseModel):
+    """Response from library CVE scan."""
+    total_libraries: int
+    high_risk_libraries: int
+    total_cves: int
+    critical_cves: int
+    high_cves: int
+    libraries: List[DetectedLibrary]
+    cves: List[LibraryCVE]
+    error: Optional[str] = None
+
+
+@router.post("/apk/decompile/library-cve-scan", response_model=LibraryCVEScanResponse)
+async def library_cve_scan(request: LibraryCVEScanRequest):
+    """
+    Scan decompiled APK for third-party libraries and look up known CVEs.
+    
+    This endpoint:
+    1. Extracts class names from decompiled source
+    2. Identifies third-party libraries by package prefixes
+    3. Looks up CVEs for each library via OSV.dev API
+    4. Returns exploitation-focused vulnerability assessment
+    
+    Use this to identify known vulnerabilities in bundled dependencies.
+    """
+    try:
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
+        
+        # Get all class names from decompiled source
+        class_names = []
+        sources_dir = output_dir / "sources"
+        
+        if sources_dir.exists():
+            for java_file in sources_dir.rglob("*.java"):
+                # Convert file path to class name
+                try:
+                    rel_path = java_file.relative_to(sources_dir)
+                    class_name = str(rel_path).replace("/", ".").replace("\\", ".").replace(".java", "")
+                    class_names.append(class_name)
+                except Exception:
+                    pass
+        
+        if not class_names:
+            return LibraryCVEScanResponse(
+                total_libraries=0,
+                high_risk_libraries=0,
+                total_cves=0,
+                critical_cves=0,
+                high_cves=0,
+                libraries=[],
+                cves=[],
+                error="No decompiled classes found. Run JADX decompilation first."
+            )
+        
+        # Extract dependencies from class names
+        from backend.services.reverse_engineering_service import extract_apk_dependencies, lookup_apk_cves
+        
+        libraries = extract_apk_dependencies(class_names, request.gradle_content)
+        
+        # Convert to response format
+        lib_responses = [
+            DetectedLibrary(
+                package_prefix=lib.package_prefix,
+                maven_coordinate=lib.maven_coordinate,
+                ecosystem=lib.ecosystem,
+                version=lib.version,
+                class_count=lib.class_count,
+                is_high_risk=lib.is_high_risk,
+                risk_reason=lib.risk_reason,
+            )
+            for lib in libraries
+        ]
+        
+        # Look up CVEs for detected libraries
+        cves_raw = await lookup_apk_cves(libraries)
+        
+        # Convert to response format
+        cve_responses = [
+            LibraryCVE(
+                library=cve.get('library', ''),
+                library_version=cve.get('library_version', 'unknown'),
+                cve_id=cve.get('cve_id', ''),
+                aliases=cve.get('aliases', []),
+                summary=cve.get('summary', ''),
+                details=cve.get('details', ''),
+                severity=cve.get('severity', 'unknown'),
+                cvss_score=cve.get('cvss_score'),
+                affected_versions=cve.get('affected_versions', []),
+                references=cve.get('references', []),
+                published=cve.get('published', ''),
+                modified=cve.get('modified', ''),
+                exploitation_potential=cve.get('exploitation_potential', ''),
+                attack_vector=cve.get('attack_vector', ''),
+            )
+            for cve in cves_raw
+        ]
+        
+        # Calculate counts
+        high_risk_libs = sum(1 for lib in libraries if lib.is_high_risk)
+        critical_cves = sum(1 for cve in cves_raw if cve.get('severity', '').lower() == 'critical')
+        high_cves = sum(1 for cve in cves_raw if cve.get('severity', '').lower() == 'high')
+        
+        logger.info(f"Library CVE scan: {len(libraries)} libraries, {len(cves_raw)} CVEs found")
+        
+        return LibraryCVEScanResponse(
+            total_libraries=len(libraries),
+            high_risk_libraries=high_risk_libs,
+            total_cves=len(cves_raw),
+            critical_cves=critical_cves,
+            high_cves=high_cves,
+            libraries=lib_responses,
+            cves=cve_responses,
+        )
+        
+    except Exception as e:
+        logger.error(f"Library CVE scan failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Library CVE scan failed: {str(e)}")
+
+
+# ============================================================================
+# Enhanced Security Analysis Endpoint (Combined Pattern + AI + CVE)
+# ============================================================================
+
+class EnhancedSecurityFinding(BaseModel):
+    """A unified security finding from any detection method."""
+    source: str  # "pattern", "ai", or "cve"
+    detection_method: str
+    title: str
+    severity: str
+    category: str = ""
+    affected_class: str = ""
+    affected_method: str = ""
+    description: str = ""
+    code_snippet: str = ""
+    line_number: int = 0
+    impact: str = ""
+    remediation: str = ""
+    cve_id: str = ""
+    cvss_score: Optional[float] = None
+    cwe_id: str = ""
+    affected_library: str = ""
+    attack_vector: str = ""
+    exploitation_potential: str = ""
+    references: List[str] = []
+
+
+class AttackChain(BaseModel):
+    """A multi-step attack scenario."""
+    name: str
+    steps: List[str]
+    impact: str
+    likelihood: str = "medium"
+    classes_involved: List[str] = []
+
+
+class EnhancedSecurityRiskSummary(BaseModel):
+    """Risk summary from enhanced security analysis."""
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    info: int = 0
+
+
+class EnhancedSecurityMetadata(BaseModel):
+    """Metadata about the security analysis."""
+    pattern_scan_enabled: bool = True
+    ai_scan_enabled: bool = True
+    cve_lookup_enabled: bool = True
+    classes_scanned: int = 0
+    libraries_detected: int = 0
+    cves_found: int = 0
+    ai_scan_error: Optional[str] = None
+    cve_lookup_error: Optional[str] = None
+
+
+class EnhancedSecurityRequest(BaseModel):
+    """Request for enhanced security analysis."""
+    output_directory: str
+    include_ai_scan: bool = True
+    include_cve_lookup: bool = True
+    ai_scan_type: str = "quick"  # quick, deep, focused
+
+
+class EnhancedSecurityResponse(BaseModel):
+    """Combined security analysis response."""
+    pattern_findings: List[Dict[str, Any]] = []
+    ai_findings: List[EnhancedSecurityFinding] = []
+    cve_findings: List[EnhancedSecurityFinding] = []
+    combined_findings: List[EnhancedSecurityFinding] = []
+    attack_chains: List[AttackChain] = []
+    risk_summary: EnhancedSecurityRiskSummary
+    overall_risk: str = "low"
+    recommendations: List[str] = []
+    executive_summary: str = ""
+    analysis_metadata: EnhancedSecurityMetadata
+    error: Optional[str] = None
+
+
+@router.post("/apk/decompile/enhanced-security", response_model=EnhancedSecurityResponse)
+async def enhanced_security_scan(request: EnhancedSecurityRequest):
+    """
+    Perform comprehensive security analysis combining multiple detection methods.
+    
+    This unified scan combines:
+    1. **Pattern-based Detection** (fast) - Regex scanning for known vulnerability patterns
+    2. **AI-powered Analysis** (thorough) - Cross-class vulnerability detection using Gemini AI
+    3. **CVE Lookup** (authoritative) - Known vulnerabilities in third-party libraries via OSV.dev
+    
+    Returns deduplicated, prioritized findings with attack chains and recommendations.
+    
+    Scan options:
+    - include_ai_scan: Enable AI cross-class analysis (requires Gemini API key)
+    - include_cve_lookup: Enable CVE lookup for dependencies
+    - ai_scan_type: "quick" (fast), "deep" (thorough), or "focused" (specific areas)
+    """
+    try:
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
+        
+        result = await re_service.enhanced_security_analysis(
+            output_dir=output_dir,
+            include_ai_scan=request.include_ai_scan,
+            include_cve_lookup=request.include_cve_lookup,
+            ai_scan_type=request.ai_scan_type
+        )
+        
+        if "error" in result and result.get("combined_findings") is None:
+            return EnhancedSecurityResponse(
+                risk_summary=EnhancedSecurityRiskSummary(),
+                analysis_metadata=EnhancedSecurityMetadata(),
+                error=result["error"]
+            )
+        
+        return EnhancedSecurityResponse(
+            pattern_findings=result.get("pattern_findings", []),
+            ai_findings=[EnhancedSecurityFinding(**f) for f in result.get("ai_findings", []) if isinstance(f, dict)],
+            cve_findings=[EnhancedSecurityFinding(**f) for f in result.get("cve_findings", []) if isinstance(f, dict)],
+            combined_findings=[EnhancedSecurityFinding(**f) if isinstance(f, dict) else f for f in result.get("combined_findings", [])],
+            attack_chains=[AttackChain(**c) if isinstance(c, dict) else c for c in result.get("attack_chains", [])],
+            risk_summary=EnhancedSecurityRiskSummary(**result.get("risk_summary", {})),
+            overall_risk=result.get("overall_risk", "low"),
+            recommendations=result.get("recommendations", []),
+            executive_summary=result.get("executive_summary", ""),
+            analysis_metadata=EnhancedSecurityMetadata(**result.get("analysis_metadata", {})),
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Enhanced security scan failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhanced security scan failed: {str(e)}")
 
 
 # ============================================================================
@@ -3589,9 +8309,7 @@ async def get_smali_view(request: SmaliViewRequest):
     - Patching/modifying APKs
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled sources not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.get_smali_for_class(output_dir, request.class_path)
         
@@ -3672,9 +8390,7 @@ async def extract_strings(request: StringExtractionRequest):
     Use filters to narrow results (e.g., ["url", "api_key"]).
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled sources not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.extract_all_strings(output_dir, request.filters)
         
@@ -3797,9 +8513,7 @@ async def get_cross_references(request: CrossReferenceRequest):
     - Identifying critical/hub classes
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled sources not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.build_cross_references(output_dir, request.class_path)
         
@@ -3867,9 +8581,7 @@ async def get_project_zip_info(request: DownloadProjectRequest):
     Returns file counts, sizes, and estimated download size.
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled project not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.get_project_zip_info(output_dir)
         
@@ -3894,9 +8606,7 @@ async def download_project_zip(request: DownloadProjectRequest):
     from fastapi.responses import FileResponse
     
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled project not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         zip_path = re_service.create_project_zip(output_dir)
         
@@ -3972,9 +8682,7 @@ async def analyze_permissions(request: PermissionAnalysisRequest):
     - Security auditing
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled project not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.analyze_permissions(output_dir)
         
@@ -4056,9 +8764,7 @@ async def extract_network_endpoints(request: NetworkEndpointRequest):
     - Security auditing
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled project not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.extract_network_endpoints(output_dir)
         
@@ -4118,6 +8824,11 @@ class ManifestVisualizationResponse(BaseModel):
     main_activity: Optional[str] = None
     deep_link_schemes: List[str] = []
     mermaid_diagram: str
+    # AI-enhanced fields
+    ai_analysis: Optional[str] = None
+    component_purposes: Optional[Dict[str, str]] = None
+    security_assessment: Optional[str] = None
+    intent_filter_analysis: Optional[Dict[str, Any]] = None
 
 
 @router.post("/apk/manifest-visualization", response_model=ManifestVisualizationResponse)
@@ -4198,6 +8909,10 @@ async def get_manifest_visualization(
             main_activity=result.main_activity,
             deep_link_schemes=result.deep_link_schemes,
             mermaid_diagram=result.mermaid_diagram,
+            ai_analysis=getattr(result, 'ai_analysis', None),
+            component_purposes=getattr(result, 'component_purposes', None),
+            security_assessment=getattr(result, 'security_assessment', None),
+            intent_filter_analysis=getattr(result, 'intent_filter_analysis', None),
         )
         
     except HTTPException:
@@ -4270,6 +8985,7 @@ class AttackSurfaceMapResponse(BaseModel):
 @router.post("/apk/attack-surface", response_model=AttackSurfaceMapResponse)
 async def get_attack_surface_map(
     file: UploadFile = File(..., description="APK file to analyze"),
+    include_ai_analysis: bool = Query(False, description="Include AI analysis of decompiled source code (slower but more accurate)"),
 ):
     """
     Generate a comprehensive attack surface map for an APK.
@@ -4281,6 +8997,9 @@ async def get_attack_surface_map(
     - ADB commands for testing
     - Risk assessment and prioritization
     - Mermaid attack tree diagram
+    
+    Set include_ai_analysis=true to enable AI-powered analysis of decompiled source code
+    for more accurate vulnerability detection (requires JADX decompilation).
     
     This provides a penetration tester's view of the app's attack surface.
     """
@@ -4312,8 +9031,29 @@ async def get_attack_surface_map(
         
         logger.info(f"Generating attack surface map: {filename}")
         
-        # Generate attack surface map
+        # Generate basic attack surface map
         result = re_service.generate_attack_surface_map(tmp_path)
+        
+        # Enhance with AI analysis if requested
+        if include_ai_analysis:
+            logger.info("Running JADX decompilation for AI attack surface analysis...")
+            try:
+                jadx_result = re_service.decompile_apk_with_jadx(tmp_path)
+                output_dir = Path(jadx_result.output_directory)
+                
+                logger.info("Enhancing attack surface with AI analysis of source code...")
+                result = await re_service.enhance_attack_surface_with_ai(result, output_dir)
+                
+                # Generate AI-powered attack tree from source code
+                logger.info("Generating AI-powered attack tree from source code analysis...")
+                ai_attack_tree = await re_service.generate_ai_attack_tree_mermaid(result, output_dir)
+                if ai_attack_tree:
+                    result.mermaid_attack_tree = ai_attack_tree
+                
+                # Clean up JADX output
+                shutil.rmtree(output_dir, ignore_errors=True)
+            except Exception as e:
+                logger.warning(f"AI attack surface enhancement failed, using basic analysis: {e}")
         
         return AttackSurfaceMapResponse(
             package_name=result.package_name,
@@ -4375,6 +9115,159 @@ async def get_attack_surface_map(
     finally:
         if tmp_dir:
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+class AIAttackSurfaceRequest(BaseModel):
+    """Request to enhance attack surface with AI analysis."""
+    session_id: str = Field(..., description="JADX decompilation session ID")
+
+
+@router.post("/apk/decompile/attack-surface-ai", response_model=AttackSurfaceMapResponse)
+async def get_ai_attack_surface_map(request: AIAttackSurfaceRequest):
+    """
+    Generate AI-enhanced attack surface map using an existing JADX session.
+    
+    This endpoint analyzes decompiled source code to find real vulnerabilities
+    in exported components, providing:
+    - Code-level vulnerability detection
+    - Specific exploitation steps based on actual code
+    - Attack chain analysis
+    - AI-powered severity assessment
+    
+    Prerequisites: APK must be decompiled first using /apk/decompile endpoint.
+    """
+    session_id = request.session_id
+    
+    if session_id not in _jadx_cache:
+        raise HTTPException(
+            status_code=404, 
+            detail="Decompilation session not found. Please decompile the APK first."
+        )
+    
+    output_dir = _jadx_cache[session_id]
+    
+    if not output_dir.exists():
+        raise HTTPException(status_code=404, detail="Decompilation output no longer exists.")
+    
+    try:
+        # Find the APK path - look for it in the parent of the output dir
+        apk_path = None
+        for ext in ['.apk', '.APK']:
+            for apk in output_dir.parent.glob(f"*{ext}"):
+                apk_path = apk
+                break
+            if apk_path:
+                break
+        
+        if not apk_path:
+            # Create minimal attack surface from JADX info
+            jadx_summary = re_service.get_jadx_result_summary(output_dir)
+            
+            # Build a basic attack surface from the JADX classes
+            attack_vectors = []
+            for cls in jadx_summary.get('classes', []):
+                if cls.get('is_activity'):
+                    attack_vectors.append(re_service.AttackVector(
+                        id=f"activity_{cls.get('class_name', 'unknown').split('.')[-1]}",
+                        name=f"Activity: {cls.get('class_name', 'unknown').split('.')[-1]}",
+                        vector_type="exported_activity",
+                        component=cls.get('class_name', 'unknown'),
+                        severity="medium",
+                        description=f"Activity found in decompiled code",
+                        exploitation_steps=["Analyze source code for vulnerabilities"],
+                        required_permissions=[],
+                        adb_command="",
+                        intent_example="",
+                        mitigation=""
+                    ))
+            
+            basic_surface = re_service.AttackSurfaceMap(
+                package_name=jadx_summary.get('package_name', 'unknown'),
+                total_attack_vectors=len(attack_vectors),
+                attack_vectors=attack_vectors,
+                exposed_data_paths=[],
+                deep_links=[],
+                ipc_endpoints=[],
+                overall_exposure_score=50,
+                risk_level="medium",
+                risk_breakdown={'critical': 0, 'high': 0, 'medium': len(attack_vectors), 'low': 0},
+                priority_targets=[],
+                automated_tests=[],
+                mermaid_attack_tree="flowchart TD\n  A[Analysis from decompiled code]"
+            )
+            result = await re_service.enhance_attack_surface_with_ai(basic_surface, output_dir)
+            
+            # Generate AI-powered attack tree from source code
+            ai_attack_tree = await re_service.generate_ai_attack_tree_mermaid(result, output_dir)
+            if ai_attack_tree:
+                result.mermaid_attack_tree = ai_attack_tree
+        else:
+            # Generate full attack surface from APK
+            basic_surface = re_service.generate_attack_surface_map(apk_path)
+            result = await re_service.enhance_attack_surface_with_ai(basic_surface, output_dir)
+            
+            # Generate AI-powered attack tree from source code
+            ai_attack_tree = await re_service.generate_ai_attack_tree_mermaid(result, output_dir)
+            if ai_attack_tree:
+                result.mermaid_attack_tree = ai_attack_tree
+        
+        return AttackSurfaceMapResponse(
+            package_name=result.package_name,
+            total_attack_vectors=result.total_attack_vectors,
+            attack_vectors=[
+                AttackVectorResponse(
+                    id=v.id,
+                    name=v.name,
+                    vector_type=v.vector_type,
+                    component=v.component,
+                    severity=v.severity,
+                    description=v.description,
+                    exploitation_steps=v.exploitation_steps,
+                    required_permissions=v.required_permissions,
+                    adb_command=v.adb_command,
+                    intent_example=v.intent_example,
+                    mitigation=v.mitigation,
+                )
+                for v in result.attack_vectors
+            ],
+            exposed_data_paths=[
+                ExposedDataPathResponse(
+                    provider_name=p.provider_name,
+                    uri_pattern=p.uri_pattern,
+                    permissions_required=p.permissions_required,
+                    operations=p.operations,
+                    is_exported=p.is_exported,
+                    potential_data=p.potential_data,
+                    risk_level=p.risk_level,
+                )
+                for p in result.exposed_data_paths
+            ],
+            deep_links=[
+                DeepLinkResponse(
+                    scheme=d.scheme,
+                    host=d.host,
+                    path=d.path,
+                    full_url=d.full_url,
+                    handling_activity=d.handling_activity,
+                    parameters=d.parameters,
+                    is_verified=d.is_verified,
+                    security_notes=d.security_notes,
+                )
+                for d in result.deep_links
+            ],
+            overall_exposure_score=result.overall_exposure_score,
+            risk_level=result.risk_level,
+            risk_breakdown=result.risk_breakdown,
+            priority_targets=result.priority_targets,
+            automated_tests=result.automated_tests,
+            mermaid_attack_tree=result.mermaid_attack_tree,
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI attack surface analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"AI attack surface analysis failed: {str(e)}")
 
 
 # ============================================================================
@@ -4448,6 +9341,11 @@ class ObfuscationAnalysisResponse(BaseModel):
     
     analysis_time: float
     warnings: List[str]
+    
+    # AI-enhanced fields
+    ai_analysis_summary: Optional[str] = None
+    reverse_engineering_difficulty: Optional[str] = None
+    ai_recommended_approach: Optional[str] = None
 
 
 @router.post("/apk/obfuscation-analysis", response_model=ObfuscationAnalysisResponse)
@@ -4558,6 +9456,9 @@ async def analyze_apk_obfuscation(
             frida_hooks=result.frida_hooks,
             analysis_time=result.analysis_time,
             warnings=result.warnings,
+            ai_analysis_summary=getattr(result, 'ai_analysis_summary', None),
+            reverse_engineering_difficulty=getattr(result, 'reverse_engineering_difficulty', None),
+            ai_recommended_approach=getattr(result, 'ai_recommended_approach', None),
         )
         
     except HTTPException:
@@ -4565,6 +9466,245 @@ async def analyze_apk_obfuscation(
     except Exception as e:
         logger.error(f"Obfuscation analysis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Obfuscation analysis failed: {str(e)}")
+    finally:
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@router.post("/apk/obfuscation-analysis/ai-enhanced", response_model=ObfuscationAnalysisResponse)
+async def analyze_apk_obfuscation_ai_enhanced(
+    file: UploadFile = File(..., description="APK file to analyze for obfuscation"),
+):
+    """
+    AI-ENHANCED obfuscation analysis with deep code pattern recognition.
+    
+    This endpoint combines fast static analysis with AI-powered insights:
+    - Identifies specific obfuscation tools (ProGuard, DexGuard, Allatori, etc.)
+    - Analyzes code samples to detect obfuscation patterns
+    - Provides tailored deobfuscation strategies
+    - Generates custom Frida hooks for specific patterns
+    - Assesses reverse engineering difficulty
+    
+    Returns enhanced analysis with AI insights and recommendations.
+    """
+    tmp_dir = None
+    
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file provided")
+        
+        filename = file.filename.lower()
+        if not filename.endswith(('.apk', '.aab')):
+            raise HTTPException(status_code=400, detail="Only APK/AAB files are supported")
+        
+        # Save file temporarily
+        tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_obfusc_ai_"))
+        tmp_path = tmp_dir / filename
+        
+        file_size = 0
+        with tmp_path.open("wb") as f:
+            while chunk := await file.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum: {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                f.write(chunk)
+        
+        logger.info(f"AI-enhanced obfuscation analysis for: {filename}")
+        
+        # Run JADX decompilation to get source code for AI analysis
+        jadx_output_dir = None
+        try:
+            jadx_result = re_service.decompile_apk_with_jadx(tmp_path)
+            jadx_output_dir = Path(jadx_result.output_directory)
+            logger.info(f"JADX decompilation complete for obfuscation AI analysis")
+        except Exception as e:
+            logger.warning(f"JADX decompilation failed, continuing without source code: {e}")
+        
+        # Perform AI-enhanced obfuscation analysis with source code context
+        result = await re_service.analyze_apk_obfuscation_ai_enhanced(tmp_path, jadx_output_dir)
+        
+        # Clean up JADX output
+        if jadx_output_dir and jadx_output_dir.exists():
+            shutil.rmtree(jadx_output_dir, ignore_errors=True)
+        
+        return ObfuscationAnalysisResponse(
+            package_name=result.package_name,
+            overall_obfuscation_level=result.overall_obfuscation_level,
+            obfuscation_score=result.obfuscation_score,
+            detected_tools=result.detected_tools,
+            indicators=[
+                ObfuscationIndicatorResponse(
+                    indicator_type=i.indicator_type,
+                    confidence=i.confidence,
+                    description=i.description,
+                    evidence=i.evidence,
+                    location=getattr(i, 'location', None),
+                    deobfuscation_hint=getattr(i, 'deobfuscation_hint', None),
+                )
+                for i in result.indicators
+            ],
+            class_naming=ClassNamingAnalysisResponse(
+                total_classes=result.class_naming.total_classes,
+                single_letter_classes=result.class_naming.single_letter_classes,
+                short_name_classes=result.class_naming.short_name_classes,
+                meaningful_name_classes=result.class_naming.meaningful_name_classes,
+                obfuscation_ratio=result.class_naming.obfuscation_ratio,
+                sample_obfuscated_names=result.class_naming.sample_obfuscated_names,
+                sample_original_names=result.class_naming.sample_original_names,
+            ),
+            string_encryption=[
+                StringEncryptionPatternResponse(
+                    pattern_name=getattr(s, 'pattern_name', s.pattern_type),
+                    class_name=getattr(s, 'class_name', ''),
+                    method_name=getattr(s, 'method_name', ''),
+                    encrypted_strings_count=getattr(s, 'encrypted_strings_count', s.occurrences),
+                    decryption_method_signature=getattr(s, 'decryption_method_signature', ''),
+                    sample_encrypted_values=getattr(s, 'sample_encrypted_values', s.sample_encrypted),
+                    suggested_frida_hook=getattr(s, 'suggested_frida_hook', s.decryption_hint),
+                )
+                for s in result.string_encryption
+            ],
+            control_flow=[
+                ControlFlowObfuscationResponse(
+                    pattern_type=c.pattern_type,
+                    affected_methods=c.affected_methods,
+                    sample_classes=c.sample_classes,
+                    complexity_score=c.complexity_score,
+                )
+                for c in result.control_flow
+            ],
+            native_protection=NativeProtectionResponse(
+                has_native_libs=result.native_protection.has_native_libs,
+                native_lib_names=getattr(result.native_protection, 'native_lib_names', result.native_protection.native_libs),
+                protection_indicators=result.native_protection.protection_indicators,
+                jni_functions=getattr(result.native_protection, 'jni_functions', []),
+            ),
+            deobfuscation_strategies=result.deobfuscation_strategies,
+            recommended_tools=result.recommended_tools,
+            frida_hooks=result.frida_hooks,
+            analysis_time=result.analysis_time,
+            warnings=result.warnings,
+            ai_analysis_summary=getattr(result, 'ai_analysis_summary', None),
+            reverse_engineering_difficulty=getattr(result, 'reverse_engineering_difficulty', None),
+            ai_recommended_approach=getattr(result, 'ai_recommended_approach', None),
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI-enhanced obfuscation analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"AI-enhanced obfuscation analysis failed: {str(e)}")
+    finally:
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@router.post("/apk/manifest-visualization/ai-enhanced", response_model=ManifestVisualizationResponse)
+async def get_manifest_visualization_ai_enhanced(
+    file: UploadFile = File(..., description="APK file to visualize"),
+):
+    """
+    AI-ENHANCED manifest visualization with deep component analysis.
+    
+    This endpoint provides:
+    - Standard manifest visualization (graph, mermaid diagram)
+    - AI analysis of component purposes based on names and code
+    - Security assessment of exported components
+    - Intent filter analysis for security implications
+    - Component relationship mapping
+    
+    Returns visualization data enriched with AI insights.
+    """
+    filename = file.filename or "unknown.apk"
+    suffix = Path(filename).suffix.lower()
+    
+    if suffix not in ALLOWED_APK_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_APK_EXTENSIONS)}"
+        )
+    
+    tmp_dir = None
+    try:
+        # Save file to temp location
+        tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_manifest_ai_"))
+        tmp_path = tmp_dir / filename
+        
+        file_size = 0
+        with tmp_path.open("wb") as f:
+            while chunk := await file.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum: {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                f.write(chunk)
+        
+        logger.info(f"Generating AI-enhanced manifest visualization: {filename}")
+        
+        # Run JADX decompilation to get source code for AI analysis
+        jadx_output_dir = None
+        try:
+            jadx_result = re_service.decompile_apk_with_jadx(tmp_path)
+            jadx_output_dir = Path(jadx_result.output_directory)
+            logger.info(f"JADX decompilation complete for manifest AI analysis")
+        except Exception as e:
+            logger.warning(f"JADX decompilation failed, continuing without source code: {e}")
+        
+        # Generate AI-enhanced visualization with source code context
+        result = await re_service.generate_ai_enhanced_manifest_visualization(tmp_path, jadx_output_dir)
+        
+        # Clean up JADX output
+        if jadx_output_dir and jadx_output_dir.exists():
+            shutil.rmtree(jadx_output_dir, ignore_errors=True)
+        
+        return ManifestVisualizationResponse(
+            package_name=result.package_name,
+            app_name=result.app_name,
+            version_name=result.version_name,
+            nodes=[
+                ManifestNodeResponse(
+                    id=n.id,
+                    name=n.name,
+                    node_type=n.node_type,
+                    label=n.label,
+                    is_exported=n.is_exported,
+                    is_main=n.is_main,
+                    is_dangerous=n.is_dangerous,
+                    attributes=n.attributes,
+                )
+                for n in result.nodes
+            ],
+            edges=[
+                ManifestEdgeResponse(
+                    source=e.source,
+                    target=e.target,
+                    edge_type=e.edge_type,
+                    label=e.label,
+                )
+                for e in result.edges
+            ],
+            component_counts=result.component_counts,
+            permission_summary=result.permission_summary,
+            exported_count=result.exported_count,
+            main_activity=result.main_activity,
+            deep_link_schemes=result.deep_link_schemes,
+            mermaid_diagram=result.mermaid_diagram,
+            ai_analysis=result.ai_analysis,
+            component_purposes=result.component_purposes,
+            security_assessment=result.security_assessment,
+            intent_filter_analysis=result.intent_filter_analysis,
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI-enhanced manifest visualization failed: {e}")
+        raise HTTPException(status_code=500, detail=f"AI-enhanced visualization failed: {str(e)}")
     finally:
         if tmp_dir:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -4869,11 +10009,14 @@ async def export_apk_report_from_result(
             hardening_score=result_data.get('hardening_score'),
         )
         
+        # Get decompiled code findings if present
+        decompiled_findings = result_data.get('decompiled_code_findings', [])
+        
         # Generate export based on format
         package_name = result.package_name.split('.')[-1] if result.package_name else 'apk'
         
         if format == "markdown":
-            markdown_content = re_service.generate_apk_markdown_report(result, report_type)
+            markdown_content = re_service.generate_apk_markdown_report(result, report_type, decompiled_findings)
             return Response(
                 content=markdown_content.encode('utf-8'),
                 media_type="text/markdown",
@@ -4881,7 +10024,7 @@ async def export_apk_report_from_result(
             )
         
         elif format == "pdf":
-            pdf_bytes = re_service.generate_apk_pdf_report(result, report_type)
+            pdf_bytes = re_service.generate_apk_pdf_report(result, report_type, decompiled_findings)
             return Response(
                 content=pdf_bytes,
                 media_type="application/pdf",
@@ -4889,7 +10032,7 @@ async def export_apk_report_from_result(
             )
         
         elif format == "docx":
-            docx_bytes = re_service.generate_apk_docx_report(result, report_type)
+            docx_bytes = re_service.generate_apk_docx_report(result, report_type, decompiled_findings)
             return Response(
                 content=docx_bytes,
                 media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -5465,9 +10608,7 @@ async def crypto_audit(request: CryptoAuditRequest):
     Returns risk score, grade (A-F), and actionable recommendations.
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled sources not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.crypto_audit(output_dir)
         
@@ -5602,9 +10743,7 @@ async def get_component_map(request: ComponentMapRequest):
     - Statistics and risk breakdown
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled sources not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.generate_component_map(output_dir)
         
@@ -5708,14 +10847,7 @@ async def get_dependency_graph(request: DependencyGraphRequest):
     Returns graph data suitable for visualization with nodes and edges.
     """
     try:
-        output_dir = Path(request.output_directory)
-        
-        # Check if it's a session ID
-        if request.output_directory in _jadx_cache:
-            output_dir = _jadx_cache[request.output_directory]
-        
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled sources not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.generate_class_dependency_graph(
             output_dir, 
@@ -5786,9 +10918,7 @@ async def lookup_symbol(request: SymbolLookupRequest):
     Returns file paths and line numbers for navigation.
     """
     try:
-        output_dir = Path(request.output_directory)
-        if not output_dir.exists():
-            raise HTTPException(status_code=404, detail="Decompiled sources not found")
+        output_dir = _resolve_jadx_output_dir(request.output_directory)
         
         result = re_service.lookup_symbol(output_dir, request.symbol, request.symbol_type)
         
@@ -5812,3 +10942,375 @@ async def lookup_symbol(request: SymbolLookupRequest):
     except Exception as e:
         logger.error(f"Symbol lookup failed: {e}")
         raise HTTPException(status_code=500, detail=f"Symbol lookup failed: {str(e)}")
+
+
+# ============================================================================
+# Enhanced Security Export
+# ============================================================================
+
+class ExportEnhancedSecurityRequest(BaseModel):
+    """Request to export enhanced security results."""
+    results: Dict[str, Any]
+    format: str = "markdown"  # markdown, pdf, docx
+    include_code_snippets: bool = True
+    include_attack_chains: bool = True
+
+
+@router.post("/apk/decompile/enhanced-security/export")
+async def export_enhanced_security(request: ExportEnhancedSecurityRequest):
+    """
+    Export enhanced security analysis results to Markdown, PDF, or Word format.
+    
+    Args:
+        results: The enhanced security results to export
+        format: Export format (markdown, pdf, docx)
+        include_code_snippets: Include code snippets in the export
+        include_attack_chains: Include attack chain analysis
+    
+    Returns the exported document as a downloadable file.
+    """
+    from fastapi.responses import Response
+    from io import BytesIO
+    from datetime import datetime
+    
+    if request.format not in ["markdown", "pdf", "docx"]:
+        raise HTTPException(status_code=400, detail="Invalid format. Use: markdown, pdf, docx")
+    
+    try:
+        results = request.results
+        
+        # Generate Markdown content
+        md_lines = [
+            "# Comprehensive Security Analysis Report",
+            f"",
+            f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"",
+            "---",
+            "",
+            "## Executive Summary",
+            "",
+            f"**Overall Risk Level:** {results.get('overall_risk', 'unknown').upper()}",
+            "",
+            results.get('executive_summary', 'No executive summary available.'),
+            "",
+            "---",
+            "",
+            "## Risk Summary",
+            "",
+            "| Severity | Count |",
+            "|----------|-------|",
+        ]
+        
+        risk_summary = results.get('risk_summary', {})
+        for severity in ['critical', 'high', 'medium', 'low', 'info']:
+            count = risk_summary.get(severity, 0)
+            emoji = {'critical': '🔴', 'high': '🟠', 'medium': '🟡', 'low': '🟢', 'info': '🔵'}.get(severity, '')
+            md_lines.append(f"| {emoji} {severity.capitalize()} | {count} |")
+        
+        md_lines.extend(["", "---", "", "## Analysis Metadata", ""])
+        
+        metadata = results.get('analysis_metadata', {})
+        md_lines.extend([
+            f"- **Classes Scanned:** {metadata.get('classes_scanned', 0)}",
+            f"- **Libraries Detected:** {metadata.get('libraries_detected', 0)}",
+            f"- **CVEs Found:** {metadata.get('cves_found', 0)}",
+            f"- **Pattern Scan:** {'✅ Enabled' if metadata.get('pattern_scan_enabled') else '❌ Disabled'}",
+            f"- **AI Scan:** {'✅ Enabled' if metadata.get('ai_scan_enabled') else '❌ Disabled'}",
+            f"- **CVE Lookup:** {'✅ Enabled' if metadata.get('cve_lookup_enabled') else '❌ Disabled'}",
+            "",
+            "---",
+            "",
+        ])
+        
+        # Combined Findings
+        combined_findings = results.get('combined_findings', [])
+        if combined_findings:
+            md_lines.extend([
+                "## Security Findings",
+                "",
+                f"Total: **{len(combined_findings)}** findings",
+                "",
+            ])
+            
+            # Group by severity
+            for severity in ['critical', 'high', 'medium', 'low', 'info']:
+                severity_findings = [f for f in combined_findings if f.get('severity', '').lower() == severity]
+                if severity_findings:
+                    md_lines.extend([
+                        f"### {severity.upper()} Severity ({len(severity_findings)})",
+                        "",
+                    ])
+                    
+                    for i, finding in enumerate(severity_findings, 1):
+                        source_badge = f"[{finding.get('source', 'unknown').upper()}]"
+                        md_lines.extend([
+                            f"#### {i}. {finding.get('title', 'Unknown Issue')} {source_badge}",
+                            "",
+                            f"**Description:** {finding.get('description', 'No description')}",
+                            "",
+                        ])
+                        
+                        if finding.get('affected_class'):
+                            location = finding.get('affected_class')
+                            if finding.get('affected_method'):
+                                location += f" → {finding.get('affected_method')}"
+                            if finding.get('line_number'):
+                                location += f" (line {finding.get('line_number')})"
+                            md_lines.append(f"**Location:** `{location}`")
+                            md_lines.append("")
+                        
+                        if finding.get('affected_library'):
+                            md_lines.append(f"**Library:** {finding.get('affected_library')}")
+                            md_lines.append("")
+                        
+                        if finding.get('cve_id'):
+                            md_lines.append(f"**CVE:** {finding.get('cve_id')}")
+                            md_lines.append("")
+                        
+                        if finding.get('cwe_id'):
+                            md_lines.append(f"**CWE:** {finding.get('cwe_id')}")
+                            md_lines.append("")
+                        
+                        if finding.get('cvss_score'):
+                            md_lines.append(f"**CVSS Score:** {finding.get('cvss_score')}")
+                            md_lines.append("")
+                        
+                        if finding.get('impact'):
+                            md_lines.append(f"**Impact:** {finding.get('impact')}")
+                            md_lines.append("")
+                        
+                        if finding.get('exploitation_potential'):
+                            md_lines.append(f"**Exploitation Potential:** {finding.get('exploitation_potential')}")
+                            md_lines.append("")
+                        
+                        if finding.get('attack_vector'):
+                            md_lines.append(f"**Attack Vector:** {finding.get('attack_vector')}")
+                            md_lines.append("")
+                        
+                        if request.include_code_snippets and finding.get('code_snippet'):
+                            md_lines.extend([
+                                "**Code:**",
+                                "```java",
+                                finding.get('code_snippet'),
+                                "```",
+                                "",
+                            ])
+                        
+                        if finding.get('remediation'):
+                            md_lines.extend([
+                                "**Remediation:**",
+                                f"> {finding.get('remediation')}",
+                                "",
+                            ])
+                        
+                        md_lines.append("---")
+                        md_lines.append("")
+        
+        # Attack Chains
+        if request.include_attack_chains:
+            attack_chains = results.get('attack_chains', [])
+            if attack_chains:
+                md_lines.extend([
+                    "## Attack Chain Analysis",
+                    "",
+                    f"**{len(attack_chains)}** potential attack chains identified:",
+                    "",
+                ])
+                
+                for i, chain in enumerate(attack_chains, 1):
+                    md_lines.extend([
+                        f"### Chain {i}: {chain.get('name', 'Unknown Chain')}",
+                        "",
+                        f"**Risk Level:** {chain.get('risk_level', 'Unknown')}",
+                        "",
+                        f"**Description:** {chain.get('description', 'No description')}",
+                        "",
+                        "**Steps:**",
+                    ])
+                    
+                    for step in chain.get('steps', []):
+                        md_lines.append(f"1. {step}")
+                    
+                    if chain.get('impact'):
+                        md_lines.extend(["", f"**Impact:** {chain.get('impact')}"])
+                    
+                    if chain.get('likelihood'):
+                        md_lines.extend(["", f"**Likelihood:** {chain.get('likelihood')}"])
+                    
+                    md_lines.extend(["", "---", ""])
+        
+        # Recommendations
+        recommendations = results.get('recommendations', [])
+        if recommendations:
+            md_lines.extend([
+                "## Recommendations",
+                "",
+            ])
+            for rec in recommendations:
+                md_lines.append(f"- {rec}")
+            md_lines.append("")
+        
+        # Footer
+        md_lines.extend([
+            "---",
+            "",
+            "*Generated by VRAgent Security Analyzer*",
+        ])
+        
+        markdown_content = "\n".join(md_lines)
+        
+        # Return based on format
+        if request.format == "markdown":
+            return Response(
+                content=markdown_content.encode('utf-8'),
+                media_type="text/markdown",
+                headers={"Content-Disposition": "attachment; filename=security_analysis_report.md"}
+            )
+        
+        elif request.format == "pdf":
+            try:
+                from weasyprint import HTML, CSS
+                from markdown import markdown
+                
+                html_content = markdown(markdown_content, extensions=['tables', 'fenced_code'])
+                
+                styled_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; }}
+                        h1 {{ color: #1e3a5f; border-bottom: 3px solid #e74c3c; padding-bottom: 10px; }}
+                        h2 {{ color: #2c5282; border-bottom: 2px solid #3182ce; padding-bottom: 5px; margin-top: 30px; }}
+                        h3 {{ color: #2d3748; margin-top: 20px; }}
+                        h4 {{ color: #4a5568; margin-top: 15px; }}
+                        table {{ border-collapse: collapse; width: 100%; margin: 15px 0; }}
+                        th, td {{ border: 1px solid #e2e8f0; padding: 10px; text-align: left; }}
+                        th {{ background-color: #edf2f7; color: #2d3748; }}
+                        code {{ background-color: #f7fafc; padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', monospace; }}
+                        pre {{ background-color: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 8px; overflow-x: auto; }}
+                        pre code {{ background: none; padding: 0; color: #e2e8f0; }}
+                        blockquote {{ border-left: 4px solid #48bb78; padding-left: 15px; margin: 15px 0; color: #2f855a; background: #f0fff4; padding: 10px 15px; }}
+                        hr {{ border: none; border-top: 1px solid #e2e8f0; margin: 20px 0; }}
+                        ul {{ padding-left: 25px; }}
+                        li {{ margin: 5px 0; }}
+                    </style>
+                </head>
+                <body>
+                    {html_content}
+                </body>
+                </html>
+                """
+                
+                pdf_buffer = BytesIO()
+                HTML(string=styled_html).write_pdf(pdf_buffer)
+                pdf_buffer.seek(0)
+                
+                return Response(
+                    content=pdf_buffer.getvalue(),
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": "attachment; filename=security_analysis_report.pdf"}
+                )
+            except ImportError:
+                raise HTTPException(status_code=500, detail="PDF export requires weasyprint. Install with: pip install weasyprint")
+        
+        elif request.format == "docx":
+            try:
+                from docx import Document
+                from docx.shared import Inches, Pt, RGBColor
+                from docx.enum.text import WD_ALIGN_PARAGRAPH
+                from docx.enum.style import WD_STYLE_TYPE
+                
+                doc = Document()
+                
+                # Title
+                title = doc.add_heading('Comprehensive Security Analysis Report', 0)
+                title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                
+                doc.add_paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                doc.add_paragraph()
+                
+                # Executive Summary
+                doc.add_heading('Executive Summary', level=1)
+                risk_para = doc.add_paragraph()
+                risk_para.add_run(f"Overall Risk Level: ").bold = True
+                risk_run = risk_para.add_run(results.get('overall_risk', 'unknown').upper())
+                risk_run.bold = True
+                risk_color = {'critical': RGBColor(220, 38, 38), 'high': RGBColor(234, 88, 12), 
+                             'medium': RGBColor(202, 138, 4), 'low': RGBColor(22, 163, 74)}.get(
+                    results.get('overall_risk', '').lower(), RGBColor(107, 114, 128))
+                risk_run.font.color.rgb = risk_color
+                
+                doc.add_paragraph(results.get('executive_summary', 'No executive summary available.'))
+                
+                # Risk Summary Table
+                doc.add_heading('Risk Summary', level=1)
+                table = doc.add_table(rows=1, cols=2)
+                table.style = 'Table Grid'
+                hdr_cells = table.rows[0].cells
+                hdr_cells[0].text = 'Severity'
+                hdr_cells[1].text = 'Count'
+                
+                for severity in ['critical', 'high', 'medium', 'low', 'info']:
+                    row_cells = table.add_row().cells
+                    row_cells[0].text = severity.capitalize()
+                    row_cells[1].text = str(risk_summary.get(severity, 0))
+                
+                # Metadata
+                doc.add_heading('Analysis Metadata', level=1)
+                doc.add_paragraph(f"Classes Scanned: {metadata.get('classes_scanned', 0)}")
+                doc.add_paragraph(f"Libraries Detected: {metadata.get('libraries_detected', 0)}")
+                doc.add_paragraph(f"CVEs Found: {metadata.get('cves_found', 0)}")
+                
+                # Findings
+                if combined_findings:
+                    doc.add_heading('Security Findings', level=1)
+                    doc.add_paragraph(f"Total: {len(combined_findings)} findings")
+                    
+                    for severity in ['critical', 'high', 'medium', 'low', 'info']:
+                        severity_findings = [f for f in combined_findings if f.get('severity', '').lower() == severity]
+                        if severity_findings:
+                            doc.add_heading(f'{severity.upper()} Severity ({len(severity_findings)})', level=2)
+                            
+                            for finding in severity_findings:
+                                p = doc.add_paragraph()
+                                p.add_run(f"{finding.get('title', 'Unknown')} ").bold = True
+                                p.add_run(f"[{finding.get('source', 'unknown').upper()}]")
+                                
+                                doc.add_paragraph(finding.get('description', 'No description'))
+                                
+                                if finding.get('affected_class'):
+                                    doc.add_paragraph(f"Location: {finding.get('affected_class')}")
+                                
+                                if finding.get('remediation'):
+                                    rem_para = doc.add_paragraph()
+                                    rem_para.add_run("Remediation: ").bold = True
+                                    rem_para.add_run(finding.get('remediation'))
+                                
+                                doc.add_paragraph()  # Spacing
+                
+                # Recommendations
+                if recommendations:
+                    doc.add_heading('Recommendations', level=1)
+                    for rec in recommendations:
+                        doc.add_paragraph(rec, style='List Bullet')
+                
+                # Save to buffer
+                docx_buffer = BytesIO()
+                doc.save(docx_buffer)
+                docx_buffer.seek(0)
+                
+                return Response(
+                    content=docx_buffer.getvalue(),
+                    media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    headers={"Content-Disposition": "attachment; filename=security_analysis_report.docx"}
+                )
+            except ImportError:
+                raise HTTPException(status_code=500, detail="DOCX export requires python-docx. Install with: pip install python-docx")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Enhanced security export failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")

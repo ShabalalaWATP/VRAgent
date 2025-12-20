@@ -25,7 +25,9 @@ from ..services.dns_service import (
     is_whois_available,
 )
 from ..core.database import get_db
-from ..models.models import NetworkAnalysisReport
+from ..core.auth import get_current_active_user
+from ..models.models import NetworkAnalysisReport, User
+from fastapi import Depends
 
 logger = logging.getLogger("vragent.backend.routers.dns")
 router = APIRouter(prefix="/dns", tags=["DNS Reconnaissance"])
@@ -247,7 +249,7 @@ async def validate_domain_endpoint(request: DNSValidateRequest):
 
 
 @router.post("/scan", response_model=DNSReconResponse)
-async def run_dns_scan(request: DNSScanRequest):
+async def run_dns_scan(request: DNSScanRequest, current_user: User = Depends(get_current_active_user)):
     """
     Run DNS reconnaissance on a domain.
     

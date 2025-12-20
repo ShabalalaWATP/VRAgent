@@ -41,6 +41,7 @@ import ImageIcon from "@mui/icons-material/Image";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import PublicIcon from "@mui/icons-material/Public";
 import { useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -86,7 +87,10 @@ const OSINTReconPage: React.FC = () => {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
+  const pageContext = `This page covers OSINT (Open Source Intelligence) and Reconnaissance techniques including domain reconnaissance, DNS enumeration, email harvesting, social media investigation, image EXIF analysis, GitHub/code repository analysis, Google dorking, subdomain discovery, and OSINT tools.`;
+
   return (
+    <LearnPageLayout pageTitle="OSINT & Reconnaissance" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
       <Container maxWidth="lg">
         {/* Header */}
@@ -1579,6 +1583,7 @@ echo "[*] Recon complete! Results in $OUTPUT/"`}
         </Box>
       </Container>
     </Box>
+    </LearnPageLayout>
   );
 };
 

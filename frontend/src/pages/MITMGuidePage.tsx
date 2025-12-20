@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
   Typography,
@@ -198,7 +199,6 @@ const USE_CASES: UseCaseInfo[] = [
 // ============================================================================
 
 const MITMGuidePage: React.FC = () => {
-  const navigate = useNavigate();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -240,17 +240,24 @@ const MITMGuidePage: React.FC = () => {
     </Box>
   );
 
+  const pageContext = `MITM (Man-in-the-Middle) attack guide page. This page teaches users about intercepting and analyzing network traffic, setting up MITM proxies, SSL/TLS interception techniques, and traffic manipulation methods for security testing.`;
+
   return (
+    <LearnPageLayout pageTitle="MITM Attacks Guide" pageContext={pageContext}>
     <Box>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Button
-          startIcon={<BackIcon />}
-          onClick={() => navigate(-1)}
-          sx={{ mb: 2 }}
-        >
-          Back
-        </Button>
+        <Box sx={{ mb: 3 }}>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<BackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2 }}
+          />
+        </Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <Box
             sx={{
@@ -847,11 +854,12 @@ response = requests.get('https://api.example.com', proxies=proxies, verify=False
             right: 20,
             zIndex: 9999,
           }}
-        >
+>
           Copied to clipboard!
         </Alert>
       )}
     </Box>
+    </LearnPageLayout>
   );
 };
 

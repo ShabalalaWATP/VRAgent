@@ -371,9 +371,15 @@ class ReverseEngineeringReport(Base):
     ai_functionality_report = Column(Text, nullable=True)
     ai_security_report = Column(Text, nullable=True)
     ai_privacy_report = Column(Text, nullable=True)
+    ai_architecture_diagram = Column(Text, nullable=True)  # Mermaid diagram
     ai_threat_model = Column(JSON, nullable=True)
     ai_vuln_scan_result = Column(JSON, nullable=True)
     ai_chat_history = Column(JSON, nullable=True)
+    ai_attack_surface_map = Column(Text, nullable=True)  # Mermaid attack tree diagram
+    
+    # Library CVE Analysis
+    detected_libraries = Column(JSON, nullable=True)  # Libraries detected in APK
+    library_cves = Column(JSON, nullable=True)  # CVEs found in libraries
     
     # Tags and notes
     tags = Column(JSON, nullable=True)

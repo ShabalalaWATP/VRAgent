@@ -83,6 +83,10 @@ test_*.md
 test_*.pdf
 test_*.docx
 test_*.json
+test-*.json
 test-scanners/
 test-scanners.zip
 test.pdf
+openapi_temp.json
+*.bin
+*.exe

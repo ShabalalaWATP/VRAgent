@@ -16,6 +16,7 @@ import ast
 import json
 import hashlib
 import asyncio
+import random
 from typing import Dict, List, Any, Optional, Set, Tuple, AsyncGenerator
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -26,6 +27,45 @@ from ..core.config import settings
 from ..core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+async def _retry_with_backoff(
+    func, 
+    max_retries: int = 3, 
+    base_delay: float = 2.0,
+    timeout_seconds: float = 120.0,
+    operation_name: str = "AgenticScan API call"
+):
+    """
+    Retry an async function with exponential backoff and timeout.
+    Handles 'Server disconnected', timeout, and other transient errors.
+    """
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            # Add timeout wrapper
+            return await asyncio.wait_for(func(), timeout=timeout_seconds)
+        except asyncio.TimeoutError:
+            last_error = Exception(f"{operation_name} timed out after {timeout_seconds}s")
+            delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+            logger.warning(f"{operation_name}: Timeout (attempt {attempt + 1}/{max_retries}), retrying in {delay:.1f}s")
+            await asyncio.sleep(delay)
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+            # Retry on transient errors
+            retryable = ['disconnected', 'timeout', 'connection', 'unavailable', '503', '429', '500', '502', '504']
+            if any(err in error_str for err in retryable):
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                logger.warning(f"{operation_name}: Transient error (attempt {attempt + 1}/{max_retries}), retrying in {delay:.1f}s: {e}")
+                await asyncio.sleep(delay)
+            else:
+                # Non-transient error, don't retry
+                raise
+    
+    logger.error(f"{operation_name}: All {max_retries} retries failed")
+    raise last_error
+
 
 # Configure Gemini using google-genai SDK
 genai_client = None
@@ -218,17 +258,17 @@ class CodeChunker:
     - Very Large (300+ files): 25 lines/chunk - prioritized analysis
     
     Performance optimizations:
-    - MAX_FILES reduced to 200 for reasonable scan times
+    - MAX_FILES reduced to 100 for balanced scan times
     - MAX_CHUNKS limits total chunks to prevent runaway LLM calls
     - Priority-based file selection focuses on security-critical code
     """
     
     # Default values (will be adjusted based on codebase size)
-    MAX_CHUNK_LINES = 80   # Maximum lines per chunk (reduced from 100)
+    MAX_CHUNK_LINES = 60   # Maximum lines per chunk
     MIN_CHUNK_LINES = 10   # Minimum lines to form a chunk
-    CONTEXT_OVERLAP = 3    # Lines of overlap between chunks (reduced)
-    MAX_FILES = 150        # Max files to process (security-prioritized)
-    MAX_CHUNKS = 100       # Max chunks - balance between speed (~1.5min) and coverage
+    CONTEXT_OVERLAP = 3    # Lines of overlap between chunks
+    MAX_FILES = 100        # Max files to process (balanced for coverage)
+    MAX_CHUNKS = 80        # Max chunks - balance between speed and coverage
     
     # Adaptive sizing thresholds - more aggressive reduction for large codebases
     SIZE_THRESHOLDS = {
@@ -646,16 +686,20 @@ class AgenticAnalyzer:
         entry_points = []
         sinks = []
         
-        # Process chunks in batches (larger batches = fewer API calls)
-        batch_size = 10
+        # Process chunks in batches (smaller batches = more reliable API calls)
+        batch_size = 5  # Reduced from 10 for stability with large APKs
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i:i + batch_size]
             
             if progress_callback:
                 progress_callback(f"Analyzing chunks {i+1}-{min(i+batch_size, len(chunks))} of {len(chunks)}")
             
-            # Analyze batch for entry points and sinks
-            batch_results = await self._analyze_batch(batch)
+            # Analyze batch with retry logic for reliability
+            batch_results = await _retry_with_backoff(
+                lambda b=batch: self._analyze_batch(b),
+                max_retries=3,
+                base_delay=2.0
+            )
             
             for chunk_id, result in batch_results.items():
                 chunk = self.chunks[chunk_id]
@@ -682,9 +726,11 @@ class AgenticAnalyzer:
         if not self.client:
             return {c.id: {"entry_points": [], "sinks": []} for c in chunks}
         
-        # Build prompt with all chunks
+        # Build prompt with all chunks (truncate to reduce payload)
         chunks_text = ""
         for chunk in chunks:
+            # Truncate content to 1200 chars for efficiency
+            truncated_content = chunk.content[:1200]
             chunks_text += f"""
 === CHUNK {chunk.id} ===
 File: {chunk.file_path}
@@ -692,7 +738,7 @@ Lines: {chunk.start_line}-{chunk.end_line}
 Language: {chunk.language}
 
 ```{chunk.language}
-{chunk.content[:2000]}
+{truncated_content}
 ```
 
 """
@@ -751,13 +797,24 @@ Be thorough but avoid false positives. Only report actual security concerns."""
 
         try:
             from google.genai import types
-            response = await self.client.aio.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    max_output_tokens=4000
+            
+            # Use retry_with_backoff which now includes timeout handling
+            async def make_request():
+                return await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=3000  # Reduced for faster responses
+                    )
                 )
+            
+            response = await _retry_with_backoff(
+                make_request, 
+                max_retries=3, 
+                base_delay=2.0,
+                timeout_seconds=120.0,
+                operation_name="AgenticScan batch analysis"
             )
             
             text = response.text
@@ -769,7 +826,7 @@ Be thorough but avoid false positives. Only report actual security concerns."""
                 logger.warning("AgenticScan: Empty response from LLM in batch analysis")
             
         except Exception as e:
-            logger.error(f"AgenticScan: Batch analysis failed: {e}")
+            logger.error(f"AgenticScan: Batch analysis failed after retries: {e}")
         
         return {c.id: {"entry_points": [], "sinks": []} for c in chunks}
     
@@ -940,15 +997,25 @@ Otherwise, return JSON:
 }}"""
 
         try:
-            # Initial analysis
+            # Initial analysis with retry
             from google.genai import types
-            response = await self.client.aio.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    max_output_tokens=2000
+            
+            async def make_request():
+                return await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=2000
+                    )
                 )
+            
+            response = await _retry_with_backoff(
+                make_request,
+                max_retries=3,
+                base_delay=2.0,
+                timeout_seconds=90.0,
+                operation_name="AgenticScan flow trace"
             )
             
             text = response.text or ""
@@ -1042,13 +1109,23 @@ Now complete the analysis with this additional context."""
 
         try:
             from google.genai import types
-            response = await self.client.aio.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    max_output_tokens=2000
+            
+            async def make_request():
+                return await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=2000
+                    )
                 )
+            
+            response = await _retry_with_backoff(
+                make_request,
+                max_retries=3,
+                base_delay=2.0,
+                timeout_seconds=90.0,
+                operation_name="AgenticScan additional context trace"
             )
             
             text = response.text
@@ -1159,13 +1236,23 @@ Generate a comprehensive report in JSON:
 
         try:
             from google.genai import types
-            response = await self.client.aio.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.2,
-                    max_output_tokens=2000
+            
+            async def make_request():
+                return await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.2,
+                        max_output_tokens=2000
+                    )
                 )
+            
+            response = await _retry_with_backoff(
+                make_request,
+                max_retries=3,
+                base_delay=2.0,
+                timeout_seconds=90.0,
+                operation_name="AgenticScan vulnerability analysis"
             )
             
             text = response.text

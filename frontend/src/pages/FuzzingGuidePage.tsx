@@ -1,3 +1,4 @@
+import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
   Typography,
@@ -213,6 +214,8 @@ export default function FuzzingGuidePage() {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
+
+  const pageContext = `This page provides a comprehensive guide to fuzzing techniques for security testing. Topics include coverage-guided fuzzing with AFL++ and libFuzzer, building effective fuzz harnesses, mutation strategies (bit flipping, byte replacement, block operations), web application fuzzing with ffuf, creating seed corpuses, and crash triage. The guide covers tools like Honggfuzz, Radamsa, Jazzer, and Atheris for various target types.`;
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -786,6 +789,7 @@ ffuf -u https://target.com/graphql -X POST \\
   ];
 
   return (
+    <LearnPageLayout pageTitle="Fuzzing Deep Dive" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
@@ -1120,5 +1124,6 @@ ffuf -u https://target.com/graphql -X POST \\
         </Box>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

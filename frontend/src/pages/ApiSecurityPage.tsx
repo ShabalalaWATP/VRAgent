@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
   Typography,
@@ -1127,7 +1128,10 @@ export default function ApiSecurityPage() {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
+  const pageContext = `This page provides a comprehensive guide to API security testing based on OWASP API Security Top 10. Topics include API discovery and enumeration, authentication testing (API keys, JWT attacks, OAuth vulnerabilities), authorization testing (BOLA/IDOR, BFLA), injection attacks (SQL, NoSQL, SSRF, command injection), data exposure and mass assignment, rate limiting bypass techniques, and GraphQL-specific security testing including introspection and query complexity attacks.`;
+
   return (
+    <LearnPageLayout pageTitle="API Security Testing" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -1409,5 +1413,6 @@ export default function ApiSecurityPage() {
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

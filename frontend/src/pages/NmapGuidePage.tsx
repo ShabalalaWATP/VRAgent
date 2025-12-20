@@ -63,6 +63,7 @@ import CodeIcon from "@mui/icons-material/Code";
 import BuildIcon from "@mui/icons-material/Build";
 import AnalyticsIcon from "@mui/icons-material/Analytics";
 import ShieldIcon from "@mui/icons-material/Shield";
+import LearnPageLayout from "../components/LearnPageLayout";
 
 // Animations
 const float = keyframes`
@@ -312,7 +313,10 @@ export default function NmapGuidePage() {
     { state: "closed|filtered", description: "Could be either (IP ID idle scan)", color: "#a855f7" },
   ];
 
+  const pageContext = `Nmap Complete Guide - The essential network scanner reference. Covers: scan techniques (-sS SYN, -sT Connect, -sU UDP, -sA ACK, -sN NULL, -sF FIN, -sX Xmas), host discovery (-Pn, -PS, -PA, -PU, -PE), port scanning (-p, --top-ports, -F), service/version detection (-sV), OS detection (-O), NSE scripting (--script), timing templates (-T0 to -T5), output formats (-oN, -oX, -oG, -oA), firewall evasion (-f, -D, --spoof-mac), port states (open, closed, filtered), and real-world scanning strategies for penetration testing.`;
+
   return (
+    <LearnPageLayout pageTitle="Nmap Complete Guide" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Link */}
       <Box sx={{ mb: 3 }}>
@@ -1140,5 +1144,6 @@ export default function NmapGuidePage() {
         </Box>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

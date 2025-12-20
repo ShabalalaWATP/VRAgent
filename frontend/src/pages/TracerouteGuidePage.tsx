@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
   Typography,
@@ -182,10 +182,19 @@ const TROUBLESHOOTING_SCENARIOS: TroubleshootingScenario[] = [
 // ============================================================================
 
 const TracerouteGuidePage: React.FC = () => {
-  const navigate = useNavigate();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
+
+  const pageContext = `This page covers traceroute and network path analysis including:
+- Traceroute command options for Windows and Linux
+- Understanding hop-by-hop network path analysis
+- Latency interpretation and troubleshooting
+- Common network issues: high latency, packet loss, unreachable destination
+- Security applications: firewall detection, CDN identification
+- MTR (My Traceroute) for advanced analysis
+- Network topology discovery techniques
+- Interpreting asterisks and timeouts in traceroute output`;
 
   const copyCommand = (cmd: string) => {
     navigator.clipboard.writeText(cmd);
@@ -223,12 +232,22 @@ const TracerouteGuidePage: React.FC = () => {
   );
 
   return (
+    <LearnPageLayout pageTitle="Traceroute Guide" pageContext={pageContext}>
     <Box sx={{ p: 3 }}>
+      {/* Back Link */}
+      <Box sx={{ mb: 3 }}>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<BackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2 }}
+        />
+      </Box>
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-        <IconButton onClick={() => navigate("/learn")}>
-          <BackIcon />
-        </IconButton>
         <RouteIcon sx={{ fontSize: 40, color: "#ec4899" }} />
         <Box>
           <Typography variant="h4" sx={{ fontWeight: "bold" }}>
@@ -828,6 +847,7 @@ const TracerouteGuidePage: React.FC = () => {
         </Grid>
       )}
     </Box>
+    </LearnPageLayout>
   );
 };
 

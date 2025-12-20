@@ -27,6 +27,8 @@ import {
   Divider,
 } from "@mui/material";
 import { Link } from "react-router-dom";
+import LearnPageLayout from "../components/LearnPageLayout";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import DnsIcon from "@mui/icons-material/Dns";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -137,8 +139,30 @@ const ZONE_TRANSFER_INFO = {
 export default function DNSGuidePage() {
   const theme = useTheme();
 
+  const pageContext = `This page covers DNS reconnaissance and security including:
+- DNS record types: A, AAAA, MX, NS, TXT, CNAME, SOA, SRV, PTR, CAA
+- Common subdomains for web, dev, API, email, infrastructure, admin, database, CI/CD
+- Email security records: SPF, DMARC, DKIM configuration and issues
+- Zone transfer vulnerabilities and prevention
+- Subdomain enumeration techniques
+- DNS security best practices and hardening
+- Tools for DNS reconnaissance and analysis`;
+
   return (
+    <LearnPageLayout pageTitle="DNS Reconnaissance" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Back Link */}
+      <Box sx={{ mb: 3 }}>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2 }}
+        />
+      </Box>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 2 }}>
@@ -815,5 +839,6 @@ whois -h whois.verisign-grs.com example.com`}
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

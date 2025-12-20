@@ -54,6 +54,7 @@ import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import SchoolIcon from "@mui/icons-material/School";
 import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
+import LearnPageLayout from "../components/LearnPageLayout";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import LockIcon from "@mui/icons-material/Lock";
 import AssessmentIcon from "@mui/icons-material/Assessment";
@@ -205,7 +206,10 @@ export default function APITestingGuidePage() {
     navigator.clipboard.writeText(text);
   };
 
+  const pageContext = `This page is the VRAgent API Endpoint Tester Guide covering API security testing features, air-gapped environment testing, JWT analysis, WebSocket testing, authentication bypass techniques, OWASP API security checks, batch VM testing, and multi-format report exports.`;
+
   return (
+    <LearnPageLayout pageTitle="API Endpoint Tester Guide" pageContext={pageContext}>
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
@@ -767,5 +771,6 @@ export default function APITestingGuidePage() {
         </Grid>
       </TabPanel>
     </Container>
+    </LearnPageLayout>
   );
 }

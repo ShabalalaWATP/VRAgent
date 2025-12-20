@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
   Typography,
@@ -984,6 +985,16 @@ export default function DataSecretsPage() {
   const [selectedTab, setSelectedTab] = useState(0);
   const [expandedAccordion, setExpandedAccordion] = useState<string | false>("panel-0");
 
+  const pageContext = `This page covers Data & Secrets security topics including:
+- File upload vulnerabilities and bypass techniques
+- File download security and path traversal attacks
+- Data storage security from an attacker's perspective
+- Logs, caches, backups, and temporary file hunting
+- Secrets hunting in code, repos, frontends, and infrastructure
+- Cryptographic misuse and exploitation
+- Data exfiltration techniques and impact assessment
+- Comprehensive attacker checklists for each topic`;
+
   const renderSubSection = (sub: SubSection, index: number) => (
     <Box key={index} sx={{ mb: 4 }}>
       <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "text.primary" }}>
@@ -1097,6 +1108,7 @@ export default function DataSecretsPage() {
   );
 
   return (
+    <LearnPageLayout pageTitle="Data & Secrets" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -1307,5 +1319,6 @@ export default function DataSecretsPage() {
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

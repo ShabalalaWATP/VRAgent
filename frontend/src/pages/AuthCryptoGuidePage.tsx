@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
   Typography,
@@ -903,7 +904,10 @@ export default function AuthCryptoGuidePage() {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
+  const pageContext = `This page covers authentication and cryptography security concepts. Topics include: authentication mechanisms (passwords, MFA, biometrics), session management, OAuth/OIDC, JWT security, cryptographic algorithms (symmetric/asymmetric), hashing, key management, TLS/SSL, and common vulnerabilities. Current tab: ${['Authentication', 'Cryptography', 'Best Practices'][tabValue] || 'Overview'}. Covers secure implementation patterns and common attack vectors.`;
+
   return (
+    <LearnPageLayout pageTitle="Authentication & Cryptography Guide" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
@@ -1122,5 +1126,6 @@ export default function AuthCryptoGuidePage() {
         </Grid>
       </Paper>
     </Container>
+    </LearnPageLayout>
   );
 }

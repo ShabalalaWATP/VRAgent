@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session
 
 from backend.core.database import get_db
 from backend.core.logging import get_logger
-from backend.models.models import NetworkAnalysisReport
+from backend.core.auth import get_current_active_user
+from backend.models.models import NetworkAnalysisReport, User
 from backend.services import pcap_service, nmap_service, network_export_service
 from backend.services import ssl_scanner_service, protocol_decoder_service
 
@@ -401,6 +402,7 @@ async def analyze_pcap_files(
     save_report: bool = Query(True, description="Save report to history"),
     title: Optional[str] = Query(None, description="Custom report title"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Analyze one or more PCAP files.
@@ -545,6 +547,7 @@ def validate_capture_filter(filter_expr: str = Query(..., description="BPF filte
 async def run_packet_capture(
     request: PacketCaptureRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Run a live packet capture and analyze the results.
@@ -683,6 +686,7 @@ async def analyze_nmap_files(
     save_report: bool = Query(True, description="Save report to history"),
     title: Optional[str] = Query(None, description="Custom report title"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Analyze one or more Nmap scan output files.
@@ -803,6 +807,7 @@ def get_nmap_scan_types():
 async def run_nmap_scan(
     request: NmapScanRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Run a live Nmap scan against a target.
@@ -945,6 +950,7 @@ def list_reports(
     project_id: Optional[int] = Query(None, description="Filter by project ID"),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """List saved network analysis reports."""
     query = db.query(NetworkAnalysisReport)
@@ -974,7 +980,7 @@ def list_reports(
 
 
 @router.get("/reports/{report_id}")
-def get_report(report_id: int, db: Session = Depends(get_db)):
+def get_report(report_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Get a specific saved report."""
     report = db.query(NetworkAnalysisReport).filter(NetworkAnalysisReport.id == report_id).first()
     if not report:
@@ -995,7 +1001,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/reports/{report_id}")
-def delete_report(report_id: int, db: Session = Depends(get_db)):
+def delete_report(report_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Delete a saved report."""
     report = db.query(NetworkAnalysisReport).filter(NetworkAnalysisReport.id == report_id).first()
     if not report:
@@ -1110,6 +1116,7 @@ async def scan_ssl_hosts(
     request: SSLScanRequest,
     save_report: bool = Query(True, description="Save report to history"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Scan SSL/TLS configuration of one or more hosts.

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 import logging
 import asyncio
 
+from fastapi import Depends
 from backend.services.api_tester_service import (
     test_api_endpoints,
     quick_scan,
@@ -42,6 +43,8 @@ from backend.services.api_tester_service import (
     AIAutoTestResult,
 )
 from backend.core.config import settings
+from backend.core.auth import get_current_active_user
+from backend.models.models import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api-tester", tags=["API Tester"])
@@ -107,7 +110,7 @@ class AIAnalysisRequest(BaseModel):
 
 
 @router.post("/test", response_model=Dict[str, Any])
-async def test_api(request: APITestRequest) -> Dict[str, Any]:
+async def test_api(request: APITestRequest, current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
     """
     Test API endpoints for security vulnerabilities.
     
@@ -170,7 +173,7 @@ async def test_api(request: APITestRequest) -> Dict[str, Any]:
 
 
 @router.post("/quick-scan", response_model=Dict[str, Any])
-async def quick_api_scan(request: QuickScanRequest) -> Dict[str, Any]:
+async def quick_api_scan(request: QuickScanRequest, current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
     """
     Quick security scan of a single API endpoint.
     
@@ -1316,7 +1319,7 @@ class AIAutoTestRequest(BaseModel):
 
 
 @router.post("/auto-test")
-async def run_ai_auto_test(request: AIAutoTestRequest) -> Dict[str, Any]:
+async def run_ai_auto_test(request: AIAutoTestRequest, current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
     """
     AI-driven automated security testing.
     
