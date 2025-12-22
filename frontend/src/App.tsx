@@ -72,6 +72,7 @@ const ReverseEngineeringHubPage = lazy(() => import("./pages/ReverseEngineeringH
 const ApkAnalysisGuidePage = lazy(() => import("./pages/ApkAnalysisGuidePage"));
 const BinaryAnalysisGuidePage = lazy(() => import("./pages/BinaryAnalysisGuidePage"));
 const AndroidReverseEngineeringGuidePage = lazy(() => import("./pages/AndroidReverseEngineeringGuidePage"));
+const AndroidPentestingPage = lazy(() => import("./pages/AndroidPentestingPage"));
 const PrivilegeEscalationGuidePage = lazy(() => import("./pages/PrivilegeEscalationGuidePage"));
 const CyberSecurityCertificationsPage = lazy(() => import("./pages/CyberSecurityCertificationsPage"));
 const IncidentResponseGuidePage = lazy(() => import("./pages/IncidentResponseGuidePage"));
@@ -107,6 +108,15 @@ const ThreatHuntingPage = lazy(() => import("./pages/ThreatHuntingPage"));
 const CommandInjectionPage = lazy(() => import("./pages/CommandInjectionPage"));
 const XSSGuidePage = lazy(() => import("./pages/XSSGuidePage"));
 const WindowsInternalsREPage = lazy(() => import("./pages/WindowsInternalsREPage"));
+const WindowsBasicsPage = lazy(() => import("./pages/WindowsBasicsPage"));
+const LinuxFundamentalsPage = lazy(() => import("./pages/LinuxFundamentalsPage"));
+const ComputerNetworkingPage = lazy(() => import("./pages/ComputerNetworkingPage"));
+const ITHardwarePage = lazy(() => import("./pages/ITHardwarePage"));
+const ComputerScienceFundamentalsPage = lazy(() => import("./pages/ComputerScienceFundamentalsPage"));
+const CloudComputingPage = lazy(() => import("./pages/CloudComputingPage"));
+const IntroToReverseEngineeringPage = lazy(() => import("./pages/IntroToReverseEngineeringPage"));
+const SystemsAdministrationPage = lazy(() => import("./pages/SystemsAdministrationPage"));
+const ArtificialIntelligencePage = lazy(() => import("./pages/ArtificialIntelligencePage"));
 
 // Auth pages
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -570,6 +580,7 @@ function App() {
             <Route path="/learn/apk-analysis" element={<ApkAnalysisGuidePage />} />
             <Route path="/learn/binary-analysis" element={<BinaryAnalysisGuidePage />} />
             <Route path="/learn/android-reverse-engineering" element={<AndroidReverseEngineeringGuidePage />} />
+            <Route path="/learn/android-pentesting" element={<AndroidPentestingPage />} />
             <Route path="/learn/privilege-escalation" element={<PrivilegeEscalationGuidePage />} />
             <Route path="/learn/certifications" element={<CyberSecurityCertificationsPage />} />
             <Route path="/learn/career-paths" element={<CareerPathsPage />} />
@@ -601,7 +612,16 @@ function App() {
             <Route path="/learn/rop" element={<ReturnOrientedProgrammingPage />} />
             <Route path="/learn/debugging-101" element={<Debugging101Page />} />
             <Route path="/learn/ghidra" element={<GhidraGuidePage />} />
+            <Route path="/learn/intro-to-re" element={<IntroToReverseEngineeringPage />} />
             <Route path="/learn/windows-internals" element={<WindowsInternalsREPage />} />
+            <Route path="/learn/windows-basics" element={<WindowsBasicsPage />} />
+            <Route path="/learn/linux-fundamentals" element={<LinuxFundamentalsPage />} />
+            <Route path="/learn/networking" element={<ComputerNetworkingPage />} />
+            <Route path="/learn/it-hardware" element={<ITHardwarePage />} />
+            <Route path="/learn/cs-fundamentals" element={<ComputerScienceFundamentalsPage />} />
+            <Route path="/learn/cloud-computing" element={<CloudComputingPage />} />
+            <Route path="/learn/systems-admin" element={<SystemsAdministrationPage />} />
+            <Route path="/learn/artificial-intelligence" element={<ArtificialIntelligencePage />} />
             <Route path="/learn/ssrf" element={<SSRFGuidePage />} />
             <Route path="/learn/buffer-overflow" element={<BufferOverflowGuidePage />} />
             <Route path="/learn/docker-forensics" element={<DockerForensicsGuidePage />} />

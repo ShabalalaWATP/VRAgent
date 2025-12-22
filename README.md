@@ -142,7 +142,7 @@ VRAgent integrates **14 specialized security scanners** for comprehensive vulner
 - **Improved Exploitability Display**: Clean card-based layout with colored sections for attack narrative, impact, PoC, and mitigations
 
 ### Learning Hub
-VRAgent includes a comprehensive **Security Learning Hub** with **68 learning topics** across **10 categories** for security professionals at all levels:
+VRAgent includes a comprehensive **Security Learning Hub** with **75 learning topics** across **11 categories** for security professionals at all levels:
 
 #### AI Chat Assistant
 Every learning page includes an **AI-powered chat assistant** that can answer questions about the current topic:
@@ -280,6 +280,19 @@ Handy references for assessments:
 |-------|-------------|
 | **Security Glossary** | 120+ cybersecurity terms with definitions |
 | **Commands Reference** | Linux, PowerShell, Nmap, Wireshark commands |
+
+#### 💻 IT Fundamentals (7 topics)
+Core technology foundations for security professionals:
+
+| Topic | Description |
+|-------|-------------|
+| **Computer Science Fundamentals** | Data structures, algorithms, Big O, memory management |
+| **Computer Networking** | OSI model, TCP/IP, routing, switching, firewalls |
+| **Linux Fundamentals** | File systems, permissions, shell scripting, systemd |
+| **Windows Basics** | Registry, services, Active Directory, PowerShell |
+| **Cloud Computing** | AWS, Azure, GCP services, IaC, containers, security |
+| **Systems Administration** | Infrastructure management, monitoring, automation |
+| **Artificial Intelligence** | ML/DL fundamentals, NLP, LLMs, AI security, MLOps |
 
 ### Reports & Exports
 - **Multiple Export Formats**: Generate professional reports in:

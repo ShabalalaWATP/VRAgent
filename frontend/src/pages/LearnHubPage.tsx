@@ -70,6 +70,8 @@ import LocalPoliceIcon from "@mui/icons-material/LocalPolice";
 import LanguageIcon from "@mui/icons-material/Language";
 import ScienceIcon from "@mui/icons-material/Science";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import ComputerIcon from "@mui/icons-material/Computer";
+import DesktopWindowsIcon from "@mui/icons-material/DesktopWindows";
 
 interface LearnCard {
   title: string;
@@ -225,6 +227,82 @@ const appCards: LearnCard[] = [
   },
 ];
 
+// ========== CATEGORY: IT Fundamentals ==========
+const itFundamentalsCards: LearnCard[] = [
+  {
+    title: "Windows Fundamentals",
+    description: "Comprehensive guide to Windows: file system, registry, services, users & permissions, command line, boot process, and essential tools.",
+    icon: <DesktopWindowsIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/windows-basics",
+    color: "#0078d4",
+    tags: ["Windows", "NTFS", "Registry", "PowerShell"],
+    badge: "New",
+  },
+  {
+    title: "Linux Fundamentals",
+    description: "Essential Linux concepts: file system hierarchy, users & groups, permissions, processes, package management, and shell basics.",
+    icon: <TerminalIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/linux-fundamentals",
+    color: "#f97316",
+    tags: ["Linux", "Bash", "Permissions", "CLI"],
+    badge: "New",
+  },
+  {
+    title: "Computer Networking",
+    description: "Network fundamentals: OSI/TCP-IP models, IP addressing, subnetting, protocols, ports, DNS, wireless, and essential commands.",
+    icon: <RouterIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/networking",
+    color: "#0ea5e9",
+    tags: ["TCP/IP", "OSI", "DNS", "Subnetting"],
+    badge: "New",
+  },
+  {
+    title: "Computer Science Fundamentals",
+    description: "Core CS concepts: data structures, algorithms, Big O notation, OOP principles, SOLID, design patterns, and memory management.",
+    icon: <SchoolIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/cs-fundamentals",
+    color: "#6366f1",
+    tags: ["Data Structures", "Algorithms", "OOP", "SOLID"],
+    badge: "New",
+  },
+  {
+    title: "IT Hardware",
+    description: "Computer components, cables, connectors, peripherals, and troubleshooting. Essential knowledge for CompTIA A+ and IT support.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/it-hardware",
+    color: "#8b5cf6",
+    tags: ["Hardware", "Components", "Cables", "A+"],
+    badge: "New",
+  },
+  {
+    title: "Cloud Computing",
+    description: "Cloud fundamentals: service models (IaaS, PaaS, SaaS), deployment types, major providers (AWS, Azure, GCP), and cloud security basics.",
+    icon: <CloudIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/cloud-computing",
+    color: "#0ea5e9",
+    tags: ["AWS", "Azure", "GCP", "IaaS"],
+    badge: "New",
+  },
+  {
+    title: "Systems Administration",
+    description: "Server management fundamentals: Windows Server & Linux, Active Directory, DNS/DHCP, backups, monitoring, and automation.",
+    icon: <DnsIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/systems-admin",
+    color: "#3b82f6",
+    tags: ["Servers", "AD", "Linux", "DevOps"],
+    badge: "New",
+  },
+  {
+    title: "Artificial Intelligence",
+    description: "AI/ML fundamentals: core concepts, data, maths, deep learning, NLP, LLMs, computer vision, MLOps, AI security, and AI for cybersecurity.",
+    icon: <PsychologyIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/artificial-intelligence",
+    color: "#8b5cf6",
+    tags: ["AI", "ML", "LLMs", "Deep Learning"],
+    badge: "New",
+  },
+];
+
 // ========== CATEGORY: Network Security ==========
 const networkCards: LearnCard[] = [
   {
@@ -263,6 +341,15 @@ const networkCards: LearnCard[] = [
 
 // ========== CATEGORY: Reverse Engineering ==========
 const reverseEngineeringCards: LearnCard[] = [
+  {
+    title: "Intro to Reverse Engineering",
+    description: "Comprehensive introduction: what RE is, why it matters, legal/ethical considerations, mindset, and methodology overview.",
+    icon: <SearchIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/intro-to-re",
+    color: "#dc2626",
+    tags: ["Fundamentals", "Malware", "Methodology"],
+    badge: "Start Here",
+  },
   {
     title: "Debugging 101",
     description: "Beginner-friendly guide to breakpoints, stepping, and memory inspection.",
@@ -606,6 +693,15 @@ const defensiveSecurityCards: LearnCard[] = [
 // ========== CATEGORY: Mobile Security ==========
 const mobileSecurityCards: LearnCard[] = [
   {
+    title: "Android Pentesting",
+    description: "Beginner friendly Android app testing: lab setup, attack surface mapping, storage, network, and runtime checks.",
+    icon: <AndroidIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/android-pentesting",
+    color: "#22c55e",
+    tags: ["Android", "Pentesting", "MASTG"],
+    badge: "New",
+  },
+  {
     title: "iOS Pentesting",
     description: "iOS app security testing: static/dynamic analysis, Frida, jailbreak bypass, and data storage.",
     icon: <PhoneAndroidIcon sx={{ fontSize: 40 }} />,
@@ -690,6 +786,16 @@ const allCategories: CategorySection[] = [
     color: "#6366f1",
     gradientEnd: "#8b5cf6",
     cards: appCards,
+  },
+  {
+    id: "it-fundamentals",
+    title: "IT Fundamentals",
+    emoji: "💻",
+    description: "Core IT concepts every security professional should know: operating systems, networking basics, and system administration.",
+    icon: <ComputerIcon sx={{ fontSize: 32 }} />,
+    color: "#0078d4",
+    gradientEnd: "#00a2ed",
+    cards: itFundamentalsCards,
   },
   {
     id: "network-security",

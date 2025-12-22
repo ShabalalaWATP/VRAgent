@@ -243,6 +243,38 @@ const SQLInjectionPage: React.FC = () => {
       safer: "Use predefined query templates with parameters.",
     },
   ];
+  const queryContexts = [
+    {
+      context: "String values",
+      risk: "Quotes plus concatenation can alter predicates.",
+      safer: "Always parameterize values.",
+    },
+    {
+      context: "Numeric values",
+      risk: "Numbers can still become expressions when concatenated.",
+      safer: "Use parameters and validate numeric ranges.",
+    },
+    {
+      context: "Identifiers (columns/tables)",
+      risk: "Identifiers cannot be parameterized safely.",
+      safer: "Use allowlists and map inputs to known names.",
+    },
+    {
+      context: "IN lists",
+      risk: "Joined lists enable injection and parsing errors.",
+      safer: "Use array parameters or repeated placeholders.",
+    },
+    {
+      context: "LIKE search",
+      risk: "Wildcards can change query meaning.",
+      safer: "Escape wildcards and parameterize the search value.",
+    },
+    {
+      context: "JSON or array fields",
+      risk: "String-building JSON paths can be abused.",
+      safer: "Use driver operators with bound values.",
+    },
+  ];
 
   const sqliTypes = [
     {
@@ -275,6 +307,11 @@ const SQLInjectionPage: React.FC = () => {
       signals: "Unexpected DNS or HTTP requests from database servers.",
       risk: "Bypasses normal response channels.",
     },
+  ];
+  const secondOrderNotes = [
+    "Malicious input is stored first, then used later in a query without parameters.",
+    "Often appears in admin views, exports, analytics, or background jobs.",
+    "Treat stored data as untrusted and parameterize every query that uses it.",
   ];
 
   const impactAreas = [
@@ -388,6 +425,12 @@ const SQLInjectionPage: React.FC = () => {
     "Database firewall or query allowlisting where possible.",
     "Network segmentation to protect database servers.",
   ];
+  const tenantSafeguards = [
+    "Always enforce tenant_id in every query and join.",
+    "Prefer row-level security or scoped database views.",
+    "Avoid accepting tenant_id directly from untrusted clients.",
+    "Add tests that verify tenant isolation on common queries.",
+  ];
 
   const insecureExample = `// Insecure: user input is concatenated into SQL
 const query = "SELECT * FROM users WHERE email = '" + email + "'";
@@ -400,6 +443,23 @@ const allowedSort = ["name", "created_at", "status"];
 const sortColumn = allowedSort.includes(sort) ? sort : "created_at";
 const query = "SELECT * FROM tickets ORDER BY " + sortColumn + " LIMIT ?";
 db.query(query, [limit]);`;
+  const safeQueryBuilderExample = `// Safe dynamic filters using parameters
+const filters = [];
+const params = [];
+
+if (status) {
+  filters.push("status = ?");
+  params.push(status);
+}
+
+if (ownerId) {
+  filters.push("owner_id = ?");
+  params.push(ownerId);
+}
+
+const whereClause = filters.length ? "WHERE " + filters.join(" AND ") : "";
+const sql = "SELECT * FROM tickets " + whereClause + " ORDER BY created_at DESC";
+const rows = await db.query(sql, params);`;
 
   const codeSamples = [
     {
@@ -767,6 +827,32 @@ rg -n \"SELECT.*\\+|\\+.*SELECT\" src`;
 
               <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#f59e0b", mb: 1 }}>
+                  SQL Contexts to Handle Safely
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: "#f59e0b" }}>Context</TableCell>
+                        <TableCell sx={{ color: "#f59e0b" }}>Risk</TableCell>
+                        <TableCell sx={{ color: "#f59e0b" }}>Safer Handling</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {queryContexts.map((item) => (
+                        <TableRow key={item.context}>
+                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.context}</TableCell>
+                          <TableCell sx={{ color: "grey.400" }}>{item.risk}</TableCell>
+                          <TableCell sx={{ color: "grey.400" }}>{item.safer}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#f59e0b", mb: 1 }}>
                   Unsafe vs Safe Query Building
                 </Typography>
                 <Typography variant="body2" sx={{ color: "grey.400" }}>
@@ -817,6 +903,27 @@ rg -n \"SELECT.*\\+|\\+.*SELECT\" src`;
                     </TableBody>
                   </Table>
                 </TableContainer>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#f59e0b", mb: 1 }}>
+                  Second-Order SQL Injection
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                  Second-order SQLi happens when untrusted input is stored safely at first, but later reused in a
+                  different query without parameters. It is easy to miss because the vulnerable query might live in
+                  a separate workflow or admin feature.
+                </Typography>
+                <List dense>
+                  {secondOrderNotes.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <WarningIcon color="warning" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
               </Paper>
 
               <Grid container spacing={2}>
@@ -1134,6 +1241,17 @@ rg -n \"SELECT.*\\+|\\+.*SELECT\" src`;
 
               <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#f59e0b", mb: 1 }}>
+                  Safe Dynamic Query Builder Pattern
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400" }}>
+                  Build optional filters by collecting query fragments and binding every value as a parameter.
+                  Avoid stitching user input into the SQL string directly.
+                </Typography>
+                <CodeBlock code={safeQueryBuilderExample} language="javascript" />
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#f59e0b", mb: 1 }}>
                   Database Role Separation
                 </Typography>
                 <TableContainer>
@@ -1156,6 +1274,22 @@ rg -n \"SELECT.*\\+|\\+.*SELECT\" src`;
                     </TableBody>
                   </Table>
                 </TableContainer>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#f59e0b", mb: 1 }}>
+                  Tenant Isolation Safeguards
+                </Typography>
+                <List dense>
+                  {tenantSafeguards.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <LockIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
               </Paper>
 
               <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>

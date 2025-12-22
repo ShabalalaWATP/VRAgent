@@ -150,11 +150,11 @@ const vulnTypes: VulnType[] = [
 ];
 
 const exploitScenarios = [
-  "Buffer size calculation → heap/stack overflow",
-  "Loop bounds → out-of-bounds access",
-  "Memory allocation size → undersized buffer",
-  "Array indexing → arbitrary read/write",
-  "Length checks bypass → buffer overflow",
+  "Buffer size calculation -> heap/stack overflow",
+  "Loop bounds -> out-of-bounds access",
+  "Memory allocation size -> undersized buffer",
+  "Array indexing -> arbitrary read/write",
+  "Length checks bypass -> buffer overflow",
 ];
 
 const codePatterns = [
@@ -164,15 +164,93 @@ const codePatterns = [
   { pattern: "(int)user_input", risk: "Sign issues if input > INT_MAX" },
 ];
 
+const rootCauses = [
+  "Implicit type conversions and integer promotions",
+  "Arithmetic on user-controlled sizes (count * size)",
+  "Assuming values are non-negative or within range",
+  "Mixing signed and unsigned types in comparisons",
+  "Narrowing casts from 64-bit to 32-bit types",
+  "Off-by-one errors at boundaries (MAX, MIN)",
+];
+
+const untrustedSources = [
+  "Network protocol length fields and headers",
+  "File format metadata (dimensions, offsets, counts)",
+  "API parameters and JSON numeric values",
+  "Database values stored in smaller types",
+  "Compression or decompression sizes",
+  "Time calculations (timeouts, durations, TTL)",
+];
+
+const conversionPitfalls = [
+  {
+    rule: "Signed to unsigned comparison",
+    example: "if (offset < size)",
+    risk: "negative becomes huge and bypasses checks",
+  },
+  {
+    rule: "Integer promotion in expressions",
+    example: "uint8_t a, b; int c = a + b;",
+    risk: "overflow checks on smaller type are ineffective",
+  },
+  {
+    rule: "Narrowing cast",
+    example: "uint32_t n = (uint64_t)len;",
+    risk: "truncation hides large values",
+  },
+  {
+    rule: "Mixed signedness arithmetic",
+    example: "size_t n; int len; if (len - n > 0)",
+    risk: "underflow to a large unsigned value",
+  },
+  {
+    rule: "Loop index type mismatch",
+    example: "for (int i = 0; i < size_t_len; i++)",
+    risk: "size_t_len > INT_MAX causes incorrect bounds",
+  },
+];
+
+const boundaryValues = [
+  "0, 1, 2",
+  "MAX - 1, MAX, MAX + 1",
+  "MIN, MIN - 1 (signed)",
+  "Powers of two (2^n) and 2^n +/- 1",
+  "Values that wrap: (MAX / size) + 1",
+  "Negative values and -1 (often becomes MAX when cast)",
+];
+
+const safeSizingWorkflow = [
+  {
+    title: "Normalize inputs",
+    detail: "Reject negative values before converting to unsigned types.",
+  },
+  {
+    title: "Validate ranges",
+    detail: "Check against protocol or format limits before arithmetic.",
+  },
+  {
+    title: "Use checked arithmetic",
+    detail: "Use builtins or checked_* helpers for add and multiply.",
+  },
+  {
+    title: "Allocate and verify",
+    detail: "Check allocation results and track computed size.",
+  },
+  {
+    title: "Use the computed size",
+    detail: "Never reuse the original untrusted length after checks.",
+  },
+];
+
 // Data type limits for different architectures
 const dataTypeLimits = [
   { type: "char", signed: "-128 to 127", unsigned: "0 to 255", bits: 8 },
   { type: "short", signed: "-32,768 to 32,767", unsigned: "0 to 65,535", bits: 16 },
   { type: "int", signed: "-2,147,483,648 to 2,147,483,647", unsigned: "0 to 4,294,967,295", bits: 32 },
   { type: "long (32-bit)", signed: "-2,147,483,648 to 2,147,483,647", unsigned: "0 to 4,294,967,295", bits: 32 },
-  { type: "long (64-bit)", signed: "-9.2×10¹⁸ to 9.2×10¹⁸", unsigned: "0 to 1.8×10¹⁹", bits: 64 },
+  { type: "long (64-bit)", signed: "-9,223,372,036,854,775,808 to 9,223,372,036,854,775,807", unsigned: "0 to 18,446,744,073,709,551,615", bits: 64 },
   { type: "size_t (32-bit)", signed: "N/A", unsigned: "0 to 4,294,967,295", bits: 32 },
-  { type: "size_t (64-bit)", signed: "N/A", unsigned: "0 to 1.8×10¹⁹", bits: 64 },
+  { type: "size_t (64-bit)", signed: "N/A", unsigned: "0 to 18,446,744,073,709,551,615", bits: 64 },
 ];
 
 // Real-world CVEs
@@ -650,7 +728,7 @@ export default function IntegerOverflowPage() {
   const theme = useTheme();
   const [tabValue, setTabValue] = useState(0);
 
-  const pageContext = `Integer Overflows and Underflows Comprehensive Guide - Covers integer overflow, underflow, signed/unsigned mismatches, and width truncation vulnerabilities. Includes real-world CVE examples (CVE-2021-21224, CVE-2016-0728, CVE-2020-0796 SMBGhost), detailed code examples with vulnerable and fixed versions, exploitation techniques, detection tools (sanitizers, static analysis, fuzzing), language-specific behaviors (C/C++, Java, Python, Rust, Go, JavaScript), safe integer libraries (SafeInt, Boost.SafeNumerics), compiler flags reference, and practice resources. Explains exploitation scenarios including buffer size calculations, loop bounds, memory allocation, and array indexing.`;
+  const pageContext = `Integer Overflows and Underflows Comprehensive Guide - Covers integer overflow, underflow, signed/unsigned mismatches, width truncation, root causes, conversion pitfalls, and boundary testing. Includes real-world CVE examples (CVE-2021-21224, CVE-2016-0728, CVE-2020-0796 SMBGhost), detailed code examples with vulnerable and fixed versions, exploitation techniques, detection tools (sanitizers, static analysis, fuzzing), language-specific behaviors (C/C++, Java, Python, Rust, Go, JavaScript), safe integer libraries (SafeInt, Boost.SafeNumerics), compiler flags reference, and practice resources. Explains exploitation scenarios including buffer size calculations, loop bounds, memory allocation, and array indexing.`;
 
   return (
     <LearnPageLayout pageTitle="Integer Overflows & Underflows" pageContext={pageContext}>
@@ -777,6 +855,40 @@ export default function IntegerOverflowPage() {
             </Table>
           </TableContainer>
 
+          <Typography variant="h6" gutterBottom>Common Root Causes and Sources</Typography>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2.5, bgcolor: alpha("#ef4444", 0.05), border: `1px solid ${alpha("#ef4444", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ color: "#ef4444", mb: 2 }}>Root Causes</Typography>
+                <List dense>
+                  {rootCauses.map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <WarningIcon sx={{ fontSize: 16, color: "#ef4444" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={<Typography variant="body2">{item}</Typography>} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2.5, bgcolor: alpha("#f59e0b", 0.05), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ color: "#f59e0b", mb: 2 }}>Untrusted Integer Sources</Typography>
+                <List dense>
+                  {untrustedSources.map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <WarningIcon sx={{ fontSize: 16, color: "#f59e0b" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={<Typography variant="body2">{item}</Typography>} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
           {/* How Overflow Happens */}
           <Typography variant="h6" gutterBottom>🔄 How Overflow Works</Typography>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -834,6 +946,30 @@ int8_t b = a + 1;  // UNDEFINED BEHAVIOR!
             </Grid>
           </Grid>
 
+          <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03) }}>
+            <Typography variant="h6" gutterBottom>Conversion and Promotion Pitfalls (C/C++)</Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "action.hover" }}>
+                    <TableCell><strong>Rule</strong></TableCell>
+                    <TableCell><strong>Example</strong></TableCell>
+                    <TableCell><strong>Risk</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {conversionPitfalls.map((row) => (
+                    <TableRow key={row.rule}>
+                      <TableCell><Typography variant="body2" sx={{ fontWeight: 600 }}>{row.rule}</Typography></TableCell>
+                      <TableCell><Typography variant="body2" sx={{ fontFamily: "monospace" }}>{row.example}</Typography></TableCell>
+                      <TableCell><Typography variant="body2" color="text.secondary">{row.risk}</Typography></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
           {/* Exploitation Scenarios */}
           <Paper
             sx={{
@@ -867,12 +1003,51 @@ int8_t b = a + 1;  // UNDEFINED BEHAVIOR!
                 <Grid item xs={12} sm={6} key={p.pattern}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                     <Chip label={p.pattern} size="small" sx={{ fontFamily: "monospace", fontWeight: 600 }} />
-                    <Typography variant="caption" color="text.secondary">→ {p.risk}</Typography>
+                    <Typography variant="caption" color="text.secondary">- {p.risk}</Typography>
                   </Box>
                 </Grid>
               ))}
             </Grid>
           </Paper>
+
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#10b981", 0.05) }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                  Boundary Value Testing Checklist
+                </Typography>
+                <List dense>
+                  {boundaryValues.map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={<Typography variant="body2">{item}</Typography>} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#3b82f6", 0.05) }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                  Safe Size Calculation Workflow
+                </Typography>
+                <Stepper orientation="vertical">
+                  {safeSizingWorkflow.map((step) => (
+                    <Step key={step.title} active completed={false}>
+                      <StepLabel>
+                        <Typography variant="body2">{step.title}</Typography>
+                      </StepLabel>
+                      <StepContent>
+                        <Typography variant="body2" color="text.secondary">{step.detail}</Typography>
+                      </StepContent>
+                    </Step>
+                  ))}
+                </Stepper>
+              </Paper>
+            </Grid>
+          </Grid>
         </TabPanel>
 
         {/* Tab 1: Code Examples */}
@@ -1606,13 +1781,15 @@ int get_element(int index) {
         <Paper sx={{ p: 3, mt: 4, borderRadius: 3, bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>📚 Related Learning</Typography>
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Chip label="Buffer Overflow →" clickable onClick={() => navigate("/learn/buffer-overflow")} sx={{ fontWeight: 600 }} />
-            <Chip label="Heap Exploitation →" clickable onClick={() => navigate("/learn/heap-exploitation")} sx={{ fontWeight: 600 }} />
-            <Chip label="Format String →" clickable onClick={() => navigate("/learn/format-string")} sx={{ fontWeight: 600 }} />
-            <Chip label="Binary Exploitation →" clickable onClick={() => navigate("/learn/binary-exploitation")} sx={{ fontWeight: 600 }} />
+            <Chip label="Buffer Overflow ->" clickable onClick={() => navigate("/learn/buffer-overflow")} sx={{ fontWeight: 600 }} />
+            <Chip label="Heap Exploitation ->" clickable onClick={() => navigate("/learn/heap-exploitation")} sx={{ fontWeight: 600 }} />
+            <Chip label="Format String ->" clickable onClick={() => navigate("/learn/format-string")} sx={{ fontWeight: 600 }} />
+            <Chip label="Binary Exploitation ->" clickable onClick={() => navigate("/learn/binary-exploitation")} sx={{ fontWeight: 600 }} />
           </Box>
         </Paper>
       </Container>
     </LearnPageLayout>
   );
 }
+
+
