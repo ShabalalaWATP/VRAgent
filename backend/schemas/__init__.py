@@ -8,6 +8,7 @@ class ProjectBase(BaseModel):
     name: str
     description: Optional[str] = None
     git_url: Optional[str] = None
+    is_shared: bool = False
 
 
 class ProjectCreate(ProjectBase):
@@ -18,6 +19,29 @@ class Project(ProjectBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+    owner_id: Optional[int] = None
+    owner_username: Optional[str] = None
+    collaborator_count: int = 0
+    user_role: Optional[str] = None  # 'owner', 'editor', 'viewer', 'admin'
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectCollaboratorBase(BaseModel):
+    user_id: int
+    role: str = "editor"  # 'viewer', 'editor', 'admin'
+
+
+class ProjectCollaboratorCreate(ProjectCollaboratorBase):
+    pass
+
+
+class ProjectCollaborator(ProjectCollaboratorBase):
+    id: int
+    project_id: int
+    added_at: datetime
+    username: Optional[str] = None
+    email: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

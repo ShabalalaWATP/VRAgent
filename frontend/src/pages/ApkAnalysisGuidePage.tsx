@@ -201,10 +201,10 @@ const ApkAnalysisGuidePage: React.FC = () => {
 
   const quickStartSteps = [
     { label: "Upload Your APK", description: "Navigate to Reverse Engineering Hub and select 'APK Analysis'. Upload any .apk file." },
-    { label: "Run Unified Scan", description: "Click 'Start Unified Scan' for comprehensive analysis including permissions, components, strings, and more." },
-    { label: "Decompile with JADX", description: "Click 'Decompile' to convert DEX bytecode to readable Java source code." },
-    { label: "Explore the Code", description: "Browse the package tree, search for suspicious patterns, and click any class to view its source." },
-    { label: "Use AI Analysis", description: "Select code and use 'Explain with AI' or run 'AI Vulnerability Scan' for deep insights." },
+    { label: "Run Unified Scan", description: "Click 'Start Unified Scan' for comprehensive analysis with real-time progress tracking." },
+    { label: "Explore 5-Tab Results", description: "Review results in five tabs: What Does This APK Do?, Security Findings, Architecture Diagram, Attack Surface Map, and Decompiled Classes." },
+    { label: "Browse Decompiled Code", description: "Navigate the package tree in the Decompiled Classes tab, search for suspicious patterns, and click any class to view its source." },
+    { label: "Use AI Analysis", description: "Use 'Explain with AI' for code explanations or run 'Full Security Scan' for comprehensive AI-powered vulnerability detection." },
     { label: "Export Reports", description: "Generate Markdown, PDF, or DOCX reports with all findings for documentation." },
   ];
 
@@ -720,6 +720,32 @@ Java.perform(function() {
             VRAgent provides <strong>40+ APK analysis capabilities</strong> powered by JADX decompilation and AI.
             All tools are accessible from the Reverse Engineering Hub.
           </Alert>
+          
+          {/* 5-Tab Unified Results Interface */}
+          <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2, mb: 4 }}>
+            <Typography variant="h6" sx={{ color: "#22c55e", mb: 2, fontWeight: 700 }}>
+              📊 Unified Results Interface (5 Tabs)
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.300", mb: 2 }}>
+              After running a Unified Scan, results are presented in an intuitive 5-tab interface:
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { tab: "1. What Does This APK Do?", desc: "AI-generated summary of the app's purpose, features, and behavior", color: "#22c55e", icon: "📱" },
+                { tab: "2. Security Findings", desc: "All detected vulnerabilities with severity ratings and remediation guidance", color: "#ef4444", icon: "🔒" },
+                { tab: "3. Architecture Diagram", desc: "Auto-generated Mermaid diagram showing app components and relationships", color: "#3b82f6", icon: "🏗️" },
+                { tab: "4. Attack Surface Map", desc: "Visual attack tree showing exported components and entry points", color: "#8b5cf6", icon: "🎯" },
+                { tab: "5. Decompiled Classes", desc: "Browse JADX-decompiled Java source code with package tree navigation", color: "#f59e0b", icon: "📂" },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} md={4} key={item.tab}>
+                  <Box sx={{ p: 2, bgcolor: alpha(item.color, 0.1), borderRadius: 2, border: `1px solid ${alpha(item.color, 0.3)}`, height: "100%" }}>
+                    <Typography sx={{ color: item.color, fontWeight: 700, mb: 0.5 }}>{item.icon} {item.tab}</Typography>
+                    <Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
           
           {/* Core AI Features */}
           <Typography variant="h6" sx={{ color: "#22c55e", mb: 2, fontWeight: 700 }}>

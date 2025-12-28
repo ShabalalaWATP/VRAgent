@@ -65,15 +65,19 @@ interface GuidedWalkthroughProps {
 // Map walkthrough phases to tab indices
 const PHASE_TAB_MAP: Record<string, number> = {
   "Basic Information": 0, // Overview/Summary
-  "Permissions Analysis": 0, // Permissions tab or main
-  "Security Issues": 0, // Security tab
-  "Secrets Discovery": 0, // Secrets section
+  "Permission Analysis": 0, // Permissions tab or main
+  "Secret Detection": 0, // Secrets section
+  "JADX Decompilation": 0, // Decompilation info
+  "Code Security Scan": 0, // Code findings
+  "Sensitive Data Discovery": 0, // Sensitive data
+  "CVE Database Lookup": 0, // CVE findings
+  "AI Vulnerability Hunt": 0, // VulnHuntr
+  "AI Finding Verification": 0, // Verification
   "Component Analysis": 0, // Components
-  "Protection Analysis": 0, // Obfuscation/Protection
-  "Frida Scripts": 0, // Dynamic analysis
-  "Native Libraries": 0, // Native analysis
-  "Hardening Assessment": 0, // Security hardening
-  "Summary": 0, // Summary
+  "Protection Detection": 0, // Obfuscation/Protection
+  "AI Report Generation": 0, // AI diagrams
+  "Dynamic Testing Scripts": 0, // Frida scripts
+  "Analysis Complete": 0, // Summary
 };
 
 export default function GuidedWalkthrough({
@@ -104,19 +108,56 @@ export default function GuidedWalkthrough({
     try {
       // Build analysis context for the walkthrough
       const analysisContext: Record<string, unknown> = {
+        // Basic info
         package_name: unifiedScanResult.package_name,
         version_name: unifiedScanResult.version_name,
         version_code: unifiedScanResult.version_code,
         min_sdk: unifiedScanResult.min_sdk,
         target_sdk: unifiedScanResult.target_sdk,
+        
+        // Permissions
         permissions: unifiedScanResult.permissions,
         dangerous_permissions_count: unifiedScanResult.dangerous_permissions_count,
+        
+        // Security findings
         security_issues: unifiedScanResult.security_issues,
         secrets: unifiedScanResult.secrets,
+        
+        // Components
         components: unifiedScanResult.components,
+        
+        // Native analysis
         native_libraries: unifiedScanResult.native_libraries,
+        
+        // Code stats
         total_classes: unifiedScanResult.total_classes,
         total_files: unifiedScanResult.total_files,
+        
+        // NEW: Decompiled code scan
+        decompiled_code_findings: unifiedScanResult.decompiled_code_findings || [],
+        decompiled_code_summary: unifiedScanResult.decompiled_code_summary || {},
+        
+        // NEW: Sensitive data discovery
+        sensitive_data_findings: unifiedScanResult.sensitive_data_findings || {},
+        
+        // NEW: CVE scan
+        cve_scan_results: unifiedScanResult.cve_scan_results || {},
+        
+        // NEW: AI vulnerability hunt (note: vuln_hunt_result not vuln_hunt_results)
+        vuln_hunt_results: unifiedScanResult.vuln_hunt_result || {},
+        
+        // NEW: AI verification
+        verification_results: unifiedScanResult.verification_results || {},
+        
+        // NEW: AI reports
+        ai_architecture_diagram: unifiedScanResult.ai_architecture_diagram,
+        ai_attack_surface_map: unifiedScanResult.ai_attack_surface_map,
+        
+        // Dynamic analysis & protections
+        dynamic_analysis: unifiedScanResult.dynamic_analysis,
+        
+        // Frida vulnerability hooks
+        vulnerability_frida_hooks: unifiedScanResult.vulnerability_frida_hooks,
       };
 
       const response = await reverseEngineeringClient.getAnalysisWalkthrough(analysisContext);

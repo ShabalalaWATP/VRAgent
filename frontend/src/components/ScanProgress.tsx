@@ -51,7 +51,7 @@ interface ScanProgressProps {
   onComplete?: () => void;
 }
 
-// Phase categories for organized display - ordered to match actual scan execution flow
+// Phase categories for organized display - EXACT ORDER matching backend execution
 interface PhaseCategory {
   name: string;
   icon: string;
@@ -61,76 +61,112 @@ interface PhaseCategory {
 
 const PHASE_CATEGORIES: PhaseCategory[] = [
   {
-    name: "Agentic AI Scan",
-    icon: "🤖",
-    phases: ["agentic_scan", "agentic_initializing", "agentic_chunking", "agentic_entry_points", "agentic_flow_tracing", "agentic_analyzing", "agentic_reporting", "agentic_complete", "agentic_error", "agentic_scanning"],
-    description: "Deep LLM-powered vulnerability analysis with code flow tracing",
-  },
-  {
     name: "Setup",
     icon: "📦",
     phases: ["initializing", "extracting", "parsing"],
-    description: "Extracting and parsing source code",
+    description: "Extracting and parsing source code (0-30%)",
   },
   {
     name: "Embeddings",
     icon: "🧠",
     phases: ["embedding"],
-    description: "Generating code embeddings for AI analysis",
+    description: "Generating code embeddings for AI analysis (30-45%)",
   },
   {
-    name: "Security Scanners",
+    name: "Parallel Scanning",
     icon: "🔍",
-    phases: ["parallel_scanning", "scanning", "sast", "secrets", "eslint", "semgrep", "bandit", "gosec", "spotbugs", "clangtidy", "cppcheck", "php", "brakeman", "cargo_audit"],
-    description: "Running SAST security scanners",
-  },
-  {
-    name: "Docker Security",
-    icon: "🐳",
-    phases: ["docker"],
-    description: "Scanning Dockerfiles and container images",
-  },
-  {
-    name: "Infrastructure as Code",
-    icon: "☁️",
-    phases: ["iac"],
-    description: "Scanning Terraform, Kubernetes, CloudFormation",
+    phases: ["parallel_scanning", "scanning", "sast", "secrets", "eslint", "semgrep", "bandit", "gosec", "spotbugs", "clangtidy", "cppcheck", "php", "brakeman", "cargo_audit", "docker", "iac"],
+    description: "SAST, Docker, IaC scanners in parallel (45-70%)",
   },
   {
     name: "Deduplication",
     icon: "🔗",
     phases: ["deduplication"],
-    description: "Merging duplicate findings across scanners",
+    description: "Merging duplicate findings across scanners (70-72%)",
   },
   {
-    name: "Dependencies",
+    name: "Dependency Parsing",
+    icon: "📦",
+    phases: ["dependencies"],
+    description: "Parsing project dependencies (72-75%)",
+  },
+  {
+    name: "Dependency Trees",
     icon: "📚",
-    phases: ["dependencies", "transitive_deps"],
-    description: "Analyzing direct and transitive dependencies",
+    phases: ["transitive_deps"],
+    description: "Analyzing transitive dependency trees (75-78%)",
   },
   {
-    name: "Vulnerability Lookup",
+    name: "CVE Lookup",
     icon: "🛡️",
-    phases: ["cve_lookup", "transitive_analysis", "reachability"],
-    description: "Looking up CVEs and analyzing reachability",
+    phases: ["cve_lookup"],
+    description: "Looking up known vulnerabilities (78-82%)",
+  },
+  {
+    name: "Transitive Analysis",
+    icon: "🔀",
+    phases: ["transitive_analysis"],
+    description: "Analyzing transitive vulnerability paths (82-84%)",
+  },
+  {
+    name: "Reachability Analysis",
+    icon: "🎯",
+    phases: ["reachability"],
+    description: "Determining if vulnerable code is reachable (84-86%)",
   },
   {
     name: "Enrichment",
     icon: "📊",
     phases: ["enrichment", "epss", "nvd"],
-    description: "Enriching with EPSS, NVD, and KEV data",
+    description: "Enriching with EPSS, NVD, and KEV data (86-89%)",
+  },
+  {
+    name: "AI File Triage",
+    icon: "🔍",
+    phases: ["agentic_scan", "agentic_initializing", "agentic_file_triage"],
+    description: "AI examines all files to select security-relevant ones (89-90%)",
+  },
+  {
+    name: "Multi-Pass Analysis",
+    icon: "🤖",
+    phases: ["agentic_initial_analysis", "agentic_focused_analysis", "agentic_deep_analysis"],
+    description: "AI analyzes 60→20→8 files with increasing depth (90-92%)",
+  },
+  {
+    name: "Entry Point Detection",
+    icon: "🎯",
+    phases: ["agentic_chunking", "agentic_entry_points"],
+    description: "Finding user input sources and API endpoints (92-93%)",
+  },
+  {
+    name: "Flow Tracing",
+    icon: "🔀",
+    phases: ["agentic_flow_tracing"],
+    description: "Tracing data flows from inputs to dangerous sinks (93-95%)",
+  },
+  {
+    name: "Vulnerability Analysis",
+    icon: "⚠️",
+    phases: ["agentic_analyzing", "agentic_fp_filtering"],
+    description: "Analyzing vulnerabilities and filtering false positives (95-97%)",
+  },
+  {
+    name: "Synthesis",
+    icon: "🧠",
+    phases: ["agentic_synthesis", "agentic_reporting", "agentic_complete", "agentic_error", "agentic_scanning"],
+    description: "AI synthesizes findings across all passes (97-98%)",
   },
   {
     name: "AI Analysis",
     icon: "✨",
     phases: ["ai_analysis"],
-    description: "AI-powered false positive detection & attack chains",
+    description: "False positive detection & attack chain discovery (98-99%)",
   },
   {
     name: "Report",
     icon: "📝",
     phases: ["reporting", "complete"],
-    description: "Generating final security report",
+    description: "Generating final security report (99-100%)",
   },
 ];
 
@@ -158,7 +194,7 @@ const PHASE_LABELS: Record<string, string> = {
   iac: "IaC Scanning",
   deduplication: "Deduplicating Findings",
   dependencies: "Parsing Dependencies",
-  transitive_deps: "Transitive Dependencies",
+  transitive_deps: "Building Dependency Trees",
   cve_lookup: "CVE Lookup",
   transitive_analysis: "Transitive Analysis",
   reachability: "Reachability Analysis",
@@ -169,12 +205,19 @@ const PHASE_LABELS: Record<string, string> = {
   reporting: "Generating Report",
   complete: "Complete",
   failed: "Failed",
-  // Agentic AI phases
+  // Agentic AI phases - unified pipeline with CVE/SAST context
+  agentic_scan: "🤖 AI-Guided Analysis",
   agentic_initializing: "Initializing Agentic AI",
+  agentic_file_triage: "🔍 AI File Triage",
+  agentic_initial_analysis: "📋 Pass 1: Scanning Files",
+  agentic_focused_analysis: "🔬 Pass 2: Focused Analysis",
+  agentic_deep_analysis: "🎯 Pass 3: Deep Analysis",
   agentic_chunking: "Breaking Code into Chunks",
   agentic_entry_points: "Detecting Entry Points",
-  agentic_flow_tracing: "Tracing Data Flows",
+  agentic_flow_tracing: "🔀 Data Flow Tracing",
   agentic_analyzing: "Analyzing Vulnerabilities",
+  agentic_fp_filtering: "Filtering False Positives",
+  agentic_synthesis: "🧠 Synthesizing Findings",
   agentic_reporting: "Generating AI Report",
   agentic_complete: "Agentic Scan Complete",
   agentic_error: "Agentic Scan Error",
@@ -187,6 +230,7 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [phaseHistory, setPhaseHistory] = useState<string[]>([]);  // Track completed phases from server
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -210,7 +254,6 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("WebSocket connected for scan", scanRunId);
         setConnected(true);
         setReconnecting(false);
         setReconnectAttempt(0);
@@ -231,7 +274,16 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
             return;
           }
 
-          const data = JSON.parse(event.data) as ScanProgress;
+          const rawData = JSON.parse(event.data);
+          
+          // Handle phase history message (sent on connect for late-joining clients)
+          if (rawData.type === "phase_history" && rawData.completed_phases) {
+            // Store history phases - they'll be used by PhaseProgressCategories
+            setPhaseHistory(rawData.completed_phases);
+            return;
+          }
+
+          const data = rawData as ScanProgress;
           setProgress(data);
 
           // Notify parent when complete
@@ -254,7 +306,6 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
       };
 
       ws.onclose = (event) => {
-        console.log("WebSocket disconnected", event.code, event.reason);
         setConnected(false);
 
         // Clear heartbeat
@@ -270,7 +321,6 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
           reconnectAttemptsRef.current += 1;
           setReconnectAttempt(reconnectAttemptsRef.current);
           setReconnecting(true);
-          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             connectWebSocket();
@@ -317,8 +367,6 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
 
     // Start polling only after max reconnect attempts
     if (reconnectAttempt >= maxReconnectAttempts && !pollingIntervalRef.current) {
-      console.log("WebSocket failed, falling back to polling");
-      
       const pollStatus = async () => {
         try {
           // Use the progress endpoint which returns WebSocket-compatible format
@@ -496,7 +544,7 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
       )}
 
       {/* Phase Category Display */}
-      <PhaseProgressCategories currentPhase={currentPhase} theme={theme} />
+      <PhaseProgressCategories currentPhase={currentPhase} theme={theme} initialPhaseHistory={phaseHistory} />
     </Paper>
   );
 }
@@ -559,11 +607,23 @@ function AgenticStatsDisplay({ message, theme }: AgenticStatsDisplayProps) {
 interface PhaseProgressCategoriesProps {
   currentPhase: string;
   theme: Theme;
+  initialPhaseHistory?: string[];  // Phases already completed (received from server on connect)
 }
 
-function PhaseProgressCategories({ currentPhase, theme }: PhaseProgressCategoriesProps) {
+function PhaseProgressCategories({ currentPhase, theme, initialPhaseHistory = [] }: PhaseProgressCategoriesProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [seenPhases, setSeenPhases] = useState<Set<string>>(new Set());
+  
+  // Initialize seenPhases with history when we get it from server
+  useEffect(() => {
+    if (initialPhaseHistory.length > 0) {
+      setSeenPhases(prev => {
+        const newSet = new Set(prev);
+        initialPhaseHistory.forEach(phase => newSet.add(phase));
+        return newSet;
+      });
+    }
+  }, [initialPhaseHistory]);
   
   // Track phases we've seen to determine what's been completed
   useEffect(() => {

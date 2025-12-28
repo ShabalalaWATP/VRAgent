@@ -47,6 +47,7 @@ services:
       NVD_API_KEY: ${NVD_API_KEY:-}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       GHIDRA_HOME: /opt/ghidra
+      UPLOAD_DIR: /app/uploads
     ports:
       - "8000:8000"
     volumes:

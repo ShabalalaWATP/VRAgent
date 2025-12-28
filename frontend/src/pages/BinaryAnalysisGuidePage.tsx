@@ -49,7 +49,6 @@ import SearchIcon from "@mui/icons-material/Search";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import TimelineIcon from "@mui/icons-material/Timeline";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SchoolIcon from "@mui/icons-material/School";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
@@ -162,10 +161,10 @@ const BinaryAnalysisGuidePage: React.FC = () => {
 
   const vrAgentFeatures = [
     { feature: "Unified Binary Scan", description: "One-click comprehensive security analysis with real-time progress", icon: <PlayArrowIcon />, color: "#22c55e" },
+    { feature: "4-Tab Results View", description: "AI summary, Security Findings, Architecture Diagram, and Attack Surface Map", icon: <VisibilityIcon />, color: "#3b82f6" },
     { feature: "AI Vulnerability Hunter", description: "AI-powered detection of memory corruption, injection, and logic flaws", icon: <BugReportIcon />, color: "#ef4444" },
     { feature: "AI Decompiler Enhancement", description: "Transform assembly into readable, annotated code", icon: <AutoAwesomeIcon />, color: "#8b5cf6" },
-    { feature: "Symbolic Execution", description: "Track data flow, constraints, and reachability to dangerous sinks", icon: <AccountTreeIcon />, color: "#3b82f6" },
-    { feature: "Live Attack Simulation", description: "Model real attacks with step-by-step exploitation paths", icon: <TimelineIcon />, color: "#f59e0b" },
+    { feature: "Symbolic Execution", description: "Track data flow, constraints, and reachability to dangerous sinks", icon: <AccountTreeIcon />, color: "#f59e0b" },
     { feature: "Natural Language Search", description: "Find code by describing what it does in plain English", icon: <SearchIcon />, color: "#06b6d4" },
     { feature: "PoC Generation", description: "Automatically generate proof-of-concept exploit code", icon: <CodeIcon />, color: "#ec4899" },
     { feature: "AI Chat", description: "Ask questions about the binary and get detailed explanations", icon: <AutoAwesomeIcon />, color: "#a855f7" },
@@ -177,24 +176,24 @@ const BinaryAnalysisGuidePage: React.FC = () => {
       description: "Navigate to the Reverse Engineering Hub and select 'Binary Analysis'. Upload a PE (.exe, .dll) or ELF binary file.",
     },
     {
-      label: "Run Quick Analysis",
-      description: "Click 'Analyze' to extract strings, imports, exports, and metadata. This gives you a first look at the binary.",
+      label: "Run Unified Scan",
+      description: "Click 'Run Unified Scan' for comprehensive AI-powered security analysis with real-time progress tracking.",
     },
     {
-      label: "Launch Vulnerability Hunt",
-      description: "Click 'Start Vulnerability Hunt' for AI-powered security scanning. Watch real-time progress as each phase completes.",
+      label: "Explore 4-Tab Results",
+      description: "Review results in four tabs: What Does This Binary Do (AI summary), Security Findings, Architecture Diagram, and Attack Surface Map.",
     },
     {
-      label: "Explore Findings",
-      description: "Review detected vulnerabilities sorted by severity. Click any finding to see detailed analysis, affected code, and remediation.",
+      label: "Review Security Findings",
+      description: "Check detected vulnerabilities sorted by severity. Each finding includes CWE references and AI-generated remediation guidance.",
     },
     {
-      label: "Use AI Enhancement",
-      description: "Select a function and click 'Enhance with AI' to get readable code with comments explaining what it does.",
+      label: "Use AI Chat",
+      description: "Ask questions about the binary using the AI Chat feature. Get explanations of specific functions or attack scenarios.",
     },
     {
-      label: "Generate Report",
-      description: "Export your analysis as Markdown, PDF, or DOCX. Include AI insights, vulnerabilities, and recommended fixes.",
+      label: "Export Report",
+      description: "Generate comprehensive reports in Markdown, PDF, or DOCX format with all findings and AI analysis.",
     },
   ];
 
@@ -734,6 +733,32 @@ data = NULL;`}
                   </Grid>
                 ))}
               </Grid>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2, mb: 2 }}>
+                <Typography variant="h6" sx={{ color: "#f97316", mb: 2, fontWeight: 700 }}>
+                  📊 Unified Results Interface (4 Tabs)
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.300", mb: 2 }}>
+                  After scanning, VRAgent presents results in an intuitive 4-tab interface:
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { tab: "1. What Does This Binary Do?", desc: "AI-generated summary of the binary's purpose, capabilities, and behavior in plain English", color: "#22c55e", icon: "📄" },
+                    { tab: "2. Security Findings", desc: "All detected vulnerabilities with severity ratings, CWE references, and remediation guidance", color: "#ef4444", icon: "🔒" },
+                    { tab: "3. Architecture Diagram", desc: "Auto-generated Mermaid diagram showing binary structure and component relationships", color: "#3b82f6", icon: "🏗️" },
+                    { tab: "4. Attack Surface Map", desc: "Visual attack tree showing all exploitable entry points and potential attack vectors", color: "#8b5cf6", icon: "🎯" },
+                  ].map((item) => (
+                    <Grid item xs={12} sm={6} key={item.tab}>
+                      <Box sx={{ p: 2, bgcolor: alpha(item.color, 0.1), borderRadius: 2, border: `1px solid ${alpha(item.color, 0.3)}`, height: "100%" }}>
+                        <Typography sx={{ color: item.color, fontWeight: 700, mb: 0.5 }}>{item.icon} {item.tab}</Typography>
+                        <Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
             </Grid>
 
             <Grid item xs={12}>

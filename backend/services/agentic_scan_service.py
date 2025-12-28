@@ -84,10 +84,16 @@ if settings.gemini_api_key:
 
 class ScanPhase(str, Enum):
     INITIALIZING = "initializing"
+    FILE_TRIAGE = "file_triage"  # New: AI examines all file names
+    INITIAL_ANALYSIS = "initial_analysis"  # New: First pass on ~60 files
+    FOCUSED_ANALYSIS = "focused_analysis"  # New: Second pass on ~20 files  
+    DEEP_ANALYSIS = "deep_analysis"  # New: Full analysis of ~8 files
     CHUNKING = "chunking"
     ENTRY_POINT_DETECTION = "entry_point_detection"
     FLOW_TRACING = "flow_tracing"
     VULNERABILITY_ANALYSIS = "vulnerability_analysis"
+    FALSE_POSITIVE_FILTERING = "false_positive_filtering"
+    SYNTHESIS = "synthesis"  # New: AI synthesizes findings from all passes
     REPORT_GENERATION = "report_generation"
     COMPLETE = "complete"
     ERROR = "error"
@@ -240,6 +246,115 @@ class AgenticScanResult:
     error_message: Optional[str] = None
 
 
+@dataclass
+class FileTriageResult:
+    """Result from AI file triage - which files to examine"""
+    file_path: str
+    relative_path: str
+    file_type: str
+    priority: str  # critical, high, medium, low, skip
+    reasoning: str
+    security_relevance: float  # 0.0 to 1.0
+    suggested_analysis_depth: str  # full, detailed, quick, skip
+
+
+@dataclass
+class MultiPassAnalysisResult:
+    """Results from multi-pass analysis of a file"""
+    file_path: str
+    pass_number: int  # 1=initial, 2=focused, 3=deep
+    analysis_depth: str
+    findings: List[Dict[str, Any]]
+    entry_points_found: int
+    potential_vulnerabilities: int
+    requires_deeper_analysis: bool
+    security_score: float  # 0-10, higher = more suspicious
+    key_observations: List[str]
+
+
+@dataclass 
+class SynthesisResult:
+    """AI synthesis of findings across all passes"""
+    total_files_triaged: int
+    files_analyzed_initial: int
+    files_analyzed_focused: int
+    files_analyzed_deep: int
+    cross_file_flows: List[Dict[str, Any]]
+    combined_vulnerabilities: List[AgenticVulnerability]
+    attack_chains: List[Dict[str, Any]]
+    overall_security_assessment: str
+    key_recommendations: List[str]
+
+
+@dataclass
+class ExternalIntelligence:
+    """
+    External intelligence data to inform AI analysis.
+    
+    This allows the AI to make smarter decisions about which files
+    to analyze deeply based on:
+    - Known CVEs in dependencies
+    - SAST scanner findings
+    - Dependency relationships
+    """
+    # CVE/Vulnerability data
+    cve_findings: List[Dict[str, Any]] = field(default_factory=list)
+    # Format: [{"external_id": "CVE-2023-XXX", "package": "requests", "severity": "high", 
+    #           "cvss_score": 8.5, "epss_score": 0.7, "in_kev": True,
+    #           "affected_functions": ["get", "post"], "description": "..."}]
+    
+    # SAST scanner findings (from Semgrep, Bandit, ESLint, etc.)
+    sast_findings: List[Dict[str, Any]] = field(default_factory=list)
+    # Format: [{"file_path": "api.py", "line": 45, "type": "sql-injection", 
+    #           "severity": "high", "scanner": "semgrep", "message": "..."}]
+    
+    # Dependency information
+    dependencies: List[Dict[str, Any]] = field(default_factory=list)
+    # Format: [{"name": "requests", "version": "2.25.0", "ecosystem": "pypi"}]
+    
+    # File-to-dependency mapping (which files import which packages)
+    file_imports: Dict[str, List[str]] = field(default_factory=dict)
+    # Format: {"api.py": ["requests", "flask"], "db.py": ["sqlalchemy"]}
+    
+    # Dependency tree (direct vs transitive)
+    dependency_tree: Dict[str, Any] = field(default_factory=dict)
+    
+    # Files with vulnerable dependency imports
+    vulnerable_import_files: List[Dict[str, Any]] = field(default_factory=list)
+    # Format: [{"file": "api.py", "package": "requests", "cve": "CVE-2023-XXX"}]
+    
+    def get_priority_files(self) -> List[str]:
+        """Get files that should be prioritized for analysis."""
+        priority = set()
+        
+        # Files flagged by SAST
+        for finding in self.sast_findings:
+            if finding.get("file_path"):
+                priority.add(finding["file_path"])
+        
+        # Files importing vulnerable dependencies
+        for item in self.vulnerable_import_files:
+            if item.get("file"):
+                priority.add(item["file"])
+        
+        return list(priority)
+    
+    def get_cves_for_package(self, package_name: str) -> List[Dict]:
+        """Get all CVEs affecting a specific package."""
+        return [cve for cve in self.cve_findings if cve.get("package") == package_name]
+    
+    def get_sast_findings_for_file(self, file_path: str) -> List[Dict]:
+        """Get SAST findings for a specific file."""
+        return [f for f in self.sast_findings if f.get("file_path") == file_path]
+    
+    def get_high_severity_cves(self) -> List[Dict]:
+        """Get high/critical severity CVEs."""
+        return [cve for cve in self.cve_findings 
+                if cve.get("severity", "").lower() in ("high", "critical")
+                or cve.get("cvss_score", 0) >= 7.0
+                or cve.get("in_kev", False)]
+
+
 # ============================================================================
 # Code Chunking Engine
 # ============================================================================
@@ -264,11 +379,12 @@ class CodeChunker:
     """
     
     # Default values (will be adjusted based on codebase size)
+    # Optimized for speed while maintaining quality - prioritizes security-critical files
     MAX_CHUNK_LINES = 60   # Maximum lines per chunk
     MIN_CHUNK_LINES = 10   # Minimum lines to form a chunk
     CONTEXT_OVERLAP = 3    # Lines of overlap between chunks
-    MAX_FILES = 100        # Max files to process (balanced for coverage)
-    MAX_CHUNKS = 80        # Max chunks - balance between speed and coverage
+    MAX_FILES = 75         # Max files to process (focused on security-critical code)
+    MAX_CHUNKS = 60        # Max chunks - optimized for faster scans without quality loss
     
     # Adaptive sizing thresholds - more aggressive reduction for large codebases
     SIZE_THRESHOLDS = {
@@ -663,63 +779,1146 @@ class AgenticAnalyzer:
     
     Uses prompt engineering to have the LLM request additional code snippets
     as needed to trace complete data flows.
+    
+    Enhanced with External Intelligence:
+    - CVE data informs which files to analyze (files importing vulnerable deps)
+    - SAST findings guide deeper analysis of flagged locations
+    - Dependency relationships help trace data flows
     """
     
-    def __init__(self):
+    def __init__(self, external_intel: Optional[ExternalIntelligence] = None):
         self.client = genai_client
         self.model_name = settings.gemini_model_id
         self.chunks: Dict[str, CodeChunk] = {}
         self.entry_points: List[EntryPoint] = []
         self.sinks: List[DangerousSink] = []
         self.flows: List[TracedFlow] = []
+        # Multi-pass analysis state
+        self.triage_results: List[FileTriageResult] = []
+        self.multi_pass_results: List[MultiPassAnalysisResult] = []
+        # External intelligence (CVEs, SAST findings, etc.)
+        self.external_intel = external_intel or ExternalIntelligence()
+        # Multi-pass file limits (configurable for enhanced mode)
+        self.pass1_limit = 90   # Default: 90 files (was 60)
+        self.pass2_limit = 30   # Default: 30 files (was 20)
+        self.pass3_limit = 15   # Default: 15 files (was 8)
+        # Content depth limits per pass (how much of each file the AI sees)
+        self.content_limits = {
+            "quick": 4500,      # Pass 1: 4.5K chars per file (was 3K)
+            "detailed": 10500,  # Pass 2: 10.5K chars per file (was 7K)
+            "full": 27000       # Pass 3: 27K chars (was 18K)
+        }
+        # Project structure context (built during triage)
+        self.project_structure: Optional[str] = None
     
+    def _build_project_structure_summary(self, project_path: str, all_files: List[str]) -> str:
+        """
+        Build a concise project structure summary for LLM context.
+        Helps the LLM understand the codebase architecture.
+        """
+        from collections import defaultdict
+        
+        # Analyze directory structure
+        dir_stats = defaultdict(lambda: {"count": 0, "types": set()})
+        framework_hints = set()
+        
+        for f in all_files:
+            try:
+                rel_path = os.path.relpath(f, project_path)
+                parts = rel_path.replace("\\", "/").split("/")
+                ext = os.path.splitext(f)[1].lower()
+                
+                # Track directory stats
+                if len(parts) > 1:
+                    top_dir = parts[0]
+                    dir_stats[top_dir]["count"] += 1
+                    dir_stats[top_dir]["types"].add(ext)
+                
+                # Detect frameworks from file patterns
+                filename = os.path.basename(f).lower()
+                if filename in ["manage.py", "wsgi.py"]:
+                    framework_hints.add("Django")
+                elif filename in ["app.py", "flask_app.py"]:
+                    framework_hints.add("Flask")
+                elif "fastapi" in filename or "main.py" in filename:
+                    framework_hints.add("FastAPI")
+                elif filename in ["package.json"]:
+                    framework_hints.add("Node.js")
+                elif filename in ["pom.xml", "build.gradle"]:
+                    framework_hints.add("Java/Spring")
+                elif filename == "Gemfile":
+                    framework_hints.add("Ruby on Rails")
+                elif filename in ["composer.json"]:
+                    framework_hints.add("PHP/Laravel")
+                elif "router" in filename or "routes" in rel_path.lower():
+                    framework_hints.add("Has routing layer")
+                elif "model" in filename or "schema" in filename:
+                    framework_hints.add("Has data models")
+                elif "service" in filename:
+                    framework_hints.add("Service layer pattern")
+                elif "controller" in filename:
+                    framework_hints.add("MVC pattern")
+            except Exception:
+                continue
+        
+        # Build summary
+        summary_parts = ["## PROJECT STRUCTURE OVERVIEW:"]
+        
+        if framework_hints:
+            summary_parts.append(f"**Detected patterns**: {', '.join(sorted(framework_hints))}")
+        
+        summary_parts.append(f"**Total files**: {len(all_files)}")
+        
+        # Top-level directories
+        if dir_stats:
+            summary_parts.append("\n**Key directories**:")
+            for dir_name, stats in sorted(dir_stats.items(), key=lambda x: -x[1]["count"])[:10]:
+                types_str = ", ".join(sorted(stats["types"])[:4])
+                summary_parts.append(f"- `{dir_name}/`: {stats['count']} files ({types_str})")
+        
+        # Language breakdown
+        lang_counts = defaultdict(int)
+        for f in all_files:
+            ext = os.path.splitext(f)[1].lower()
+            if ext:
+                lang_counts[ext] += 1
+        
+        if lang_counts:
+            summary_parts.append("\n**Languages**:")
+            for ext, count in sorted(lang_counts.items(), key=lambda x: -x[1])[:6]:
+                summary_parts.append(f"- {ext}: {count} files")
+        
+        return "\n".join(summary_parts)
+    
+    def set_multi_pass_limits(self, pass1: int = 60, pass2: int = 20, pass3: int = 8,
+                              quick_chars: int = 2000, detailed_chars: int = 5000, full_chars: int = 15000):
+        """Configure multi-pass file limits and content depth.
+        
+        Args:
+            pass1/pass2/pass3: Number of files per pass
+            quick_chars: Chars per file in Pass 1 (default 2000)
+            detailed_chars: Chars per file in Pass 2 (default 5000)
+            full_chars: Chars per file in Pass 3 (default 15000)
+        """
+        self.pass1_limit = pass1
+        self.pass2_limit = pass2
+        self.pass3_limit = pass3
+        self.content_limits = {
+            "quick": quick_chars,
+            "detailed": detailed_chars,
+            "full": full_chars
+        }
+        logger.info(f"AgenticScan: Multi-pass limits set to {pass1}→{pass2}→{pass3} files, "
+                   f"content depth: {quick_chars}→{detailed_chars}→{full_chars} chars")
+    
+    def set_external_intelligence(self, intel: ExternalIntelligence):
+        """Set or update external intelligence data."""
+        self.external_intel = intel
+        logger.info(f"AgenticScan: Loaded external intelligence - "
+                   f"{len(intel.cve_findings)} CVEs, {len(intel.sast_findings)} SAST findings")
+    
+    def _build_intel_context_for_prompt(self, file_path: Optional[str] = None) -> str:
+        """Build external intelligence context string for AI prompts."""
+        if not self.external_intel:
+            return ""
+        
+        parts = []
+        
+        # High severity CVEs summary
+        high_cves = self.external_intel.get_high_severity_cves()
+        if high_cves:
+            parts.append("## KNOWN VULNERABILITIES IN DEPENDENCIES:")
+            for cve in high_cves[:10]:  # Limit to top 10
+                kev_flag = " ⚠️ ACTIVELY EXPLOITED" if cve.get("in_kev") else ""
+                parts.append(f"- {cve.get('external_id')}: {cve.get('package')} "
+                           f"(CVSS: {cve.get('cvss_score', 'N/A')}, "
+                           f"EPSS: {cve.get('epss_score', 'N/A'):.1%}){kev_flag}")
+                if cve.get("affected_functions"):
+                    parts.append(f"  Affected functions: {', '.join(cve['affected_functions'][:5])}")
+        
+        # SAST findings for specific file
+        if file_path:
+            sast = self.external_intel.get_sast_findings_for_file(file_path)
+            if sast:
+                parts.append(f"\n## SAST SCANNER FLAGS FOR THIS FILE:")
+                for finding in sast[:5]:
+                    parts.append(f"- Line {finding.get('line', '?')}: {finding.get('type')} "
+                               f"({finding.get('severity')}) - {finding.get('message', '')[:100]}")
+        
+        # Files importing vulnerable packages
+        if self.external_intel.vulnerable_import_files:
+            parts.append("\n## FILES IMPORTING VULNERABLE PACKAGES:")
+            for item in self.external_intel.vulnerable_import_files[:10]:
+                parts.append(f"- {item.get('file')}: imports {item.get('package')} "
+                           f"(affected by {item.get('cve')})")
+        
+        return "\n".join(parts) if parts else ""
+    
+    # ========================================================================
+    # Multi-Pass Smart File Selection
+    # ========================================================================
+    
+    async def triage_files(
+        self,
+        project_path: str,
+        all_files: List[str],
+        progress_callback: Optional[callable] = None
+    ) -> List[FileTriageResult]:
+        """
+        PASS 0: AI examines ALL file names and types to intelligently select
+        which files to analyze further. Much smarter than pattern matching.
+        
+        NOW ENHANCED: Also considers external intelligence (CVEs, SAST findings)
+        to prioritize files that import vulnerable dependencies or were flagged.
+        
+        Args:
+            project_path: Root path of the project
+            all_files: List of all file paths in the project
+            
+        Returns:
+            List of FileTriageResult with priority assignments
+        """
+        if not self.client:
+            logger.warning("AgenticScan: No LLM client for file triage, using heuristic selection")
+            return self._heuristic_triage(project_path, all_files)
+        
+        # Build project structure summary for context (stored for later passes)
+        self.project_structure = self._build_project_structure_summary(project_path, all_files)
+        
+        if progress_callback:
+            progress_callback(f"🔍 AI analyzing {len(all_files)} file names for security relevance...")
+        
+        # Prepare file list with metadata
+        file_entries = []
+        for f in all_files:
+            try:
+                rel_path = os.path.relpath(f, project_path)
+                ext = os.path.splitext(f)[1].lower()
+                size = os.path.getsize(f) if os.path.exists(f) else 0
+                file_entries.append({
+                    "path": rel_path,
+                    "extension": ext,
+                    "size_kb": round(size / 1024, 1)
+                })
+            except Exception:
+                continue
+        
+        # Process in batches of 200 file names per LLM call - WITH PARALLEL PROCESSING
+        batch_size = 200
+        max_parallel_triage = 4  # Run up to 4 triage batches in parallel
+        all_triage_results = []
+        
+        # Create all batches
+        batches = []
+        for i in range(0, len(file_entries), batch_size):
+            batch = file_entries[i:i + batch_size]
+            batches.append((i, batch))
+        
+        if len(batches) <= 1:
+            # Single batch - process directly
+            if batches:
+                if progress_callback:
+                    progress_callback(f"🔍 Triaging {len(file_entries)} files...")
+                results = await self._triage_batch(project_path, batches[0][1], progress_callback)
+                all_triage_results.extend(results)
+        else:
+            # Multiple batches - process in parallel
+            semaphore = asyncio.Semaphore(max_parallel_triage)
+            
+            async def triage_with_semaphore(batch_idx: int, batch: List[Dict]):
+                async with semaphore:
+                    if progress_callback:
+                        start = batch_idx * batch_size + 1
+                        end = min(start + len(batch) - 1, len(file_entries))
+                        progress_callback(f"🔍 Triaging files {start}-{end} of {len(file_entries)} (parallel)")
+                    return await self._triage_batch(project_path, batch, None)
+            
+            # Create tasks for all batches
+            tasks = [
+                triage_with_semaphore(idx, batch) 
+                for idx, (_, batch) in enumerate(batches)
+            ]
+            
+            # Execute in parallel
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Collect results
+            for idx, result in enumerate(batch_results):
+                if isinstance(result, Exception):
+                    logger.warning(f"AgenticScan: Parallel triage batch failed: {result}")
+                    # Fall back to heuristic for this failed batch
+                    _, batch = batches[idx]
+                    for file_info in batch:
+                        full_path = os.path.join(project_path, file_info["path"])
+                        heuristic = self._heuristic_single_file(full_path, file_info["path"])
+                        all_triage_results.append(heuristic)
+                elif result:
+                    all_triage_results.extend(result)
+        
+        # Sort by security relevance
+        all_triage_results.sort(key=lambda x: x.security_relevance, reverse=True)
+        self.triage_results = all_triage_results
+        
+        # Log summary
+        critical = len([r for r in all_triage_results if r.priority == "CRITICAL"])
+        high = len([r for r in all_triage_results if r.priority == "HIGH"])
+        medium = len([r for r in all_triage_results if r.priority == "MEDIUM"])
+        logger.info(f"AgenticScan: File triage complete - {critical} critical, {high} high, {medium} medium priority files")
+        
+        return all_triage_results
+    
+    async def _triage_batch(
+        self, 
+        project_path: str, 
+        batch: List[Dict], 
+        progress_callback: Optional[callable] = None
+    ) -> List[FileTriageResult]:
+        """Process a single triage batch with LLM"""
+        results = []
+        
+        # Build concise file listing
+        files_text = "\n".join([
+            f"{idx+1}. {f['path']} ({f['extension']}, {f['size_kb']}KB)"
+            for idx, f in enumerate(batch)
+        ])
+        
+        # Build external intelligence context
+        intel_context = self._build_intel_context_for_prompt()
+        intel_section = ""
+        if intel_context:
+            intel_section = f"""
+## EXTERNAL INTELLIGENCE (CVEs, SAST findings):
+{intel_context}
+
+**USE THIS INFORMATION**: Prioritize files that:
+- Import packages with known CVEs
+- Were flagged by SAST scanners
+- Handle data from vulnerable sources
+"""
+        
+        # Mark files known to import vulnerable deps
+        priority_files = set(self.external_intel.get_priority_files()) if self.external_intel else set()
+        if priority_files:
+            # Annotate files in the listing
+            annotated_files = []
+            for idx, f in enumerate(batch):
+                annotation = ""
+                if f['path'] in priority_files:
+                    annotation = " ⚠️ [FLAGGED by SAST/CVE]"
+                annotated_files.append(f"{idx+1}. {f['path']} ({f['extension']}, {f['size_kb']}KB){annotation}")
+            files_text = "\n".join(annotated_files)
+        
+        prompt = f"""You are an objective security analyst performing file triage to determine which files MIGHT be worth reviewing.
+{intel_section}
+## Files to Categorize ({len(batch)} files):
+{files_text}
+
+## Your Task:
+Categorize each file by what type of code it likely contains (NOT whether it has vulnerabilities):
+
+- **CRITICAL**: Security-sensitive areas that SHOULD be reviewed (auth, crypto, session handling)
+  OR files that import packages with KNOWN CVEs
+- **HIGH**: External interfaces worth examining (API endpoints, database access, file ops)
+  OR files flagged by SAST scanners
+- **MEDIUM**: Business logic that may handle data (services, validators)
+- **LOW**: Supporting code unlikely to have direct security impact (config, models, types)
+- **SKIP**: Non-production code (tests, mocks, generated, docs, assets)
+
+Respond with JSON:
+{{
+  "triage": [
+    {{"index": 1, "priority": "CRITICAL|HIGH|MEDIUM|LOW|SKIP", "security_score": 0.0-1.0, "reason": "brief reason for categorization"}}
+  ]
+}}
+
+**IMPORTANT**: 
+- Files marked with ⚠️ should generally be CRITICAL or HIGH priority
+- You are categorizing files by TYPE and RISK CONTEXT, not predicting vulnerabilities
+- A file being CRITICAL means it handles sensitive operations or has known vulnerability exposure
+
+Be thorough - files importing vulnerable dependencies need review even if their names seem innocuous."""
+
+        try:
+            from google.genai import types
+            
+            async def make_request():
+                return await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=4000
+                    )
+                )
+            
+            response = await _retry_with_backoff(
+                make_request,
+                max_retries=3,
+                base_delay=2.0,
+                timeout_seconds=120.0,
+                operation_name="AgenticScan file triage"
+            )
+            
+            text = response.text if response else ""
+            if text:
+                json_match = re.search(r'\{[\s\S]*\}', text)
+                if json_match:
+                    result_data = json.loads(json_match.group())
+                    for item in result_data.get("triage", []):
+                        idx = item.get("index", 1) - 1
+                        if 0 <= idx < len(batch):
+                            file_info = batch[idx]
+                            full_path = os.path.join(project_path, file_info["path"])
+                            
+                            triage_result = FileTriageResult(
+                                file_path=full_path,
+                                relative_path=file_info["path"],
+                                file_type=file_info["extension"],
+                                priority=item.get("priority", "MEDIUM"),
+                                reasoning=item.get("reason", ""),
+                                security_relevance=item.get("security_score", 0.5),
+                                suggested_analysis_depth=self._priority_to_depth(item.get("priority", "MEDIUM"))
+                            )
+                            results.append(triage_result)
+                            
+        except Exception as e:
+            logger.warning(f"AgenticScan: File triage batch failed: {e}")
+            # Fall back to heuristic for this batch
+            for file_info in batch:
+                full_path = os.path.join(project_path, file_info["path"])
+                heuristic = self._heuristic_single_file(full_path, file_info["path"])
+                results.append(heuristic)
+        
+        return results
+    
+    def _priority_to_depth(self, priority: str) -> str:
+        """Convert priority to suggested analysis depth"""
+        mapping = {
+            "CRITICAL": "full",
+            "HIGH": "detailed",
+            "MEDIUM": "quick",
+            "LOW": "quick",
+            "SKIP": "skip"
+        }
+        return mapping.get(priority.upper(), "quick")
+    
+    def _heuristic_triage(self, project_path: str, files: List[str]) -> List[FileTriageResult]:
+        """Fallback heuristic-based triage when LLM is unavailable"""
+        results = []
+        for f in files:
+            try:
+                rel_path = os.path.relpath(f, project_path)
+                results.append(self._heuristic_single_file(f, rel_path))
+            except Exception:
+                continue
+        results.sort(key=lambda x: x.security_relevance, reverse=True)
+        return results
+    
+    def _heuristic_single_file(self, full_path: str, rel_path: str) -> FileTriageResult:
+        """Heuristic scoring for a single file"""
+        path_lower = rel_path.lower()
+        ext = os.path.splitext(full_path)[1].lower()
+        
+        # Score based on path patterns
+        score = 0.3
+        priority = "MEDIUM"
+        reason = "Standard source file"
+        
+        # Critical patterns
+        if any(p in path_lower for p in ['auth', 'login', 'password', 'token', 'session', 'crypto', 'key', 'secret']):
+            score = 0.95
+            priority = "CRITICAL"
+            reason = "Authentication/security-related"
+        # High patterns
+        elif any(p in path_lower for p in ['route', 'controller', 'handler', 'api', 'endpoint', 'upload', 'download', 'query', 'db']):
+            score = 0.8
+            priority = "HIGH"
+            reason = "Entry point or data access"
+        # Medium patterns
+        elif any(p in path_lower for p in ['service', 'manager', 'util', 'helper', 'validator']):
+            score = 0.5
+            priority = "MEDIUM"
+            reason = "Business logic"
+        # Low/Skip patterns
+        elif any(p in path_lower for p in ['test', 'spec', 'mock', '__test__', '.min.', 'bundle', 'dist', 'generated']):
+            score = 0.1
+            priority = "SKIP"
+            reason = "Test/generated code"
+        
+        return FileTriageResult(
+            file_path=full_path,
+            relative_path=rel_path,
+            file_type=ext,
+            priority=priority,
+            reasoning=reason,
+            security_relevance=score,
+            suggested_analysis_depth=self._priority_to_depth(priority)
+        )
+
+    async def multi_pass_analysis(
+        self,
+        project_path: str,
+        triage_results: List[FileTriageResult],
+        progress_callback: Optional[callable] = None
+    ) -> Tuple[List[MultiPassAnalysisResult], List[str]]:
+        """
+        PASS 1-3: Progressive multi-pass file analysis.
+        
+        Pass 1: Initial analysis of ~60 files (quick scan)
+        Pass 2: Focused analysis of ~20 most interesting files
+        Pass 3: Deep analysis of ~8 highest-priority files
+        
+        Returns:
+            Tuple of (all pass results, files selected for deep analysis)
+        """
+        all_results: List[MultiPassAnalysisResult] = []
+        
+        # Get files by priority (excluding SKIP)
+        eligible_files = [r for r in triage_results if r.priority != "SKIP"]
+        
+        # PASS 1: Initial analysis (uses configurable limit)
+        pass1_count = min(self.pass1_limit, len(eligible_files))
+        pass1_files = eligible_files[:pass1_count]
+        
+        if progress_callback:
+            progress_callback(f"📋 Pass 1: Initial scan of {pass1_count} files...")
+        
+        pass1_results = await self._run_analysis_pass(
+            project_path=project_path,
+            files=pass1_files,
+            pass_number=1,
+            analysis_depth="quick",
+            chunk_size=50,
+            progress_callback=progress_callback
+        )
+        all_results.extend(pass1_results)
+        
+        # Sort by security score to find most interesting files
+        pass1_results.sort(key=lambda x: x.security_score, reverse=True)
+        
+        # PASS 2: Focused analysis (uses configurable limit)
+        # Select files that need deeper analysis
+        pass2_candidates = [
+            r for r in pass1_results 
+            if r.requires_deeper_analysis or r.security_score >= 5.0 or r.potential_vulnerabilities > 0
+        ]
+        pass2_count = min(self.pass2_limit, len(pass2_candidates))
+        
+        if pass2_count > 0:
+            if progress_callback:
+                progress_callback(f"🔬 Pass 2: Focused analysis of {pass2_count} high-interest files...")
+            
+            # Get the FileTriageResults for pass2 files
+            pass2_paths = {r.file_path for r in pass2_candidates[:pass2_count]}
+            pass2_triage = [t for t in triage_results if t.file_path in pass2_paths]
+            
+            pass2_results = await self._run_analysis_pass(
+                project_path=project_path,
+                files=pass2_triage,
+                pass_number=2,
+                analysis_depth="detailed",
+                chunk_size=10,
+                progress_callback=progress_callback
+            )
+            all_results.extend(pass2_results)
+            
+            # Sort for pass 3 selection
+            pass2_results.sort(key=lambda x: x.security_score, reverse=True)
+        else:
+            pass2_results = []
+        
+        # PASS 3: Deep analysis (uses configurable limit)
+        # Select the most critical files for full analysis
+        pass3_candidates = [
+            r for r in pass2_results 
+            if r.security_score >= 6.0 or r.potential_vulnerabilities > 0
+        ] if pass2_results else [
+            r for r in pass1_results 
+            if r.security_score >= 7.0 or r.potential_vulnerabilities > 0
+        ]
+        pass3_count = min(self.pass3_limit, len(pass3_candidates))
+        
+        deep_analysis_files = []
+        if pass3_count > 0:
+            if progress_callback:
+                progress_callback(f"🎯 Pass 3: Deep analysis of {pass3_count} critical files...")
+            
+            pass3_paths = {r.file_path for r in pass3_candidates[:pass3_count]}
+            pass3_triage = [t for t in triage_results if t.file_path in pass3_paths]
+            deep_analysis_files = [t.file_path for t in pass3_triage]
+            
+            pass3_results = await self._run_analysis_pass(
+                project_path=project_path,
+                files=pass3_triage,
+                pass_number=3,
+                analysis_depth="full",
+                chunk_size=3,  # Smaller chunks for deeper analysis
+                progress_callback=progress_callback
+            )
+            all_results.extend(pass3_results)
+        
+        self.multi_pass_results = all_results
+        
+        # Log summary
+        logger.info(f"AgenticScan: Multi-pass analysis complete - "
+                   f"Pass 1: {pass1_count}, Pass 2: {pass2_count}, Pass 3: {pass3_count}")
+        
+        return all_results, deep_analysis_files
+
+    async def _run_analysis_pass(
+        self,
+        project_path: str,
+        files: List[FileTriageResult],
+        pass_number: int,
+        analysis_depth: str,
+        chunk_size: int,
+        progress_callback: Optional[callable] = None,
+        max_parallel: int = 3  # Limit concurrent API calls to avoid rate limits
+    ) -> List[MultiPassAnalysisResult]:
+        """Run a single analysis pass on a set of files with parallel processing"""
+        
+        # Create all batches
+        batches = []
+        for i in range(0, len(files), chunk_size):
+            batch = files[i:i + chunk_size]
+            batches.append((i, batch))
+        
+        if len(batches) <= 1:
+            # Single batch - no need for parallelization
+            if batches:
+                if progress_callback:
+                    progress_callback(f"Pass {pass_number}: Analyzing {len(files)} files...")
+                return await self._analyze_files_batch(
+                    project_path=project_path,
+                    files=batches[0][1],
+                    pass_number=pass_number,
+                    analysis_depth=analysis_depth
+                )
+            return []
+        
+        # Process batches in parallel with concurrency limit
+        all_results = []
+        semaphore = asyncio.Semaphore(max_parallel)
+        
+        async def process_batch_with_semaphore(batch_idx: int, batch: List[FileTriageResult]):
+            async with semaphore:
+                if progress_callback:
+                    start = batch_idx * chunk_size + 1
+                    end = min(start + len(batch) - 1, len(files))
+                    progress_callback(f"Pass {pass_number}: Analyzing files {start}-{end} of {len(files)} (parallel)")
+                
+                return await self._analyze_files_batch(
+                    project_path=project_path,
+                    files=batch,
+                    pass_number=pass_number,
+                    analysis_depth=analysis_depth
+                )
+        
+        # Create tasks for all batches
+        tasks = [
+            process_batch_with_semaphore(idx, batch) 
+            for idx, (_, batch) in enumerate(batches)
+        ]
+        
+        # Execute in parallel and gather results
+        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Collect successful results
+        for result in batch_results:
+            if isinstance(result, Exception):
+                logger.warning(f"AgenticScan: Parallel batch failed: {result}")
+            elif result:
+                all_results.extend(result)
+        
+        return all_results
+    
+    async def _analyze_files_batch(
+        self,
+        project_path: str,
+        files: List[FileTriageResult],
+        pass_number: int,
+        analysis_depth: str
+    ) -> List[MultiPassAnalysisResult]:
+        """Analyze a batch of files in a single LLM call"""
+        if not self.client:
+            return [
+                MultiPassAnalysisResult(
+                    file_path=f.file_path,
+                    pass_number=pass_number,
+                    analysis_depth=analysis_depth,
+                    findings=[],
+                    entry_points_found=0,
+                    potential_vulnerabilities=0,
+                    requires_deeper_analysis=False,
+                    security_score=f.security_relevance * 10,
+                    key_observations=[]
+                )
+                for f in files
+            ]
+        
+        # Read file contents based on analysis depth
+        files_content = []
+        for f in files:
+            try:
+                with open(f.file_path, 'r', encoding='utf-8', errors='ignore') as fh:
+                    content = fh.read()
+                    # Truncate based on configured depth limits
+                    char_limit = self.content_limits.get(analysis_depth, 2000)
+                    content = content[:char_limit]
+                    
+                    files_content.append({
+                        "path": f.relative_path,
+                        "full_path": f.file_path,
+                        "content": content,
+                        "priority": f.priority
+                    })
+            except Exception as e:
+                logger.debug(f"Could not read {f.file_path}: {e}")
+                continue
+        
+        if not files_content:
+            return []
+        
+        # Build analysis prompt based on depth
+        depth_instruction = {
+            "quick": "Do a QUICK scan - identify obvious security patterns, entry points, and dangerous functions. Be efficient.",
+            "detailed": "Do a DETAILED analysis - trace data flows, identify potential vulnerabilities, check for missing sanitization.",
+            "full": "Do a COMPREHENSIVE security audit - examine every function, trace all data flows, identify all potential attack vectors."
+        }.get(analysis_depth, "quick")
+        
+        # Include project structure context (helps LLM understand architecture)
+        project_context = ""
+        if self.project_structure:
+            project_context = f"\n{self.project_structure}\n"
+        
+        # Build external intelligence context for each file
+        intel_context = ""
+        if self.external_intel:
+            intel_parts = []
+            for fc in files_content:
+                file_sast = self.external_intel.get_sast_findings_for_file(fc["path"])
+                if file_sast:
+                    intel_parts.append(f"**{fc['path']}** - SAST flagged: {', '.join(f['type'] for f in file_sast[:3])}")
+            
+            # Add CVE context
+            high_cves = self.external_intel.get_high_severity_cves()[:5]
+            if high_cves:
+                intel_parts.append("\n**Known CVEs in dependencies:**")
+                for cve in high_cves:
+                    funcs = ", ".join(cve.get("affected_functions", [])[:3]) if cve.get("affected_functions") else "unknown"
+                    intel_parts.append(f"- {cve.get('package')}: {cve.get('external_id')} (affects: {funcs})")
+            
+            if intel_parts:
+                intel_context = "\n## EXTERNAL INTELLIGENCE:\n" + "\n".join(intel_parts) + "\n"
+        
+        files_text = ""
+        for idx, fc in enumerate(files_content):
+            # Add per-file intelligence annotations
+            file_flags = []
+            if self.external_intel:
+                sast = self.external_intel.get_sast_findings_for_file(fc["path"])
+                if sast:
+                    file_flags.append(f"SAST:{len(sast)} findings")
+                for vuln in self.external_intel.vulnerable_import_files:
+                    if vuln.get("file") == fc["path"]:
+                        file_flags.append(f"imports vulnerable {vuln.get('package')}")
+            
+            flag_str = f" ⚠️ [{', '.join(file_flags)}]" if file_flags else ""
+            
+            files_text += f"""
+### File {idx + 1}: {fc['path']} (Priority: {fc['priority']}){flag_str}
+```
+{fc['content']}
+```
+"""
+        
+        prompt = f"""You are an objective code reviewer performing PASS {pass_number} ({analysis_depth.upper()}) security analysis.
+
+{depth_instruction}
+{project_context}{intel_context}
+## Files to Analyze:
+{files_text}
+
+## For each file, objectively assess:
+1. Entry points (where external data enters) - if any exist
+2. Sensitive operations (database, file system, commands) - if any exist
+3. Whether input validation/sanitization is present or missing
+4. **If file imports vulnerable packages**: Check if the VULNERABLE FUNCTIONS are actually called
+5. **If file was SAST-flagged**: Verify or refute the SAST findings
+6. Any actual security concerns you can identify with evidence
+
+## Response Format (JSON):
+{{
+  "files": [
+    {{
+      "index": 1,
+      "security_score": 0-10,
+      "requires_deeper_analysis": true/false,
+      "entry_points": ["list of entry points if found, empty array if none"],
+      "vulnerable_dep_usage": ["pkg.function() called at line X - CVE-XXXX applies/does not apply"],
+      "sast_verification": ["SAST finding X is TRUE_POSITIVE/FALSE_POSITIVE because..."],
+      "potential_vulns": [
+        {{"type": "Type", "severity": "HIGH|MEDIUM|LOW", "location": "line X", "description": "specific evidence"}}
+      ],
+      "observations": ["factual observations about the code"]
+    }}
+  ]
+}}
+
+## Scoring Guidelines (be objective):
+- 0-2: No security-relevant code or all inputs properly validated
+- 3-4: Has external interfaces but appears to handle them safely
+- 5-6: Some areas that could benefit from review, minor concerns
+- 7-8: Clear security issues identified with specific evidence
+- 9-10: Critical, confirmed vulnerabilities with exploit path
+
+**IMPORTANT**: 
+- It is acceptable to report score 0-2 if the code is secure. Do NOT inflate scores.
+- Empty potential_vulns array is valid for secure code.
+- If a file imports a vulnerable package but doesn't use the affected functions, note that explicitly.
+- SAST findings may be false positives - verify with actual code analysis."""
+
+        try:
+            from google.genai import types
+            
+            async def make_request():
+                return await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.2,
+                        max_output_tokens=4000
+                    )
+                )
+            
+            response = await _retry_with_backoff(
+                make_request,
+                max_retries=3,
+                base_delay=2.0,
+                timeout_seconds=120.0,
+                operation_name=f"AgenticScan Pass {pass_number} analysis"
+            )
+            
+            results = []
+            text = response.text if response else ""
+            if text:
+                json_match = re.search(r'\{[\s\S]*\}', text)
+                if json_match:
+                    result = json.loads(json_match.group())
+                    for item in result.get("files", []):
+                        idx = item.get("index", 1) - 1
+                        if 0 <= idx < len(files_content):
+                            fc = files_content[idx]
+                            
+                            results.append(MultiPassAnalysisResult(
+                                file_path=fc["full_path"],
+                                pass_number=pass_number,
+                                analysis_depth=analysis_depth,
+                                findings=item.get("potential_vulns", []),
+                                entry_points_found=len(item.get("entry_points", [])),
+                                potential_vulnerabilities=len(item.get("potential_vulns", [])),
+                                requires_deeper_analysis=item.get("requires_deeper_analysis", False),
+                                security_score=item.get("security_score", 5.0),
+                                key_observations=item.get("observations", [])
+                            ))
+            
+            return results
+            
+        except Exception as e:
+            logger.warning(f"AgenticScan: Pass {pass_number} batch analysis failed: {e}")
+            return []
+
+    async def synthesize_findings(
+        self,
+        multi_pass_results: List[MultiPassAnalysisResult],
+        vulnerabilities: List[AgenticVulnerability],
+        progress_callback: Optional[callable] = None
+    ) -> SynthesisResult:
+        """
+        SYNTHESIS PASS: AI reviews all findings from all passes and creates
+        a comprehensive security assessment, identifying cross-file attack
+        chains and prioritizing the most critical issues.
+        """
+        if progress_callback:
+            progress_callback("🧠 Synthesizing findings across all analysis passes...")
+        
+        # Group results by pass
+        pass1_results = [r for r in multi_pass_results if r.pass_number == 1]
+        pass2_results = [r for r in multi_pass_results if r.pass_number == 2]
+        pass3_results = [r for r in multi_pass_results if r.pass_number == 3]
+        
+        # Prepare summary for synthesis
+        high_score_files = [r for r in multi_pass_results if r.security_score >= 6.0]
+        all_observations = []
+        all_entry_points = []
+        all_potential_vulns = []
+        
+        for r in multi_pass_results:
+            all_observations.extend(r.key_observations)
+            all_entry_points.extend([f"{r.file_path}: {ep}" for ep in range(r.entry_points_found)])
+            all_potential_vulns.extend(r.findings)
+        
+        if not self.client:
+            # Return basic synthesis without LLM
+            return SynthesisResult(
+                total_files_triaged=len(self.triage_results),
+                files_analyzed_initial=len(pass1_results),
+                files_analyzed_focused=len(pass2_results),
+                files_analyzed_deep=len(pass3_results),
+                cross_file_flows=[],
+                combined_vulnerabilities=vulnerabilities,
+                attack_chains=[],
+                overall_security_assessment="LLM unavailable for synthesis",
+                key_recommendations=[]
+            )
+        
+        # Build synthesis prompt
+        findings_summary = f"""
+## Analysis Summary:
+- Total files triaged: {len(self.triage_results)}
+- Pass 1 (Quick scan): {len(pass1_results)} files
+- Pass 2 (Focused): {len(pass2_results)} files  
+- Pass 3 (Deep): {len(pass3_results)} files
+- High-risk files found: {len(high_score_files)}
+- Total potential vulnerabilities: {len(all_potential_vulns)}
+- Confirmed vulnerabilities: {len(vulnerabilities)}
+
+## High-Risk Files:
+{chr(10).join([f"- {r.file_path} (score: {r.security_score})" for r in high_score_files[:15]])}
+
+## Key Observations from Analysis:
+{chr(10).join([f"- {obs}" for obs in all_observations[:30]])}
+
+## Potential Vulnerabilities Found:
+{chr(10).join([f"- {v.get('type', 'Unknown')}: {v.get('description', '')[:100]}" for v in all_potential_vulns[:20]])}
+"""
+        
+        # Add external intelligence context
+        intel_summary = ""
+        if self.external_intel:
+            intel_parts = []
+            
+            # High-severity CVEs
+            high_cves = self.external_intel.get_high_severity_cves()
+            if high_cves:
+                intel_parts.append("## Known CVEs in Dependencies:")
+                for cve in high_cves[:8]:
+                    severity = cve.get("severity", "UNKNOWN")
+                    epss = cve.get("epss_score", 0)
+                    epss_str = f" (EPSS: {epss:.1%})" if epss else ""
+                    intel_parts.append(f"- {cve.get('external_id')}: {cve.get('package')} - {severity}{epss_str}")
+            
+            # SAST findings summary
+            sast_by_type = {}
+            for f in self.external_intel.sast_findings:
+                t = f.get("type", "unknown")
+                sast_by_type[t] = sast_by_type.get(t, 0) + 1
+            if sast_by_type:
+                intel_parts.append("\n## SAST Scanner Findings:")
+                for t, count in sorted(sast_by_type.items(), key=lambda x: -x[1])[:10]:
+                    intel_parts.append(f"- {t}: {count} occurrences")
+            
+            # Files flagged by both SAST and importing vulnerable deps
+            priority_files = self.external_intel.get_priority_files()
+            if priority_files:
+                intel_parts.append(f"\n## High-Priority Files (flagged by external intel): {len(priority_files)}")
+                for f in priority_files[:5]:
+                    intel_parts.append(f"- {f}")
+            
+            if intel_parts:
+                intel_summary = "\n" + "\n".join(intel_parts) + "\n"
+
+        prompt = f"""You are an objective security analyst synthesizing findings from a multi-pass code review.
+
+{findings_summary}
+{intel_summary}
+
+## Your Task:
+1. Review all findings and assess their validity
+2. **Correlate AI findings with CVE/SAST data** - do AI findings match known issues?
+3. Identify any cross-file relationships IF they exist
+4. Provide an honest overall security assessment
+5. Give actionable recommendations (can include "code looks secure" if appropriate)
+
+## Response Format (JSON):
+{{
+  "overall_assessment": "honest summary - can be positive if no issues found",
+  "risk_level": "CRITICAL|HIGH|MEDIUM|LOW|MINIMAL",
+  "cve_correlation": [
+    {{"cve": "CVE-XXXX", "verified_in_code": true/false, "details": "whether vulnerable code paths exist"}}
+  ],
+  "attack_chains": [
+    {{"name": "chain name", "files": ["file1", "file2"], "description": "how attack flows", "severity": "HIGH"}}
+  ],
+  "priority_issues": [
+    {{"issue": "description", "severity": "HIGH", "remediation": "what to fix"}}
+  ],
+  "patterns_found": ["patterns identified - can be empty if none"],
+  "recommendations": ["actionable recommendations"]
+}}
+
+**IMPORTANT**: 
+- If no significant vulnerabilities were found, say so clearly. A "MINIMAL" risk level is valid.
+- Empty arrays for attack_chains, priority_issues, and patterns_found are acceptable.
+- Do NOT manufacture issues. If the codebase appears secure, report that finding.
+- For CVE correlation: just because a package has a CVE doesn't mean the app is vulnerable - verify the vulnerable functions are actually used.
+- Recommendations can include positive observations like "authentication implementation follows best practices"."""
+
+        try:
+            from google.genai import types
+            
+            async def make_request():
+                return await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.3,
+                        max_output_tokens=3000
+                    )
+                )
+            
+            response = await _retry_with_backoff(
+                make_request,
+                max_retries=3,
+                base_delay=2.0,
+                timeout_seconds=90.0,
+                operation_name="AgenticScan synthesis"
+            )
+            
+            text = response.text if response else ""
+            attack_chains = []
+            recommendations = []
+            assessment = "Analysis complete"
+            
+            if text:
+                json_match = re.search(r'\{[\s\S]*\}', text)
+                if json_match:
+                    result = json.loads(json_match.group())
+                    assessment = result.get("overall_assessment", assessment)
+                    attack_chains = result.get("attack_chains", [])
+                    recommendations = result.get("recommendations", [])
+            
+            return SynthesisResult(
+                total_files_triaged=len(self.triage_results),
+                files_analyzed_initial=len(pass1_results),
+                files_analyzed_focused=len(pass2_results),
+                files_analyzed_deep=len(pass3_results),
+                cross_file_flows=[],
+                combined_vulnerabilities=vulnerabilities,
+                attack_chains=attack_chains,
+                overall_security_assessment=assessment,
+                key_recommendations=recommendations
+            )
+            
+        except Exception as e:
+            logger.warning(f"AgenticScan: Synthesis failed: {e}")
+            return SynthesisResult(
+                total_files_triaged=len(self.triage_results),
+                files_analyzed_initial=len(pass1_results),
+                files_analyzed_focused=len(pass2_results),
+                files_analyzed_deep=len(pass3_results),
+                cross_file_flows=[],
+                combined_vulnerabilities=vulnerabilities,
+                attack_chains=[],
+                overall_security_assessment=f"Synthesis error: {e}",
+                key_recommendations=[]
+            )
+
     async def analyze_chunks(
         self, 
         chunks: List[CodeChunk],
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        max_parallel: int = 3  # Limit concurrent API calls
     ) -> Tuple[List[EntryPoint], List[DangerousSink]]:
         """
         Analyze chunks to identify entry points and dangerous sinks.
-        Uses batched LLM calls for efficiency.
+        Uses batched LLM calls with parallel processing for efficiency.
         """
         self.chunks = {c.id: c for c in chunks}
         entry_points = []
         sinks = []
         
         # Process chunks in batches (smaller batches = more reliable API calls)
-        batch_size = 5  # Reduced from 10 for stability with large APKs
+        batch_size = 5
+        
+        # Create all batches
+        batches = []
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i:i + batch_size]
+            batches.append((i, batch))
+        
+        if len(batches) <= 1:
+            # Single batch - process directly
+            if batches:
+                if progress_callback:
+                    progress_callback(f"Analyzing {len(chunks)} chunks...")
+                batch_results = await _retry_with_backoff(
+                    lambda b=batches[0][1]: self._analyze_batch(b),
+                    max_retries=3,
+                    base_delay=2.0
+                )
+                self._process_batch_results(batch_results, entry_points, sinks)
+        else:
+            # Multiple batches - process in parallel with semaphore
+            semaphore = asyncio.Semaphore(max_parallel)
             
-            if progress_callback:
-                progress_callback(f"Analyzing chunks {i+1}-{min(i+batch_size, len(chunks))} of {len(chunks)}")
+            async def analyze_with_semaphore(batch_idx: int, batch: List[CodeChunk]):
+                async with semaphore:
+                    if progress_callback:
+                        start = batch_idx * batch_size + 1
+                        end = min(start + len(batch) - 1, len(chunks))
+                        progress_callback(f"Analyzing chunks {start}-{end} of {len(chunks)} (parallel)")
+                    
+                    return await _retry_with_backoff(
+                        lambda b=batch: self._analyze_batch(b),
+                        max_retries=3,
+                        base_delay=2.0
+                    )
             
-            # Analyze batch with retry logic for reliability
-            batch_results = await _retry_with_backoff(
-                lambda b=batch: self._analyze_batch(b),
-                max_retries=3,
-                base_delay=2.0
-            )
+            # Create tasks for all batches
+            tasks = [
+                analyze_with_semaphore(idx, batch) 
+                for idx, (_, batch) in enumerate(batches)
+            ]
             
-            for chunk_id, result in batch_results.items():
-                chunk = self.chunks[chunk_id]
-                chunk.analysis_status = "complete"
-                chunk.analysis_result = result
-                
-                # Extract entry points
-                for ep_data in result.get("entry_points", []):
-                    entry_point = self._create_entry_point(chunk, ep_data)
-                    entry_points.append(entry_point)
-                
-                # Extract sinks
-                for sink_data in result.get("sinks", []):
-                    sink = self._create_sink(chunk, sink_data)
-                    sinks.append(sink)
+            # Execute in parallel
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.warning(f"AgenticScan: Parallel chunk analysis failed: {result}")
+                elif result:
+                    self._process_batch_results(result, entry_points, sinks)
         
         self.entry_points = entry_points
         self.sinks = sinks
         
         return entry_points, sinks
+    
+    def _process_batch_results(
+        self, 
+        batch_results: Dict[str, Dict], 
+        entry_points: List[EntryPoint], 
+        sinks: List[DangerousSink]
+    ):
+        """Process results from a batch analysis"""
+        for chunk_id, result in batch_results.items():
+            chunk = self.chunks.get(chunk_id)
+            if not chunk:
+                continue
+            chunk.analysis_status = "complete"
+            chunk.analysis_result = result
+            
+            # Extract entry points
+            for ep_data in result.get("entry_points", []):
+                entry_point = self._create_entry_point(chunk, ep_data)
+                entry_points.append(entry_point)
+            
+            # Extract sinks
+            for sink_data in result.get("sinks", []):
+                sink = self._create_sink(chunk, sink_data)
+                sinks.append(sink)
     
     async def _analyze_batch(self, chunks: List[CodeChunk]) -> Dict[str, Dict]:
         """Analyze a batch of chunks with a single LLM call"""
@@ -743,57 +1942,45 @@ Language: {chunk.language}
 
 """
         
-        prompt = f"""Analyze these code chunks for security-relevant patterns.
+        prompt = f"""Objectively analyze these code chunks to identify WHERE data enters and WHERE sensitive operations occur.
 
 {chunks_text}
 
-For each chunk, identify:
+For each chunk, identify IF PRESENT:
 
-1. ENTRY POINTS (where user input enters):
-   - HTTP request parameters (query, body, headers, cookies)
-   - Form submissions
-   - File uploads
-   - WebSocket messages
-   - CLI arguments
-   - Environment variables (when used for user data)
+1. ENTRY POINTS (external data sources) - only if they exist:
+   - HTTP request parameters, form data, headers, cookies
+   - File uploads, WebSocket messages
+   - CLI arguments, environment variables used for user data
 
-2. DANGEROUS SINKS (functions that could cause vulnerabilities):
-   - SQL queries (raw queries, not parameterized)
-   - OS command execution
-   - File operations with user input
-   - eval/exec/compile
-   - HTTP requests (SSRF)
-   - Template rendering with user input
+2. SENSITIVE OPERATIONS - only if they exist AND handle external data unsafely:
+   - Raw SQL queries (NOT parameterized queries - those are safe)
+   - OS command execution with external input
+   - File operations with unvalidated paths
+   - eval/exec with external data
    - Deserialization of untrusted data
-   - XML parsing
 
-Return JSON with this structure:
+Return JSON:
 {{
   "<chunk_id>": {{
-    "entry_points": [
-      {{
-        "line": <line_number>,
-        "type": "<entry_type>",
-        "variable": "<variable_name>",
-        "framework": "<detected_framework>",
-        "http_method": "<GET/POST/etc or null>",
-        "route": "<route_path or null>"
-      }}
-    ],
-    "sinks": [
-      {{
-        "line": <line_number>,
-        "type": "<sink_type>",
-        "function": "<function_name>",
-        "vuln_type": "<vulnerability_type>",
-        "severity": "<critical/high/medium/low>",
-        "cwe": "<CWE-XXX>"
-      }}
-    ]
+    "entry_points": [],
+    "sinks": []
   }}
 }}
 
-Be thorough but avoid false positives. Only report actual security concerns."""
+**CRITICAL GUIDELINES**:
+- Empty arrays are expected and correct if no entry points or sinks exist
+- Parameterized queries (using ?, $1, :param) are SAFE - do not report as sinks
+- ORM methods (query.filter, Model.objects) are generally SAFE
+- Framework-provided auth/session handling is generally SAFE
+- Only report sinks where user data could actually reach them unsanitized
+- When in doubt, do NOT report it - we want to minimize false positives
+
+Entry point format (only if found):
+{{"line": N, "type": "type", "variable": "name", "framework": "framework", "http_method": "METHOD or null", "route": "path or null"}}
+
+Sink format (only if genuinely concerning):
+{{"line": N, "type": "type", "function": "name", "vuln_type": "type", "severity": "level", "cwe": "CWE-XXX"}}"""
 
         try:
             from google.genai import types
@@ -872,38 +2059,99 @@ Be thorough but avoid false positives. Only report actual security concerns."""
         self,
         entry_points: List[EntryPoint],
         sinks: List[DangerousSink],
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        max_parallel: int = 4,  # Limit concurrent flow traces
+        max_flow_pairs: int = 120  # Max pairs to trace - balances thoroughness vs speed
     ) -> List[TracedFlow]:
         """
-        Trace data flows from entry points to sinks.
+        Trace data flows from entry points to sinks with parallel processing.
         This is the core agentic capability - the LLM can request additional code.
-        """
-        flows = []
-        total_pairs = len(entry_points) * len(sinks)
-        processed = 0
         
+        IMPORTANT: Limited to max_flow_pairs to prevent runaway scans.
+        With 27 entry points × 30 sinks = 810 potential pairs, each taking ~6s,
+        an unlimited scan would take 75+ minutes. The limit keeps it reasonable.
+        """
+        # Build list of pairs to analyze with priority scoring
+        scored_pairs = []
         for entry_point in entry_points:
             for sink in sinks:
-                processed += 1
-                
-                if progress_callback and processed % 10 == 0:
-                    progress_callback(f"Tracing flow {processed}/{total_pairs}")
-                
-                # Quick heuristic: skip if in completely different areas
-                if not self._could_be_connected(entry_point, sink):
-                    continue
-                
-                # Use LLM to trace the flow
-                flow = await self._trace_single_flow(entry_point, sink)
-                if flow and flow.is_exploitable:
-                    flows.append(flow)
+                if self._could_be_connected(entry_point, sink):
+                    # Score pairs to prioritize same-file and high-severity
+                    score = 0
+                    # Same file = highest priority (most likely to be connected)
+                    if entry_point.file_path == sink.file_path:
+                        score += 100
+                    # High severity sinks get priority
+                    if sink.severity == "critical":
+                        score += 50
+                    elif sink.severity == "high":
+                        score += 30
+                    # Direct dependencies
+                    entry_chunk = self.chunks.get(entry_point.chunk_id)
+                    sink_chunk = self.chunks.get(sink.chunk_id)
+                    if entry_chunk and sink_chunk:
+                        if sink.chunk_id in entry_chunk.dependencies:
+                            score += 40
+                        if entry_point.chunk_id in sink_chunk.dependencies:
+                            score += 40
+                    scored_pairs.append((score, entry_point, sink))
+        
+        # Sort by score (highest first) and limit
+        scored_pairs.sort(key=lambda x: x[0], reverse=True)
+        pairs_to_trace = [(ep, sink) for _, ep, sink in scored_pairs[:max_flow_pairs]]
+        
+        total_potential = len(scored_pairs)
+        total_pairs = len(pairs_to_trace)
+        
+        if total_pairs == 0:
+            return []
+        
+        # Log if we're limiting
+        if total_potential > max_flow_pairs:
+            logger.info(f"AgenticScan: Limiting flow traces from {total_potential} to {max_flow_pairs} (prioritized by likelihood)")
+        
+        if progress_callback:
+            limit_note = f" (limited from {total_potential})" if total_potential > max_flow_pairs else ""
+            progress_callback(f"Tracing {total_pairs} data flows{limit_note}...")
+        
+        # Process in parallel with semaphore to limit concurrency
+        semaphore = asyncio.Semaphore(max_parallel)
+        processed_count = [0]  # Use list to allow mutation in closure
+        
+        async def trace_with_semaphore(entry_point: EntryPoint, sink: DangerousSink):
+            async with semaphore:
+                processed_count[0] += 1
+                if progress_callback and processed_count[0] % 5 == 0:
+                    progress_callback(f"Tracing flow {processed_count[0]}/{total_pairs} (parallel)")
+                return await self._trace_single_flow(entry_point, sink)
+        
+        # Create tasks for all pairs
+        tasks = [
+            trace_with_semaphore(entry_point, sink)
+            for entry_point, sink in pairs_to_trace
+        ]
+        
+        # Execute in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Collect successful, exploitable flows
+        flows = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.debug(f"AgenticScan: Flow trace failed: {result}")
+            elif result and result.is_exploitable:
+                flows.append(result)
         
         self.flows = flows
         return flows
     
     def _could_be_connected(self, entry_point: EntryPoint, sink: DangerousSink) -> bool:
-        """Quick heuristic to check if flow tracing is worth attempting"""
-        # Same file is likely connected
+        """Quick heuristic to check if flow tracing is worth attempting.
+        
+        IMPORTANT: This is a critical filter to prevent O(n²) explosion.
+        Only returns True for pairs that have a realistic chance of being connected.
+        """
+        # Same file is likely connected - always check
         if entry_point.file_path == sink.file_path:
             return True
         
@@ -917,8 +2165,14 @@ Be thorough but avoid false positives. Only report actual security concerns."""
                 return True
             if entry_point.chunk_id in sink_chunk.dependencies:
                 return True
+            # Check if they share any imports (might call common code)
+            common_imports = set(entry_chunk.imports) & set(sink_chunk.imports)
+            if common_imports:
+                return True
         
-        return True  # Default to checking (conservative)
+        # Different files with no detected dependency - unlikely to be connected
+        # This prevents the O(n²) explosion from scanning all pairs
+        return False
     
     async def _trace_single_flow(
         self, 
@@ -942,8 +2196,27 @@ Be thorough but avoid false positives. Only report actual security concerns."""
         context_chunks = self._gather_context(entry_point, sink)
         context_code = self._build_context_string(context_chunks)
         
-        prompt = f"""Analyze if user input can flow from this ENTRY POINT to this SINK.
+        # Build CVE context if available
+        cve_context = ""
+        if self.external_intel:
+            relevant_cves = []
+            # Check if sink involves a vulnerable package
+            for cve in self.external_intel.cve_findings:
+                pkg = cve.get("package", "")
+                if pkg and (pkg in sink_chunk.content or pkg in entry_chunk.content):
+                    relevant_cves.append(cve)
+            
+            if relevant_cves:
+                cve_context = "\n## KNOWN CVES IN CODE:\n"
+                for cve in relevant_cves[:3]:
+                    funcs = ", ".join(cve.get("affected_functions", [])[:3]) if cve.get("affected_functions") else "various"
+                    cve_context += f"- **{cve.get('external_id')}** in {cve.get('package')}: {cve.get('description', 'N/A')[:100]}\n"
+                    cve_context += f"  Affected functions: {funcs}\n"
+                cve_context += "\nCheck if the vulnerable functions are actually called in this flow.\n"
+        
+        prompt = f"""Determine whether user input from this entry point can actually reach this sink in an exploitable way.
 
+{cve_context}
 ENTRY POINT:
 File: {entry_point.file_path}
 Line: {entry_point.line_number}
@@ -968,33 +2241,33 @@ Code:
 ADDITIONAL CONTEXT:
 {context_code}
 
-ANALYSIS REQUIRED:
-1. Can the user input from the entry point reach the sink?
-2. If yes, trace the exact data flow path
-3. Is there any sanitization/validation that would prevent exploitation?
-4. What is the likelihood this is exploitable?
+ANALYZE OBJECTIVELY:
+1. Does a data flow path actually exist from entry to sink?
+2. Is there sanitization/validation that PREVENTS exploitation?
+3. Is this sink actually dangerous in this context?
+4. **If known CVEs are listed above**: Does the code actually use the vulnerable functions?
 
-If you need to see additional code to trace the flow, specify:
-"NEED_MORE_CODE: <file_path>:<function_name>"
+**IMPORTANT - Default to NO vulnerability unless you have clear evidence:**
+- If data is validated/sanitized before reaching sink -> NOT exploitable
+- If the sink uses parameterized queries/safe APIs -> NOT exploitable  
+- If you cannot trace a clear path -> flow_exists: false
+- If there's ANY reasonable doubt -> is_exploitable: false
+- If a CVE is listed but vulnerable functions aren't called -> NOT exploitable
 
-Otherwise, return JSON:
+If you need more code: "NEED_MORE_CODE: <file_path>:<function_name>"
+
+Otherwise return JSON:
 {{
   "flow_exists": true/false,
   "is_exploitable": true/false,
   "confidence": 0.0-1.0,
-  "flow_steps": [
-    {{
-      "file": "<file>",
-      "line": <line>,
-      "code": "<code_snippet>",
-      "variable": "<variable_name>",
-      "transformation": "<what_happens_to_data>"
-    }}
-  ],
+  "flow_steps": [],
   "sanitization_present": true/false,
-  "sanitization_analysis": "<analysis of any sanitization>",
-  "reason": "<explanation>"
-}}"""
+  "sanitization_analysis": "describe any validation/sanitization found",
+  "reason": "clear explanation - especially important if NOT exploitable"
+}}
+
+A response of {{"flow_exists": false, "is_exploitable": false}} is completely valid and expected for most entry/sink pairs."""
 
         try:
             # Initial analysis with retry
@@ -1199,10 +2472,10 @@ Now complete the analysis with this additional context."""
             # Return basic vulnerability without LLM analysis
             return self._create_basic_vulnerability(flow)
         
-        prompt = f"""Generate a detailed security vulnerability report for this data flow.
+        prompt = f"""Generate an accurate vulnerability report for this potential data flow issue.
 
-VULNERABILITY TYPE: {flow.sink.vulnerability_type}
-SEVERITY: {flow.sink.severity}
+POTENTIAL ISSUE TYPE: {flow.sink.vulnerability_type}
+INITIAL SEVERITY ASSESSMENT: {flow.sink.severity}
 CWE: {flow.sink.cwe_id}
 
 ENTRY POINT:
@@ -1211,7 +2484,7 @@ ENTRY POINT:
 - Type: {flow.entry_point.entry_type}
 - Variable: {flow.entry_point.variable_name}
 
-DANGEROUS SINK:
+SINK:
 - File: {flow.sink.file_path}
 - Line: {flow.sink.line_number}
 - Function: {flow.sink.function_name}
@@ -1222,17 +2495,26 @@ DATA FLOW:
 SANITIZATION ANALYSIS:
 {flow.sanitization_analysis}
 
-Generate a comprehensive report in JSON:
+Generate an HONEST report. If after review this doesn't appear to be a real vulnerability, indicate that with high false_positive_likelihood.
+
+JSON Response:
 {{
-  "title": "<Brief vulnerability title>",
-  "description": "<Detailed description of the vulnerability>",
-  "exploit_scenario": "<Step-by-step exploitation scenario>",
-  "remediation": "<Specific remediation steps>",
-  "code_fix": "<Example fixed code if applicable>",
-  "owasp_category": "<OWASP Top 10 category>",
+  "title": "<Brief, accurate title>",
+  "description": "<Factual description - include mitigating factors if present>",
+  "exploit_scenario": "<Realistic exploit scenario, or 'Exploitation unlikely due to...' if not exploitable>",
+  "remediation": "<Specific fixes, or 'No action needed' if false positive>",
+  "code_fix": "<Example fix or null if not needed>",
+  "owasp_category": "<OWASP category>",
   "confidence": 0.0-1.0,
   "false_positive_likelihood": 0.0-1.0
-}}"""
+}}
+
+**CALIBRATION**:
+- false_positive_likelihood 0.7-1.0: Likely NOT a real issue (sanitization present, safe API usage)
+- false_positive_likelihood 0.4-0.6: Uncertain, needs manual review
+- false_positive_likelihood 0.0-0.3: Likely a genuine vulnerability with clear exploit path
+
+Be conservative - if there's doubt, lean toward higher false_positive_likelihood."""
 
         try:
             from google.genai import types
@@ -1330,6 +2612,259 @@ Generate a comprehensive report in JSON:
         }
         return remediations.get(vuln_type, "Validate and sanitize all user input.")
 
+    async def filter_false_positives(
+        self,
+        vulnerabilities: List[AgenticVulnerability],
+        progress_callback: Optional[callable] = None,
+        max_parallel: int = 3  # Limit concurrent API calls
+    ) -> Tuple[List[AgenticVulnerability], Dict[str, Any]]:
+        """
+        AI-powered false positive filtering phase with parallel processing.
+        
+        Similar to APK Analyzer's AI Finding Verification, this:
+        1. Reviews each vulnerability with full context
+        2. Assigns confidence scores
+        3. Filters out likely false positives
+        4. Returns verified findings + stats
+        
+        Returns:
+            Tuple of (verified_vulnerabilities, filtering_stats)
+        """
+        if not vulnerabilities:
+            return [], {"total": 0, "verified": 0, "filtered": 0, "filter_rate": 0}
+        
+        if not self.client:
+            # No API available, return all with default confidence
+            logger.warning("AgenticScan: No LLM client for false positive filtering, returning all findings")
+            return vulnerabilities, {
+                "total": len(vulnerabilities),
+                "verified": len(vulnerabilities),
+                "filtered": 0,
+                "filter_rate": 0,
+                "note": "LLM unavailable - no filtering applied"
+            }
+        
+        if progress_callback:
+            progress_callback(f"Filtering false positives from {len(vulnerabilities)} findings (parallel)...")
+        
+        # Process in batches for efficiency
+        batch_size = 5
+        batches = []
+        for i in range(0, len(vulnerabilities), batch_size):
+            batch = vulnerabilities[i:i + batch_size]
+            batches.append((i, batch))
+        
+        if len(batches) <= 1:
+            # Single batch - process directly
+            if batches:
+                return await self._filter_batch(batches[0][1], progress_callback)
+            return [], {"total": 0, "verified": 0, "filtered": 0, "filter_rate": 0}
+        
+        # Multiple batches - process in parallel
+        semaphore = asyncio.Semaphore(max_parallel)
+        
+        async def filter_with_semaphore(batch_idx: int, batch: List[AgenticVulnerability]):
+            async with semaphore:
+                if progress_callback:
+                    start = batch_idx * batch_size + 1
+                    end = min(start + len(batch) - 1, len(vulnerabilities))
+                    progress_callback(f"Verifying findings {start}-{end} of {len(vulnerabilities)} (parallel)")
+                return await self._filter_batch(batch, None)
+        
+        # Create tasks for all batches
+        tasks = [
+            filter_with_semaphore(idx, batch)
+            for idx, (_, batch) in enumerate(batches)
+        ]
+        
+        # Execute in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Combine results
+        all_verified = []
+        all_filtered = []
+        
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning(f"AgenticScan: Parallel FP filtering failed: {result}")
+            elif result:
+                verified, stats = result
+                all_verified.extend(verified)
+                all_filtered.extend(stats.get("filtered_findings", []))
+        
+        # Calculate final stats
+        total = len(vulnerabilities)
+        verified_count = len(all_verified)
+        filtered_count = total - verified_count
+        filter_rate = filtered_count / total if total > 0 else 0
+        
+        stats = {
+            "total": total,
+            "verified": verified_count,
+            "filtered": filtered_count,
+            "filter_rate": filter_rate,
+            "filtered_findings": all_filtered,
+            "by_verdict": {
+                "high_confidence": sum(1 for v in all_verified if v.false_positive_likelihood < 0.2),
+                "medium_confidence": sum(1 for v in all_verified if 0.2 <= v.false_positive_likelihood < 0.4),
+                "low_confidence": sum(1 for v in all_verified if v.false_positive_likelihood >= 0.4),
+            }
+        }
+        
+        logger.info(f"AgenticScan: FP filtering - {verified_count} verified, {filtered_count} filtered ({filter_rate:.1%} filter rate)")
+        
+        return all_verified, stats
+    
+    async def _filter_batch(
+        self,
+        batch: List[AgenticVulnerability],
+        progress_callback: Optional[callable] = None
+    ) -> Tuple[List[AgenticVulnerability], Dict[str, Any]]:
+        """Filter a single batch of vulnerabilities"""
+        verified = []
+        filtered_out = []
+        
+        # Build batch verification prompt
+        findings_text = ""
+        for idx, vuln in enumerate(batch):
+            flow_info = ""
+            if vuln.flow:
+                flow_info = f"""
+  Entry: {vuln.flow.entry_point.file_path}:{vuln.flow.entry_point.line_number} ({vuln.flow.entry_point.entry_type})
+  Sink: {vuln.flow.sink.file_path}:{vuln.flow.sink.line_number} ({vuln.flow.sink.function_name})
+  Code at entry: {vuln.flow.entry_point.code_snippet[:100] if vuln.flow.entry_point.code_snippet else 'N/A'}
+  Code at sink: {vuln.flow.sink.code_snippet[:100] if vuln.flow.sink.code_snippet else 'N/A'}"""
+            
+            findings_text += f"""
+### Finding {idx + 1}: {vuln.vulnerability_type} ({vuln.severity})
+- Title: {vuln.title}
+- CWE: {vuln.cwe_id}
+- Current confidence: {vuln.confidence:.0%}
+- Description: {vuln.description[:300] if vuln.description else 'N/A'}
+{flow_info}
+"""
+
+        prompt = f"""You are a skeptical security reviewer. Your job is to CHALLENGE each finding and determine if it represents a REAL, EXPLOITABLE vulnerability.
+
+Assume findings may be false positives until proven otherwise.
+
+## Findings to Verify:
+{findings_text}
+
+## Verification Approach:
+For each finding, ask yourself:
+1. Is there CONCRETE evidence of exploitability, or just theoretical risk?
+2. Are there sanitization/validation mechanisms I might have missed?
+3. Is this a safe pattern that looks dangerous (e.g., parameterized queries, ORM usage)?
+4. Would a real attacker actually be able to exploit this?
+
+## Verdicts:
+- **FALSE_POSITIVE**: Not exploitable - safe pattern, sanitization present, trusted data source, or theoretical-only risk
+- **UNCERTAIN**: Can't determine - flag for manual review but don't alarm the user
+- **LIKELY_TRUE**: Probably exploitable but some uncertainty remains  
+- **TRUE_POSITIVE**: Definitely exploitable with clear attack path and no mitigations
+
+Respond with JSON:
+{{
+  "verifications": [
+    {{
+      "index": 1,
+      "verdict": "FALSE_POSITIVE|UNCERTAIN|LIKELY_TRUE|TRUE_POSITIVE",
+      "confidence": 0.0-1.0,
+      "reasoning": "<specific explanation with evidence>",
+      "severity_adjustment": "none|upgrade|downgrade",
+      "new_severity": "<only if adjustment needed>"
+    }}
+  ]
+}}
+
+**IMPORTANT**: 
+- Err on the side of FALSE_POSITIVE when uncertain - users prefer fewer false alarms
+- Common false positive patterns: parameterized queries, ORM methods, framework auth, type-checked inputs, allowlist validation
+- A finding needs CLEAR evidence of exploitability to be TRUE_POSITIVE
+- It's better to miss a low-confidence issue than to waste user time on false positives"""
+
+        try:
+            from google.genai import types
+            
+            async def make_request():
+                return await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=2000
+                    )
+                )
+            
+            response = await _retry_with_backoff(
+                make_request,
+                max_retries=3,
+                base_delay=2.0,
+                timeout_seconds=90.0,
+                operation_name="AgenticScan FP filtering"
+            )
+            
+            text = response.text if response else ""
+            if text:
+                json_match = re.search(r'\{[\s\S]*\}', text)
+                if json_match:
+                    result = json.loads(json_match.group())
+                    verifications = result.get("verifications", [])
+                    
+                    for ver in verifications:
+                        idx = ver.get("index", 1) - 1
+                        if 0 <= idx < len(batch):
+                            vuln = batch[idx]
+                            verdict = ver.get("verdict", "UNCERTAIN")
+                            confidence = ver.get("confidence", vuln.confidence)
+                            reasoning = ver.get("reasoning", "")
+                            
+                            # Update confidence based on verification
+                            vuln.confidence = confidence
+                            
+                            # Adjust severity if recommended
+                            if ver.get("severity_adjustment") == "downgrade" and ver.get("new_severity"):
+                                vuln.severity = ver.get("new_severity")
+                            elif ver.get("severity_adjustment") == "upgrade" and ver.get("new_severity"):
+                                vuln.severity = ver.get("new_severity")
+                            
+                            # Filter based on verdict
+                            if verdict == "FALSE_POSITIVE":
+                                vuln.false_positive_likelihood = 0.9
+                                filtered_out.append({
+                                    "id": vuln.id,
+                                    "type": vuln.vulnerability_type,
+                                    "reason": reasoning
+                                })
+                                logger.info(f"AgenticScan FP filtered: {vuln.vulnerability_type} - {reasoning[:50]}")
+                            else:
+                                # Keep the finding
+                                if verdict == "TRUE_POSITIVE":
+                                    vuln.false_positive_likelihood = 0.1
+                                elif verdict == "LIKELY_TRUE":
+                                    vuln.false_positive_likelihood = 0.25
+                                else:  # UNCERTAIN
+                                    vuln.false_positive_likelihood = 0.4
+                                
+                                verified.append(vuln)
+                    
+                    # Handle any unprocessed findings in batch
+                    processed_indices = {v.get("index", 0) - 1 for v in verifications}
+                    for idx, vuln in enumerate(batch):
+                        if idx not in processed_indices:
+                            verified.append(vuln)
+                    
+                    # Return results for this batch
+                    return verified, {"filtered_findings": filtered_out}
+            
+            # If parsing failed, keep all findings
+            return batch, {"filtered_findings": []}
+            
+        except Exception as e:
+            logger.warning(f"AgenticScan: FP filtering batch failed: {e}, keeping findings")
+            return batch, {"filtered_findings": []}
+
 
 # ============================================================================
 # Main Service Class
@@ -1351,14 +2886,55 @@ class AgenticScanService:
         project_id: int,
         project_path: str,
         file_extensions: List[str] = None,
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        use_multi_pass: bool = True,  # Enable smart multi-pass by default
+        external_intel: Optional[ExternalIntelligence] = None,  # CVE/SAST/dependency context
+        enhanced_mode: bool = False  # Enhanced: 120→40→20 files vs default 90→30→15
     ) -> str:
         """
-        Start a new agentic scan.
+        Start a new agentic scan with smart multi-pass file selection.
+        
+        The scan now uses intelligent AI-driven file triage:
+        - Pass 0: AI examines ALL file names to select security-relevant files
+        - Pass 1: Initial analysis of ~90 files (or ~120 in enhanced mode)
+        - Pass 2: Focused analysis of ~30 files (or ~40 in enhanced mode)
+        - Pass 3: Deep analysis of ~15 files (or ~20 in enhanced mode)
+        - Synthesis: AI combines findings from all passes
+        
+        Args:
+            enhanced_mode: If True, increases file limits for more thorough analysis
+            external_intel: CVE, SAST, and dependency data for AI context
+        
         Returns the scan_id for tracking.
         """
         import time
         start_time = time.time()
+        
+        # Set multi-pass limits based on mode
+        # Enhanced mode: more files AND more content per file
+        if enhanced_mode:
+            self.analyzer.set_multi_pass_limits(
+                pass1=120, pass2=40, pass3=20,          # Files per pass (increased)
+                quick_chars=6000,                       # Pass 1: 6K chars (50% more)
+                detailed_chars=15000,                   # Pass 2: 15K chars (50% more)
+                full_chars=45000                        # Pass 3: 45K chars (full file, 50% more)
+            )
+            logger.info("AgenticScan: Enhanced mode enabled (120→40→20 files, 6K→15K→45K chars)")
+        else:
+            self.analyzer.set_multi_pass_limits(
+                pass1=90, pass2=30, pass3=15,           # Files per pass (increased)
+                quick_chars=4500,                       # Pass 1: 4.5K chars (50% more)
+                detailed_chars=10500,                   # Pass 2: 10.5K chars (50% more)
+                full_chars=27000                        # Pass 3: 27K chars (50% more)
+            )
+            logger.info("AgenticScan: Standard mode (90→30→15 files, 4.5K→10.5K→27K chars)")
+        
+        # Inject external intelligence into analyzer if provided
+        if external_intel:
+            self.analyzer.set_external_intelligence(external_intel)
+            logger.info(f"AgenticScan: Loaded external intel - {len(external_intel.cve_findings)} CVEs, "
+                       f"{len(external_intel.sast_findings)} SAST findings, "
+                       f"{len(external_intel.vulnerable_import_files)} vulnerable import files")
         
         if file_extensions is None:
             # Comprehensive list of security-relevant source file extensions
@@ -1397,29 +2973,98 @@ class AgenticScanService:
         )
         self.active_scans[scan_id] = progress
         
+        def update_progress(msg: str):
+            progress.message = msg
+            if progress_callback:
+                progress_callback(progress)
+        
         try:
-            # Phase 1: Code Chunking
+            # Collect ALL source files first
+            all_files = self.chunker._collect_all_files(project_path, file_extensions)
+            total_file_count = len(all_files)
+            logger.info(f"AgenticScan: Found {total_file_count} total source files")
+            
+            multi_pass_results = []
+            synthesis_result = None
+            
+            if use_multi_pass and total_file_count > 20:
+                # ================================================================
+                # SMART MULTI-PASS ANALYSIS
+                # ================================================================
+                
+                # Phase 0: AI File Triage
+                progress.phase = ScanPhase.FILE_TRIAGE
+                progress.message = f"🔍 AI analyzing {total_file_count} file names for security relevance..."
+                if progress_callback:
+                    progress_callback(progress)
+                
+                triage_results = await self.analyzer.triage_files(
+                    project_path, all_files, update_progress
+                )
+                
+                critical_count = len([r for r in triage_results if r.priority == "CRITICAL"])
+                high_count = len([r for r in triage_results if r.priority == "HIGH"])
+                progress.message = f"🔍 Triage complete: {critical_count} critical, {high_count} high priority files"
+                progress.phase_progress = 1.0
+                if progress_callback:
+                    progress_callback(progress)
+                
+                # Phases 1-3: Multi-Pass Analysis
+                progress.phase = ScanPhase.INITIAL_ANALYSIS
+                progress.message = "📋 Starting multi-pass analysis..."
+                if progress_callback:
+                    progress_callback(progress)
+                
+                multi_pass_results, deep_files = await self.analyzer.multi_pass_analysis(
+                    project_path, triage_results, update_progress
+                )
+                
+                progress.phase = ScanPhase.DEEP_ANALYSIS
+                progress.phase_progress = 1.0
+                
+                # Get files selected for chunking (combine top triage + deep analysis files)
+                selected_for_chunking = set(deep_files)
+                # Also include high-scoring files from multi-pass
+                high_score_files = [r.file_path for r in multi_pass_results if r.security_score >= 6.0]
+                selected_for_chunking.update(high_score_files[:30])  # Cap at reasonable number
+                
+                # Filter original files to only those selected
+                files_to_chunk = [f for f in all_files if f in selected_for_chunking]
+                
+                logger.info(f"AgenticScan: Multi-pass selected {len(files_to_chunk)} files for deep chunked analysis")
+            else:
+                # Small codebase or multi-pass disabled - use original prioritization
+                files_to_chunk = self.chunker._prioritize_files(all_files)
+                triage_results = []
+            
+            # Phase: Code Chunking (on selected files only)
             progress.phase = ScanPhase.CHUNKING
-            progress.message = "Breaking code into analyzable chunks..."
+            progress.message = f"Breaking {len(files_to_chunk)} selected files into analyzable chunks..."
             if progress_callback:
                 progress_callback(progress)
             
-            chunks = self.chunker.chunk_project(project_path, file_extensions)
+            # Temporarily override file list for chunking
+            chunks = []
+            for file_path in files_to_chunk[:self.chunker.MAX_FILES]:
+                if len(chunks) >= self.chunker.MAX_CHUNKS:
+                    break
+                file_chunks = self.chunker._chunk_file(file_path)
+                remaining = self.chunker.MAX_CHUNKS - len(chunks)
+                if remaining > 0:
+                    chunks.extend(file_chunks[:remaining])
+            
+            # Build dependency graph
+            self.chunker._analyze_dependencies(chunks)
             progress.total_chunks = len(chunks)
             progress.phase_progress = 1.0
             
-            logger.info(f"AgenticScan: Created {len(chunks)} code chunks")
+            logger.info(f"AgenticScan: Created {len(chunks)} code chunks from {len(files_to_chunk)} files")
             
-            # Phase 2: Entry Point Detection
+            # Phase: Entry Point Detection
             progress.phase = ScanPhase.ENTRY_POINT_DETECTION
             progress.message = "Identifying user input entry points..."
             if progress_callback:
                 progress_callback(progress)
-            
-            def update_progress(msg: str):
-                progress.message = msg
-                if progress_callback:
-                    progress_callback(progress)
             
             entry_points, sinks = await self.analyzer.analyze_chunks(chunks, update_progress)
             progress.entry_points_found = len(entry_points)
@@ -1428,9 +3073,18 @@ class AgenticScanService:
             
             logger.info(f"AgenticScan: Found {len(entry_points)} entry points and {len(sinks)} sinks")
             
-            # Phase 3: Flow Tracing
+            # Track multi-pass findings for synthesis later
+            multi_pass_vulns = []
+            if use_multi_pass and multi_pass_results:
+                for r in multi_pass_results:
+                    for finding in r.findings:
+                        if isinstance(finding, dict):
+                            multi_pass_vulns.append(finding)
+                logger.info(f"AgenticScan: Multi-pass found {len(multi_pass_vulns)} potential vulnerabilities")
+            
+            # Phase: Flow Tracing (always run, limited to 120 pairs max)
             progress.phase = ScanPhase.FLOW_TRACING
-            progress.message = "Tracing data flows from inputs to sinks..."
+            progress.message = f"🔀 Tracing data flows ({len(entry_points)} entry points → sinks)..."
             if progress_callback:
                 progress_callback(progress)
             
@@ -1440,7 +3094,7 @@ class AgenticScanService:
             
             logger.info(f"AgenticScan: Traced {len(flows)} exploitable flows")
             
-            # Phase 4: Vulnerability Analysis
+            # Phase: Vulnerability Analysis
             progress.phase = ScanPhase.VULNERABILITY_ANALYSIS
             progress.message = "Generating detailed vulnerability reports..."
             if progress_callback:
@@ -1452,7 +3106,36 @@ class AgenticScanService:
             
             logger.info(f"AgenticScan: Generated {len(vulnerabilities)} vulnerability reports")
             
-            # Phase 5: Report Generation
+            # Phase: False Positive Filtering
+            progress.phase = ScanPhase.FALSE_POSITIVE_FILTERING
+            progress.message = "AI verification: Filtering false positives..."
+            if progress_callback:
+                progress_callback(progress)
+            
+            verified_vulnerabilities, fp_stats = await self.analyzer.filter_false_positives(
+                vulnerabilities, update_progress
+            )
+            
+            progress.vulnerabilities_found = len(verified_vulnerabilities)
+            progress.phase_progress = 1.0
+            
+            logger.info(f"AgenticScan: Final verified vulnerabilities: {len(verified_vulnerabilities)}")
+            
+            # Phase: Synthesis (if multi-pass was used)
+            if use_multi_pass and multi_pass_results:
+                progress.phase = ScanPhase.SYNTHESIS
+                progress.message = "🧠 Synthesizing findings across all analysis passes..."
+                if progress_callback:
+                    progress_callback(progress)
+                
+                synthesis_result = await self.analyzer.synthesize_findings(
+                    multi_pass_results, verified_vulnerabilities, update_progress
+                )
+                progress.phase_progress = 1.0
+                
+                logger.info(f"AgenticScan: Synthesis complete - {len(synthesis_result.attack_chains)} attack chains identified")
+            
+            # Phase: Report Generation
             progress.phase = ScanPhase.REPORT_GENERATION
             progress.message = "Compiling final report..."
             if progress_callback:
@@ -1460,7 +3143,28 @@ class AgenticScanService:
             
             duration = time.time() - start_time
             
-            # Build result
+            # Build statistics including multi-pass info
+            stats = self._build_statistics(verified_vulnerabilities, entry_points, sinks, flows, fp_stats)
+            
+            # Add multi-pass stats if available
+            if use_multi_pass and multi_pass_results:
+                stats["multi_pass"] = {
+                    "enabled": True,
+                    "total_files_triaged": len(triage_results) if triage_results else 0,
+                    "files_selected_for_deep_analysis": len(files_to_chunk),
+                    "pass_1_files": len([r for r in multi_pass_results if r.pass_number == 1]),
+                    "pass_2_files": len([r for r in multi_pass_results if r.pass_number == 2]),
+                    "pass_3_files": len([r for r in multi_pass_results if r.pass_number == 3]),
+                    "high_risk_files": len([r for r in multi_pass_results if r.security_score >= 7.0])
+                }
+                if synthesis_result:
+                    stats["synthesis"] = {
+                        "attack_chains": len(synthesis_result.attack_chains),
+                        "recommendations": len(synthesis_result.key_recommendations),
+                        "assessment": synthesis_result.overall_security_assessment[:500] if synthesis_result.overall_security_assessment else ""
+                    }
+            
+            # Build result with verified vulnerabilities
             result = AgenticScanResult(
                 scan_id=scan_id,
                 project_id=project_id,
@@ -1472,8 +3176,8 @@ class AgenticScanService:
                 entry_points=entry_points,
                 sinks=sinks,
                 traced_flows=flows,
-                vulnerabilities=vulnerabilities,
-                statistics=self._build_statistics(vulnerabilities, entry_points, sinks, flows),
+                vulnerabilities=verified_vulnerabilities,
+                statistics=stats,
                 started_at=progress.started_at,
                 completed_at=datetime.now().isoformat(),
                 scan_duration_seconds=round(duration, 2)
@@ -1528,7 +3232,8 @@ class AgenticScanService:
         vulnerabilities: List[AgenticVulnerability],
         entry_points: List[EntryPoint],
         sinks: List[DangerousSink],
-        flows: List[TracedFlow]
+        flows: List[TracedFlow],
+        fp_stats: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Build statistics summary"""
         stats = {
@@ -1539,6 +3244,10 @@ class AgenticScanService:
             "sink_types": {},
             "avg_confidence": 0.0,
         }
+        
+        # Include false positive filtering stats if available
+        if fp_stats:
+            stats["false_positive_filtering"] = fp_stats
         
         confidences = []
         for vuln in vulnerabilities:

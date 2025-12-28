@@ -24,6 +24,8 @@ import {
   Tabs,
   Tab,
   Tooltip,
+  Button,
+  Divider,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -46,6 +48,273 @@ import AndroidIcon from "@mui/icons-material/Android";
 import AppleIcon from "@mui/icons-material/Apple";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import CodeIcon from "@mui/icons-material/Code";
+import QuizIcon from "@mui/icons-material/Quiz";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import RefreshIcon from "@mui/icons-material/Refresh";
+
+// Quiz Question Interface
+interface QuizQuestion {
+  id: number;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  topic: string;
+}
+
+// OWASP Mobile Top 10 Quiz Question Bank (75 questions)
+const questionBank: QuizQuestion[] = [
+  // M1: Improper Credential Usage (8 questions)
+  { id: 1, question: "What is M1 in OWASP Mobile Top 10?", options: ["Improper Platform Usage", "Improper Credential Usage", "Insecure Data Storage", "Insecure Communication"], correctAnswer: 1, explanation: "M1 is Improper Credential Usage, covering hardcoded credentials and insecure key management.", topic: "M1: Credentials" },
+  { id: 2, question: "What is a common M1 vulnerability?", options: ["SQL injection", "Hardcoded API keys in the app binary", "Buffer overflow", "XSS attack"], correctAnswer: 1, explanation: "Hardcoded secrets in app binaries can be extracted through reverse engineering.", topic: "M1: Credentials" },
+  { id: 3, question: "How should API keys be protected in mobile apps?", options: ["Hardcode them", "Store in SharedPreferences", "Use backend proxy or secure key storage", "Put in comments"], correctAnswer: 2, explanation: "Sensitive keys should use backend proxies or secure storage like KeyStore/Keychain.", topic: "M1: Credentials" },
+  { id: 4, question: "What is credential stuffing?", options: ["Adding more passwords", "Using stolen credentials from breaches to login", "Password encryption", "Key generation"], correctAnswer: 1, explanation: "Credential stuffing uses leaked username/password pairs to attempt unauthorized access.", topic: "M1: Credentials" },
+  { id: 5, question: "Where should user passwords be validated?", options: ["Client-side only", "Server-side", "In the app binary", "In local storage"], correctAnswer: 1, explanation: "Authentication must be validated server-side; client-side checks can be bypassed.", topic: "M1: Credentials" },
+  { id: 6, question: "What is the risk of storing OAuth tokens insecurely?", options: ["No risk", "Token theft enabling account takeover", "Slower performance", "UI issues"], correctAnswer: 1, explanation: "Stolen OAuth tokens allow attackers to impersonate users.", topic: "M1: Credentials" },
+  { id: 7, question: "What is a secure way to store credentials on Android?", options: ["SharedPreferences plaintext", "Android KeyStore", "SQLite database", "Log files"], correctAnswer: 1, explanation: "Android KeyStore provides hardware-backed secure credential storage.", topic: "M1: Credentials" },
+  { id: 8, question: "What is certificate/public key pinning for?", options: ["Physical security", "Preventing MITM by validating server certificate", "Performance", "Caching"], correctAnswer: 1, explanation: "Pinning prevents MITM attacks by ensuring only expected certificates are trusted.", topic: "M1: Credentials" },
+
+  // M2: Inadequate Supply Chain Security (7 questions)
+  { id: 9, question: "What is M2 in OWASP Mobile Top 10?", options: ["Insecure Storage", "Inadequate Supply Chain Security", "Broken Crypto", "Code Injection"], correctAnswer: 1, explanation: "M2 covers risks from third-party libraries, SDKs, and components.", topic: "M2: Supply Chain" },
+  { id: 10, question: "What is a supply chain attack on mobile apps?", options: ["Shipping delays", "Compromised third-party SDK injecting malicious code", "App store issues", "Network problems"], correctAnswer: 1, explanation: "Supply chain attacks compromise dependencies to inject malicious code into apps.", topic: "M2: Supply Chain" },
+  { id: 11, question: "How should third-party libraries be managed?", options: ["Use any version", "Pin versions, scan for vulnerabilities, review updates", "Never update", "Only use old libraries"], correctAnswer: 1, explanation: "Pin versions, scan for CVEs, and carefully review library updates.", topic: "M2: Supply Chain" },
+  { id: 12, question: "What tool scans Android dependencies for vulnerabilities?", options: ["Photoshop", "OWASP Dependency-Check, Snyk", "Calculator", "Notepad"], correctAnswer: 1, explanation: "Tools like Dependency-Check and Snyk scan libraries for known vulnerabilities.", topic: "M2: Supply Chain" },
+  { id: 13, question: "What is the risk of using unmaintained libraries?", options: ["No risk", "Unpatched vulnerabilities remain exploitable", "Better performance", "More features"], correctAnswer: 1, explanation: "Unmaintained libraries don't receive security patches for discovered vulnerabilities.", topic: "M2: Supply Chain" },
+  { id: 14, question: "What is SBOM?", options: ["Security Buffer Overflow Monitor", "Software Bill of Materials", "System Boot Options Menu", "Secure Binary Object Model"], correctAnswer: 1, explanation: "SBOM lists all software components for supply chain visibility.", topic: "M2: Supply Chain" },
+  { id: 15, question: "How can malicious SDKs affect your app?", options: ["Improve performance", "Exfiltrate data, inject ads, compromise security", "Add features", "Better UI"], correctAnswer: 1, explanation: "Malicious SDKs can steal data, inject unwanted content, or compromise app security.", topic: "M2: Supply Chain" },
+
+  // M3: Insecure Authentication/Authorization (8 questions)
+  { id: 16, question: "What is M3 in OWASP Mobile Top 10?", options: ["Insecure Storage", "Insecure Authentication/Authorization", "Code Tampering", "Reverse Engineering"], correctAnswer: 1, explanation: "M3 covers weak authentication mechanisms and broken authorization.", topic: "M3: Auth" },
+  { id: 17, question: "What is the risk of client-side authentication only?", options: ["No risk", "Can be bypassed by modifying app or intercepting traffic", "Better security", "Faster login"], correctAnswer: 1, explanation: "Client-side auth can be bypassed through app modification or traffic interception.", topic: "M3: Auth" },
+  { id: 18, question: "What is IDOR?", options: ["iOS Development Object Reference", "Insecure Direct Object Reference", "Internal Data Object Retrieval", "Interface Design Object Reference"], correctAnswer: 1, explanation: "IDOR allows accessing resources by manipulating identifiers without proper authorization.", topic: "M3: Auth" },
+  { id: 19, question: "Why should session tokens be rotated?", options: ["Performance", "Limit impact of token theft", "UI refresh", "Database sync"], correctAnswer: 1, explanation: "Token rotation limits the window of opportunity for stolen tokens.", topic: "M3: Auth" },
+  { id: 20, question: "What is privilege escalation?", options: ["Getting promoted", "Gaining higher access rights than authorized", "Installing updates", "Admin login"], correctAnswer: 1, explanation: "Privilege escalation exploits allow gaining admin or higher-level access.", topic: "M3: Auth" },
+  { id: 21, question: "What should be checked for authorization bypass?", options: ["UI only", "Server-side checks for every sensitive action", "Client preferences", "Device model"], correctAnswer: 1, explanation: "Authorization must be enforced server-side for all sensitive operations.", topic: "M3: Auth" },
+  { id: 22, question: "What is horizontal privilege escalation?", options: ["Vertical access", "Accessing other users' resources at same privilege level", "Admin access", "Root access"], correctAnswer: 1, explanation: "Horizontal escalation accesses other users' data without elevated privileges.", topic: "M3: Auth" },
+  { id: 23, question: "How can biometric auth be bypassed?", options: ["Cannot bypass", "Hooking auth callbacks with Frida, exploiting fallback mechanisms", "Physical fingerprint", "Face photo"], correctAnswer: 1, explanation: "Biometric auth can be bypassed through runtime manipulation or fallback exploits.", topic: "M3: Auth" },
+
+  // M4: Insufficient Input/Output Validation (8 questions)
+  { id: 24, question: "What is M4 in OWASP Mobile Top 10?", options: ["Insecure Storage", "Insufficient Input/Output Validation", "Code Tampering", "Network Issues"], correctAnswer: 1, explanation: "M4 covers injection attacks from inadequate input/output validation.", topic: "M4: Validation" },
+  { id: 25, question: "What is SQL injection?", options: ["SQL performance", "Injecting malicious SQL through user input", "Database backup", "Query optimization"], correctAnswer: 1, explanation: "SQL injection manipulates queries through unvalidated user input.", topic: "M4: Validation" },
+  { id: 26, question: "What is path traversal?", options: ["Navigation UI", "Accessing files outside intended directory using ../ sequences", "File compression", "Path optimization"], correctAnswer: 1, explanation: "Path traversal exploits navigate outside intended directories to access sensitive files.", topic: "M4: Validation" },
+  { id: 27, question: "What is XSS in WebView context?", options: ["Cross-site styling", "Injecting scripts through WebView that execute in app context", "Site loading", "Caching"], correctAnswer: 1, explanation: "WebView XSS can execute malicious JavaScript with app privileges.", topic: "M4: Validation" },
+  { id: 28, question: "How to prevent SQL injection?", options: ["Use string concatenation", "Use parameterized queries/prepared statements", "Disable SQL", "Use plaintext"], correctAnswer: 1, explanation: "Parameterized queries prevent SQL injection by separating code from data.", topic: "M4: Validation" },
+  { id: 29, question: "What is input sanitization?", options: ["Cleaning keyboards", "Filtering/encoding user input to prevent injection", "Input speed", "Input formatting"], correctAnswer: 1, explanation: "Sanitization removes or encodes potentially malicious characters from input.", topic: "M4: Validation" },
+  { id: 30, question: "What is a deep link injection?", options: ["Link depth", "Manipulating deep link parameters to access unauthorized features", "URL shortening", "Link tracking"], correctAnswer: 1, explanation: "Deep link injection exploits parameter handling to bypass controls or access features.", topic: "M4: Validation" },
+  { id: 31, question: "What is deserialization vulnerability?", options: ["Data formatting", "Executing malicious code through untrusted serialized data", "JSON parsing", "XML formatting"], correctAnswer: 1, explanation: "Unsafe deserialization can execute arbitrary code from malicious serialized objects.", topic: "M4: Validation" },
+
+  // M5: Insecure Communication (8 questions)
+  { id: 32, question: "What is M5 in OWASP Mobile Top 10?", options: ["Insecure Storage", "Insecure Communication", "Code Issues", "Platform Issues"], correctAnswer: 1, explanation: "M5 covers network security issues like missing encryption and certificate validation.", topic: "M5: Communication" },
+  { id: 33, question: "What is the risk of cleartext HTTP?", options: ["No risk", "Traffic can be intercepted and modified by attackers", "Faster loading", "Better compatibility"], correctAnswer: 1, explanation: "Cleartext HTTP exposes data to eavesdropping and manipulation.", topic: "M5: Communication" },
+  { id: 34, question: "What is a MITM attack?", options: ["Middle app", "Intercepting communications between app and server", "Media transfer", "Memory issue"], correctAnswer: 1, explanation: "MITM attacks intercept and potentially modify traffic between endpoints.", topic: "M5: Communication" },
+  { id: 35, question: "What does SSL/TLS provide?", options: ["Speed boost", "Encryption, integrity, and authentication for network traffic", "Compression", "Caching"], correctAnswer: 1, explanation: "SSL/TLS encrypts data and verifies server identity to prevent interception.", topic: "M5: Communication" },
+  { id: 36, question: "What is certificate validation bypass?", options: ["Speeding up connections", "Accepting any certificate without proper validation", "Certificate upgrade", "Key rotation"], correctAnswer: 1, explanation: "Bypassing cert validation allows MITM attacks with fraudulent certificates.", topic: "M5: Communication" },
+  { id: 37, question: "What is ATS on iOS?", options: ["App Test Suite", "App Transport Security enforcing HTTPS", "Auto Test System", "Apple Test Standard"], correctAnswer: 1, explanation: "ATS enforces secure network connections, requiring HTTPS by default.", topic: "M5: Communication" },
+  { id: 38, question: "What is android:usesCleartextTraffic?", options: ["Network speed setting", "Flag controlling whether app allows unencrypted HTTP", "Cache setting", "Debug setting"], correctAnswer: 1, explanation: "This manifest flag controls whether the app permits cleartext HTTP traffic.", topic: "M5: Communication" },
+  { id: 39, question: "What should be logged about network traffic?", options: ["All data including credentials", "Non-sensitive metadata only, never credentials or tokens", "Nothing", "Only errors"], correctAnswer: 1, explanation: "Never log sensitive data; only log non-sensitive information for debugging.", topic: "M5: Communication" },
+
+  // M6: Inadequate Privacy Controls (7 questions)
+  { id: 40, question: "What is M6 in OWASP Mobile Top 10?", options: ["Code Tampering", "Inadequate Privacy Controls", "Reverse Engineering", "Binary Protection"], correctAnswer: 1, explanation: "M6 covers privacy issues like PII leakage and excessive data collection.", topic: "M6: Privacy" },
+  { id: 41, question: "What is PII?", options: ["Program Interface Identifier", "Personally Identifiable Information", "Private Internet Index", "Protected Internal Instance"], correctAnswer: 1, explanation: "PII is data that can identify an individual, requiring protection.", topic: "M6: Privacy" },
+  { id: 42, question: "What is data minimization?", options: ["Compressing data", "Collecting only necessary data for app function", "Deleting all data", "Data backup"], correctAnswer: 1, explanation: "Data minimization limits collection to what's strictly necessary.", topic: "M6: Privacy" },
+  { id: 43, question: "What regulation requires privacy-by-design?", options: ["HTTP", "GDPR, CCPA", "TCP/IP", "DNS"], correctAnswer: 1, explanation: "GDPR and similar regulations require building privacy into app design.", topic: "M6: Privacy" },
+  { id: 44, question: "What is the risk of analytics SDKs?", options: ["No risk", "May collect and transmit excessive user data", "Better performance", "Enhanced UI"], correctAnswer: 1, explanation: "Analytics SDKs can collect more data than necessary, creating privacy risks.", topic: "M6: Privacy" },
+  { id: 45, question: "How should location data be handled?", options: ["Always collect", "Request minimum necessary precision, explain usage", "Never use", "Store forever"], correctAnswer: 1, explanation: "Use minimum necessary location precision and clearly explain why it's needed.", topic: "M6: Privacy" },
+  { id: 46, question: "What is device fingerprinting?", options: ["Biometrics", "Identifying devices through unique characteristics", "Screen unlock", "Touch ID"], correctAnswer: 1, explanation: "Device fingerprinting identifies devices through hardware/software characteristics.", topic: "M6: Privacy" },
+
+  // M7: Insufficient Binary Protections (8 questions)
+  { id: 47, question: "What is M7 in OWASP Mobile Top 10?", options: ["Insecure Storage", "Insufficient Binary Protections", "Network Issues", "Auth Problems"], correctAnswer: 1, explanation: "M7 covers lack of protection against reverse engineering and tampering.", topic: "M7: Binary" },
+  { id: 48, question: "What is code obfuscation?", options: ["Code deletion", "Making code difficult to understand and reverse engineer", "Code comments", "Code formatting"], correctAnswer: 1, explanation: "Obfuscation makes reverse engineering harder through code transformation.", topic: "M7: Binary" },
+  { id: 49, question: "What is anti-tampering?", options: ["Weather protection", "Detecting modifications to app binary", "Crash prevention", "Performance tuning"], correctAnswer: 1, explanation: "Anti-tampering detects if the application has been modified.", topic: "M7: Binary" },
+  { id: 50, question: "What is root/jailbreak detection?", options: ["Plant detection", "Identifying compromised device environments", "Hardware check", "Model detection"], correctAnswer: 1, explanation: "Root/jailbreak detection identifies devices where security controls are bypassed.", topic: "M7: Binary" },
+  { id: 51, question: "What is debugger detection?", options: ["Finding bugs", "Detecting if debugger is attached to prevent analysis", "Error logging", "Performance monitoring"], correctAnswer: 1, explanation: "Debugger detection prevents runtime analysis and manipulation.", topic: "M7: Binary" },
+  { id: 52, question: "What is ProGuard/R8 on Android?", options: ["Security guard", "Code shrinking and obfuscation tool", "Antivirus", "Firewall"], correctAnswer: 1, explanation: "ProGuard/R8 shrinks code and provides basic obfuscation.", topic: "M7: Binary" },
+  { id: 53, question: "What is RASP?", options: ["Audio format", "Runtime Application Self-Protection", "Network protocol", "File type"], correctAnswer: 1, explanation: "RASP monitors and protects apps at runtime against attacks.", topic: "M7: Binary" },
+  { id: 54, question: "Can binary protections be bypassed?", options: ["Never", "Yes, but they raise the bar for attackers", "Only on old devices", "Only with root"], correctAnswer: 1, explanation: "Binary protections can be bypassed but significantly increase attack difficulty.", topic: "M7: Binary" },
+
+  // M8: Security Misconfiguration (7 questions)
+  { id: 55, question: "What is M8 in OWASP Mobile Top 10?", options: ["Insecure Storage", "Security Misconfiguration", "Crypto Issues", "Platform Usage"], correctAnswer: 1, explanation: "M8 covers insecure default settings, exposed services, and configuration errors.", topic: "M8: Misconfig" },
+  { id: 56, question: "What is android:debuggable='true' risk?", options: ["No risk", "Allows attaching debugger to production app", "Better logging", "Faster builds"], correctAnswer: 1, explanation: "debuggable=true in production allows debugging tools to attach.", topic: "M8: Misconfig" },
+  { id: 57, question: "What is android:allowBackup='true' risk?", options: ["No risk", "App data can be extracted via adb backup", "Better backup", "Cloud sync"], correctAnswer: 1, explanation: "allowBackup allows extracting app data using adb without root.", topic: "M8: Misconfig" },
+  { id: 58, question: "What are exported components risks?", options: ["No risk", "Unprotected components accessible by other apps", "Performance", "UI issues"], correctAnswer: 1, explanation: "Exported components without permission checks can be exploited by malicious apps.", topic: "M8: Misconfig" },
+  { id: 59, question: "What should be disabled in production builds?", options: ["All features", "Debug logging, test endpoints, verbose errors", "Main functionality", "User accounts"], correctAnswer: 1, explanation: "Disable debug features, test code, and verbose logging in production.", topic: "M8: Misconfig" },
+  { id: 60, question: "What is a WebView misconfiguration?", options: ["UI style", "Enabling JavaScript with file:// access or insecure settings", "Page layout", "Font size"], correctAnswer: 1, explanation: "Insecure WebView settings can enable code execution or data access.", topic: "M8: Misconfig" },
+  { id: 61, question: "What is deep link scheme hijacking?", options: ["URL theft", "Malicious app registering same URL scheme to intercept", "Link shortening", "Redirect"], correctAnswer: 1, explanation: "Other apps can register the same scheme to hijack deep links.", topic: "M8: Misconfig" },
+
+  // M9: Insecure Data Storage (7 questions)
+  { id: 62, question: "What is M9 in OWASP Mobile Top 10?", options: ["Network Security", "Insecure Data Storage", "Binary Protection", "Auth Issues"], correctAnswer: 1, explanation: "M9 covers storing sensitive data insecurely on the device.", topic: "M9: Storage" },
+  { id: 63, question: "What is the risk of storing credentials in SharedPreferences?", options: ["No risk", "Plaintext credentials accessible on rooted devices or via backup", "Better performance", "Easier access"], correctAnswer: 1, explanation: "SharedPreferences stores data in plaintext accessible through various means.", topic: "M9: Storage" },
+  { id: 64, question: "What is the iOS Keychain for?", options: ["Physical keys", "Encrypted storage for sensitive credentials", "iCloud sync", "App settings"], correctAnswer: 1, explanation: "Keychain provides encrypted storage for passwords and sensitive data.", topic: "M9: Storage" },
+  { id: 65, question: "What is the risk of logging sensitive data?", options: ["No risk", "Logs accessible via logcat, backup, or crash reports", "Better debugging", "Performance monitoring"], correctAnswer: 1, explanation: "Sensitive data in logs can be extracted through various channels.", topic: "M9: Storage" },
+  { id: 66, question: "What is SQLCipher?", options: ["SQL editor", "Encryption extension for SQLite databases", "Database viewer", "Query tool"], correctAnswer: 1, explanation: "SQLCipher adds encryption to SQLite databases for secure storage.", topic: "M9: Storage" },
+  { id: 67, question: "What are clipboard security concerns?", options: ["None", "Sensitive copied data accessible by other apps", "Performance", "Formatting"], correctAnswer: 1, explanation: "Clipboard content can be read by other apps, exposing copied secrets.", topic: "M9: Storage" },
+  { id: 68, question: "What is screenshot protection?", options: ["Camera block", "Preventing sensitive screens from appearing in snapshots", "Photo filter", "Image compression"], correctAnswer: 1, explanation: "FLAG_SECURE and similar prevent capturing sensitive screen content.", topic: "M9: Storage" },
+
+  // M10: Insufficient Cryptography (7 questions)
+  { id: 69, question: "What is M10 in OWASP Mobile Top 10?", options: ["Network Security", "Insufficient Cryptography", "Storage Issues", "Platform Issues"], correctAnswer: 1, explanation: "M10 covers weak or improperly implemented cryptography.", topic: "M10: Crypto" },
+  { id: 70, question: "What is a deprecated crypto algorithm?", options: ["AES-256", "MD5, SHA1 for security, DES", "ChaCha20", "Curve25519"], correctAnswer: 1, explanation: "MD5, SHA1 (for security), and DES are cryptographically broken.", topic: "M10: Crypto" },
+  { id: 71, question: "What is the risk of hardcoded encryption keys?", options: ["Better performance", "Keys extractable through reverse engineering", "Easier implementation", "Stronger encryption"], correctAnswer: 1, explanation: "Hardcoded keys can be extracted, defeating the encryption purpose.", topic: "M10: Crypto" },
+  { id: 72, question: "What is proper key storage?", options: ["In source code", "Hardware-backed KeyStore or Keychain", "In SharedPreferences", "In app resources"], correctAnswer: 1, explanation: "Keys should be stored in hardware-backed secure storage.", topic: "M10: Crypto" },
+  { id: 73, question: "What is CBC mode vulnerability?", options: ["No vulnerability", "Padding oracle attacks possible without authentication", "Too slow", "Too complex"], correctAnswer: 1, explanation: "CBC without authentication is vulnerable to padding oracle attacks.", topic: "M10: Crypto" },
+  { id: 74, question: "What is recommended symmetric encryption?", options: ["DES", "AES-GCM or ChaCha20-Poly1305", "Blowfish", "RC4"], correctAnswer: 1, explanation: "AES-GCM and ChaCha20-Poly1305 provide authenticated encryption.", topic: "M10: Crypto" },
+  { id: 75, question: "What is key derivation function (KDF)?", options: ["Key deletion", "Deriving keys from passwords using PBKDF2, Argon2", "Key sharing", "Key display"], correctAnswer: 1, explanation: "KDFs derive cryptographic keys from passwords with stretching.", topic: "M10: Crypto" },
+];
+
+// Quiz Section Component
+function QuizSection() {
+  const theme = useTheme();
+  const [quizStarted, setQuizStarted] = React.useState(false);
+  const [currentQuestions, setCurrentQuestions] = React.useState<QuizQuestion[]>([]);
+  const [userAnswers, setUserAnswers] = React.useState<{ [key: number]: number }>({});
+  const [showResults, setShowResults] = React.useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
+
+  const shuffleAndSelectQuestions = () => {
+    const shuffled = [...questionBank].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 10);
+  };
+
+  const startQuiz = () => {
+    setCurrentQuestions(shuffleAndSelectQuestions());
+    setUserAnswers({});
+    setShowResults(false);
+    setCurrentQuestionIndex(0);
+    setQuizStarted(true);
+  };
+
+  const handleAnswerSelect = (questionId: number, answerIndex: number) => {
+    setUserAnswers((prev) => ({ ...prev, [questionId]: answerIndex }));
+  };
+
+  const calculateScore = () => {
+    let correct = 0;
+    currentQuestions.forEach((q) => {
+      if (userAnswers[q.id] === q.correctAnswer) correct++;
+    });
+    return correct;
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 8) return "#f59e0b";
+    if (score >= 6) return "#3b82f6";
+    return "#ef4444";
+  };
+
+  const getScoreMessage = (score: number) => {
+    if (score === 10) return "Perfect! You've mastered OWASP Mobile Top 10! 🏆";
+    if (score >= 8) return "Excellent! Strong mobile security knowledge! 🛡️";
+    if (score >= 6) return "Good job! Keep studying mobile vulnerabilities! 📚";
+    if (score >= 4) return "Not bad, but review the OWASP categories again. 💪";
+    return "Keep learning! Review all M1-M10 categories. 📖";
+  };
+
+  if (!quizStarted) {
+    return (
+      <Paper id="quiz-section" sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `2px solid ${alpha("#f59e0b", 0.2)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #f59e0b, #d97706)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <QuizIcon sx={{ color: "white", fontSize: 28 }} />
+          </Box>
+          Test Your OWASP Mobile Knowledge
+        </Typography>
+        <Typography variant="body1" sx={{ mb: 3, color: "text.secondary" }}>
+          Ready to test what you've learned? Take this <strong>10-question quiz</strong> covering all OWASP Mobile Top 10 categories. Questions are randomly selected from a pool of <strong>75 questions</strong>!
+        </Typography>
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {[{ label: "Questions", value: "10", color: "#f59e0b" }, { label: "Question Pool", value: "75", color: "#d97706" }, { label: "Categories", value: "10", color: "#8b5cf6" }, { label: "Retakes", value: "∞", color: "#3b82f6" }].map((stat) => (
+            <Grid item xs={6} sm={3} key={stat.label}>
+              <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(stat.color, 0.1), borderRadius: 2 }}>
+                <Typography variant="h4" sx={{ fontWeight: 800, color: stat.color }}>{stat.value}</Typography>
+                <Typography variant="caption" color="text.secondary">{stat.label}</Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+        <Button variant="contained" size="large" onClick={startQuiz} startIcon={<QuizIcon />} sx={{ background: "linear-gradient(135deg, #f59e0b, #d97706)", fontWeight: 700, px: 4, py: 1.5, "&:hover": { background: "linear-gradient(135deg, #d97706, #b45309)" } }}>
+          Start Quiz
+        </Button>
+      </Paper>
+    );
+  }
+
+  if (showResults) {
+    const score = calculateScore();
+    return (
+      <Paper id="quiz-section" sx={{ p: 4, mb: 4, borderRadius: 3, border: `2px solid ${alpha(getScoreColor(score), 0.3)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <EmojiEventsIcon sx={{ color: getScoreColor(score), fontSize: 36 }} /> Quiz Results
+        </Typography>
+        <Box sx={{ textAlign: "center", mb: 4 }}>
+          <Typography variant="h1" sx={{ fontWeight: 900, color: getScoreColor(score) }}>{score}/10</Typography>
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>{getScoreMessage(score)}</Typography>
+          <Chip label={`${score * 10}%`} sx={{ bgcolor: alpha(getScoreColor(score), 0.15), color: getScoreColor(score), fontWeight: 700, fontSize: "1rem" }} />
+        </Box>
+        <Divider sx={{ my: 3 }} />
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Review Your Answers:</Typography>
+        {currentQuestions.map((q, index) => {
+          const isCorrect = userAnswers[q.id] === q.correctAnswer;
+          return (
+            <Paper key={q.id} sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: alpha(isCorrect ? "#f59e0b" : "#ef4444", 0.05), border: `1px solid ${alpha(isCorrect ? "#f59e0b" : "#ef4444", 0.2)}` }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1 }}>
+                <Chip label={`Q${index + 1}`} size="small" sx={{ bgcolor: isCorrect ? "#f59e0b" : "#ef4444", color: "white", fontWeight: 700 }} />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{q.question}</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 5 }}>
+                <strong>Your answer:</strong> {q.options[userAnswers[q.id]] || "Not answered"}
+                {!isCorrect && (<><br /><strong style={{ color: "#f59e0b" }}>Correct:</strong> {q.options[q.correctAnswer]}</>)}
+              </Typography>
+              {!isCorrect && <Alert severity="info" sx={{ mt: 1, ml: 5 }}><Typography variant="caption">{q.explanation}</Typography></Alert>}
+            </Paper>
+          );
+        })}
+        <Box sx={{ display: "flex", gap: 2, mt: 3 }}>
+          <Button variant="contained" onClick={startQuiz} startIcon={<RefreshIcon />} sx={{ background: "linear-gradient(135deg, #f59e0b, #d97706)", fontWeight: 700 }}>Try Again</Button>
+          <Button variant="outlined" onClick={() => setQuizStarted(false)}>Back to Overview</Button>
+        </Box>
+      </Paper>
+    );
+  }
+
+  const currentQuestion = currentQuestions[currentQuestionIndex];
+  const answeredCount = Object.keys(userAnswers).length;
+
+  return (
+    <Paper id="quiz-section" sx={{ p: 4, mb: 4, borderRadius: 3, border: `2px solid ${alpha("#f59e0b", 0.2)}` }}>
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Question {currentQuestionIndex + 1} of 10</Typography>
+          <Chip label={currentQuestion.topic} size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.15), color: "#8b5cf6", fontWeight: 600 }} />
+        </Box>
+        <LinearProgress variant="determinate" value={((currentQuestionIndex + 1) / 10) * 100} sx={{ height: 8, borderRadius: 1, bgcolor: alpha("#f59e0b", 0.1), "& .MuiLinearProgress-bar": { bgcolor: "#f59e0b" } }} />
+      </Box>
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 3, lineHeight: 1.5 }}>{currentQuestion.question}</Typography>
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {currentQuestion.options.map((option, index) => {
+          const isSelected = userAnswers[currentQuestion.id] === index;
+          return (
+            <Grid item xs={12} key={index}>
+              <Paper onClick={() => handleAnswerSelect(currentQuestion.id, index)} sx={{ p: 2, borderRadius: 2, cursor: "pointer", bgcolor: isSelected ? alpha("#f59e0b", 0.1) : "background.paper", border: `2px solid ${isSelected ? "#f59e0b" : alpha(theme.palette.divider, 0.2)}`, transition: "all 0.2s", "&:hover": { borderColor: "#f59e0b", bgcolor: alpha("#f59e0b", 0.05) } }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: isSelected ? "#f59e0b" : alpha(theme.palette.divider, 0.3), color: isSelected ? "white" : "text.secondary", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{String.fromCharCode(65 + index)}</Box>
+                  <Typography variant="body1" sx={{ fontWeight: isSelected ? 600 : 400 }}>{option}</Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Button variant="outlined" disabled={currentQuestionIndex === 0} onClick={() => setCurrentQuestionIndex((p) => p - 1)}>Previous</Button>
+        <Typography variant="body2" color="text.secondary">{answeredCount}/10 answered</Typography>
+        {currentQuestionIndex < 9 ? (
+          <Button variant="contained" onClick={() => setCurrentQuestionIndex((p) => p + 1)} sx={{ background: "linear-gradient(135deg, #f59e0b, #d97706)" }}>Next</Button>
+        ) : (
+          <Button variant="contained" onClick={() => setShowResults(true)} disabled={answeredCount < 10} sx={{ background: answeredCount >= 10 ? "linear-gradient(135deg, #3b82f6, #2563eb)" : undefined, fontWeight: 700 }}>Submit Quiz</Button>
+        )}
+      </Box>
+    </Paper>
+  );
+}
 
 interface MobileRisk {
   id: string;
@@ -1414,6 +1683,11 @@ export default function OwaspMobilePage() {
           ))}
         </Grid>
       </Paper>
+
+      {/* Quiz Section */}
+      <Box sx={{ mt: 4 }}>
+        <QuizSection />
+      </Box>
     </Container>
     </LearnPageLayout>
   );

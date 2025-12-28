@@ -9,6 +9,7 @@ from sqlalchemy import func
 from backend import models
 from backend.core.database import get_db
 from backend.core.logging import get_logger
+from backend.core.mermaid_icons import WEBAPP_DIAGRAM_ICONS, get_webapp_diagram_prompt_icons
 from backend.services import export_service, sbom_service
 from backend.schemas import Report, Finding
 
@@ -510,6 +511,9 @@ async def get_codebase_diagram(report_id: int, db: Session = Depends(get_db)):
     - Dependencies between components
     - Technology-specific patterns
     
+    This is a human-friendly overview of how the application works,
+    NOT a security-focused diagram (that's the Attack Surface Map).
+    
     Returns Mermaid flowchart code with icons from available icon packs.
     """
     from backend.core.config import settings
@@ -536,16 +540,32 @@ async def get_codebase_diagram(report_id: int, db: Session = Depends(get_db)):
         models.CodeChunk.project_id == project_id
     ).all()
     
-    # Build file metadata
-    file_metadata = defaultdict(lambda: {"lines": 0, "language": None, "path": ""})
+    # Get dependencies for understanding the app
+    dependencies = db.query(models.Dependency).filter(
+        models.Dependency.project_id == project_id
+    ).all()
+    
+    # Get all findings to understand which files are most important
+    findings = db.query(models.Finding).filter(
+        models.Finding.scan_run_id == report.scan_run_id
+    ).all()
+    
+    # Build file metadata with finding counts (like AI summaries do)
+    file_metadata = defaultdict(lambda: {"lines": 0, "language": None, "path": "", "chunks": [], "finding_count": 0})
     for chunk in chunks:
         file_metadata[chunk.file_path]["language"] = chunk.language
         file_metadata[chunk.file_path]["path"] = chunk.file_path
+        file_metadata[chunk.file_path]["chunks"].append(chunk)
         if chunk.end_line:
             file_metadata[chunk.file_path]["lines"] = max(
                 file_metadata[chunk.file_path]["lines"],
                 chunk.end_line
             )
+    
+    # Count findings per file to identify important files
+    for finding in findings:
+        if finding.file_path and finding.file_path in file_metadata:
+            file_metadata[finding.file_path]["finding_count"] += 1
     
     # Calculate statistics
     total_files = len(file_metadata)
@@ -562,24 +582,80 @@ async def get_codebase_diagram(report_id: int, db: Session = Depends(get_db)):
         for i in range(1, len(parts)):
             folders.add("/".join(parts[:i]))
     
-    # Sample key files (entry points, configs, main files)
-    key_patterns = ["main", "app", "index", "config", "router", "service", "model", "view", "controller", "api", "handler"]
-    key_files = []
+    # PRIORITY FILE SELECTION (same strategy as AI summaries)
+    # 1. Files with most findings (these are the critical/active files)
+    files_by_findings = sorted(file_metadata.items(), key=lambda x: x[1]["finding_count"], reverse=True)
+    priority_files_with_findings = [f for f in files_by_findings if f[1]["finding_count"] > 0][:15]
+    
+    # 2. Largest files (by line count) - these define the app's structure
+    files_by_size = sorted(file_metadata.items(), key=lambda x: x[1]["lines"], reverse=True)
+    
+    # 3. Architecture files (entry points, configs, main files)
+    key_patterns = ["main", "app", "index", "config", "router", "service", "model", "view", "controller", "api", "handler", "routes", "server"]
+    architecture_files = []
     for path in file_metadata.keys():
         filename = path.split("/")[-1].lower()
         for pattern in key_patterns:
             if pattern in filename:
-                key_files.append(path)
+                architecture_files.append(path)
                 break
     
-    # Get sample file contents for better understanding
+    # Combine: priority files + large files + architecture files (deduplicated)
+    seen_paths = set()
+    significant_files = []
+    
+    # First: files with findings (up to 15)
+    for path, meta in priority_files_with_findings:
+        if path not in seen_paths:
+            seen_paths.add(path)
+            full_code = ""
+            for chunk in sorted(meta["chunks"], key=lambda c: c.start_line or 0):
+                full_code += (chunk.code or "") + "\n"
+            significant_files.append({
+                "path": path,
+                "language": meta["language"],
+                "lines": meta["lines"],
+                "finding_count": meta["finding_count"],
+                "code_preview": full_code[:4000]
+            })
+    
+    # Second: largest files (up to 10 more)
+    for path, meta in files_by_size:
+        if path not in seen_paths and len(significant_files) < 25:
+            seen_paths.add(path)
+            full_code = ""
+            for chunk in sorted(meta["chunks"], key=lambda c: c.start_line or 0):
+                full_code += (chunk.code or "") + "\n"
+            significant_files.append({
+                "path": path,
+                "language": meta["language"],
+                "lines": meta["lines"],
+                "finding_count": meta["finding_count"],
+                "code_preview": full_code[:4000]
+            })
+    
+    # Third: architecture files (up to 5 more)
+    for path in architecture_files:
+        if path not in seen_paths and len(significant_files) < 30:
+            meta = file_metadata[path]
+            seen_paths.add(path)
+            full_code = ""
+            for chunk in sorted(meta["chunks"], key=lambda c: c.start_line or 0):
+                full_code += (chunk.code or "") + "\n"
+            significant_files.append({
+                "path": path,
+                "language": meta["language"],
+                "lines": meta["lines"],
+                "finding_count": meta["finding_count"],
+                "code_preview": full_code[:4000]
+            })
+    
+    key_files = architecture_files
+    
+    # Get sample file contents for better understanding - up to 20 files with 2500 chars each
     sample_contents = []
-    important_files = ["main", "app", "index", "routes", "router", "server", "config", "package.json", "requirements.txt", "dockerfile"]
-    for chunk in chunks[:30]:
-        filename_lower = chunk.file_path.lower()
-        if any(imp in filename_lower for imp in important_files):
-            content_preview = chunk.code[:500] if chunk.code else ""
-            sample_contents.append(f"--- {chunk.file_path} ---\n{content_preview}")
+    for sig_file in significant_files[:20]:
+        sample_contents.append(f"--- {sig_file['path']} ({sig_file['lines']} lines) ---\n{sig_file['code_preview'][:2500]}")
     
     # Detect tech stack from languages and file names
     tech_stack = []
@@ -643,125 +719,112 @@ async def get_codebase_diagram(report_id: int, db: Session = Depends(get_db)):
     if "redis" in code_sample:
         tech_stack.append("Redis")
     
-    # Build the prompt for diagram generation
-    diagram_prompt = f"""You are an expert software architect. Create a HIGH-LEVEL ARCHITECTURE DIAGRAM showing the technology stack and how components interact.
+    # Dependencies context for understanding the app
+    dep_context = ""
+    if dependencies:
+        dep_ecosystems = defaultdict(list)
+        for d in dependencies:
+            dep_ecosystems[d.ecosystem or "unknown"].append(d.name)
+        dep_context = f"""
+KEY DEPENDENCIES:
+{chr(10).join(f"- {eco}: {', '.join(deps[:15])}{'...' if len(deps) > 15 else ''}" for eco, deps in dep_ecosystems.items())}
+"""
+    
+    # Get agentic scan synthesis data from report.data (if available)
+    synthesis_context = ""
+    report_data = report.data or {}
+    scan_stats = report_data.get("scan_stats", {})
+    synthesis_data = scan_stats.get("synthesis", {})
+    if synthesis_data:
+        synthesis_context = f"""
+## AGENTIC ANALYSIS (Deep Scan Insights)
+App Description: {synthesis_data.get('app_description', 'N/A')}
+Architecture Pattern: {synthesis_data.get('architecture_pattern', 'N/A')}
+Key Components: {', '.join(synthesis_data.get('key_components', [])[:10]) if synthesis_data.get('key_components') else 'N/A'}
+Data Flow: {synthesis_data.get('data_flow_summary', 'N/A')}
+External Integrations: {', '.join(synthesis_data.get('external_integrations', [])[:8]) if synthesis_data.get('external_integrations') else 'N/A'}
+"""
+    
+    # Build the prompt for diagram generation with Mermaid icon packs
+    diagram_prompt = f"""You are a software architect creating a code architecture diagram for a web/software application.
 
-PROJECT: {project.name if project else 'Unknown'}
-DETECTED TECH STACK: {', '.join(tech_stack) if tech_stack else 'Unknown'}
-TOTAL: {total_files} files, {total_lines:,} lines of code
+## PROJECT INFORMATION
+Name: {project.name if project else 'Unknown'}
+Tech Stack: {', '.join(tech_stack) if tech_stack else 'Unknown'}
+Total Files: {total_files}
+Lines of Code: {total_lines:,}
 
-LANGUAGE BREAKDOWN:
+## LANGUAGES
 {chr(10).join(f"- {lang}: {count} files" for lang, count in sorted(languages.items(), key=lambda x: -x[1])[:8])}
 
-PROJECT STRUCTURE:
+## PROJECT STRUCTURE
 {chr(10).join(f"- {f}/" for f in sorted(folders) if "/" not in f)}
 
-KEY FILES:
+## KEY FILES ({len(key_files)} architecture files identified)
 {chr(10).join(f"- {f}" for f in sorted(key_files)[:30])}
+{dep_context}
+{synthesis_context}
+## SOURCE CODE SAMPLES
+{chr(10).join(sample_contents[:12])}
 
-SAMPLE CODE (to understand the app):
-{chr(10).join(sample_contents[:5])}
+## YOUR TASK
+Create a Mermaid diagram showing the app's architecture. Show:
+1. Main layers (UI/Frontend, API/Backend, Business Logic, Data Layer)
+2. Key components and their relationships
+3. Data flow between components
+4. External service connections (if any)
 
-CREATE A TECHNOLOGY ARCHITECTURE OVERVIEW showing:
-1. **Client/Frontend Layer**: What users see (Browser, Mobile App, Desktop)
-2. **Backend/API Layer**: Server technology with framework name (Node.js, PHP, Python, Java)
-3. **Database Layer**: All data stores with specific tech (MySQL, PostgreSQL, MongoDB, Redis)
-4. **External Services**: Third-party APIs, cloud services, auth providers
-5. **Infrastructure**: Docker, Kubernetes, cloud platform if detected
+{get_webapp_diagram_prompt_icons()}
 
-DIAGRAM RULES:
-- Use "flowchart TD" (top-down)
-- Group related components in subgraphs
-- Label connections with protocols: "HTTP/REST", "SQL", "WebSocket", "GraphQL"
-- Max 15-20 nodes for readability
-- Use the NEW MERMAID v11.3.0+ ICON SHAPE SYNTAX for nodes with icons
+Output a valid Mermaid flowchart diagram. Use subgraphs for different layers.
+Use plain text labels with emojis for subgraph titles (NO icons in subgraph labels).
+Use the icon block syntax for individual nodes: NodeId@{{ icon: "prefix:name", form: "square", label: "Label" }}
 
-=== ICON SHAPE SYNTAX (REQUIRED) ===
-Use this EXACT format for nodes with icons:
-    NodeId@{{ icon: "prefix:icon-name", form: "square", label: "Label Text" }}
+IMPORTANT: Output ONLY the Mermaid code, no explanations. Start with ```mermaid and end with ```.
 
-Available icon prefixes and EXACT icon names (use these exactly):
-
-fa (FontAwesome Solid):
-  - fa:user, fa:users, fa:user-shield
-  - fa:server, fa:database, fa:cloud, fa:globe
-  - fa:lock, fa:shield, fa:key
-  - fa:desktop, fa:mobile, fa:laptop, fa:tablet
-  - fa:code, fa:file, fa:folder, fa:gear
-  - fa:network-wired, fa:plug, fa:link
-
-fab (FontAwesome Brands):
-  - fab:react, fab:angular, fab:vuejs
-  - fab:node-js, fab:node, fab:php, fab:python, fab:java
-  - fab:docker, fab:aws, fab:google
-  - fab:github, fab:laravel, fab:wordpress, fab:symfony
-
-Form options: "square", "circle", "rounded" (or omit for no background)
-
-=== CORRECT EXAMPLES ===
-flowchart TD
-    Browser@{{ icon: "fa:desktop", form: "square", label: "Web Browser" }}
-    ReactApp@{{ icon: "fab:react", form: "square", label: "React Frontend" }}
-    NodeAPI@{{ icon: "fab:node-js", form: "square", label: "Node.js API" }}
-    MySQL@{{ icon: "fa:database", form: "square", label: "MySQL" }}
-    Redis@{{ icon: "fa:database", form: "circle", label: "Redis Cache" }}
-    
-    Browser --> ReactApp
-    ReactApp -->|REST API| NodeAPI
-    NodeAPI -->|SQL| MySQL
-    NodeAPI -->|Cache| Redis
-
-=== TECHNOLOGY-SPECIFIC ICONS ===
-Frontend: fab:react, fab:angular, fab:vuejs, fa:desktop, fa:mobile
-Backend: fab:node-js, fab:php, fab:python, fab:java, fab:laravel, fa:server
-Database: fa:database (for MySQL, PostgreSQL, MongoDB, etc.)
-Cache: fa:database with circle form (for Redis, Memcached)
-Cloud: fa:cloud, fab:aws, fab:google, fab:docker
-Auth: fa:lock, fa:user, fa:shield
-External: fa:globe, fa:cloud, fa:plug
-
-Return ONLY valid Mermaid code starting with "flowchart TD". No explanations, no markdown blocks.
-
-EXAMPLE OUTPUT (for a React + Node.js + MySQL app):
-flowchart TD
-    subgraph Clients[Users]
-        Browser@{{ icon: "fa:desktop", form: "square", label: "Web Browser" }}
+Example structure:
+```mermaid
+flowchart TB
+    subgraph UI["🖥️ User Interface"]
+        Browser@{{ icon: "fa:globe", form: "square", label: "Web Browser" }}
         Mobile@{{ icon: "fa:mobile", form: "square", label: "Mobile App" }}
     end
-    
-    subgraph Frontend[React Frontend]
-        ReactUI@{{ icon: "fab:react", form: "square", label: "React UI" }}
-        State@{{ icon: "fa:gear", form: "square", label: "State Management" }}
+    subgraph Frontend["⚛️ Frontend Layer"]
+        ReactApp@{{ icon: "fab:react", form: "square", label: "React Application" }}
+        Components@{{ icon: "fab:js", form: "square", label: "UI Components" }}
+    end
+    subgraph Backend["🔧 Backend API"]
+        APIServer@{{ icon: "mdi:api", form: "square", label: "REST API" }}
+        AuthService@{{ icon: "fa:lock", form: "square", label: "Authentication" }}
+        BusinessLogic@{{ icon: "mdi:cog", form: "square", label: "Business Logic" }}
+    end
+    subgraph Data["💾 Data Layer"]
+        Database@{{ icon: "mdi:elephant", form: "square", label: "PostgreSQL" }}
+        Cache@{{ icon: "mdi:memory", form: "square", label: "Redis Cache" }}
+    end
+    subgraph External["☁️ External Services"]
+        EmailService@{{ icon: "mdi:email", form: "square", label: "Email Provider" }}
+        CloudStorage@{{ icon: "fa:cloud", form: "square", label: "Cloud Storage" }}
     end
     
-    subgraph Backend[Node.js / Express]
-        API@{{ icon: "fab:node-js", form: "square", label: "REST API" }}
-        Auth@{{ icon: "fa:lock", form: "square", label: "Authentication" }}
-        Services@{{ icon: "fa:gear", form: "square", label: "Business Logic" }}
-    end
-    
-    subgraph DataLayer[Data Layer]
-        MySQL@{{ icon: "fa:database", form: "square", label: "MySQL Database" }}
-        Redis@{{ icon: "fa:database", form: "circle", label: "Redis Cache" }}
-    end
-    
-    subgraph External[External Services]
-        S3@{{ icon: "fab:aws", form: "circle", label: "AWS S3" }}
-        Email@{{ icon: "fa:globe", form: "circle", label: "Email Service" }}
-    end
-    
-    Browser --> ReactUI
-    Mobile -->|HTTPS| API
-    ReactUI -->|REST| API
-    API --> Auth
-    API --> Services
-    Services -->|SQL| MySQL
-    Services -->|Cache| Redis
-    Services -->|Upload| S3
-    Services -->|SMTP| Email"""
+    Browser --> ReactApp
+    Mobile --> APIServer
+    ReactApp --> APIServer
+    APIServer --> AuthService
+    APIServer --> BusinessLogic
+    BusinessLogic --> Database
+    BusinessLogic --> Cache
+    BusinessLogic --> EmailService
+    BusinessLogic --> CloudStorage
+```
+
+Generate a diagram for THIS app based on the actual code structure provided. 
+Tech Stack Detected: {', '.join(tech_stack) if tech_stack else 'Unknown'}
+Use the appropriate icons from the list above for the detected technologies."""
     
     mermaid_code = None
     
+    # Generate diagram using Gemini (Ollama support can be added later for offline use)
     if settings.gemini_api_key:
         try:
             from google import genai
@@ -776,14 +839,17 @@ flowchart TD
             if response and response.text:
                 diagram = response.text.strip()
                 
-                # Clean up response - remove markdown code blocks if present
-                if diagram.startswith("```mermaid"):
-                    diagram = diagram[10:]
-                if diagram.startswith("```"):
+                # Extract just the mermaid code (same as APK Analyzer)
+                if "```mermaid" in diagram:
+                    start = diagram.find("```mermaid")
+                    end = diagram.find("```", start + 10)
+                    if end > start:
+                        diagram = diagram[start + 10:end].strip()
+                elif diagram.startswith("```"):
                     diagram = diagram[3:]
-                if diagram.endswith("```"):
-                    diagram = diagram[:-3]
-                diagram = diagram.strip()
+                    if diagram.endswith("```"):
+                        diagram = diagram[:-3]
+                    diagram = diagram.strip()
                 
                 # Validate it starts with flowchart
                 if diagram.startswith("flowchart"):
@@ -794,7 +860,8 @@ flowchart TD
                     report_data = report.data or {}
                     report_data["codebase_diagram"] = {
                         "mermaid_code": mermaid_code,
-                        "diagram_type": "flowchart"
+                        "diagram_type": "flowchart",
+                        "generated_by": "gemini"
                     }
                     report.data = report_data
                     db.commit()
@@ -805,30 +872,27 @@ flowchart TD
         except Exception as e:
             logger.error(f"Error generating diagram with Gemini: {e}")
     else:
-        logger.warning("Gemini API key not configured, cannot generate diagram")
+        logger.warning("No AI configured (set GEMINI_API_KEY), using fallback diagram")
     
-    # Return fallback diagram if AI generation failed
+    # Return fallback diagram if AI generation failed (clean simple structure)
     if not mermaid_code:
-        # Generate a basic fallback diagram from folder structure using new icon syntax
-        top_folders = [f for f in folders if "/" not in f][:6]
-        mermaid_code = "flowchart TD\n"
-        project_name = (project.name if project else 'Project').replace('"', "'")
-        mermaid_code += f'    Project@{{ icon: "fa:folder", form: "square", label: "{project_name}" }}\n'
+        top_folders = [f for f in folders if "/" not in f][:8]
+        project_name = (project.name if project else 'Project').replace('"', "'").replace('[', '').replace(']', '')
+        
+        mermaid_code = f'''flowchart TB
+    subgraph Project["{project_name}"]
+'''
         for folder in top_folders:
-            icon = "fa:file"
-            if folder in ["backend", "api", "server"]:
-                icon = "fa:server"
-            elif folder in ["frontend", "ui", "client", "web"]:
-                icon = "fab:react"
-            elif folder in ["models", "database", "db"]:
-                icon = "fa:database"
-            elif folder in ["tests", "test"]:
-                icon = "fa:check"
-            elif folder in ["services"]:
-                icon = "fa:gear"
-            safe_id = folder.replace('-', '_').replace('.', '_')
-            mermaid_code += f'    {safe_id}@{{ icon: "{icon}", form: "square", label: "{folder}/" }}\n'
-            mermaid_code += f"    Project --> {safe_id}\n"
+            safe_id = folder.replace('-', '_').replace('.', '_').replace(' ', '_')
+            mermaid_code += f'        {safe_id}["{folder}/"]\n'
+        
+        mermaid_code += "    end\n"
+        
+        # Add connections between folders if there are common patterns
+        if "frontend" in [f.lower() for f in top_folders] and "backend" in [f.lower() for f in top_folders]:
+            mermaid_code += "    frontend --> backend\n"
+        if "src" in [f.lower() for f in top_folders]:
+            mermaid_code += "    src --> |contains| Project\n"
     
     return {
         "report_id": report_id,
@@ -1748,7 +1812,7 @@ Answer the user's question based on this security scan report. Be helpful, speci
         })
         
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=settings.gemini_model_id,
             contents=conversation,
             config=types.GenerateContentConfig(
                 temperature=0.7,
@@ -2321,7 +2385,7 @@ Provide:
 Keep the explanation concise but informative. Use bullet points."""
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=settings.gemini_model_id,
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
             config=types.GenerateContentConfig(
                 temperature=0.3,

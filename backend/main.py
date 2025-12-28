@@ -7,7 +7,7 @@ from backend.core.config import settings
 from backend.core.database import Base, engine
 from backend.core.exceptions import VRAgentError
 from backend.core.logging import get_logger
-from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering, learn_chat
+from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering, learn_chat, social, chat_websocket, project_files
 from backend import models  # noqa: F401  # ensure models are registered
 
 logger = get_logger(__name__)
@@ -96,7 +96,27 @@ app.include_router(vulnhuntr.router, tags=["vulnhuntr"])
 app.include_router(agentic_scan.router, tags=["agentic-ai-scan"])
 app.include_router(findings.router, tags=["findings"])
 app.include_router(reverse_engineering.router, tags=["reverse-engineering"])
-app.include_router(learn_chat.router, prefix="/api", tags=["learn-chat"])
+app.include_router(learn_chat.router, tags=["learn-chat"])
+app.include_router(social.router, tags=["social"])
+app.include_router(chat_websocket.router, tags=["chat-websocket"])
+app.include_router(project_files.router, tags=["project-files"])
+
+# Serve uploaded chat files
+from starlette.staticfiles import StaticFiles
+import os
+CHAT_UPLOAD_DIR = os.path.join(settings.upload_dir, "chat")
+os.makedirs(CHAT_UPLOAD_DIR, exist_ok=True)
+app.mount("/api/uploads/chat", StaticFiles(directory=CHAT_UPLOAD_DIR), name="chat-uploads")
+
+# Serve uploaded project files
+PROJECT_FILES_DIR = os.path.join(settings.upload_dir, "project_files")
+os.makedirs(PROJECT_FILES_DIR, exist_ok=True)
+app.mount("/api/uploads/project_files", StaticFiles(directory=PROJECT_FILES_DIR), name="project-files-uploads")
+
+# Serve uploaded project documents (AI-analyzed)
+PROJECT_DOCS_DIR = os.path.join(settings.upload_dir, "project_documents")
+os.makedirs(PROJECT_DOCS_DIR, exist_ok=True)
+app.mount("/api/uploads/project_documents", StaticFiles(directory=PROJECT_DOCS_DIR), name="project-documents-uploads")
 
 
 @app.get("/health")

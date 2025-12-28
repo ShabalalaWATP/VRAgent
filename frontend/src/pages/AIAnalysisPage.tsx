@@ -27,6 +27,7 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import LinkIcon from "@mui/icons-material/Link";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import VerifiedIcon from "@mui/icons-material/Verified";
+import LayersIcon from "@mui/icons-material/Layers";
 
 interface AIFeature {
   id: string;
@@ -323,6 +324,83 @@ else:
     color: "#06b6d4",
   },
   {
+    id: "multi_pass_scan",
+    title: "Multi-Pass Deep Scan",
+    icon: <LayersIcon />,
+    description:
+      "Three-pass progressive analysis: AI scans many files briefly first, then focuses on high-risk files with more content, then performs full analysis on the most critical files. Enhanced mode doubles the content depth.",
+    prompt: `# Multi-Pass Architecture in agentic_scan_service.py
+
+# Pass configuration (standard vs enhanced mode)
+if enhanced_mode:
+    self.analyzer.set_multi_pass_limits(
+        pass1=80, pass2=30, pass3=12,       # Files per pass
+        quick_chars=4000,                    # Pass 1: 4K chars per file
+        detailed_chars=10000,                # Pass 2: 10K chars per file
+        full_chars=30000                     # Pass 3: 30K chars (full file)
+    )
+else:  # Standard mode
+    self.analyzer.set_multi_pass_limits(
+        pass1=60, pass2=20, pass3=8,         # Files per pass
+        quick_chars=3000,                    # Pass 1: 3K chars per file
+        detailed_chars=7000,                 # Pass 2: 7K chars per file
+        full_chars=18000                     # Pass 3: 18K chars (full file)
+    )
+
+# Pass 1 (Quick Triage): Many files, brief content
+# - Identifies entry points, security patterns, dangerous functions
+# - Scores files 0-10 for security relevance
+# - Files scoring ≥5 or flagged "requires_deeper_analysis" → Pass 2
+
+# Pass 2 (Focused Analysis): Fewer files, more content  
+# - Traces data flows, checks input validation/sanitization
+# - Cross-references with CVE/SAST findings
+# - Files scoring ≥6 or with confirmed vulns → Pass 3
+
+# Pass 3 (Deep Analysis): Critical files only, full content
+# - Comprehensive audit: every function, all data flows
+# - Exploit path identification
+# - Generates detailed vulnerability reports
+
+# Content truncation by depth:
+def truncate_content(content, analysis_depth):
+    char_limit = self.content_limits.get(analysis_depth, 3000)
+    return content[:char_limit]`,
+    exampleOutput: `## Multi-Pass Analysis Results
+
+### Pass 1: Quick Triage (60 files × 3K chars)
+| File | Security Score | Entry Points | Vulns Found |
+|------|---------------|--------------|-------------|
+| api/auth.py | 8.5 | 4 (login, register, reset) | 2 potential |
+| api/search.py | 7.2 | 2 (query, filter) | 1 potential |
+| utils/db.py | 6.8 | 0 | 1 potential |
+| ... | ... | ... | ... |
+→ 18 files scored ≥5.0, advancing to Pass 2
+
+### Pass 2: Focused Analysis (20 files × 7K chars)
+| File | Score | Data Flow Issues | CVE Match |
+|------|-------|------------------|----------|
+| api/auth.py | 9.1 | Unsanitized input → SQL | - |
+| api/search.py | 8.4 | User input → eval() | - |
+| api/upload.py | 7.8 | Path traversal risk | - |
+→ 8 files scored ≥6.0, advancing to Pass 3
+
+### Pass 3: Deep Analysis (8 files × 18K chars)
+| File | Confirmed Vulns | Exploit Path |
+|------|-----------------|-------------|
+| api/auth.py | SQLi (HIGH) | login → query → exfil |
+| api/search.py | RCE (CRITICAL) | search → eval → shell |
+| api/upload.py | Path Traversal | upload → ../../etc/passwd |
+
+### Summary:
+- 60 files triaged → 20 focused → 8 deep analyzed
+- 5 confirmed vulnerabilities found
+- 2 CRITICAL, 2 HIGH, 1 MEDIUM
+- Progressive depth: 3K → 7K → 18K chars per file`,
+    outputFormat: "Progressive depth analysis",
+    color: "#f97316",
+  },
+  {
     id: "exploit_scenarios",
     title: "Exploit Scenarios",
     icon: <AutoAwesomeIcon />,
@@ -544,11 +622,11 @@ export default function AIAnalysisPage() {
 
       {/* Feature Cards Overview */}
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-        🎯 6 AI Analysis Capabilities
+        🎯 7 AI Analysis Capabilities
       </Typography>
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {aiFeatures.map((feature, index) => (
-          <Grid item xs={12} sm={6} md={2} key={feature.id}>
+          <Grid item xs={6} sm={4} md={12/7} key={feature.id}>
             <Card
               onClick={() => setSelectedTab(index)}
               sx={{

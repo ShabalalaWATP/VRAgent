@@ -5,7 +5,7 @@ An end-to-end platform for automated security vulnerability scanning and analysi
 - **Network Security Analysis**: Run Nmap scans and analyze PCAP files with AI-powered insights
 - **Reverse Engineering Hub**: Analyze binaries (PE/ELF), Android APKs, and Docker images with AI-powered insights
 - **AI-Powered Reports**: Google Gemini generates detailed exploitability narratives, attack scenarios, and remediation guidance
-- **Interactive Learning Hub**: 68 educational topics across 10 categories covering security fundamentals, attack frameworks, vulnerability research, and pentesting methodologies with AI-powered chat assistant on every page
+- **Interactive Learning Hub**: 105 educational topics across 13 categories covering security fundamentals, attack frameworks, vulnerability research, and pentesting methodologies with AI-powered chat assistant on every page, global search, and quick jump navigation
 
 ## 🎯 Features
 
@@ -79,6 +79,14 @@ VRAgent integrates **14 specialized security scanners** for comprehensive vulner
 
 ### AI-Powered Analysis
 - **Google Gemini Integration**: AI-powered code analysis and exploitability narratives
+- **Agentic AI Scanner**: Multi-pass deep vulnerability analysis that runs with CVE/SAST context
+  - Pass 1: Triage scan (60 files × 3K chars, or 80 files × 4K chars in Enhanced mode)
+  - Pass 2: Focused analysis (20 files × 7K chars, or 30 files × 10K chars in Enhanced mode)
+  - Pass 3: Deep analysis (8 files × 18K chars, or 12 files × 30K chars in Enhanced mode)
+  - Progressive content depth: AI sees more of each file as it advances through passes
+  - Data flow tracing across file boundaries
+  - Correlates findings with CVE and SAST results for higher confidence
+  - Enhanced mode for larger codebases (toggle in scan options)
 - **Dual AI Summaries**: 
   - Application overview explaining what the code does
   - Security analysis summarizing risk posture and top concerns
@@ -142,7 +150,22 @@ VRAgent integrates **14 specialized security scanners** for comprehensive vulner
 - **Improved Exploitability Display**: Clean card-based layout with colored sections for attack narrative, impact, PoC, and mitigations
 
 ### Learning Hub
-VRAgent includes a comprehensive **Security Learning Hub** with **75 learning topics** across **11 categories** for security professionals at all levels:
+VRAgent includes a comprehensive **Security Learning Hub** with **105 learning topics** across **13 categories** for security professionals at all levels:
+
+#### Global Search & Quick Jump Navigation
+The Learning Hub features powerful navigation tools to help you find topics fast:
+- **Global Search (Ctrl+K)**: Fuzzy search across all 105 topics instantly
+  - Keyboard shortcut support (Ctrl+K or Cmd+K)
+  - Real-time fuzzy matching as you type
+  - Click results to navigate directly to topics
+  - Searches topic titles, descriptions, and categories
+- **Quick Jump Sidebar**: Fixed navigation panel on large screens
+  - Collapsible category sections
+  - Topic counts per category
+  - Smooth scroll to any category
+  - Responsive drawer on mobile devices
+- **Category Chips**: Horizontal scrollable chips for quick category access
+- **Back to Top**: Floating button appears when scrolling down
 
 #### AI Chat Assistant
 Every learning page includes an **AI-powered chat assistant** that can answer questions about the current topic:
@@ -185,15 +208,21 @@ Advanced network security concepts:
 | **DDoS Attack Techniques** | Volumetric, protocol, application layer attacks, mitigation |
 | **Wireless Pentesting** | WiFi security (WEP/WPA), evil twin attacks, Bluetooth, RF protocols |
 
-#### 🔬 Reverse Engineering (4 topics)
-Reverse engineering fundamentals:
+#### 🔬 Reverse Engineering (10 topics)
+Reverse engineering fundamentals and advanced techniques:
 
 | Topic | Description |
 |-------|-------------|
+| **Intro to Reverse Engineering** | Fundamentals, tools overview, methodology, legal considerations |
 | **Debugging 101** | Breakpoints, stepping, memory inspection for beginners |
 | **Ghidra Reverse Engineering** | NSA's open-source RE tool: disassembly, decompilation, scripting |
+| **IDA Pro Essentials** | Industry-standard disassembler, navigation, scripting |
+| **Binary Ninja Guide** | Modern RE platform, HLIL/MLIL, automation, plugins |
 | **Android Reverse Engineering** | APK structure, JADX, Frida, static/dynamic analysis |
+| **iOS Reverse Engineering** | IPA analysis, Objective-C/Swift, jailbreak tools |
 | **Windows Internals for RE** | PE format, TEB/PEB, API patterns, hooking, DLL injection |
+| **Linux Internals for RE** | ELF format, syscalls, debugging, kernel modules |
+| **Anti-Debugging Techniques** | Detection methods, bypass techniques, anti-tampering |
 
 #### 🔍 Vulnerability Research (8 topics)
 Memory corruption, exploit development, and vulnerability analysis:
@@ -255,22 +284,23 @@ Threat intelligence, incident response, and defensive monitoring:
 | **SOC Analyst Workflow** | Triage, investigation, escalation, shift handoffs |
 | **Threat Hunting Fundamentals** | Hypothesis-driven hunting, data sources, ATT&CK mapping |
 
-#### 📱 Mobile Security (3 topics)
+#### 📱 Mobile Security (4 topics)
 Mobile application security testing:
 
 | Topic | Description |
 |-------|-------------|
+| **Android Pentesting** | APK analysis, Frida, Objection, root detection bypass |
 | **iOS Pentesting** | Static/dynamic analysis, Frida, jailbreak bypass, data storage |
 | **OWASP Mobile Top 10** | Critical security risks for mobile applications (2024) |
 | **Mobile App Pentesting** | Android & iOS: Frida, SSL pinning bypass, data storage |
 
-#### 🏆 Career & Certifications (3 topics)
+#### 🏆 Career & Certifications (4 topics)
 Career development resources:
 
 | Topic | Description |
 |-------|-------------|
 | **Cyber Security Certifications** | SANS, OffSec, CompTIA, CREST, CEH certification map |
-| **Cybersecurity Career Paths** | Red Team, Blue Team, Security Engineering, GRC tracks |
+| **Cybersecurity Career Paths** | Comprehensive guide with 12 tabs: Overview, Learning Paths, Specialized Tracks, Career Guidance, Salary Data, Job Market, Interview Prep, Networking, Resume Tips, Personal Branding, Home Lab Setup |
 | **Building a Security Portfolio** | GitHub projects, CTF, blog writing, bug bounty work |
 
 #### 📚 Quick Reference (2 topics)
@@ -281,7 +311,39 @@ Handy references for assessments:
 | **Security Glossary** | 120+ cybersecurity terms with definitions |
 | **Commands Reference** | Linux, PowerShell, Nmap, Wireshark commands |
 
-#### 💻 IT Fundamentals (7 topics)
+#### ⚙️ Software Engineering (17 topics)
+Core software engineering and programming foundations for security professionals:
+
+| Topic | Description |
+|-------|-------------|
+| **Software Engineering Fundamentals** | Beginner guide to tools, IDEs, Git/GitHub, workflows |
+| **Secure by Design** | Security principles, threat modeling, STRIDE, OWASP Top 10 |
+| **Git Version Control** | Repositories, commits, branches, merging, GitHub/GitLab |
+| **Python Fundamentals** | Scripting, automation, security tools, exploit development |
+| **JavaScript Fundamentals** | ES6+, DOM, async programming, React, Node.js, TypeScript |
+| **C Programming** | Memory management, pointers, data structures, systems programming |
+| **C++ Programming** | OOP, templates, STL, smart pointers, modern C++ features |
+| **Go Programming** | Goroutines, channels, interfaces, building scalable services |
+| **Rust Programming** | Ownership, memory safety, fearless concurrency |
+| **Java Programming** | OOP, JVM architecture, Spring Boot, enterprise applications |
+| **C# Programming** | .NET ecosystem, LINQ, async patterns, ASP.NET Core |
+| **PHP Programming** | Server-side scripting, database integration, Laravel |
+| **Kotlin Programming** | Null safety, coroutines, functional programming, Android |
+| **Swift Programming** | Optionals, protocols, SwiftUI, iOS/macOS development |
+| **Assembly Language** | x86/x64 registers, memory, instructions, CPU architecture |
+| **HTML & CSS Fundamentals** | Document structure, CSS styling, Flexbox, Grid |
+
+#### 📋 Project & Service Management (4 topics)
+Project management methodologies and IT service frameworks:
+
+| Topic | Description |
+|-------|-------------|
+| **Agile Project Management** | Scrum, Kanban, user stories, estimation, sprints, SAFe |
+| **The Scrum Guide** | Roles, events, artifacts, Definition of Done |
+| **PRINCE2 Guide** | 7 principles, 7 themes, 7 processes, governance |
+| **ITIL 4 Guide** | Service Value System, guiding principles, 34 practices |
+
+#### 💻 IT Fundamentals (8 topics)
 Core technology foundations for security professionals:
 
 | Topic | Description |
@@ -293,6 +355,7 @@ Core technology foundations for security professionals:
 | **Cloud Computing** | AWS, Azure, GCP services, IaC, containers, security |
 | **Systems Administration** | Infrastructure management, monitoring, automation |
 | **Artificial Intelligence** | ML/DL fundamentals, NLP, LLMs, AI security, MLOps |
+| **IT Hardware** | Computer architecture, components, troubleshooting |
 
 ### Reports & Exports
 - **Multiple Export Formats**: Generate professional reports in:
@@ -579,6 +642,11 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
 
 #### Binary Analysis (PE/ELF)
 - **Multi-Format Support**: Analyze Windows executables (PE), Linux binaries (ELF), DLLs, and shared objects
+- **Unified Binary Results** (4-Tab Interface):
+  - **Tab 1: What Does This Binary Do?** - AI-powered functionality analysis explaining the binary's purpose, capabilities, and behavior in plain English
+  - **Tab 2: Security Findings** - All detected vulnerabilities with severity ratings, CWE references, and AI-generated remediation guidance
+  - **Tab 3: Architecture Diagram** - Auto-generated Mermaid diagram showing binary structure and component relationships
+  - **Tab 4: Attack Surface Map** - Visual attack tree showing exploitable entry points and attack vectors
 - **String Extraction**: Extract ASCII and Unicode strings with context
   - Configurable minimum length filtering
   - Automatic categorization (URLs, paths, registry keys, IP addresses)
@@ -593,16 +661,24 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
   - Build artifact analysis
 - **ELF Symbol Extraction**: Function and object symbols
 - **Binary Metadata**: File size, architecture, entry point, sections
+- **Legitimacy Detection**: Automatic detection of trusted software (Microsoft signed, known publishers)
 
 #### AI-Powered Vulnerability Hunter
-- **Unified Binary Scanning**: Comprehensive multi-phase security analysis
-  - Automatic vulnerability detection across multiple categories
-  - Memory corruption (buffer overflow, use-after-free, double-free)
-  - Authentication bypass, hardcoded credentials
-  - Injection vulnerabilities (command, SQL, format string)
-  - Cryptographic weaknesses
+- **Unified Binary Scanning**: Comprehensive **11-phase** security analysis
+  - **Phase 1**: Static Analysis - Metadata, strings, imports, secrets extraction
+  - **Phase 2**: Ghidra Decompilation - Headless decompiler with function export (optional, up to 5000 functions)
+  - **Phase 3**: Ghidra AI Summaries - Gemini summaries for decompiled functions (up to 30 functions)
+  - **Phase 4**: AI Security Summary - Overall Gemini analysis
+  - **Phase 5**: Pattern Vulnerability Scan - 80+ vulnerability patterns on decompiled code
+  - **Phase 6**: CVE Lookup - OSV.dev + NVD for library vulnerabilities
+  - **Phase 7**: Sensitive Data Discovery - 40+ patterns for secrets, credentials, API keys
+  - **Phase 8**: AI Vulnerability Hunt - Multi-pass hunting (up to 6 passes, 80 targets/pass)
+  - **Phase 9**: AI Findings Verification - Unified false positive elimination and attack chain detection
+  - **Phase 10**: Advanced Analysis - Obfuscation detection, packing analysis
+  - **Phase 11**: Attack Surface Mapping - Entry points, exports, attack vectors, Frida hooks
   - Real-time progress streaming via SSE
   - Cancelable long-running scans
+  - Configurable options: Enable/disable Ghidra, AI analysis, pattern scans, CVE lookup
 - **AI Vulnerability Analysis**: Deep inspection of detected issues
   - CVSS scoring with attack vector analysis
   - Exploitability assessment (complexity, privileges required)
@@ -612,6 +688,10 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
   - Behavioral classification
   - Suspicious indicator detection
   - Malware family hints
+- **Obfuscation Detection**: Identify packed/protected binaries
+  - Entropy analysis per section
+  - Packer signature detection
+  - Anti-analysis technique identification
 
 #### AI Decompiler Enhancement
 - **Code Enhancement**: Transform raw disassembly into readable code
@@ -697,10 +777,19 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
   - Export as Markdown, PDF, or DOCX
 
 #### APK Analysis (Android)
-- **Unified APK Scanning**: Comprehensive multi-phase security analysis
+- **Unified APK Scanning**: Comprehensive **10-phase** security analysis
+  - **Phase 1**: Manifest Analysis - Package info, permissions, components
+  - **Phase 2**: Secret Detection - Hardcoded secrets, URLs, API keys
+  - **Phase 3**: JADX Decompilation - Full Java source code recovery
+  - **Phase 4**: Code Security Scan - Pattern-based vulnerability scanning (60+ patterns)
+  - **Phase 5**: Sensitive Data Discovery - AI-verified PII, passwords, credentials
+  - **Phase 6**: CVE Database Lookup - OSV.dev + NVD for library vulnerabilities
+  - **Phase 7**: AI Vulnerability Hunt - Multi-pass AI-guided deep analysis (5 passes, 50 targets/pass)
+  - **Phase 8**: AI Finding Verification - Confidence scoring, false positive elimination
+  - **Phase 9**: AI Deep Analysis - Cross-reference analysis and code sampling
+  - **Phase 10**: AI Report Generation - Functionality, security, architecture, attack surface reports
   - Real-time progress streaming via SSE
   - Cancelable long-running scans
-  - Automatic vulnerability detection across all components
 - **JADX Decompilation**: Full Java source code recovery
   - Browse decompiled class files
   - Search across decompiled code
@@ -1291,21 +1380,22 @@ You have two options:
 #### Running a Scan
 
 1. After uploading code, click **"Start New Scan"**
-2. Watch the real-time progress bar as VRAgent:
-   - Extracts and parses your code
-   - Detects hardcoded secrets (40+ secret types)
-   - Runs static analysis scanners based on detected languages:
-     - ESLint for JavaScript/TypeScript
-     - Semgrep for all supported languages
-     - Bandit for Python
-     - gosec for Go
-     - SpotBugs for Java/Kotlin
-     - clang-tidy for C/C++
-   - Parses dependencies from manifest files
-   - Looks up known CVEs in OSV database
-   - Enriches findings with NVD data and EPSS scores
-   - Generates AI summaries and exploitability analysis
-3. When complete, you'll see the scan report
+2. Optionally enable **"Enhanced Scan"** for larger codebases (analyzes more files per pass)
+3. Watch the real-time progress bar as VRAgent runs through **12 phases**:
+   - **Phase 1-3 (0-30%)**: Archive extraction, parallel file parsing, static pattern detection
+   - **Phase 4 (30-45%)**: Code embedding generation with Gemini (reuses cached embeddings)
+   - **Phase 5-6 (45-70%)**: Parallel security scanning (SAST, Docker, IaC, Dependencies)
+   - **Phase 7 (70-72%)**: Cross-scanner deduplication
+   - **Phase 8-9 (72-86%)**: CVE lookup, transitive dependency analysis, reachability analysis
+   - **Phase 10 (86-89%)**: Vulnerability enrichment (NVD, EPSS, KEV)
+   - **Phase 11 (89-90%)**: **Agentic AI Scan** - Multi-pass AI-guided deep analysis with CVE/SAST context:
+     - Pass 1: Triage (60 files × 3K chars; Enhanced: 80 × 4K) - quick security scoring
+     - Pass 2: Focused (20 files × 7K chars; Enhanced: 30 × 10K) - deeper inspection
+     - Pass 3: Deep (8 files × 18K chars; Enhanced: 12 × 30K) - full file analysis
+     - Data flow tracing and vulnerability correlation
+   - **Phase 12 (90-94%)**: AI analysis - False positive detection, attack chain discovery
+   - **Phase 13 (94-100%)**: Report generation and webhook notifications
+4. When complete, you'll see the scan report
 
 #### Viewing Results
 

@@ -234,15 +234,40 @@ const scanPhases: ScanPhase[] = [
     color: "#7c3aed",
   },
   {
+    name: "Agentic AI Scan",
+    description:
+      "AI-guided multi-pass deep analysis that uses CVE and SAST context to intelligently prioritize and analyze code for vulnerabilities.",
+    details: [
+      "Receives external intelligence from CVE/SAST phases before analyzing code",
+      "Pass 1: Triage (60 files × 3K chars; Enhanced: 80 × 4K) - quick security scoring",
+      "Pass 2: Focused (20 files × 7K chars; Enhanced: 30 × 10K) - deeper file inspection",
+      "Pass 3: Deep (8 files × 18K chars; Enhanced: 12 × 30K) - full file analysis",
+      "Progressive depth: AI sees more content per file as passes narrow down",
+      "AI-guided data flow tracing across function calls and file boundaries",
+      "Synthesis phase: Correlates findings across all passes, deduplicates, scores confidence",
+    ],
+    tools: ["Gemini 2.0 Flash", "Multi-pass analyzer", "Data flow tracer", "CVE/SAST context"],
+    outputs: [
+      "AI-discovered vulnerabilities with exploit scenarios",
+      "Data flow traces showing taint propagation",
+      "Confidence scores based on CVE/SAST corroboration",
+      "CWE and OWASP classifications",
+    ],
+    icon: <PsychologyIcon />,
+    duration: "60-180 sec",
+    progressRange: "86-90%",
+    color: "#f97316",
+  },
+  {
     name: "AI-Enhanced Analysis",
     description:
-      "Google Gemini AI analyzes top findings for false positives, discovers attack chains, and optionally correlates with Agentic AI scan results.",
+      "Final AI analysis correlates SAST, CVE, and Agentic findings to detect false positives and discover attack chains.",
     details: [
       "Heuristic FP detection first: test files, mock code, __test__, suppression comments",
       "Context-aware severity: auth checks present, admin-only routes, internal endpoints",
       "Attack chain discovery: Combines related findings into exploitable paths",
       "LLM analysis for top 20 most critical findings (configurable MAX_LLM_FINDINGS)",
-      "Agentic AI corroboration: If agentic scan ran, cross-references findings",
+      "Agentic AI corroboration: Cross-references SAST findings with Agentic results",
       "Findings with FP score ≥0.6 (and not agentic-corroborated) marked for filtering",
     ],
     tools: ["Gemini 2.0 Flash", "Heuristic patterns", "Agentic correlation"],

@@ -23,6 +23,7 @@ alembic==1.12.0
 
 # HTTP client
 httpx>=0.28.1
+aiofiles>=23.0
 
 # Background jobs
 redis==4.6.0
@@ -33,6 +34,10 @@ reportlab==4.0.4
 python-docx==0.8.11
 markdown==3.4.4
 PyYAML>=6.0
+
+# Document AI processing (text extraction)
+PyPDF2>=3.0.0
+python-pptx>=0.6.21
 
 # Security scanning
 semgrep>=1.50.0
@@ -51,6 +56,7 @@ pyelftools>=0.31
 capstone>=5.0.0
 lief>=0.15.1
 yara-python>=4.5.0
+unicorn>=2.0.0  # CPU emulator for dynamic analysis
 # ssdeep>=3.4  # Requires libfuzzy-dev, optional
 # tlsh>=4.8.2  # Build issues, optional
 

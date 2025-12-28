@@ -98,6 +98,7 @@ import {
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
   RestartAlt as ResetIcon,
+  Close as CloseIcon,
 } from "@mui/icons-material";
 
 // Initialize mermaid with dark theme settings and register icon packs
@@ -153,21 +154,42 @@ mermaid.initialize({
     useMaxWidth: true,
     htmlLabels: true,
     curve: "basis",
+    nodeSpacing: 50,
+    rankSpacing: 50,
   },
   themeVariables: {
+    // Primary nodes (blue)
     primaryColor: "#3b82f6",
-    primaryTextColor: "#fff",
+    primaryTextColor: "#ffffff",
     primaryBorderColor: "#60a5fa",
+    // Lines and connections
     lineColor: "#94a3b8",
-    secondaryColor: "#1e293b",
-    tertiaryColor: "#0f172a",
+    // Secondary (darker blue-gray)
+    secondaryColor: "#1e3a5f",
+    secondaryTextColor: "#ffffff",
+    secondaryBorderColor: "#3b82f6",
+    // Tertiary (even darker)
+    tertiaryColor: "#1e293b",
+    tertiaryTextColor: "#e2e8f0",
+    tertiaryBorderColor: "#475569",
+    // Background colors
     background: "#0f172a",
     mainBkg: "#1e293b",
+    // Node styling
     nodeBorder: "#3b82f6",
+    nodeTextColor: "#ffffff",
+    // Cluster/subgraph styling - IMPORTANT for contrast
     clusterBkg: "#1e293b",
-    clusterBorder: "#334155",
-    titleColor: "#e2e8f0",
+    clusterBorder: "#475569",
+    // Title and labels
+    titleColor: "#f1f5f9",
     edgeLabelBackground: "#1e293b",
+    // Ensure text is always readable
+    textColor: "#f1f5f9",
+    // Note styling
+    noteBkgColor: "#334155",
+    noteTextColor: "#f1f5f9",
+    noteBorderColor: "#475569",
   },
 });
 
@@ -294,6 +316,28 @@ export function MermaidDiagram({
     setPan({ x: 0, y: 0 });
   };
 
+  // Handle escape key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+      }
+    };
+
+    if (isFullscreen) {
+      document.addEventListener("keydown", handleKeyDown);
+      // Prevent body scrolling when fullscreen
+      document.body.style.overflow = "hidden";
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [isFullscreen]);
+
   const handleZoom = (delta: number) => {
     setZoom((prev) => Math.max(0.1, Math.min(5, prev + delta)));
   };
@@ -357,6 +401,51 @@ export function MermaidDiagram({
         ...containerStyle,
       }}
     >
+      {/* Prominent close button for fullscreen mode */}
+      {isFullscreen && (
+        <IconButton
+          onClick={toggleFullscreen}
+          sx={{
+            position: "fixed",
+            top: 16,
+            right: 16,
+            zIndex: 10000,
+            bgcolor: "error.main",
+            color: "white",
+            width: 48,
+            height: 48,
+            "&:hover": {
+              bgcolor: "error.dark",
+              transform: "scale(1.1)",
+            },
+            boxShadow: 4,
+            transition: "all 0.2s",
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+      )}
+
+      {/* ESC hint in fullscreen */}
+      {isFullscreen && (
+        <Typography
+          variant="caption"
+          sx={{
+            position: "fixed",
+            top: 20,
+            right: 80,
+            zIndex: 10000,
+            color: "text.secondary",
+            bgcolor: alpha(theme.palette.background.paper, 0.8),
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 1,
+          }}
+        >
+          Press ESC to exit
+        </Typography>
+      )}
+
       {/* Header with controls */}
       {showControls && (
         <Box
@@ -518,6 +607,37 @@ export function MermaidDiagram({
                 width: isFullscreen ? "auto" : undefined,
                 height: "auto",
                 minWidth: isFullscreen ? "800px" : undefined,
+              },
+              // Force readable text colors on all node types
+              "& .node rect, & .node polygon, & .node circle, & .node ellipse": {
+                stroke: "#60a5fa !important",
+              },
+              "& .node .label, & .nodeLabel, & .label": {
+                color: "#f1f5f9 !important",
+                fill: "#f1f5f9 !important",
+              },
+              "& .cluster rect": {
+                fill: "#1e293b !important",
+                stroke: "#475569 !important",
+              },
+              "& .cluster .nodeLabel, & .cluster-label": {
+                fill: "#f1f5f9 !important",
+              },
+              // Subgraph title styling
+              "& .cluster text, & text.cluster-label": {
+                fill: "#f1f5f9 !important",
+                fontWeight: 600,
+              },
+              // Edge labels
+              "& .edgeLabel": {
+                backgroundColor: "#1e293b",
+                color: "#e2e8f0",
+              },
+              "& .edgeLabel rect": {
+                fill: "#1e293b !important",
+              },
+              "& .edgeLabel span": {
+                color: "#e2e8f0 !important",
               },
             }}
             dangerouslySetInnerHTML={{ __html: svg }}

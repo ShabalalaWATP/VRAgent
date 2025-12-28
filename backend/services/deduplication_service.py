@@ -700,3 +700,58 @@ def correlate_cross_file_findings(findings: List[Any]) -> List[Dict[str, Any]]:
     
     logger.info(f"Found {len(correlations)} cross-file correlations")
     return correlations
+
+
+def deduplicate_findings_simple(findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Simple deduplication for APK code scan findings.
+    
+    Removes duplicate findings based on:
+    - Same file path + line number + category
+    - Same fingerprint (hash of key attributes)
+    
+    Args:
+        findings: List of finding dictionaries from APK code scan
+        
+    Returns:
+        Deduplicated list of findings
+    """
+    if not findings:
+        return findings
+    
+    seen_fingerprints: Set[str] = set()
+    deduplicated: List[Dict[str, Any]] = []
+    
+    for finding in findings:
+        # Create fingerprint from key attributes
+        file_path = finding.get("file_path", "")
+        line_number = finding.get("line_number", 0)
+        category = finding.get("category", "")
+        title = finding.get("title", "")
+        
+        # Create unique fingerprint
+        fingerprint_str = f"{file_path}:{line_number}:{category}:{title}"
+        fingerprint = hashlib.md5(fingerprint_str.encode()).hexdigest()
+        
+        # Also check for near-duplicates (same file, same category, within 5 lines)
+        near_duplicate = False
+        for seen in list(seen_fingerprints):
+            if seen.startswith(f"{file_path}:{category}:"):
+                try:
+                    seen_line = int(seen.split(":")[1]) if ":" in seen else 0
+                    if abs(line_number - seen_line) <= 5 and category == seen.split(":")[2]:
+                        near_duplicate = True
+                        break
+                except (ValueError, IndexError):
+                    pass
+        
+        # Also create a location-based key for near-duplicate detection
+        location_key = f"{file_path}:{category}:{line_number // 10}"  # Group by 10-line blocks
+        
+        if fingerprint not in seen_fingerprints and not near_duplicate:
+            seen_fingerprints.add(fingerprint)
+            seen_fingerprints.add(f"{file_path}:{line_number}:{category}")
+            deduplicated.append(finding)
+    
+    logger.info(f"Deduplicated {len(findings)} findings to {len(deduplicated)} unique findings")
+    return deduplicated

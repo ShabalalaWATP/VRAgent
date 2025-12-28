@@ -4,9 +4,12 @@ import {
   Alert,
   Box,
   Button,
+  FormControlLabel,
   InputAdornment,
   Stack,
+  Switch,
   TextField,
+  Typography,
   alpha,
   useTheme,
 } from "@mui/material";
@@ -31,6 +34,12 @@ const GitIcon = () => (
   </svg>
 );
 
+const PeopleIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+  </svg>
+);
+
 type Props = {
   onCreated?: (project: ProjectSummary) => void;
 };
@@ -41,15 +50,17 @@ export default function NewProjectForm({ onCreated }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [gitUrl, setGitUrl] = useState("");
+  const [isShared, setIsShared] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: () => api.createProject({ name, description, git_url: gitUrl }),
+    mutationFn: () => api.createProject({ name, description, git_url: gitUrl, is_shared: isShared }),
     onSuccess: (project) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       onCreated?.(project);
       setName("");
       setDescription("");
       setGitUrl("");
+      setIsShared(false);
     },
   });
 
@@ -122,6 +133,44 @@ export default function NewProjectForm({ onCreated }: Props) {
           helperText="Link to your code repository for reference"
         />
 
+        {/* Shared Project Toggle */}
+        <Box
+          sx={{
+            p: 2,
+            borderRadius: 2,
+            bgcolor: isShared ? alpha(theme.palette.primary.main, 0.08) : "action.hover",
+            border: "1px solid",
+            borderColor: isShared ? theme.palette.primary.main : "divider",
+            transition: "all 0.2s",
+          }}
+        >
+          <FormControlLabel
+            control={
+              <Switch
+                checked={isShared}
+                onChange={(e) => setIsShared(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <PeopleIcon />
+                <Box>
+                  <Typography variant="body1" fontWeight={500}>
+                    Shared Project
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {isShared
+                      ? "Other users can be invited to view and edit this project"
+                      : "Only you can access this project"}
+                  </Typography>
+                </Box>
+              </Box>
+            }
+            sx={{ m: 0, width: "100%" }}
+          />
+        </Box>
+
         <Button
           type="submit"
           variant="contained"
@@ -138,7 +187,7 @@ export default function NewProjectForm({ onCreated }: Props) {
             },
           }}
         >
-          {mutation.isPending ? "Creating Project..." : "Create Project"}
+          {mutation.isPending ? "Creating Project..." : `Create ${isShared ? "Shared " : ""}Project`}
         </Button>
 
         {mutation.isError && (

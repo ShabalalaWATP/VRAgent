@@ -26,6 +26,8 @@ import {
   alpha,
   Divider,
   Alert,
+  AlertTitle,
+  useTheme,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -43,8 +45,849 @@ import SchoolIcon from "@mui/icons-material/School";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
+import QuizIcon from "@mui/icons-material/Quiz";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
+
+// Quiz question type
+interface QuizQuestion {
+  id: number;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  topic: string;
+}
+
+// Question bank for Android Reverse Engineering quiz (75 questions)
+const questionBank: QuizQuestion[] = [
+  // Section 1: APK Structure & Basics (10 questions)
+  {
+    id: 1,
+    question: "What file format is an APK file?",
+    options: ["TAR archive", "ZIP archive", "RAR archive", "7z archive"],
+    correctAnswer: 1,
+    explanation: "An APK (Android Package) file is essentially a ZIP archive containing all resources and code for an Android app.",
+    topic: "APK Structure"
+  },
+  {
+    id: 2,
+    question: "What does DEX stand for in Android?",
+    options: ["Data Exchange", "Dalvik Executable", "Device Executable", "Debug Extension"],
+    correctAnswer: 1,
+    explanation: "DEX stands for Dalvik Executable, the bytecode format executed by the Android runtime.",
+    topic: "APK Structure"
+  },
+  {
+    id: 3,
+    question: "Where is the AndroidManifest.xml located in an APK?",
+    options: ["In the res folder", "In the root of the APK", "In the META-INF folder", "In the lib folder"],
+    correctAnswer: 1,
+    explanation: "AndroidManifest.xml is located at the root of the APK and contains essential app metadata.",
+    topic: "APK Structure"
+  },
+  {
+    id: 4,
+    question: "What does the classes.dex file contain?",
+    options: ["Native code", "Compiled Java/Kotlin bytecode", "Resources only", "Signatures"],
+    correctAnswer: 1,
+    explanation: "classes.dex contains the Dalvik bytecode compiled from Java/Kotlin source code.",
+    topic: "APK Structure"
+  },
+  {
+    id: 5,
+    question: "What is the purpose of the resources.arsc file?",
+    options: ["Store native libraries", "Compiled binary resources table", "Application signatures", "Debug symbols"],
+    correctAnswer: 1,
+    explanation: "resources.arsc is the compiled binary resources table containing strings, styles, and resource references.",
+    topic: "APK Structure"
+  },
+  {
+    id: 6,
+    question: "What folder contains native libraries in an APK?",
+    options: ["native/", "lib/", "jni/", "so/"],
+    correctAnswer: 1,
+    explanation: "The lib/ folder contains native libraries (.so files) organized by architecture (arm64-v8a, armeabi-v7a, x86, etc.).",
+    topic: "APK Structure"
+  },
+  {
+    id: 7,
+    question: "What is the META-INF folder used for?",
+    options: ["Metadata and APK signatures", "Native libraries", "User data", "Cache files"],
+    correctAnswer: 0,
+    explanation: "META-INF contains the APK signature files (CERT.SF, CERT.RSA/DSA, MANIFEST.MF).",
+    topic: "APK Structure"
+  },
+  {
+    id: 8,
+    question: "What is an AXML file?",
+    options: ["Audio XML", "Android compiled binary XML", "Archive XML", "Application XML"],
+    correctAnswer: 1,
+    explanation: "AXML is Android's compiled binary XML format, a compressed version of XML resource files.",
+    topic: "APK Structure"
+  },
+  {
+    id: 9,
+    question: "Which signature scheme uses the APK Signing Block?",
+    options: ["v1 (JAR signing)", "v2 and v3 (APK Signature Scheme)", "v0 (no signing)", "PGP signing"],
+    correctAnswer: 1,
+    explanation: "APK Signature Scheme v2 and v3 use the APK Signing Block for whole-file signing.",
+    topic: "APK Structure"
+  },
+  {
+    id: 10,
+    question: "What happens when you rename an APK to .zip and extract it?",
+    options: ["Nothing, it won't work", "You can view all contents including decompiled code", "You see the raw structure but XML is binary encoded", "The APK gets corrupted"],
+    correctAnswer: 2,
+    explanation: "Renaming to .zip lets you extract and see the structure, but XML files are in binary AXML format requiring tools like apktool to decode.",
+    topic: "APK Structure"
+  },
+
+  // Section 2: Decompilation Tools (10 questions)
+  {
+    id: 11,
+    question: "What is the primary purpose of apktool?",
+    options: ["Sign APKs", "Decode/rebuild APKs with resources", "Only extract DEX files", "Obfuscate code"],
+    correctAnswer: 1,
+    explanation: "apktool decodes APKs to near-original form (including resources) and can rebuild them.",
+    topic: "Decompilation Tools"
+  },
+  {
+    id: 12,
+    question: "What does jadx produce from an APK?",
+    options: ["Smali code only", "Decompiled Java source code", "Native code", "Bytecode"],
+    correctAnswer: 1,
+    explanation: "jadx decompiles DEX/APK files directly to readable Java source code.",
+    topic: "Decompilation Tools"
+  },
+  {
+    id: 13,
+    question: "What is Smali?",
+    options: ["A programming language", "Human-readable DEX assembly language", "A compression format", "An encryption algorithm"],
+    correctAnswer: 1,
+    explanation: "Smali is the human-readable assembly language representation of Dalvik bytecode.",
+    topic: "Decompilation Tools"
+  },
+  {
+    id: 14,
+    question: "What tool converts DEX to JAR files?",
+    options: ["jadx", "dex2jar", "apktool", "smali"],
+    correctAnswer: 1,
+    explanation: "dex2jar converts DEX files to JAR format, which can then be decompiled with Java decompilers.",
+    topic: "Decompilation Tools"
+  },
+  {
+    id: 15,
+    question: "Which tool provides a GUI for APK analysis with decompilation?",
+    options: ["dex2jar", "JADX-GUI", "baksmali", "aapt"],
+    correctAnswer: 1,
+    explanation: "JADX-GUI provides a graphical interface for browsing decompiled Java code from APKs.",
+    topic: "Decompilation Tools"
+  },
+  {
+    id: 16,
+    question: "What command decodes an APK using apktool?",
+    options: ["apktool extract app.apk", "apktool d app.apk", "apktool decode app.apk", "apktool unzip app.apk"],
+    correctAnswer: 1,
+    explanation: "apktool d (decode) is the command to decode an APK to its decompiled form.",
+    topic: "Decompilation Tools"
+  },
+  {
+    id: 17,
+    question: "What is baksmali?",
+    options: ["An APK builder", "A disassembler for DEX to Smali", "A signing tool", "A resource extractor"],
+    correctAnswer: 1,
+    explanation: "baksmali is a disassembler that converts DEX bytecode to Smali assembly code.",
+    topic: "Decompilation Tools"
+  },
+  {
+    id: 18,
+    question: "What command rebuilds an APK with apktool?",
+    options: ["apktool rebuild folder/", "apktool b folder/", "apktool r folder/", "apktool build folder/"],
+    correctAnswer: 1,
+    explanation: "apktool b (build) rebuilds an APK from the decoded folder.",
+    topic: "Decompilation Tools"
+  },
+  {
+    id: 19,
+    question: "Why might jadx show some methods as /* compiled code */?",
+    options: ["The code is encrypted", "Decompilation failed for complex/obfuscated code", "It's native code", "Missing dependencies"],
+    correctAnswer: 1,
+    explanation: "jadx shows this when it cannot reliably decompile complex, unusual, or obfuscated bytecode patterns.",
+    topic: "Decompilation Tools"
+  },
+  {
+    id: 20,
+    question: "What is JEB Decompiler known for?",
+    options: ["Free and open source", "Professional-grade Android/native decompiler with advanced features", "Only for iOS", "Command-line only"],
+    correctAnswer: 1,
+    explanation: "JEB is a professional decompiler with advanced features like interactive analysis, scripting, and better obfuscation handling.",
+    topic: "Decompilation Tools"
+  },
+
+  // Section 3: Dynamic Analysis & Frida (10 questions)
+  {
+    id: 21,
+    question: "What is Frida?",
+    options: ["A static analyzer", "A dynamic instrumentation toolkit", "An emulator", "A compiler"],
+    correctAnswer: 1,
+    explanation: "Frida is a dynamic instrumentation toolkit allowing runtime code injection and hooking.",
+    topic: "Dynamic Analysis"
+  },
+  {
+    id: 22,
+    question: "What command lists running processes with Frida?",
+    options: ["frida-ls", "frida-ps -U", "frida-list", "frida-processes"],
+    correctAnswer: 1,
+    explanation: "frida-ps -U lists processes on a USB-connected device.",
+    topic: "Dynamic Analysis"
+  },
+  {
+    id: 23,
+    question: "What does the Java.perform() function do in Frida?",
+    options: ["Executes Java code on PC", "Ensures code runs in the Java runtime context on Android", "Compiles Java code", "Starts the app"],
+    correctAnswer: 1,
+    explanation: "Java.perform() ensures your JavaScript code executes within the app's Java runtime context.",
+    topic: "Dynamic Analysis"
+  },
+  {
+    id: 24,
+    question: "How do you hook a method's implementation in Frida?",
+    options: ["Java.hook()", "ClassName.methodName.implementation = function(){}", "Java.replace()", "Method.intercept()"],
+    correctAnswer: 1,
+    explanation: "You set the implementation property of the method to a new function to hook it.",
+    topic: "Dynamic Analysis"
+  },
+  {
+    id: 25,
+    question: "What is objection in Android security testing?",
+    options: ["A legal term", "Runtime mobile exploration toolkit built on Frida", "An emulator", "A static analyzer"],
+    correctAnswer: 1,
+    explanation: "objection is a runtime exploration toolkit powered by Frida, simplifying common tasks.",
+    topic: "Dynamic Analysis"
+  },
+  {
+    id: 26,
+    question: "What does frida-server do?",
+    options: ["Hosts a web server", "Runs on the device to enable Frida instrumentation", "Compiles scripts", "Signs APKs"],
+    correctAnswer: 1,
+    explanation: "frida-server runs on the target device and communicates with the Frida client on your PC.",
+    topic: "Dynamic Analysis"
+  },
+  {
+    id: 27,
+    question: "How can you spawn and attach to an app with Frida?",
+    options: ["frida -U -f com.app.package", "frida -U -spawn com.app", "frida --start com.app", "frida -run com.app"],
+    correctAnswer: 0,
+    explanation: "frida -U -f <package> spawns the app and attaches Frida before execution continues.",
+    topic: "Dynamic Analysis"
+  },
+  {
+    id: 28,
+    question: "What is the purpose of Java.choose() in Frida?",
+    options: ["Select a Java version", "Find existing instances of a class in memory", "Choose a method to hook", "Pick a thread"],
+    correctAnswer: 1,
+    explanation: "Java.choose() searches the heap for existing instances of a specified class.",
+    topic: "Dynamic Analysis"
+  },
+  {
+    id: 29,
+    question: "What tool provides a MITM proxy for intercepting app traffic?",
+    options: ["Wireshark only", "Burp Suite or mitmproxy", "frida-trace", "jadx"],
+    correctAnswer: 1,
+    explanation: "Burp Suite and mitmproxy are commonly used to intercept and modify HTTP/HTTPS traffic.",
+    topic: "Dynamic Analysis"
+  },
+  {
+    id: 30,
+    question: "What does frida-trace do?",
+    options: ["Traces network packets", "Automatically generates hooks for specified functions/methods", "Traces file system", "Traces memory"],
+    correctAnswer: 1,
+    explanation: "frida-trace auto-generates hooks to trace function calls matching a pattern.",
+    topic: "Dynamic Analysis"
+  },
+
+  // Section 4: Root Detection & Bypass (8 questions)
+  {
+    id: 31,
+    question: "What is a common root detection method?",
+    options: ["Checking screen size", "Checking for su binary or root management apps", "Checking battery level", "Checking app version"],
+    correctAnswer: 1,
+    explanation: "Apps commonly check for su binary, Magisk/SuperSU apps, or dangerous properties to detect root.",
+    topic: "Root Detection"
+  },
+  {
+    id: 32,
+    question: "What is Magisk Hide / DenyList?",
+    options: ["Hides the device", "Hides root from specific apps", "Hides user data", "Hides network traffic"],
+    correctAnswer: 1,
+    explanation: "Magisk Hide (now DenyList) conceals root status from selected apps.",
+    topic: "Root Detection"
+  },
+  {
+    id: 33,
+    question: "Which property is commonly checked for root detection?",
+    options: ["ro.build.version", "ro.debuggable or ro.secure", "ro.product.model", "ro.hardware"],
+    correctAnswer: 1,
+    explanation: "ro.debuggable and ro.secure properties indicate if the device is in a debuggable/insecure state.",
+    topic: "Root Detection"
+  },
+  {
+    id: 34,
+    question: "How can Frida bypass root detection?",
+    options: ["By uninstalling root", "By hooking detection methods to return false", "By encrypting the app", "By changing device ID"],
+    correctAnswer: 1,
+    explanation: "Frida can hook root detection methods and modify return values to indicate non-rooted device.",
+    topic: "Root Detection"
+  },
+  {
+    id: 35,
+    question: "What does SafetyNet/Play Integrity check?",
+    options: ["Network security only", "Device integrity, root, and tampering", "App performance", "Battery health"],
+    correctAnswer: 1,
+    explanation: "SafetyNet/Play Integrity checks device integrity, bootloader status, root, and system tampering.",
+    topic: "Root Detection"
+  },
+  {
+    id: 36,
+    question: "What is a common location apps check for su binary?",
+    options: ["/sdcard/su", "/system/bin/su or /system/xbin/su", "/data/local/su", "/cache/su"],
+    correctAnswer: 1,
+    explanation: "Common su binary locations include /system/bin/su, /system/xbin/su, and /sbin/su.",
+    topic: "Root Detection"
+  },
+  {
+    id: 37,
+    question: "What is the purpose of checking for test-keys in build.prop?",
+    options: ["Check app signature", "Detect custom/rooted ROM (not release-keys)", "Check encryption", "Verify developer"],
+    correctAnswer: 1,
+    explanation: "Official builds use release-keys; test-keys indicate a custom or potentially rooted ROM.",
+    topic: "Root Detection"
+  },
+  {
+    id: 38,
+    question: "What library is commonly used by apps for root detection?",
+    options: ["OpenSSL", "RootBeer", "OkHttp", "Retrofit"],
+    correctAnswer: 1,
+    explanation: "RootBeer is a popular open-source library for root detection in Android apps.",
+    topic: "Root Detection"
+  },
+
+  // Section 5: SSL Pinning & Network (8 questions)
+  {
+    id: 39,
+    question: "What is SSL/Certificate Pinning?",
+    options: ["Encrypting the APK", "Hardcoding expected server certificate/public key in the app", "Hiding SSL traffic", "Compressing data"],
+    correctAnswer: 1,
+    explanation: "SSL pinning hardcodes the expected server certificate or public key to prevent MITM attacks.",
+    topic: "SSL Pinning"
+  },
+  {
+    id: 40,
+    question: "Why does SSL pinning prevent proxy interception?",
+    options: ["It encrypts traffic", "The app rejects proxy's certificate not matching the pinned cert", "It blocks all network", "It uses different protocol"],
+    correctAnswer: 1,
+    explanation: "Pinned apps reject the proxy's certificate because it doesn't match the expected pinned certificate.",
+    topic: "SSL Pinning"
+  },
+  {
+    id: 41,
+    question: "What does the network_security_config.xml file define?",
+    options: ["App permissions", "Network security settings including trusted CAs and pins", "API endpoints", "Database config"],
+    correctAnswer: 1,
+    explanation: "network_security_config.xml defines trusted CAs, certificate pins, and cleartext traffic policy.",
+    topic: "SSL Pinning"
+  },
+  {
+    id: 42,
+    question: "What is a common way to bypass SSL pinning with Frida?",
+    options: ["Delete the certificate", "Hook TrustManager and certificate validation to always succeed", "Change DNS", "Use a VPN"],
+    correctAnswer: 1,
+    explanation: "Frida scripts can hook TrustManager.checkServerTrusted() and similar methods to bypass validation.",
+    topic: "SSL Pinning"
+  },
+  {
+    id: 43,
+    question: "What does objection's 'android sslpinning disable' do?",
+    options: ["Enables pinning", "Hooks common pinning implementations to bypass them", "Deletes certificates", "Blocks network"],
+    correctAnswer: 1,
+    explanation: "This objection command hooks various SSL pinning implementations to bypass certificate validation.",
+    topic: "SSL Pinning"
+  },
+  {
+    id: 44,
+    question: "What is OkHttp's CertificatePinner?",
+    options: ["A certificate generator", "A pinning implementation that apps use with OkHttp", "An encryption tool", "A logging library"],
+    correctAnswer: 1,
+    explanation: "CertificatePinner is OkHttp's built-in SSL pinning mechanism that many apps use.",
+    topic: "SSL Pinning"
+  },
+  {
+    id: 45,
+    question: "On Android 7+, what changed regarding user-installed CA certificates?",
+    options: ["They're always trusted", "Apps don't trust them by default unless configured", "They're blocked completely", "No change"],
+    correctAnswer: 1,
+    explanation: "Android 7+ apps don't trust user-installed CAs by default; the app must explicitly allow them.",
+    topic: "SSL Pinning"
+  },
+  {
+    id: 46,
+    question: "How can you make an app trust user certificates on Android 7+?",
+    options: ["Root only", "Modify network_security_config.xml or use Magisk module", "Change system settings", "Use older Android"],
+    correctAnswer: 1,
+    explanation: "You can modify the app's network_security_config.xml or use Magisk modules to inject user CAs into system store.",
+    topic: "SSL Pinning"
+  },
+
+  // Section 6: Smali & Patching (8 questions)
+  {
+    id: 47,
+    question: "What does the Smali opcode 'invoke-virtual' do?",
+    options: ["Calls a static method", "Calls a virtual (instance) method", "Creates an object", "Returns a value"],
+    correctAnswer: 1,
+    explanation: "invoke-virtual calls an instance method through virtual method dispatch.",
+    topic: "Smali & Patching"
+  },
+  {
+    id: 48,
+    question: "In Smali, what does 'const/4 v0, 0x0' do?",
+    options: ["Creates a string", "Loads the integer 0 into register v0", "Calls a method", "Returns null"],
+    correctAnswer: 1,
+    explanation: "const/4 loads a 4-bit constant (0 in this case) into the specified register.",
+    topic: "Smali & Patching"
+  },
+  {
+    id: 49,
+    question: "How would you patch a method to always return true in Smali?",
+    options: ["Delete the method", "Replace body with 'const/4 v0, 0x1' and 'return v0'", "Add a comment", "Change the method name"],
+    correctAnswer: 1,
+    explanation: "Setting v0 to 1 (true) and returning it makes the method always return true.",
+    topic: "Smali & Patching"
+  },
+  {
+    id: 50,
+    question: "What is the Smali register naming convention?",
+    options: ["r0, r1, r2", "v0, v1, v2 for locals and p0, p1 for parameters", "a, b, c", "reg1, reg2"],
+    correctAnswer: 1,
+    explanation: "Smali uses v-registers for locals and p-registers (parameter aliases) for method parameters.",
+    topic: "Smali & Patching"
+  },
+  {
+    id: 51,
+    question: "After patching Smali code, what must you do before installing?",
+    options: ["Nothing", "Rebuild with apktool and re-sign the APK", "Just rename the file", "Clear app data"],
+    correctAnswer: 1,
+    explanation: "After patching, you must rebuild with 'apktool b' and sign the APK with a valid keystore.",
+    topic: "Smali & Patching"
+  },
+  {
+    id: 52,
+    question: "What tool is used to sign a rebuilt APK?",
+    options: ["apktool sign", "jarsigner or apksigner", "signapk", "keytool sign"],
+    correctAnswer: 1,
+    explanation: "jarsigner or apksigner (Android SDK) are used to sign APKs after rebuilding.",
+    topic: "Smali & Patching"
+  },
+  {
+    id: 53,
+    question: "What does 'zipalign' do to an APK?",
+    options: ["Signs it", "Optimizes alignment of uncompressed data for better performance", "Compresses it", "Encrypts it"],
+    correctAnswer: 1,
+    explanation: "zipalign aligns uncompressed data on 4-byte boundaries for optimized memory-mapped access.",
+    topic: "Smali & Patching"
+  },
+  {
+    id: 54,
+    question: "What Smali instruction is used for conditional branching?",
+    options: ["goto", "if-eqz, if-nez, if-eq, etc.", "jump", "branch"],
+    correctAnswer: 1,
+    explanation: "Conditional branches use if-* instructions (if-eqz, if-nez, if-eq, if-ne, etc.).",
+    topic: "Smali & Patching"
+  },
+
+  // Section 7: Native Code & Libraries (8 questions)
+  {
+    id: 55,
+    question: "What is JNI in Android?",
+    options: ["Java Network Interface", "Java Native Interface - bridge between Java and native code", "Java New Instance", "Java Numeric Interface"],
+    correctAnswer: 1,
+    explanation: "JNI (Java Native Interface) allows Java code to call and be called by native code (C/C++).",
+    topic: "Native Code"
+  },
+  {
+    id: 56,
+    question: "What are .so files in an APK?",
+    options: ["Sound files", "Shared object (native library) files", "Source files", "Settings files"],
+    correctAnswer: 1,
+    explanation: ".so files are shared object files containing compiled native code (like Linux .so libraries).",
+    topic: "Native Code"
+  },
+  {
+    id: 57,
+    question: "What tool is commonly used to disassemble native libraries?",
+    options: ["jadx", "IDA Pro or Ghidra", "apktool", "dex2jar"],
+    correctAnswer: 1,
+    explanation: "IDA Pro and Ghidra are powerful disassemblers/decompilers for analyzing native code.",
+    topic: "Native Code"
+  },
+  {
+    id: 58,
+    question: "What is the common naming convention for JNI functions?",
+    options: ["jni_methodName", "Java_packageName_ClassName_methodName", "native_methodName", "call_methodName"],
+    correctAnswer: 1,
+    explanation: "JNI functions follow Java_fully_qualified_ClassName_methodName convention.",
+    topic: "Native Code"
+  },
+  {
+    id: 59,
+    question: "How can you hook native functions with Frida?",
+    options: ["Java.use()", "Interceptor.attach() with the function address", "NativeFunction.hook()", "System.loadLibrary()"],
+    correctAnswer: 1,
+    explanation: "Frida's Interceptor.attach() hooks native functions at their memory addresses.",
+    topic: "Native Code"
+  },
+  {
+    id: 60,
+    question: "What is System.loadLibrary() used for?",
+    options: ["Load Java classes", "Load native .so libraries at runtime", "Load resources", "Load configuration"],
+    correctAnswer: 1,
+    explanation: "System.loadLibrary() loads native shared libraries (.so files) into the app's process.",
+    topic: "Native Code"
+  },
+  {
+    id: 61,
+    question: "What architectures are common for Android native libraries?",
+    options: ["x86 only", "arm64-v8a, armeabi-v7a, x86, x86_64", "PowerPC", "MIPS only"],
+    correctAnswer: 1,
+    explanation: "Common Android architectures are arm64-v8a (64-bit ARM), armeabi-v7a (32-bit ARM), x86, and x86_64.",
+    topic: "Native Code"
+  },
+  {
+    id: 62,
+    question: "What makes native code harder to analyze than DEX?",
+    options: ["It's smaller", "It's compiled machine code without high-level abstractions", "It's encrypted by default", "It requires root"],
+    correctAnswer: 1,
+    explanation: "Native code is compiled machine code, lacking the metadata and high-level structure of DEX bytecode.",
+    topic: "Native Code"
+  },
+
+  // Section 8: Obfuscation & Protection (7 questions)
+  {
+    id: 63,
+    question: "What is ProGuard/R8?",
+    options: ["An emulator", "Code obfuscation and optimization tool for Android", "A testing framework", "A database"],
+    correctAnswer: 1,
+    explanation: "ProGuard/R8 obfuscates, optimizes, and shrinks Android apps by renaming and removing unused code.",
+    topic: "Obfuscation"
+  },
+  {
+    id: 64,
+    question: "What does string encryption obfuscation do?",
+    options: ["Makes strings longer", "Encrypts strings and decrypts at runtime to hide from static analysis", "Compresses strings", "Removes strings"],
+    correctAnswer: 1,
+    explanation: "String encryption hides sensitive strings from static analysis; they're decrypted only at runtime.",
+    topic: "Obfuscation"
+  },
+  {
+    id: 65,
+    question: "What is control flow obfuscation?",
+    options: ["Network protection", "Restructuring code logic to make it harder to understand", "Encrypting methods", "Hiding the APK"],
+    correctAnswer: 1,
+    explanation: "Control flow obfuscation adds fake branches, opaque predicates, and restructures code logic.",
+    topic: "Obfuscation"
+  },
+  {
+    id: 66,
+    question: "What is a packer in Android protection?",
+    options: ["A compression tool", "Tool that encrypts/hides the real DEX and unpacks at runtime", "A signing tool", "A manifest editor"],
+    correctAnswer: 1,
+    explanation: "Packers encrypt or hide the original DEX; a loader unpacks it into memory at runtime.",
+    topic: "Obfuscation"
+  },
+  {
+    id: 67,
+    question: "How does reflection-based obfuscation work?",
+    options: ["Uses mirrors", "Calls methods dynamically via reflection to hide direct references", "Encrypts reflection", "Blocks reflection"],
+    correctAnswer: 1,
+    explanation: "Methods are called via reflection APIs using encrypted strings, hiding direct method references.",
+    topic: "Obfuscation"
+  },
+  {
+    id: 68,
+    question: "What is DexGuard?",
+    options: ["A free tool", "Commercial app protection with advanced obfuscation and protection", "An open-source decompiler", "A testing tool"],
+    correctAnswer: 1,
+    explanation: "DexGuard is a commercial protection tool offering stronger obfuscation than ProGuard.",
+    topic: "Obfuscation"
+  },
+  {
+    id: 69,
+    question: "What is anti-tampering protection?",
+    options: ["Prevents app updates", "Detects modifications to the APK and prevents execution", "Encrypts the APK", "Compresses code"],
+    correctAnswer: 1,
+    explanation: "Anti-tampering checks APK integrity (signature, checksums) and blocks if modifications are detected.",
+    topic: "Obfuscation"
+  },
+
+  // Section 9: Android Security Features (6 questions)
+  {
+    id: 70,
+    question: "What is the Android Keystore system?",
+    options: ["File storage", "Secure hardware-backed storage for cryptographic keys", "Password manager", "App store"],
+    correctAnswer: 1,
+    explanation: "Android Keystore provides hardware-backed secure storage for cryptographic keys.",
+    topic: "Security Features"
+  },
+  {
+    id: 71,
+    question: "What is SELinux on Android?",
+    options: ["A file system", "Mandatory access control system enforcing security policies", "A web browser", "A root tool"],
+    correctAnswer: 1,
+    explanation: "SELinux enforces mandatory access controls, limiting what processes can access regardless of permissions.",
+    topic: "Security Features"
+  },
+  {
+    id: 72,
+    question: "What does 'android:exported=false' in a component mean?",
+    options: ["Component is public", "Component cannot be accessed by other apps", "Component is disabled", "Component is hidden from user"],
+    correctAnswer: 1,
+    explanation: "exported=false means the component can only be accessed by the same app or apps with the same user ID.",
+    topic: "Security Features"
+  },
+  {
+    id: 73,
+    question: "What is the purpose of Android's sandbox model?",
+    options: ["Gaming feature", "Isolates apps from each other with unique UID/file permissions", "Cloud storage", "Development testing"],
+    correctAnswer: 1,
+    explanation: "Each app runs with a unique Linux UID, isolating its data and processes from other apps.",
+    topic: "Security Features"
+  },
+  {
+    id: 74,
+    question: "What is Scoped Storage introduced in Android 10+?",
+    options: ["Cloud storage", "Restricted file access limiting apps to their own directories", "Encrypted storage", "External storage only"],
+    correctAnswer: 1,
+    explanation: "Scoped Storage restricts apps to accessing only their own files without broad storage permissions.",
+    topic: "Security Features"
+  },
+  {
+    id: 75,
+    question: "What is the purpose of runtime permissions (Android 6+)?",
+    options: ["Install-time only", "Users grant sensitive permissions at runtime when needed", "Automatic permissions", "No permissions needed"],
+    correctAnswer: 1,
+    explanation: "Dangerous permissions must be requested at runtime, giving users control over when to grant access.",
+    topic: "Security Features"
+  }
+];
+
+// Quiz Section Component
+function QuizSection() {
+  const theme = useTheme();
+  const [quizStarted, setQuizStarted] = React.useState(false);
+  const [currentQuestions, setCurrentQuestions] = React.useState<QuizQuestion[]>([]);
+  const [userAnswers, setUserAnswers] = React.useState<{ [key: number]: number }>({});
+  const [showResults, setShowResults] = React.useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
+
+  const shuffleAndSelectQuestions = () => {
+    const shuffled = [...questionBank].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 10);
+  };
+
+  const startQuiz = () => {
+    setCurrentQuestions(shuffleAndSelectQuestions());
+    setUserAnswers({});
+    setShowResults(false);
+    setCurrentQuestionIndex(0);
+    setQuizStarted(true);
+  };
+
+  const handleAnswerSelect = (questionId: number, answerIndex: number) => {
+    setUserAnswers((prev) => ({ ...prev, [questionId]: answerIndex }));
+  };
+
+  const calculateScore = () => {
+    let correct = 0;
+    currentQuestions.forEach((q) => {
+      if (userAnswers[q.id] === q.correctAnswer) correct++;
+    });
+    return correct;
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 8) return "#22c55e";
+    if (score >= 6) return "#f97316";
+    return "#ef4444";
+  };
+
+  const getScoreMessage = (score: number) => {
+    if (score === 10) return "Perfect! You're an Android RE master! 🏆";
+    if (score >= 8) return "Excellent work! Strong Android security knowledge! 🌟";
+    if (score >= 6) return "Good job! Keep studying Android internals! 📚";
+    if (score >= 4) return "Not bad, but review the material again. 💪";
+    return "Keep learning! Review the sections above. 📖";
+  };
+
+  if (!quizStarted) {
+    return (
+      <Paper
+        id="quiz-section"
+        sx={{
+          p: 4,
+          mb: 5,
+          borderRadius: 4,
+          bgcolor: alpha("#0f0f14", 0.8),
+          border: `2px solid ${alpha("#22c55e", 0.3)}`,
+          background: `linear-gradient(135deg, ${alpha("#22c55e", 0.05)} 0%, ${alpha("#16a34a", 0.05)} 100%)`,
+        }}
+      >
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2, color: "white" }}>
+          <Box sx={{ width: 56, height: 56, borderRadius: 2, background: "linear-gradient(135deg, #22c55e, #16a34a)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <QuizIcon sx={{ color: "white", fontSize: 32 }} />
+          </Box>
+          Test Your Android RE Knowledge
+        </Typography>
+
+        <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8, fontSize: "1.05rem", color: "grey.300" }}>
+          Ready to test what you've learned? Take this <strong>10-question quiz</strong> covering Android reverse engineering. 
+          Questions are randomly selected from a pool of <strong>75 questions</strong>!
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#22c55e", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#22c55e" }}>10</Typography>
+              <Typography variant="caption" color="grey.400">Questions</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#3b82f6", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#3b82f6" }}>75</Typography>
+              <Typography variant="caption" color="grey.400">Question Pool</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#a855f7", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#a855f7" }}>9</Typography>
+              <Typography variant="caption" color="grey.400">Topics Covered</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#f97316", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#f97316" }}>∞</Typography>
+              <Typography variant="caption" color="grey.400">Retakes Allowed</Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        <Button
+          variant="contained"
+          size="large"
+          onClick={startQuiz}
+          startIcon={<QuizIcon />}
+          sx={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", fontWeight: 700, px: 4, py: 1.5, fontSize: "1.1rem", "&:hover": { background: "linear-gradient(135deg, #16a34a, #15803d)" } }}
+        >
+          Start Quiz
+        </Button>
+      </Paper>
+    );
+  }
+
+  if (showResults) {
+    const score = calculateScore();
+    return (
+      <Paper id="quiz-section" sx={{ p: 4, mb: 5, borderRadius: 4, bgcolor: alpha("#0f0f14", 0.8), border: `2px solid ${alpha(getScoreColor(score), 0.3)}` }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2, color: "white" }}>
+          <EmojiEventsIcon sx={{ color: getScoreColor(score), fontSize: 40 }} />
+          Quiz Results
+        </Typography>
+
+        <Box sx={{ textAlign: "center", mb: 4 }}>
+          <Typography variant="h1" sx={{ fontWeight: 900, color: getScoreColor(score), mb: 1 }}>{score}/10</Typography>
+          <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>{getScoreMessage(score)}</Typography>
+          <Chip label={`${score * 10}%`} sx={{ bgcolor: alpha(getScoreColor(score), 0.15), color: getScoreColor(score), fontWeight: 700, fontSize: "1rem", px: 2 }} />
+        </Box>
+
+        <Divider sx={{ my: 3, borderColor: "grey.700" }} />
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "white" }}>Review Your Answers:</Typography>
+
+        {currentQuestions.map((q, index) => {
+          const isCorrect = userAnswers[q.id] === q.correctAnswer;
+          return (
+            <Paper key={q.id} sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: alpha(isCorrect ? "#22c55e" : "#ef4444", 0.05), border: `1px solid ${alpha(isCorrect ? "#22c55e" : "#ef4444", 0.2)}` }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1 }}>
+                <Chip label={`Q${index + 1}`} size="small" sx={{ bgcolor: isCorrect ? "#22c55e" : "#ef4444", color: "white", fontWeight: 700 }} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: "white" }}>{q.question}</Typography>
+              </Box>
+              <Typography variant="body2" sx={{ color: "grey.400", ml: 4.5 }}>
+                <strong>Your answer:</strong> {q.options[userAnswers[q.id]] || "Not answered"}
+                {!isCorrect && (<><br /><strong style={{ color: "#22c55e" }}>Correct:</strong> {q.options[q.correctAnswer]}</>)}
+              </Typography>
+              {!isCorrect && (<Alert severity="info" sx={{ mt: 1, ml: 4.5, bgcolor: alpha("#3b82f6", 0.1) }}><Typography variant="caption">{q.explanation}</Typography></Alert>)}
+            </Paper>
+          );
+        })}
+
+        <Box sx={{ display: "flex", gap: 2, mt: 3 }}>
+          <Button variant="contained" onClick={startQuiz} startIcon={<RefreshIcon />} sx={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", fontWeight: 700 }}>Try Again</Button>
+          <Button variant="outlined" onClick={() => setQuizStarted(false)} sx={{ fontWeight: 600, borderColor: "grey.600", color: "grey.300" }}>Back to Overview</Button>
+        </Box>
+      </Paper>
+    );
+  }
+
+  const currentQuestion = currentQuestions[currentQuestionIndex];
+  const answeredCount = Object.keys(userAnswers).length;
+
+  return (
+    <Paper id="quiz-section" sx={{ p: 4, mb: 5, borderRadius: 4, bgcolor: alpha("#0f0f14", 0.8), border: `2px solid ${alpha("#22c55e", 0.3)}` }}>
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "white" }}>Question {currentQuestionIndex + 1} of 10</Typography>
+          <Chip label={currentQuestion.topic} size="small" sx={{ bgcolor: alpha("#a855f7", 0.15), color: "#a855f7", fontWeight: 600 }} />
+        </Box>
+        <Box sx={{ width: "100%", bgcolor: alpha("#22c55e", 0.1), borderRadius: 1, height: 8 }}>
+          <Box sx={{ width: `${((currentQuestionIndex + 1) / 10) * 100}%`, bgcolor: "#22c55e", borderRadius: 1, height: "100%", transition: "width 0.3s ease" }} />
+        </Box>
+      </Box>
+
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 3, lineHeight: 1.6, color: "white" }}>{currentQuestion.question}</Typography>
+
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {currentQuestion.options.map((option, index) => {
+          const isSelected = userAnswers[currentQuestion.id] === index;
+          return (
+            <Grid item xs={12} key={index}>
+              <Paper
+                onClick={() => handleAnswerSelect(currentQuestion.id, index)}
+                sx={{ p: 2, borderRadius: 2, cursor: "pointer", bgcolor: isSelected ? alpha("#22c55e", 0.15) : alpha("#1a1a24", 0.5), border: `2px solid ${isSelected ? "#22c55e" : alpha("#444", 0.3)}`, transition: "all 0.2s ease", "&:hover": { borderColor: "#22c55e", bgcolor: alpha("#22c55e", 0.08) } }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: isSelected ? "#22c55e" : alpha("#666", 0.3), color: isSelected ? "white" : "grey.400", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.9rem" }}>
+                    {String.fromCharCode(65 + index)}
+                  </Box>
+                  <Typography variant="body1" sx={{ fontWeight: isSelected ? 600 : 400, color: "white" }}>{option}</Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
+
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Button variant="outlined" disabled={currentQuestionIndex === 0} onClick={() => setCurrentQuestionIndex((prev) => prev - 1)} sx={{ borderColor: "grey.600", color: "grey.300" }}>Previous</Button>
+        <Typography variant="body2" color="grey.400">{answeredCount}/10 answered</Typography>
+        {currentQuestionIndex < 9 ? (
+          <Button variant="contained" onClick={() => setCurrentQuestionIndex((prev) => prev + 1)} sx={{ background: "linear-gradient(135deg, #22c55e, #16a34a)" }}>Next</Button>
+        ) : (
+          <Button variant="contained" onClick={() => setShowResults(true)} disabled={answeredCount < 10} sx={{ background: answeredCount >= 10 ? "linear-gradient(135deg, #3b82f6, #2563eb)" : undefined, fontWeight: 700 }}>Submit Quiz</Button>
+        )}
+      </Box>
+    </Paper>
+  );
+}
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -230,7 +1073,7 @@ const AndroidReverseEngineeringGuidePage: React.FC = () => {
             Back to Learning Hub
           </Button>
           
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
             <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.1) }}>
               <AndroidIcon sx={{ fontSize: 48, color: "#22c55e" }} />
             </Box>
@@ -239,29 +1082,122 @@ const AndroidReverseEngineeringGuidePage: React.FC = () => {
                 Android Reverse Engineering
               </Typography>
               <Typography variant="h6" sx={{ color: "grey.400" }}>
-                Fundamentals, Tools & Techniques for Android Security Research
+                Comprehensive Guide to Android Security Research & App Analysis
               </Typography>
             </Box>
           </Box>
-
-          <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 2 }}>
-            <Alert severity="info" sx={{ bgcolor: alpha("#22c55e", 0.1), flex: 1 }}>
-              <Typography variant="body2">
-                <strong>Learn Android reverse engineering</strong> from the ground up. This guide covers architecture,
-                tools, static/dynamic analysis, and common vulnerabilities.
-              </Typography>
-            </Alert>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<AndroidIcon />}
-              onClick={() => navigate("/reverse")}
-              sx={{ bgcolor: "#22c55e", "&:hover": { bgcolor: "#16a34a" }, alignSelf: "center", whiteSpace: "nowrap" }}
-            >
-              Try APK Analyzer
-            </Button>
-          </Box>
         </Box>
+
+        {/* Comprehensive Introduction Section */}
+        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            🔬 What is Android Reverse Engineering?
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 2, color: "grey.200" }}>
+            <strong>Android reverse engineering</strong> is the process of analyzing Android applications (APK files) to 
+            understand how they work without access to the original source code. With over 3 billion active Android devices 
+            worldwide, Android apps handle everything from banking and healthcare to social media and gaming — making them 
+            prime targets for security researchers, penetration testers, and unfortunately, attackers. Understanding how to 
+            dissect and analyze Android apps is an essential skill for mobile security professionals.
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 2, color: "grey.200" }}>
+            <strong>What makes Android unique for reverse engineering?</strong> Unlike traditional compiled programs (like 
+            Windows .exe files), Android apps are distributed as APK (Android Package) files — essentially ZIP archives 
+            containing compiled bytecode, resources, and metadata. The app's Java or Kotlin code is compiled into DEX 
+            (Dalvik Executable) format, which runs on the Android Runtime (ART). This bytecode is easier to decompile 
+            back to readable Java code than native x86/ARM binaries, making Android a relatively accessible platform 
+            for learning reverse engineering. However, many apps include native code (C/C++ libraries in .so files) 
+            that requires traditional binary analysis techniques.
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 2, color: "grey.200" }}>
+            <strong>Why would you reverse engineer Android apps?</strong> Security researchers analyze apps to find 
+            vulnerabilities: insecure data storage (passwords saved in plaintext), weak cryptography (hardcoded keys), 
+            improper certificate validation (allowing MITM attacks), or exported components that can be exploited by 
+            malicious apps. Bug bounty hunters examine popular apps for security flaws that qualify for rewards. 
+            Malware analysts dissect suspicious apps to understand their behavior, identify command-and-control servers, 
+            and develop detection signatures. Developers audit third-party SDKs and libraries their apps depend on. 
+            And sometimes, researchers simply want to understand how a clever feature was implemented.
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 2, color: "grey.200" }}>
+            <strong>The APK structure</strong> is your starting point. An APK contains: <code>classes.dex</code> (or 
+            multiple DEX files) with the compiled application code; <code>AndroidManifest.xml</code> describing the 
+            app's components, permissions, and requirements; the <code>res/</code> folder with layouts, strings, and 
+            other resources; the <code>lib/</code> folder containing native libraries for different CPU architectures; 
+            and <code>assets/</code> for raw files the app uses. Tools like <strong>JADX</strong> can decompile the DEX 
+            bytecode back to Java, while <strong>apktool</strong> decodes the binary XML resources and allows you to 
+            repackage modified APKs.
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 3, color: "grey.200" }}>
+            <strong>Dynamic analysis</strong> is equally important. While static analysis shows you the code, dynamic 
+            analysis shows you the app in action. Tools like <strong>Frida</strong> let you hook into running apps, 
+            intercept function calls, modify return values, and bypass security checks in real-time. You can disable 
+            root detection, bypass certificate pinning to intercept HTTPS traffic, and trace exactly what happens when 
+            a user taps a button. This combination of static analysis (reading the code) and dynamic analysis (watching 
+            it run) gives you a complete picture of how an app behaves.
+          </Typography>
+
+          <Divider sx={{ my: 3, borderColor: "rgba(34, 197, 94, 0.2)" }} />
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            📱 Android Architecture Overview
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1rem", lineHeight: 1.8, mb: 2, color: "grey.300" }}>
+            Android is built in layers. Understanding this architecture helps you know where to look for different 
+            types of vulnerabilities and what tools to use:
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { layer: "Applications", desc: "User apps and system apps written in Java/Kotlin. This is where most RE focuses.", color: "#22c55e" },
+              { layer: "Android Framework", desc: "APIs for activities, content providers, services. Security boundaries live here.", color: "#10b981" },
+              { layer: "Native Libraries", desc: "C/C++ libs (OpenGL, SQLite, SSL). Requires binary RE skills like Ghidra/IDA.", color: "#059669" },
+              { layer: "ART Runtime", desc: "Executes DEX bytecode. JIT/AOT compilation, garbage collection.", color: "#047857" },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} key={item.layer}>
+                <Paper sx={{ p: 2, bgcolor: alpha(item.color, 0.1), borderRadius: 2, border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color, mb: 0.5 }}>{item.layer}</Typography>
+                  <Typography variant="body2" sx={{ color: "grey.300" }}>{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            🎯 Common Security Issues in Android Apps
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { title: "Insecure Data Storage", desc: "Sensitive data in SharedPreferences, SQLite databases, or log files without encryption", icon: <StorageIcon />, color: "#ef4444" },
+              { title: "Weak SSL/TLS", desc: "Missing certificate pinning, accepting all certificates, or allowing cleartext HTTP", icon: <LockIcon />, color: "#f59e0b" },
+              { title: "Exported Components", desc: "Activities, services, or content providers accessible to other apps without proper permissions", icon: <WarningIcon />, color: "#8b5cf6" },
+              { title: "Hardcoded Secrets", desc: "API keys, credentials, or encryption keys embedded directly in the code", icon: <SecurityIcon />, color: "#3b82f6" },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} key={item.title}>
+                <Paper sx={{ p: 2, bgcolor: alpha(item.color, 0.08), borderRadius: 2, border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    <Box sx={{ color: item.color }}>{item.icon}</Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color }}>{item.title}</Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Alert severity="success" sx={{ bgcolor: "rgba(34, 197, 94, 0.1)" }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>Getting Started</AlertTitle>
+            Begin with static analysis: download an APK, decompile it with JADX, and explore the code. Look for the 
+            <code>AndroidManifest.xml</code> to understand app structure, search for "password" or "api_key" in strings, 
+            and examine how data flows through the app. Once comfortable, move to dynamic analysis with Frida.
+          </Alert>
+        </Paper>
 
         {/* Tabs */}
         <Paper sx={{ bgcolor: "#111118", borderRadius: 3, mb: 3 }}>
@@ -1368,6 +2304,9 @@ frida -U -f com.target.app -l ssl_bypass.js --no-pause
             </Grid>
           </Grid>
         </TabPanel>
+
+        {/* Quiz Section */}
+        <QuizSection />
       </Container>
     </Box>
     </LearnPageLayout>

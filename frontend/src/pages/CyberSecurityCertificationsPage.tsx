@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
@@ -52,7 +52,7 @@ import SchoolIcon from "@mui/icons-material/School";
 import CategoryIcon from "@mui/icons-material/Category";
 import BusinessIcon from "@mui/icons-material/Business";
 import BookmarkIcon from "@mui/icons-material/Bookmark";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 type Level = "Beginner" | "Intermediate" | "Advanced";
 
@@ -829,12 +829,29 @@ const subjects: SubjectSection[] = [
 
 const CyberSecurityCertificationsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLevel, setSelectedLevel] = useState<Level | "all">("all");
   const [selectedCareerPath, setSelectedCareerPath] = useState<CareerPathType | "all">("all");
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set([subjects[0]?.title]));
   const [showFilters, setShowFilters] = useState(false);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Read URL query parameters on mount for deep linking from Career Paths page
+  useEffect(() => {
+    const pathParam = searchParams.get("path");
+    const levelParam = searchParams.get("level");
+    
+    if (pathParam && Object.keys(careerPathMeta).includes(pathParam)) {
+      setSelectedCareerPath(pathParam as CareerPathType);
+      setShowFilters(true);
+    }
+    
+    if (levelParam && ["Beginner", "Intermediate", "Advanced"].includes(levelParam)) {
+      setSelectedLevel(levelParam as Level);
+      setShowFilters(true);
+    }
+  }, [searchParams]);
 
   // Calculate statistics
   const stats = useMemo(() => {

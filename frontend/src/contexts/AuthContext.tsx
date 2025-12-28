@@ -164,7 +164,6 @@ export function AuthProvider({ children }: Props) {
     if (!user) return;
 
     const refreshInterval = setInterval(async () => {
-      console.log("[Auth] Auto-refreshing token...");
       const success = await refreshAuth();
       if (!success) {
         console.warn("[Auth] Auto-refresh failed, user will need to re-login");

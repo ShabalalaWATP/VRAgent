@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 
+from backend.core.config import settings
+
 router = APIRouter(prefix="/learn", tags=["Learn Chat"])
 
 
@@ -92,7 +94,7 @@ Respond in a conversational, helpful tone."""
         
         # Generate response
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=settings.gemini_model_id,
             contents=messages,
             config={
                 "system_instruction": system_prompt,

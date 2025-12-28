@@ -30,6 +30,7 @@ import {
   Tooltip,
   alpha,
   useTheme,
+  Button,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -48,7 +49,849 @@ import FunctionsIcon from "@mui/icons-material/Functions";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import QuizIcon from "@mui/icons-material/Quiz";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import LearnPageLayout from "../components/LearnPageLayout";
+
+// Question bank for the quiz (75 questions)
+interface QuizQuestion {
+  id: number;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  topic: string;
+}
+
+const questionBank: QuizQuestion[] = [
+  // Section 1: Ghidra Basics (8 questions)
+  {
+    id: 1,
+    question: "Who developed Ghidra?",
+    options: ["Microsoft", "Google", "NSA (National Security Agency)", "MIT"],
+    correctAnswer: 2,
+    explanation: "Ghidra was developed by the NSA and released as open-source in 2019.",
+    topic: "Ghidra Basics"
+  },
+  {
+    id: 2,
+    question: "What programming language is Ghidra primarily written in?",
+    options: ["Python", "C++", "Java", "Rust"],
+    correctAnswer: 2,
+    explanation: "Ghidra is primarily written in Java, which allows it to run on multiple platforms.",
+    topic: "Ghidra Basics"
+  },
+  {
+    id: 3,
+    question: "What is the main advantage of Ghidra over many commercial tools?",
+    options: ["It's faster", "It's free and open-source", "It has better graphics", "It only works on Windows"],
+    correctAnswer: 1,
+    explanation: "Ghidra is completely free and open-source, unlike commercial tools like IDA Pro.",
+    topic: "Ghidra Basics"
+  },
+  {
+    id: 4,
+    question: "What file formats does Ghidra support?",
+    options: ["Only PE files", "Only ELF files", "Multiple formats including PE, ELF, Mach-O, DEX, and more", "Only raw binaries"],
+    correctAnswer: 2,
+    explanation: "Ghidra supports many formats including PE, ELF, Mach-O, DEX, APK, firmware, and more.",
+    topic: "Ghidra Basics"
+  },
+  {
+    id: 5,
+    question: "What is the keyboard shortcut to open the decompiler view in Ghidra?",
+    options: ["Ctrl+D", "Ctrl+E", "F5", "Alt+D"],
+    correctAnswer: 1,
+    explanation: "Ctrl+E opens the decompiler window in Ghidra.",
+    topic: "Ghidra Basics"
+  },
+  {
+    id: 6,
+    question: "What is a Ghidra project?",
+    options: ["A single binary file", "A container that holds one or more programs for analysis", "A Python script", "A configuration file"],
+    correctAnswer: 1,
+    explanation: "A Ghidra project is a container that can hold multiple programs/binaries for analysis.",
+    topic: "Ghidra Basics"
+  },
+  {
+    id: 7,
+    question: "How do you navigate to a specific address in Ghidra?",
+    options: ["Press A", "Press G and type the address", "Double-click anywhere", "Press Ctrl+A"],
+    correctAnswer: 1,
+    explanation: "Press G to open the 'Go To' dialog and enter the address you want to navigate to.",
+    topic: "Ghidra Basics"
+  },
+  {
+    id: 8,
+    question: "What is auto-analysis in Ghidra?",
+    options: ["Manual function detection", "Automatic initial analysis that identifies functions, strings, and data", "A plugin system", "A debugging feature"],
+    correctAnswer: 1,
+    explanation: "Auto-analysis automatically analyzes the binary to identify functions, strings, references, and more.",
+    topic: "Ghidra Basics"
+  },
+
+  // Section 2: Code Browser & Views (8 questions)
+  {
+    id: 9,
+    question: "What is the Listing View in Ghidra?",
+    options: ["A file browser", "The main disassembly view showing assembly code", "A log window", "A plugin manager"],
+    correctAnswer: 1,
+    explanation: "The Listing View is the main disassembly window showing assembly instructions with addresses and bytes.",
+    topic: "Code Browser & Views"
+  },
+  {
+    id: 10,
+    question: "What does the Symbol Tree show?",
+    options: ["Only imported functions", "All symbols including functions, labels, namespaces, and classes", "Only strings", "Only variables"],
+    correctAnswer: 1,
+    explanation: "The Symbol Tree shows all symbols in the program including functions, labels, namespaces, and classes.",
+    topic: "Code Browser & Views"
+  },
+  {
+    id: 11,
+    question: "How do you view cross-references (XRefs) to a function or address?",
+    options: ["Press X", "Press R", "Press C", "Press F"],
+    correctAnswer: 0,
+    explanation: "Press X to show all cross-references to the current address or symbol.",
+    topic: "Code Browser & Views"
+  },
+  {
+    id: 12,
+    question: "What is the Function Graph view?",
+    options: ["A list of all functions", "A visual representation of control flow with basic blocks", "A call graph", "A memory map"],
+    correctAnswer: 1,
+    explanation: "The Function Graph shows the control flow of a function with basic blocks connected by edges.",
+    topic: "Code Browser & Views"
+  },
+  {
+    id: 13,
+    question: "How do you access the Function Graph in Ghidra?",
+    options: ["Press G", "Press Space while in the Listing view", "Press F", "Press Tab"],
+    correctAnswer: 1,
+    explanation: "Press Space while in the Listing view to toggle the Function Graph display.",
+    topic: "Code Browser & Views"
+  },
+  {
+    id: 14,
+    question: "What does the Bytes view display?",
+    options: ["Only ASCII strings", "Raw hexadecimal bytes of the binary", "Only code bytes", "Encrypted data only"],
+    correctAnswer: 1,
+    explanation: "The Bytes view shows the raw hexadecimal representation of the binary file.",
+    topic: "Code Browser & Views"
+  },
+  {
+    id: 15,
+    question: "What is the Data Type Manager?",
+    options: ["A file manager", "A tool to define and manage data types and structures", "A debugging tool", "A memory analyzer"],
+    correctAnswer: 1,
+    explanation: "The Data Type Manager lets you create, modify, and apply data types and structures to the binary.",
+    topic: "Code Browser & Views"
+  },
+  {
+    id: 16,
+    question: "What does the Defined Strings window show?",
+    options: ["All bytes in the file", "Strings that Ghidra has identified in the binary", "Function names only", "Comments only"],
+    correctAnswer: 1,
+    explanation: "The Defined Strings window lists all strings Ghidra has found and defined in the binary.",
+    topic: "Code Browser & Views"
+  },
+
+  // Section 3: Decompiler (9 questions)
+  {
+    id: 17,
+    question: "What does the decompiler do?",
+    options: ["Compiles source code", "Converts assembly back to pseudo-C code", "Encrypts code", "Debugs the binary"],
+    correctAnswer: 1,
+    explanation: "The decompiler converts low-level assembly code into higher-level pseudo-C for easier analysis.",
+    topic: "Decompiler"
+  },
+  {
+    id: 18,
+    question: "How do you rename a variable in the decompiler view?",
+    options: ["Press R", "Press L or right-click and rename", "Press N", "Press V"],
+    correctAnswer: 1,
+    explanation: "Press L or right-click on a variable and select 'Rename Variable' to give it a meaningful name.",
+    topic: "Decompiler"
+  },
+  {
+    id: 19,
+    question: "How do you change a variable's type in the decompiler?",
+    options: ["Press T or right-click and retype", "Press C", "Press D", "Press Y"],
+    correctAnswer: 0,
+    explanation: "Press T or right-click on a variable to change its data type.",
+    topic: "Decompiler"
+  },
+  {
+    id: 20,
+    question: "What happens when you make changes in the decompiler?",
+    options: ["Changes only affect the decompiler view", "Changes are synchronized with the Listing view", "Changes are lost on exit", "Nothing happens"],
+    correctAnswer: 1,
+    explanation: "Changes made in the decompiler (renaming, retyping) are synchronized with the Listing view and saved.",
+    topic: "Decompiler"
+  },
+  {
+    id: 21,
+    question: "What is the purpose of the 'Commit Locals' action?",
+    options: ["Save the project", "Apply inferred variable types and locations from decompiler to the function", "Delete local variables", "Export the function"],
+    correctAnswer: 1,
+    explanation: "Commit Locals applies the decompiler's inferred variable information to the function definition.",
+    topic: "Decompiler"
+  },
+  {
+    id: 22,
+    question: "How does Ghidra handle optimized code in decompilation?",
+    options: ["It cannot decompile optimized code", "It attempts to reconstruct logic but may show less readable output", "It automatically deoptimizes", "It refuses to open optimized binaries"],
+    correctAnswer: 1,
+    explanation: "Ghidra can decompile optimized code but the output may be harder to read due to inlining and other optimizations.",
+    topic: "Decompiler"
+  },
+  {
+    id: 23,
+    question: "What is the 'Edit Function Signature' option used for?",
+    options: ["Changing the function's address", "Correcting the function's return type and parameters", "Deleting the function", "Encrypting the function"],
+    correctAnswer: 1,
+    explanation: "Edit Function Signature lets you correct or define the return type, calling convention, and parameters.",
+    topic: "Decompiler"
+  },
+  {
+    id: 24,
+    question: "What does the decompiler parameter ID analysis do?",
+    options: ["Encrypts parameters", "Attempts to identify function parameters and their types", "Deletes parameters", "Exports parameters to a file"],
+    correctAnswer: 1,
+    explanation: "Parameter ID analysis tries to determine the number and types of function parameters.",
+    topic: "Decompiler"
+  },
+  {
+    id: 25,
+    question: "How do you navigate from decompiler back to assembly?",
+    options: ["Press Escape", "Click on code in decompiler to sync with Listing", "Press Home", "Close the decompiler"],
+    correctAnswer: 1,
+    explanation: "Clicking on code in the decompiler will highlight the corresponding assembly in the Listing view.",
+    topic: "Decompiler"
+  },
+
+  // Section 4: Functions & Analysis (9 questions)
+  {
+    id: 26,
+    question: "How do you create a function at an address in Ghidra?",
+    options: ["Press C", "Press F", "Press D", "Press A"],
+    correctAnswer: 1,
+    explanation: "Press F to create a function at the current address.",
+    topic: "Functions & Analysis"
+  },
+  {
+    id: 27,
+    question: "What does 'Undefined' mean in Ghidra?",
+    options: ["Corrupted data", "Bytes that haven't been analyzed or defined as code/data", "Encrypted bytes", "Empty bytes"],
+    correctAnswer: 1,
+    explanation: "Undefined bytes haven't been analyzed or defined as code, data, or any other type.",
+    topic: "Functions & Analysis"
+  },
+  {
+    id: 28,
+    question: "How do you disassemble undefined bytes as code?",
+    options: ["Press D", "Press C (or right-click and Disassemble)", "Press X", "Press L"],
+    correctAnswer: 1,
+    explanation: "Press C to disassemble undefined bytes as code at the current address.",
+    topic: "Functions & Analysis"
+  },
+  {
+    id: 29,
+    question: "What does 'D' do in the Listing view?",
+    options: ["Deletes code", "Defines data at the current address", "Disassembles code", "Duplicates the line"],
+    correctAnswer: 1,
+    explanation: "D defines data (like a DWORD, string, etc.) at the current address.",
+    topic: "Functions & Analysis"
+  },
+  {
+    id: 30,
+    question: "What is a thunk function?",
+    options: ["A deleted function", "A small function that just jumps to another function (often for imports)", "An encrypted function", "A recursive function"],
+    correctAnswer: 1,
+    explanation: "A thunk is a small wrapper function that typically just jumps to another function, common for imports.",
+    topic: "Functions & Analysis"
+  },
+  {
+    id: 31,
+    question: "How do you add a comment in Ghidra?",
+    options: ["Press C", "Press ; for EOL comment, Ctrl+; for pre-comment", "Press N", "Press Tab"],
+    correctAnswer: 1,
+    explanation: "Press ; for end-of-line comment, or Ctrl+; for pre-comment (comment before the instruction).",
+    topic: "Functions & Analysis"
+  },
+  {
+    id: 32,
+    question: "What is the purpose of creating bookmarks?",
+    options: ["To delete code", "To mark important locations for easy navigation", "To encrypt sections", "To export functions"],
+    correctAnswer: 1,
+    explanation: "Bookmarks let you mark important locations and quickly navigate back to them later.",
+    topic: "Functions & Analysis"
+  },
+  {
+    id: 33,
+    question: "How do you create a bookmark?",
+    options: ["Press B", "Press Ctrl+D", "Press M", "Press K"],
+    correctAnswer: 1,
+    explanation: "Press Ctrl+D to create a bookmark at the current address.",
+    topic: "Functions & Analysis"
+  },
+  {
+    id: 34,
+    question: "What is the Function Call Graph?",
+    options: ["A list of functions", "A graph showing which functions call which other functions", "A memory map", "A string list"],
+    correctAnswer: 1,
+    explanation: "The Function Call Graph visualizes the calling relationships between functions.",
+    topic: "Functions & Analysis"
+  },
+
+  // Section 5: Scripting & Automation (8 questions)
+  {
+    id: 35,
+    question: "What scripting languages does Ghidra support?",
+    options: ["Only Python", "Only Java", "Java and Python (via Jython)", "JavaScript only"],
+    correctAnswer: 2,
+    explanation: "Ghidra supports both Java and Python (via Jython) for scripting and automation.",
+    topic: "Scripting & Automation"
+  },
+  {
+    id: 36,
+    question: "How do you access the Script Manager in Ghidra?",
+    options: ["File menu", "Window > Script Manager", "Help menu", "Edit menu"],
+    correctAnswer: 1,
+    explanation: "Open the Script Manager from Window > Script Manager to browse and run scripts.",
+    topic: "Scripting & Automation"
+  },
+  {
+    id: 37,
+    question: "What is 'currentProgram' in a Ghidra script?",
+    options: ["The script itself", "A reference to the currently open program/binary", "A Python module", "A configuration object"],
+    correctAnswer: 1,
+    explanation: "currentProgram is a built-in variable that provides access to the currently open binary.",
+    topic: "Scripting & Automation"
+  },
+  {
+    id: 38,
+    question: "What does 'currentAddress' represent in a script?",
+    options: ["The entry point", "The address where the cursor is currently located", "The first byte of the file", "The last address"],
+    correctAnswer: 1,
+    explanation: "currentAddress is the address where the cursor is positioned in the Listing view.",
+    topic: "Scripting & Automation"
+  },
+  {
+    id: 39,
+    question: "How do you get all functions in a program via script?",
+    options: ["getSymbols()", "currentProgram.getFunctionManager().getFunctions(True)", "listFunctions()", "getAllFunctions()"],
+    correctAnswer: 1,
+    explanation: "Use currentProgram.getFunctionManager().getFunctions(True) to iterate over all functions.",
+    topic: "Scripting & Automation"
+  },
+  {
+    id: 40,
+    question: "What is headless analysis in Ghidra?",
+    options: ["Analysis without the GUI for batch processing", "Analysis of header files only", "Analysis with reduced features", "Analysis without decompilation"],
+    correctAnswer: 0,
+    explanation: "Headless analysis runs Ghidra without the GUI, enabling automated batch analysis of many files.",
+    topic: "Scripting & Automation"
+  },
+  {
+    id: 41,
+    question: "How do you run headless analysis?",
+    options: ["ghidra --headless", "Use analyzeHeadless script in support directory", "ghidra -nogui", "ghidra --batch"],
+    correctAnswer: 1,
+    explanation: "Use the analyzeHeadless script (analyzeHeadless.bat on Windows) from the support directory.",
+    topic: "Scripting & Automation"
+  },
+  {
+    id: 42,
+    question: "What is the FlatProgramAPI?",
+    options: ["A REST API", "A simplified API for common scripting tasks in Ghidra", "A file format API", "A network API"],
+    correctAnswer: 1,
+    explanation: "FlatProgramAPI provides simplified methods for common tasks like finding functions, getting bytes, etc.",
+    topic: "Scripting & Automation"
+  },
+
+  // Section 6: Data Types & Structures (8 questions)
+  {
+    id: 43,
+    question: "How do you apply a structure to memory in Ghidra?",
+    options: ["Press S", "Press T and select the structure type", "Press D", "Press C"],
+    correctAnswer: 1,
+    explanation: "Press T to open the data type dialog and select a structure to apply at the current address.",
+    topic: "Data Types & Structures"
+  },
+  {
+    id: 44,
+    question: "Where do you create custom structures in Ghidra?",
+    options: ["In the Listing view", "In the Data Type Manager", "In the Script Manager", "In the Console"],
+    correctAnswer: 1,
+    explanation: "Use the Data Type Manager to create, edit, and organize custom data types and structures.",
+    topic: "Data Types & Structures"
+  },
+  {
+    id: 45,
+    question: "What is a Data Type Archive in Ghidra?",
+    options: ["A compressed file", "A collection of data types that can be shared between projects", "A backup file", "A log file"],
+    correctAnswer: 1,
+    explanation: "Data Type Archives (.gdt files) contain data types that can be shared across multiple projects.",
+    topic: "Data Types & Structures"
+  },
+  {
+    id: 46,
+    question: "How do you import Windows API data types?",
+    options: ["They're always included", "Open the windows.gdt archive from the Ghidra installation", "Download from Microsoft", "Create them manually"],
+    correctAnswer: 1,
+    explanation: "Ghidra includes windows.gdt archive with Windows API types - open it via the Data Type Manager.",
+    topic: "Data Types & Structures"
+  },
+  {
+    id: 47,
+    question: "What is an enum in Ghidra?",
+    options: ["A function type", "A data type with named integer constants", "A string type", "A pointer type"],
+    correctAnswer: 1,
+    explanation: "An enum (enumeration) is a data type consisting of named integer constants (like error codes).",
+    topic: "Data Types & Structures"
+  },
+  {
+    id: 48,
+    question: "How do you create an array in the Listing view?",
+    options: ["Press A", "Press [ and specify the count", "Right-click > Data > Create Array", "Press R"],
+    correctAnswer: 2,
+    explanation: "Right-click on defined data and select Data > Create Array, then specify the element count.",
+    topic: "Data Types & Structures"
+  },
+  {
+    id: 49,
+    question: "What is a typedef in Ghidra?",
+    options: ["A new type", "An alias for an existing data type", "A function definition", "A variable declaration"],
+    correctAnswer: 1,
+    explanation: "A typedef creates an alias or alternative name for an existing data type.",
+    topic: "Data Types & Structures"
+  },
+  {
+    id: 50,
+    question: "How do you define a string at an address?",
+    options: ["Press S", "Place cursor and choose Data > string type (or use keyboard shortcut for specific string type)", "Press Q", "Press W"],
+    correctAnswer: 1,
+    explanation: "Select the address, then use Data menu or shortcuts to define the string type (ASCII, Unicode, etc.).",
+    topic: "Data Types & Structures"
+  },
+
+  // Section 7: Patching & Modifying (7 questions)
+  {
+    id: 51,
+    question: "Can you patch (modify) bytes in Ghidra?",
+    options: ["No, Ghidra is read-only", "Yes, using the Patch Instruction or Patch Data features", "Only in the decompiler", "Only with plugins"],
+    correctAnswer: 1,
+    explanation: "Ghidra supports patching via Patch Instruction (Ctrl+Shift+G) and direct byte modification.",
+    topic: "Patching & Modifying"
+  },
+  {
+    id: 52,
+    question: "How do you patch an instruction in Ghidra?",
+    options: ["Press P", "Press Ctrl+Shift+G", "Press M", "Press E"],
+    correctAnswer: 1,
+    explanation: "Press Ctrl+Shift+G to open the Patch Instruction dialog where you can modify assembly.",
+    topic: "Patching & Modifying"
+  },
+  {
+    id: 53,
+    question: "Where can you directly edit bytes in Ghidra?",
+    options: ["Only in the Listing", "In the Bytes view using the edit mode", "Only in scripts", "You cannot edit bytes"],
+    correctAnswer: 1,
+    explanation: "Enable edit mode in the Bytes view to directly modify hexadecimal values.",
+    topic: "Patching & Modifying"
+  },
+  {
+    id: 54,
+    question: "How do you export a patched binary?",
+    options: ["Save Project", "File > Export Program and choose format", "Copy and paste", "Use the Console"],
+    correctAnswer: 1,
+    explanation: "Use File > Export Program to save the modified binary in various formats (original, ELF, PE, etc.).",
+    topic: "Patching & Modifying"
+  },
+  {
+    id: 55,
+    question: "What is NOPing out code?",
+    options: ["Deleting code", "Replacing instructions with NOP (no operation) to disable functionality", "Encrypting code", "Commenting code"],
+    correctAnswer: 1,
+    explanation: "NOPing replaces instructions with NOP (0x90 on x86) to effectively disable that code path.",
+    topic: "Patching & Modifying"
+  },
+  {
+    id: 56,
+    question: "Why might you patch a conditional jump to an unconditional jump?",
+    options: ["To make code faster", "To bypass a check (like license validation) by always taking one path", "To add new features", "To compress the binary"],
+    correctAnswer: 1,
+    explanation: "Changing a conditional jump (JZ/JNZ) to unconditional (JMP) bypasses checks by forcing one code path.",
+    topic: "Patching & Modifying"
+  },
+  {
+    id: 57,
+    question: "What should you be careful about when patching?",
+    options: ["Color scheme", "Instruction length must match or be adjusted for, and not breaking relative references", "Font size", "Window position"],
+    correctAnswer: 1,
+    explanation: "Patches must account for instruction sizes and not break relative jumps/calls or corrupt other code.",
+    topic: "Patching & Modifying"
+  },
+
+  // Section 8: Debugging Integration (6 questions)
+  {
+    id: 58,
+    question: "Does Ghidra have a built-in debugger?",
+    options: ["No debugging support", "Yes, Ghidra has integrated debugging capabilities", "Only for Java", "Only for Python"],
+    correctAnswer: 1,
+    explanation: "Ghidra includes debugging capabilities for analyzing running programs (introduced in version 10+).",
+    topic: "Debugging Integration"
+  },
+  {
+    id: 59,
+    question: "What debuggers can Ghidra connect to?",
+    options: ["Only GDB", "Only WinDbg", "GDB, WinDbg, LLDB, and others via connectors", "No external debuggers"],
+    correctAnswer: 2,
+    explanation: "Ghidra can connect to various debuggers including GDB, WinDbg, and LLDB through its debugger connectors.",
+    topic: "Debugging Integration"
+  },
+  {
+    id: 60,
+    question: "What is the advantage of debugging in Ghidra?",
+    options: ["Faster execution", "Combines static analysis with dynamic debugging in one tool", "Better graphics", "Smaller memory usage"],
+    correctAnswer: 1,
+    explanation: "Ghidra's debugging integration allows you to use your static analysis alongside dynamic debugging.",
+    topic: "Debugging Integration"
+  },
+  {
+    id: 61,
+    question: "How do you set a breakpoint in Ghidra's debugger?",
+    options: ["Press B", "Right-click in Listing and select toggle breakpoint, or use the Breakpoints window", "Press F9", "Press P"],
+    correctAnswer: 1,
+    explanation: "Set breakpoints by right-clicking in the Listing view or using the Breakpoints tool window.",
+    topic: "Debugging Integration"
+  },
+  {
+    id: 62,
+    question: "What is the Registers window in debugging mode?",
+    options: ["Shows file registers", "Displays CPU register values during debugging", "Shows memory regions", "Lists all variables"],
+    correctAnswer: 1,
+    explanation: "The Registers window shows current CPU register values (EAX, EBX, RIP, etc.) during debugging.",
+    topic: "Debugging Integration"
+  },
+  {
+    id: 63,
+    question: "Can you modify registers while debugging in Ghidra?",
+    options: ["No", "Yes, you can modify register values during debugging", "Only in scripts", "Only on Linux"],
+    correctAnswer: 1,
+    explanation: "You can modify register values in the Registers window to alter program execution.",
+    topic: "Debugging Integration"
+  },
+
+  // Section 9: Collaboration & Server (6 questions)
+  {
+    id: 64,
+    question: "What is Ghidra Server?",
+    options: ["A web interface", "A server for collaborative reverse engineering with shared projects", "A malware database", "A file server"],
+    correctAnswer: 1,
+    explanation: "Ghidra Server enables teams to work together on the same project with version control.",
+    topic: "Collaboration & Server"
+  },
+  {
+    id: 65,
+    question: "What is the default port for Ghidra Server?",
+    options: ["8080", "443", "13100", "22"],
+    correctAnswer: 2,
+    explanation: "Ghidra Server uses port 13100 by default for client connections.",
+    topic: "Collaboration & Server"
+  },
+  {
+    id: 66,
+    question: "How do you connect to a shared Ghidra project?",
+    options: ["Open a local file", "File > New Project > Shared Project", "Import from URL", "Use FTP"],
+    correctAnswer: 1,
+    explanation: "Create a new Shared Project and provide the server address and credentials to connect.",
+    topic: "Collaboration & Server"
+  },
+  {
+    id: 67,
+    question: "What happens when multiple people edit the same function?",
+    options: ["It crashes", "Ghidra uses version control with checkouts and merging", "Only one person can work at a time", "Changes are lost"],
+    correctAnswer: 1,
+    explanation: "Ghidra Server uses version control - users check out files and can merge or resolve conflicts.",
+    topic: "Collaboration & Server"
+  },
+  {
+    id: 68,
+    question: "How do you add a user to Ghidra Server?",
+    options: ["Through the GUI", "Using svrAdmin command-line tool", "Edit a text file", "Via web interface"],
+    correctAnswer: 1,
+    explanation: "Use the svrAdmin command-line tool to add, remove, and manage users on the server.",
+    topic: "Collaboration & Server"
+  },
+  {
+    id: 69,
+    question: "Can you undo changes in a shared project?",
+    options: ["No", "Yes, using version history", "Only the admin can", "Only before saving"],
+    correctAnswer: 1,
+    explanation: "Shared projects maintain version history, allowing you to review and revert changes.",
+    topic: "Collaboration & Server"
+  },
+
+  // Section 10: Advanced Features & Tips (6 questions)
+  {
+    id: 70,
+    question: "What is the Entropy view useful for?",
+    options: ["Showing code quality", "Identifying encrypted, compressed, or packed sections", "Measuring CPU usage", "Counting functions"],
+    correctAnswer: 1,
+    explanation: "The Entropy view helps identify encrypted, compressed, or packed data by showing randomness levels.",
+    topic: "Advanced Features"
+  },
+  {
+    id: 71,
+    question: "What is Version Tracking in Ghidra?",
+    options: ["Project version control", "Comparing and matching functions between different program versions", "Tracking Ghidra updates", "User activity logging"],
+    correctAnswer: 1,
+    explanation: "Version Tracking compares two binaries to identify matching functions (useful for patch diffing).",
+    topic: "Advanced Features"
+  },
+  {
+    id: 72,
+    question: "How do you import function signatures from a header file?",
+    options: ["Copy and paste", "File > Parse C Source", "Use a plugin", "It's not possible"],
+    correctAnswer: 1,
+    explanation: "Use File > Parse C Source to import function signatures and data types from C header files.",
+    topic: "Advanced Features"
+  },
+  {
+    id: 73,
+    question: "What are Ghidra extensions?",
+    options: ["File extensions Ghidra supports", "Plugins that add new features and capabilities to Ghidra", "Processor definitions", "Memory extensions"],
+    correctAnswer: 1,
+    explanation: "Extensions are plugins that extend Ghidra with new analyzers, exporters, loaders, and features.",
+    topic: "Advanced Features"
+  },
+  {
+    id: 74,
+    question: "Where can you find community Ghidra scripts and plugins?",
+    options: ["Only from NSA", "GitHub repositories like ghidra-scripts and ghidra-contrib", "Microsoft Store", "App Store"],
+    correctAnswer: 1,
+    explanation: "The community shares scripts and plugins on GitHub - search for 'ghidra scripts' or 'ghidra plugins'.",
+    topic: "Advanced Features"
+  },
+  {
+    id: 75,
+    question: "What is SLEIGH in Ghidra?",
+    options: ["A debugging tool", "The processor specification language used to define instruction sets", "A scripting language", "A file format"],
+    correctAnswer: 1,
+    explanation: "SLEIGH is Ghidra's language for defining processor specifications and instruction semantics.",
+    topic: "Advanced Features"
+  }
+];
+
+// Quiz Section Component
+function QuizSection() {
+  const theme = useTheme();
+  const [quizStarted, setQuizStarted] = React.useState(false);
+  const [currentQuestions, setCurrentQuestions] = React.useState<QuizQuestion[]>([]);
+  const [userAnswers, setUserAnswers] = React.useState<{ [key: number]: number }>({});
+  const [showResults, setShowResults] = React.useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
+
+  const shuffleAndSelectQuestions = () => {
+    const shuffled = [...questionBank].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 10);
+  };
+
+  const startQuiz = () => {
+    setCurrentQuestions(shuffleAndSelectQuestions());
+    setUserAnswers({});
+    setShowResults(false);
+    setCurrentQuestionIndex(0);
+    setQuizStarted(true);
+  };
+
+  const handleAnswerSelect = (questionId: number, answerIndex: number) => {
+    setUserAnswers((prev) => ({ ...prev, [questionId]: answerIndex }));
+  };
+
+  const calculateScore = () => {
+    let correct = 0;
+    currentQuestions.forEach((q) => {
+      if (userAnswers[q.id] === q.correctAnswer) correct++;
+    });
+    return correct;
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 8) return "#22c55e";
+    if (score >= 6) return "#f97316";
+    return "#ef4444";
+  };
+
+  const getScoreMessage = (score: number) => {
+    if (score === 10) return "Perfect! You're a Ghidra master! 🏆";
+    if (score >= 8) return "Excellent work! Strong Ghidra skills! 🌟";
+    if (score >= 6) return "Good job! Keep practicing with Ghidra! 📚";
+    if (score >= 4) return "Not bad, but review the material again. 💪";
+    return "Keep learning! Review the sections above. 📖";
+  };
+
+  if (!quizStarted) {
+    return (
+      <Paper
+        id="quiz-section"
+        sx={{
+          p: 4,
+          mb: 5,
+          borderRadius: 4,
+          bgcolor: alpha(theme.palette.background.paper, 0.6),
+          border: `2px solid ${alpha("#10b981", 0.3)}`,
+          background: `linear-gradient(135deg, ${alpha("#10b981", 0.05)} 0%, ${alpha("#059669", 0.05)} 100%)`,
+        }}
+      >
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ width: 56, height: 56, borderRadius: 2, background: "linear-gradient(135deg, #10b981, #059669)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <QuizIcon sx={{ color: "white", fontSize: 32 }} />
+          </Box>
+          Test Your Ghidra Knowledge
+        </Typography>
+
+        <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8, fontSize: "1.05rem" }}>
+          Ready to test what you've learned? Take this <strong>10-question quiz</strong> covering all aspects of 
+          Ghidra. Questions are randomly selected from a pool of <strong>75 questions</strong>, so each attempt is different!
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#3b82f6", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#3b82f6" }}>10</Typography>
+              <Typography variant="caption" color="text.secondary">Questions</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#22c55e", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#22c55e" }}>75</Typography>
+              <Typography variant="caption" color="text.secondary">Question Pool</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#8b5cf6", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#8b5cf6" }}>10</Typography>
+              <Typography variant="caption" color="text.secondary">Topics Covered</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#f97316", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#f97316" }}>∞</Typography>
+              <Typography variant="caption" color="text.secondary">Retakes Allowed</Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        <Button
+          variant="contained"
+          size="large"
+          onClick={startQuiz}
+          startIcon={<QuizIcon />}
+          sx={{ background: "linear-gradient(135deg, #10b981, #059669)", fontWeight: 700, px: 4, py: 1.5, fontSize: "1.1rem", "&:hover": { background: "linear-gradient(135deg, #059669, #047857)" } }}
+        >
+          Start Quiz
+        </Button>
+      </Paper>
+    );
+  }
+
+  if (showResults) {
+    const score = calculateScore();
+    return (
+      <Paper id="quiz-section" sx={{ p: 4, mb: 5, borderRadius: 4, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `2px solid ${alpha(getScoreColor(score), 0.3)}` }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <EmojiEventsIcon sx={{ color: getScoreColor(score), fontSize: 40 }} />
+          Quiz Results
+        </Typography>
+
+        <Box sx={{ textAlign: "center", mb: 4 }}>
+          <Typography variant="h1" sx={{ fontWeight: 900, color: getScoreColor(score), mb: 1 }}>{score}/10</Typography>
+          <Typography variant="h6" sx={{ color: "text.secondary", mb: 2 }}>{getScoreMessage(score)}</Typography>
+          <Chip label={`${score * 10}%`} sx={{ bgcolor: alpha(getScoreColor(score), 0.15), color: getScoreColor(score), fontWeight: 700, fontSize: "1rem", px: 2 }} />
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Review Your Answers:</Typography>
+
+        {currentQuestions.map((q, index) => {
+          const isCorrect = userAnswers[q.id] === q.correctAnswer;
+          return (
+            <Paper key={q.id} sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: alpha(isCorrect ? "#22c55e" : "#ef4444", 0.05), border: `1px solid ${alpha(isCorrect ? "#22c55e" : "#ef4444", 0.2)}` }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1 }}>
+                <Chip label={`Q${index + 1}`} size="small" sx={{ bgcolor: isCorrect ? "#22c55e" : "#ef4444", color: "white", fontWeight: 700 }} />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{q.question}</Typography>
+              </Box>
+              <Typography variant="body2" sx={{ color: "text.secondary", ml: 4.5 }}>
+                <strong>Your answer:</strong> {q.options[userAnswers[q.id]] || "Not answered"}
+                {!isCorrect && (<><br /><strong style={{ color: "#22c55e" }}>Correct:</strong> {q.options[q.correctAnswer]}</>)}
+              </Typography>
+              {!isCorrect && (<Alert severity="info" sx={{ mt: 1, ml: 4.5 }}><Typography variant="caption">{q.explanation}</Typography></Alert>)}
+            </Paper>
+          );
+        })}
+
+        <Box sx={{ display: "flex", gap: 2, mt: 3 }}>
+          <Button variant="contained" onClick={startQuiz} startIcon={<RefreshIcon />} sx={{ background: "linear-gradient(135deg, #10b981, #059669)", fontWeight: 700 }}>Try Again</Button>
+          <Button variant="outlined" onClick={() => setQuizStarted(false)} sx={{ fontWeight: 600 }}>Back to Overview</Button>
+        </Box>
+      </Paper>
+    );
+  }
+
+  const currentQuestion = currentQuestions[currentQuestionIndex];
+  const answeredCount = Object.keys(userAnswers).length;
+
+  return (
+    <Paper id="quiz-section" sx={{ p: 4, mb: 5, borderRadius: 4, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `2px solid ${alpha("#10b981", 0.3)}` }}>
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Question {currentQuestionIndex + 1} of 10</Typography>
+          <Chip label={currentQuestion.topic} size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.15), color: "#8b5cf6", fontWeight: 600 }} />
+        </Box>
+        <Box sx={{ width: "100%", bgcolor: alpha("#10b981", 0.1), borderRadius: 1, height: 8 }}>
+          <Box sx={{ width: `${((currentQuestionIndex + 1) / 10) * 100}%`, bgcolor: "#10b981", borderRadius: 1, height: "100%", transition: "width 0.3s ease" }} />
+        </Box>
+      </Box>
+
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 3, lineHeight: 1.6 }}>{currentQuestion.question}</Typography>
+
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {currentQuestion.options.map((option, index) => {
+          const isSelected = userAnswers[currentQuestion.id] === index;
+          return (
+            <Grid item xs={12} key={index}>
+              <Paper
+                onClick={() => handleAnswerSelect(currentQuestion.id, index)}
+                sx={{ p: 2, borderRadius: 2, cursor: "pointer", bgcolor: isSelected ? alpha("#3b82f6", 0.15) : alpha(theme.palette.background.paper, 0.5), border: `2px solid ${isSelected ? "#3b82f6" : alpha(theme.palette.divider, 0.2)}`, transition: "all 0.2s ease", "&:hover": { borderColor: "#3b82f6", bgcolor: alpha("#3b82f6", 0.08) } }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: isSelected ? "#3b82f6" : alpha(theme.palette.divider, 0.3), color: isSelected ? "white" : "text.secondary", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.9rem" }}>
+                    {String.fromCharCode(65 + index)}
+                  </Box>
+                  <Typography variant="body1" sx={{ fontWeight: isSelected ? 600 : 400 }}>{option}</Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
+
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Button variant="outlined" disabled={currentQuestionIndex === 0} onClick={() => setCurrentQuestionIndex((prev) => prev - 1)}>Previous</Button>
+        <Typography variant="body2" color="text.secondary">{answeredCount}/10 answered</Typography>
+        {currentQuestionIndex < 9 ? (
+          <Button variant="contained" onClick={() => setCurrentQuestionIndex((prev) => prev + 1)} sx={{ background: "linear-gradient(135deg, #3b82f6, #2563eb)" }}>Next</Button>
+        ) : (
+          <Button variant="contained" onClick={() => setShowResults(true)} disabled={answeredCount < 10} sx={{ background: answeredCount >= 10 ? "linear-gradient(135deg, #22c55e, #16a34a)" : undefined, fontWeight: 700 }}>Submit Quiz</Button>
+        )}
+      </Box>
+    </Paper>
+  );
+}
 
 // TabPanel component
 interface TabPanelProps {
@@ -1997,6 +2840,10 @@ cd $GHIDRA_HOME/server
           </Grid>
         </TabPanel>
       </Paper>
+
+      {/* Quiz Section */}
+      <QuizSection />
+
     </Container>
     </LearnPageLayout>
   );

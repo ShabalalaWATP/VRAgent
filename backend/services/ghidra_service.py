@@ -49,9 +49,10 @@ def ghidra_available() -> bool:
 
 def run_ghidra_decompilation(
     file_path: Path,
-    max_functions: int = 200,
-    decomp_limit: int = 4000,
-    timeout_seconds: int = 900,
+    max_functions: int = 300,
+    decomp_limit: int = 8000,
+    timeout_seconds: int = 1200,
+    selection_mode: str = "security",
 ) -> Dict[str, Any]:
     """
     Run Ghidra headless analysis and export decompilation JSON.
@@ -83,6 +84,7 @@ def run_ghidra_decompilation(
         str(output_path),
         str(max_functions),
         str(decomp_limit),
+        selection_mode,  # Pass selection mode to script
     ]
     if headless_path.suffix.lower() == ".bat" and os.name == "nt":
         cmd = ["cmd", "/c"] + cmd
@@ -92,7 +94,7 @@ def run_ghidra_decompilation(
     env["JAVA_TOOL_OPTIONS"] = "-Djava.awt.headless=true"
 
     try:
-        logger.info("Running Ghidra headless analysis")
+        logger.info(f"Running Ghidra headless analysis (max_functions={max_functions}, decomp_limit={decomp_limit}, mode={selection_mode})")
         result = subprocess.run(
             cmd,
             capture_output=True,

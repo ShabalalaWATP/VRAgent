@@ -70,6 +70,8 @@ class ConnectionManager:
         self._project_connections: Dict[int, Set[WebSocket]] = {}
         # Cache of last progress for each scan (for reconnecting clients)
         self._last_progress: Dict[int, str] = {}  # scan_run_id -> JSON string
+        # Track all phases that have been seen for each scan (for late-joining clients)
+        self._phase_history: Dict[int, List[str]] = {}  # scan_run_id -> list of phase names
         self._lock = asyncio.Lock()
     
     async def connect(self, websocket: WebSocket, scan_run_id: Optional[int] = None, project_id: Optional[int] = None):
@@ -82,6 +84,19 @@ class ConnectionManager:
                     self._connections[scan_run_id] = set()
                 self._connections[scan_run_id].add(websocket)
                 logger.debug(f"WebSocket connected for scan_run {scan_run_id}")
+                
+                # Send phase history first (so client knows what's already completed)
+                if scan_run_id in self._phase_history and self._phase_history[scan_run_id]:
+                    try:
+                        history_msg = json.dumps({
+                            "type": "phase_history",
+                            "scan_run_id": scan_run_id,
+                            "completed_phases": self._phase_history[scan_run_id],
+                        })
+                        await websocket.send_text(history_msg)
+                        logger.debug(f"Sent phase history ({len(self._phase_history[scan_run_id])} phases) for scan {scan_run_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to send phase history: {e}")
                 
                 # Send last known progress immediately on reconnect
                 if scan_run_id in self._last_progress:
@@ -121,6 +136,14 @@ class ConnectionManager:
             # Cache the last progress for reconnecting clients
             self._last_progress[progress.scan_run_id] = message
             
+            # Track phase history for late-joining clients
+            phase_name = progress.phase.value if isinstance(progress.phase, ScanPhase) else str(progress.phase)
+            if progress.scan_run_id not in self._phase_history:
+                self._phase_history[progress.scan_run_id] = []
+            # Add phase if not already tracked (avoid duplicates)
+            if phase_name not in self._phase_history[progress.scan_run_id]:
+                self._phase_history[progress.scan_run_id].append(phase_name)
+            
             # Clean up old completed scans from cache (keep only last 100)
             if progress.phase in (ScanPhase.COMPLETE, ScanPhase.FAILED):
                 # Schedule cleanup after a delay to allow final reconnects
@@ -131,6 +154,8 @@ class ConnectionManager:
                 oldest_keys = list(self._last_progress.keys())[:-100]
                 for key in oldest_keys:
                     del self._last_progress[key]
+                    if key in self._phase_history:
+                        del self._phase_history[key]
             
             # Send to scan-specific subscribers
             for ws in self._connections.get(progress.scan_run_id, set()):
@@ -362,10 +387,21 @@ class SimpleProgressManager:
                             try:
                                 progress_data = json.loads(message['data'])
                                 scan_run_id = progress_data.get('scan_run_id')
+                                phase = progress_data.get('phase', '')
                                 
-                                # Broadcast to WebSocket clients
-                                disconnected = []
+                                # Track phase history for late-joining clients
                                 async with manager._lock:
+                                    # Cache last progress
+                                    manager._last_progress[scan_run_id] = json.dumps(progress_data)
+                                    
+                                    # Track phase in history
+                                    if scan_run_id not in manager._phase_history:
+                                        manager._phase_history[scan_run_id] = []
+                                    if phase and phase not in manager._phase_history[scan_run_id]:
+                                        manager._phase_history[scan_run_id].append(phase)
+                                    
+                                    # Broadcast to WebSocket clients
+                                    disconnected = []
                                     for ws in manager._connections.get(scan_run_id, set()):
                                         try:
                                             await ws.send_text(json.dumps(progress_data))

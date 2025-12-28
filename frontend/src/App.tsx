@@ -23,11 +23,13 @@ import UserMenu from "./components/UserMenu";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
 import MemoryIcon from "@mui/icons-material/Memory";
+import PeopleIcon from "@mui/icons-material/People";
 
 // Lazy load all pages
 const ProjectListPage = lazy(() => import("./pages/ProjectListPage"));
 const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
 const ReportDetailPage = lazy(() => import("./pages/ReportDetailPage"));
+const AgenticAIScanPage = lazy(() => import("./pages/AgenticAIScanPage"));
 const LearnHubPage = lazy(() => import("./pages/LearnHubPage"));
 const ScanningPage = lazy(() => import("./pages/ScanningPage"));
 const AIAnalysisPage = lazy(() => import("./pages/AIAnalysisPage"));
@@ -93,12 +95,15 @@ const DeserializationAttacksPage = lazy(() => import("./pages/DeserializationAtt
 const ReturnOrientedProgrammingPage = lazy(() => import("./pages/ReturnOrientedProgrammingPage"));
 const Debugging101Page = lazy(() => import("./pages/Debugging101Page"));
 const GhidraGuidePage = lazy(() => import("./pages/GhidraGuidePage"));
+const BinaryNinjaGuidePage = lazy(() => import("./pages/BinaryNinjaGuidePage"));
+const IDAProEssentialsPage = lazy(() => import("./pages/IDAProEssentialsPage"));
 const SSRFGuidePage = lazy(() => import("./pages/SSRFGuidePage"));
 const BufferOverflowGuidePage = lazy(() => import("./pages/BufferOverflowGuidePage"));
 const DockerForensicsGuidePage = lazy(() => import("./pages/DockerForensicsGuidePage"));
 const CareerPathsPage = lazy(() => import("./pages/CareerPathsPage"));
 const SecurityPortfolioPage = lazy(() => import("./pages/SecurityPortfolioPage"));
 const IOSPentestingPage = lazy(() => import("./pages/iOSPentestingPage"));
+const IOSReverseEngineeringFundamentalsPage = lazy(() => import("./pages/IOSReverseEngineeringFundamentalsPage"));
 const HeapExploitationPage = lazy(() => import("./pages/HeapExploitationPage"));
 const IntegerOverflowPage = lazy(() => import("./pages/IntegerOverflowPage"));
 const OutOfBoundsPage = lazy(() => import("./pages/OutOfBoundsPage"));
@@ -115,14 +120,39 @@ const ITHardwarePage = lazy(() => import("./pages/ITHardwarePage"));
 const ComputerScienceFundamentalsPage = lazy(() => import("./pages/ComputerScienceFundamentalsPage"));
 const CloudComputingPage = lazy(() => import("./pages/CloudComputingPage"));
 const IntroToReverseEngineeringPage = lazy(() => import("./pages/IntroToReverseEngineeringPage"));
+const LinuxInternalsREPage = lazy(() => import("./pages/LinuxInternalsREPage"));
+const MalwareAnalysisPage = lazy(() => import("./pages/MalwareAnalysisPage"));
+const AntiDebuggingGuidePage = lazy(() => import("./pages/AntiDebuggingGuidePage"));
+const FirmwareReverseEngineeringPage = lazy(() => import("./pages/FirmwareReverseEngineeringPage"));
 const SystemsAdministrationPage = lazy(() => import("./pages/SystemsAdministrationPage"));
 const ArtificialIntelligencePage = lazy(() => import("./pages/ArtificialIntelligencePage"));
+const AssemblyGuidePage = lazy(() => import("./pages/AssemblyGuidePage"));
+const HtmlCssGuidePage = lazy(() => import("./pages/HtmlCssGuidePage"));
+const JavaScriptFundamentalsPage = lazy(() => import("./pages/JavaScriptFundamentalsPage"));
+const SoftwareEngineeringFundamentalsPage = lazy(() => import("./pages/SoftwareEngineeringFundamentalsPage"));
+const PythonFundamentalsPage = lazy(() => import("./pages/PythonFundamentalsPage"));
+const JavaProgrammingPage = lazy(() => import("./pages/JavaProgrammingPage"));
+const GoProgrammingPage = lazy(() => import("./pages/GoProgrammingPage"));
+const RustProgrammingPage = lazy(() => import("./pages/RustProgrammingPage"));
+const CProgrammingPage = lazy(() => import("./pages/CProgrammingPage"));
+const CppProgrammingPage = lazy(() => import("./pages/CppProgrammingPage"));
+const PHPProgrammingPage = lazy(() => import("./pages/PHPProgrammingPage"));
+const CSharpProgrammingPage = lazy(() => import("./pages/CSharpProgrammingPage"));
+const KotlinProgrammingPage = lazy(() => import("./pages/KotlinProgrammingPage"));
+const SwiftProgrammingPage = lazy(() => import("./pages/SwiftProgrammingPage"));
+const SecureByDesignPage = lazy(() => import("./pages/SecureByDesignPage"));
+const AgilePMPage = lazy(() => import("./pages/AgilePMPage"));
+const ScrumGuidePage = lazy(() => import("./pages/ScrumGuidePage"));
+const PRINCE2GuidePage = lazy(() => import("./pages/PRINCE2GuidePage"));
+const ITILv4GuidePage = lazy(() => import("./pages/ITILv4GuidePage"));
+const GitVersionControlPage = lazy(() => import("./pages/GitVersionControlPage"));
 
 // Auth pages
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const SocialPage = lazy(() => import("./pages/SocialPage"));
 
 // Shared animations imported from theme
 import { pulse, shimmer, float } from './theme/animations';
@@ -409,6 +439,41 @@ function App() {
                 Learn
               </Button>
             </Tooltip>
+
+            {isAuthenticated && (
+              <Tooltip title="Social Hub - Friends, Messages & Community">
+                <Button
+                  component={Link}
+                  to="/social"
+                  startIcon={<PeopleIcon sx={{ fontSize: "1.3rem !important" }} />}
+                  variant="contained"
+                  size="medium"
+                  sx={{
+                    background: `linear-gradient(135deg, #ec4899 0%, #db2777 50%, #be185d 100%)`,
+                    color: "white",
+                    fontWeight: 700,
+                    px: 2.5,
+                    py: 1,
+                    borderRadius: 2,
+                    textTransform: "none",
+                    fontSize: "0.95rem",
+                    boxShadow: `0 4px 15px ${alpha("#db2777", 0.4)}, 0 0 20px ${alpha("#db2777", 0.2)}`,
+                    border: `1px solid ${alpha("#ec4899", 0.5)}`,
+                    "&:hover": {
+                      background: `linear-gradient(135deg, #db2777 0%, #be185d 50%, #9d174d 100%)`,
+                      boxShadow: `0 6px 25px ${alpha("#db2777", 0.5)}, 0 0 30px ${alpha("#db2777", 0.3)}`,
+                      transform: "translateY(-2px)",
+                    },
+                    "&:active": {
+                      transform: "translateY(0)",
+                    },
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  Social
+                </Button>
+              </Tooltip>
+            )}
             
             <Tooltip title="View on GitHub">
               <IconButton
@@ -478,6 +543,13 @@ function App() {
               </ProtectedRoute>
             } />
             
+            {/* Social Route */}
+            <Route path="/social" element={
+              <ProtectedRoute>
+                <SocialPage />
+              </ProtectedRoute>
+            } />
+            
             {/* Protected Routes */}
             <Route path="/" element={
               <ProtectedRoute>
@@ -487,6 +559,11 @@ function App() {
             <Route path="/projects/:projectId" element={
               <ProtectedRoute>
                 <ProjectDetailPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/projects/:projectId/agentic-scan" element={
+              <ProtectedRoute>
+                <AgenticAIScanPage />
               </ProtectedRoute>
             } />
             <Route path="/reports/:reportId" element={
@@ -580,6 +657,7 @@ function App() {
             <Route path="/learn/apk-analysis" element={<ApkAnalysisGuidePage />} />
             <Route path="/learn/binary-analysis" element={<BinaryAnalysisGuidePage />} />
             <Route path="/learn/android-reverse-engineering" element={<AndroidReverseEngineeringGuidePage />} />
+            <Route path="/learn/ios-reverse-engineering" element={<IOSReverseEngineeringFundamentalsPage />} />
             <Route path="/learn/android-pentesting" element={<AndroidPentestingPage />} />
             <Route path="/learn/privilege-escalation" element={<PrivilegeEscalationGuidePage />} />
             <Route path="/learn/certifications" element={<CyberSecurityCertificationsPage />} />
@@ -612,8 +690,14 @@ function App() {
             <Route path="/learn/rop" element={<ReturnOrientedProgrammingPage />} />
             <Route path="/learn/debugging-101" element={<Debugging101Page />} />
             <Route path="/learn/ghidra" element={<GhidraGuidePage />} />
+            <Route path="/learn/binary-ninja" element={<BinaryNinjaGuidePage />} />
+            <Route path="/learn/ida-pro" element={<IDAProEssentialsPage />} />
             <Route path="/learn/intro-to-re" element={<IntroToReverseEngineeringPage />} />
             <Route path="/learn/windows-internals" element={<WindowsInternalsREPage />} />
+            <Route path="/learn/linux-internals" element={<LinuxInternalsREPage />} />
+            <Route path="/learn/malware-analysis" element={<MalwareAnalysisPage />} />
+            <Route path="/learn/anti-debugging" element={<AntiDebuggingGuidePage />} />
+            <Route path="/learn/firmware-re" element={<FirmwareReverseEngineeringPage />} />
             <Route path="/learn/windows-basics" element={<WindowsBasicsPage />} />
             <Route path="/learn/linux-fundamentals" element={<LinuxFundamentalsPage />} />
             <Route path="/learn/networking" element={<ComputerNetworkingPage />} />
@@ -625,6 +709,26 @@ function App() {
             <Route path="/learn/ssrf" element={<SSRFGuidePage />} />
             <Route path="/learn/buffer-overflow" element={<BufferOverflowGuidePage />} />
             <Route path="/learn/docker-forensics" element={<DockerForensicsGuidePage />} />
+            <Route path="/learn/assembly" element={<AssemblyGuidePage />} />
+            <Route path="/learn/html-css" element={<HtmlCssGuidePage />} />
+            <Route path="/learn/javascript" element={<JavaScriptFundamentalsPage />} />
+            <Route path="/learn/software-engineering-fundamentals" element={<SoftwareEngineeringFundamentalsPage />} />
+            <Route path="/learn/python-fundamentals" element={<PythonFundamentalsPage />} />
+            <Route path="/learn/java-programming" element={<JavaProgrammingPage />} />
+            <Route path="/learn/go-programming" element={<GoProgrammingPage />} />
+            <Route path="/learn/rust-programming" element={<RustProgrammingPage />} />
+            <Route path="/learn/c-programming" element={<CProgrammingPage />} />
+            <Route path="/learn/cpp-programming" element={<CppProgrammingPage />} />
+            <Route path="/learn/php-programming" element={<PHPProgrammingPage />} />
+            <Route path="/learn/csharp-programming" element={<CSharpProgrammingPage />} />
+            <Route path="/learn/kotlin-programming" element={<KotlinProgrammingPage />} />
+            <Route path="/learn/swift-programming" element={<SwiftProgrammingPage />} />
+            <Route path="/learn/secure-by-design" element={<SecureByDesignPage />} />
+            <Route path="/learn/agile-pm" element={<AgilePMPage />} />
+            <Route path="/learn/scrum" element={<ScrumGuidePage />} />
+            <Route path="/learn/prince2" element={<PRINCE2GuidePage />} />
+            <Route path="/learn/itil-v4" element={<ITILv4GuidePage />} />
+            <Route path="/learn/git-version-control" element={<GitVersionControlPage />} />
           </Routes>
         </Suspense>
       </Container>

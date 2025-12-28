@@ -31,6 +31,8 @@ from backend.services.codebase_service import (
 from backend.services.embedding_service import enrich_code_chunks
 from backend.services.websocket_service import progress_manager
 from backend.services.webhook_service import notify_scan_complete, get_webhooks
+# Import ExternalIntelligence for unified AI pipeline
+from backend.services.agentic_scan_service import ExternalIntelligence
 
 logger = get_logger(__name__)
 
@@ -342,6 +344,124 @@ def _filter_source_files_fast(source_root: Path, files: List[Path]) -> List[Path
     return filtered
 
 
+def build_external_intelligence(
+    vulns: List[models.Vulnerability],
+    scanner_findings: List[models.Finding],
+    deps: List[models.Dependency],
+    enriched_vulns: Optional[Dict[int, Dict]] = None,
+    source_root: Optional[Path] = None
+) -> ExternalIntelligence:
+    """
+    Build ExternalIntelligence from scan results to provide context
+    for AI-guided code analysis.
+    
+    This enables the unified pipeline where AI knows about:
+    - Which dependencies have CVEs (and their severity/EPSS)
+    - What files were flagged by SAST scanners
+    - Which files import vulnerable packages
+    
+    Args:
+        vulns: CVE/vulnerability models from cve_service
+        scanner_findings: Findings from SAST scanners (bandit, semgrep, etc.)
+        deps: Parsed dependencies from the codebase
+        enriched_vulns: Optional dict with NVD/EPSS enrichment data
+        source_root: Optional source directory for import analysis
+        
+    Returns:
+        ExternalIntelligence object ready to pass to AgenticAnalyzer
+    """
+    intel = ExternalIntelligence()
+    
+    # Build dependency map (name -> version)
+    dep_map = {d.id: {"name": d.name, "version": d.version} for d in deps}
+    dep_name_map = {d.name.lower(): d for d in deps}
+    
+    # Process CVE findings
+    for vuln in vulns:
+        dep_info = dep_map.get(vuln.dependency_id, {})
+        epss_data = enriched_vulns.get(vuln.id, {}) if enriched_vulns else {}
+        
+        cve_entry = {
+            "external_id": vuln.external_id,
+            "package": dep_info.get("name", "unknown"),
+            "version": dep_info.get("version"),
+            "severity": vuln.severity or "unknown",
+            "cvss_score": vuln.cvss_score,
+            "epss_score": epss_data.get("epss_score"),
+            "in_kev": epss_data.get("in_kev", False),
+            "description": vuln.title,
+            "affected_functions": [],  # Could be enriched from NVD
+        }
+        
+        # Try to get affected functions from NVD enrichment
+        nvd_data = epss_data.get("nvd_enrichment", {})
+        if nvd_data:
+            cve_entry["description"] = nvd_data.get("description", vuln.title)
+            # Could parse CWE -> common functions mapping here
+        
+        intel.cve_findings.append(cve_entry)
+    
+    # Process SAST findings (convert models to dicts)
+    for finding in scanner_findings:
+        sast_entry = {
+            "file": finding.file_path,
+            "line": finding.start_line,
+            "type": finding.type,
+            "severity": finding.severity,
+            "summary": finding.summary,
+            "scanner": finding.details.get("scanner") if finding.details else None,
+        }
+        intel.sast_findings.append(sast_entry)
+    
+    # Analyze which files import vulnerable packages
+    if source_root:
+        vulnerable_packages = {c["package"].lower() for c in intel.cve_findings}
+        
+        # Quick scan for imports
+        for source_file in source_root.rglob("*"):
+            if not source_file.is_file():
+                continue
+            ext = source_file.suffix.lower()
+            if ext not in {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rb"}:
+                continue
+            
+            try:
+                content = source_file.read_text(encoding="utf-8", errors="ignore")[:50000]
+                rel_path = str(source_file.relative_to(source_root))
+                
+                # Check for imports of vulnerable packages
+                for pkg in vulnerable_packages:
+                    # Python: import pkg, from pkg import
+                    # JS/TS: require('pkg'), import ... from 'pkg'
+                    # Simplified check (can be improved with AST parsing)
+                    if (f"import {pkg}" in content.lower() or 
+                        f"from {pkg}" in content.lower() or
+                        f"require('{pkg}')" in content.lower() or
+                        f'require("{pkg}")' in content.lower() or
+                        f"from '{pkg}'" in content.lower() or
+                        f'from "{pkg}"' in content.lower()):
+                        
+                        # Get the CVEs for this package
+                        pkg_cves = [c["external_id"] for c in intel.cve_findings 
+                                   if c["package"].lower() == pkg]
+                        
+                        intel.vulnerable_import_files.append({
+                            "file": rel_path,
+                            "package": pkg,
+                            "cves": pkg_cves,
+                        })
+                        break  # One per file is enough
+                        
+            except Exception:
+                continue
+    
+    logger.info(f"Built ExternalIntelligence: {len(intel.cve_findings)} CVEs, "
+               f"{len(intel.sast_findings)} SAST findings, "
+               f"{len(intel.vulnerable_import_files)} files importing vulnerable deps")
+    
+    return intel
+
+
 def _process_single_file(args: Tuple[Path, Path, int]) -> Tuple[Optional[str], List[Any], Optional[List[models.Finding]]]:
     """
     Process a single file: read, chunk, and run static checks.
@@ -525,7 +645,11 @@ def _reuse_or_generate_embeddings(
     return chunks_to_embed, reused_count
 
 
-def _run_scanners_parallel(source_root: Path, timeout_per_scanner: int = None) -> Dict[str, List[Any]]:
+def _run_scanners_parallel(
+    source_root: Path, 
+    timeout_per_scanner: int = None,
+    tracker: 'ParallelPhaseTracker' = None
+) -> Dict[str, List[Any]]:
     """
     Run all SAST scanners in parallel using ThreadPoolExecutor.
     
@@ -536,10 +660,12 @@ def _run_scanners_parallel(source_root: Path, timeout_per_scanner: int = None) -
     - Per-scanner timeout to prevent hanging
     - Progressive result collection
     - Graceful degradation on scanner failures
+    - Real-time progress updates for each scanner
     
     Args:
         source_root: Path to the source code directory
         timeout_per_scanner: Maximum seconds per scanner (uses config default if None)
+        tracker: Optional progress tracker for real-time scanner updates
         
     Returns:
         Dict mapping scanner name to list of findings
@@ -642,6 +768,29 @@ def _run_scanners_parallel(source_root: Path, timeout_per_scanner: int = None) -
     
     logger.info(f"Smart scanner selection: Running {len(scanner_tasks)} scanners for languages {list(language_set)}: {[t[0] for t in scanner_tasks]}")
     
+    # Broadcast which scanners will run
+    if tracker:
+        scanner_names = [t[0] for t in scanner_tasks]
+        tracker.update("sast", 15, f"🔍 Running {len(scanner_tasks)} scanners: {', '.join(scanner_names)}")
+    
+    # Scanner display names for nicer progress messages
+    scanner_display = {
+        "semgrep": "🔎 Semgrep (multi-language)",
+        "bandit": "🐍 Bandit (Python)",
+        "gosec": "🔷 Gosec (Go)",
+        "spotbugs": "☕ SpotBugs (Java)",
+        "clangtidy": "🔧 Clang-Tidy (C/C++)",
+        "cppcheck": "🔧 Cppcheck (C/C++)",
+        "eslint": "📜 ESLint (JS/TS)",
+        "secrets": "🔐 Secret Scanner",
+        "php": "🐘 PHP Security",
+        "brakeman": "💎 Brakeman (Ruby)",
+        "cargo_audit": "🦀 Cargo Audit (Rust)",
+    }
+    
+    # Track completed scanners for progress
+    completed_count = [0]  # Use list for closure mutability
+    
     # Run scanners in parallel with individual timeouts
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SCANNERS) as executor:
         # Submit all tasks
@@ -656,13 +805,34 @@ def _run_scanners_parallel(source_root: Path, timeout_per_scanner: int = None) -
             try:
                 scanner_results = future.result(timeout=timeout_per_scanner)
                 results[name] = scanner_results if scanner_results else []
-                logger.info(f"Scanner {name} completed: {len(results[name])} findings")
+                completed_count[0] += 1
+                count = len(results[name])
+                logger.info(f"Scanner {name} completed: {count} findings")
+                
+                # Broadcast individual scanner completion
+                if tracker:
+                    display = scanner_display.get(name, name)
+                    progress = 15 + int((completed_count[0] / len(scanner_tasks)) * 80)
+                    if count > 0:
+                        tracker.update("sast", progress, f"✅ {display}: {count} findings")
+                    else:
+                        tracker.update("sast", progress, f"✅ {display}: clean")
             except TimeoutError:
                 logger.warning(f"Scanner {name} timed out after {timeout_per_scanner}s")
                 results[name] = []
+                completed_count[0] += 1
+                if tracker:
+                    display = scanner_display.get(name, name)
+                    progress = 15 + int((completed_count[0] / len(scanner_tasks)) * 80)
+                    tracker.update("sast", progress, f"⏱️ {display}: timeout")
             except Exception as e:
                 logger.error(f"Scanner {name} failed: {e}")
                 results[name] = []
+                completed_count[0] += 1
+                if tracker:
+                    display = scanner_display.get(name, name)
+                    progress = 15 + int((completed_count[0] / len(scanner_tasks)) * 80)
+                    tracker.update("sast", progress, f"⚠️ {display}: failed")
     
     total_findings = sum(len(v) for v in results.values())
     logger.info(f"All scanners complete. Total findings: {total_findings}")
@@ -708,30 +878,32 @@ def _run_parallel_scan_phases(
     
     def run_sast():
         """Run all SAST scanners."""
-        tracker.update("sast", 10, "Starting SAST scanners")
-        sast_results = _run_scanners_parallel(source_root, timeout)
-        tracker.update("sast", 100, f"SAST complete")
+        tracker.update("sast", 10, "🔍 Initializing security scanners...")
+        sast_results = _run_scanners_parallel(source_root, timeout, tracker=tracker)
+        total_findings = sum(len(v) for v in sast_results.values())
+        tracker.update("sast", 100, f"✅ SAST complete: {total_findings} findings")
         return ("sast", sast_results)
     
     def run_docker():
         """Run Docker scanning."""
-        tracker.update("docker", 10, "Scanning Docker resources")
+        tracker.update("docker", 10, "🐳 Scanning Dockerfiles and images...")
         try:
             docker_result = docker_scan_service.scan_docker_resources(
                 source_root,
                 scan_images=docker_scan_service.is_trivy_available(),
                 image_timeout=timeout
             )
-            tracker.update("docker", 100, f"Docker scan complete: {len(docker_result.dockerfile_findings)} findings")
+            count = len(docker_result.dockerfile_findings) if docker_result else 0
+            tracker.update("docker", 100, f"✅ Docker scan: {count} findings")
             return ("docker", docker_result)
         except Exception as e:
             logger.warning(f"Docker scanning failed: {e}")
-            tracker.update("docker", 100, "Docker scan skipped")
+            tracker.update("docker", 100, "⏭️ Docker scan skipped")
             return ("docker", None)
     
     def run_iac():
         """Run IaC scanning."""
-        tracker.update("iac", 10, "Scanning Infrastructure as Code")
+        tracker.update("iac", 10, "🏗️ Scanning Infrastructure as Code...")
         try:
             iac_result = iac_scan_service.scan_iac(
                 source_root,
@@ -739,23 +911,24 @@ def _run_parallel_scan_phases(
                 use_tfsec=iac_scan_service.is_tfsec_available(),
                 timeout=timeout
             )
-            tracker.update("iac", 100, f"IaC scan complete: {len(iac_result.findings)} findings")
+            count = len(iac_result.findings) if iac_result else 0
+            tracker.update("iac", 100, f"✅ IaC scan: {count} findings")
             return ("iac", iac_result)
         except Exception as e:
             logger.warning(f"IaC scanning failed: {e}")
-            tracker.update("iac", 100, "IaC scan skipped")
+            tracker.update("iac", 100, "⏭️ IaC scan skipped")
             return ("iac", None)
     
     def run_deps():
         """Parse dependencies."""
-        tracker.update("dependencies", 10, "Parsing dependencies")
+        tracker.update("dependencies", 10, "📦 Parsing project dependencies...")
         try:
             deps = dependency_service.parse_dependencies(project, source_root)
-            tracker.update("dependencies", 100, f"Found {len(deps)} dependencies")
+            tracker.update("dependencies", 100, f"✅ Found {len(deps)} dependencies")
             return ("dependencies", deps)
         except Exception as e:
             logger.warning(f"Dependency parsing failed: {e}")
-            tracker.update("dependencies", 100, "Dependency parsing failed")
+            tracker.update("dependencies", 100, "⚠️ Dependency parsing failed")
             return ("dependencies", [])
     
     # Run all phases in parallel
@@ -971,19 +1144,24 @@ def _static_checks(file_path: Path, contents: str) -> List[models.Finding]:
 def run_scan(
     db: Session, 
     project: models.Project, 
-    scan_run: Optional[models.ScanRun] = None,
-    agentic_findings: Optional[List[models.Finding]] = None
+    scan_run: Optional[models.ScanRun] = None
 ) -> models.Report:
     """
-    Execute a full vulnerability scan on a project.
+    Execute a full vulnerability scan on a project with unified AI pipeline.
     
-    This includes:
-    - Extracting and parsing source files
-    - Running static pattern analysis
-    - Generating code embeddings
-    - Parsing dependencies
-    - Looking up known CVEs
-    - Creating findings and generating a report
+    The unified pipeline runs phases in optimal order:
+    1. Extract and parse source files
+    2. Generate code embeddings  
+    3. Parse dependencies and build trees
+    4. CVE lookup + NVD/EPSS/KEV enrichment
+    5. SAST scanners (Semgrep, Bandit, etc.)
+    6. **AI-Guided Deep Analysis** - Agentic scan WITH CVE/SAST context
+    7. Attack chain detection and final AI analysis
+    8. Report generation
+    
+    The AI-Guided phase (step 6) is new - it passes external intelligence
+    (CVEs, EPSS scores, SAST findings) to the agentic AI so it knows about
+    vulnerable dependencies BEFORE analyzing code.
     
     Progress updates are broadcast via WebSocket for real-time monitoring.
     
@@ -991,7 +1169,6 @@ def run_scan(
         db: Database session
         project: Project model to scan
         scan_run: Optional existing ScanRun to update
-        agentic_findings: Optional list of findings from agentic AI scan to include
         
     Returns:
         Generated Report model
@@ -1017,20 +1194,17 @@ def run_scan(
         db.commit()
 
     # Broadcast scan started
-    _broadcast_progress(scan_run.id, "initializing", 0, "Scan started")
+    _broadcast_progress(scan_run.id, "initializing", 0, "🚀 Scan started")
 
-    # Initialize findings list - include any agentic findings passed in
+    # Initialize findings list
     findings: List[models.Finding] = []
-    if agentic_findings:
-        findings.extend(agentic_findings)
-        logger.info(f"Including {len(agentic_findings)} agentic AI findings in scan")
     
     try:
         if not project.upload_path:
             raise ScanError("Project has no uploaded archive to scan", project_id=project.id)
         
         # Phase 1: Extract archive (5%)
-        _broadcast_progress(scan_run.id, "extracting", 5, "Extracting archive")
+        _broadcast_progress(scan_run.id, "extracting", 5, "📦 Extracting archive...")
         logger.debug(f"Extracting archive: {project.upload_path}")
         source_root = unpack_zip_to_temp(project.upload_path)
         
@@ -1038,7 +1212,7 @@ def run_scan(
         file_count = 0
         
         # Phase 2: Parse source files with PARALLEL processing (10-30%)
-        _broadcast_progress(scan_run.id, "parsing", 10, "Parsing source files")
+        _broadcast_progress(scan_run.id, "parsing", 10, "📝 Parsing source files...")
         scan_start = time.time()
         
         # Collect and filter source files
@@ -1051,7 +1225,7 @@ def run_scan(
         skipped_files = total_files_raw - total_files
         
         logger.info(f"Found {total_files} source files to process (skipped {skipped_files} irrelevant)")
-        _broadcast_progress(scan_run.id, "parsing", 12, f"Processing {total_files} files ({skipped_files} skipped)")
+        _broadcast_progress(scan_run.id, "parsing", 12, f"📝 Processing {total_files} files ({skipped_files} skipped)")
         
         # Progress callback for parallel processing
         def parsing_progress(processed: int, msg: str):
@@ -1111,15 +1285,15 @@ def run_scan(
         file_count = processed_files
         parse_time = time.time() - scan_start
         logger.info(f"Processed {file_count} source files, {len(all_chunks)} code chunks in {parse_time:.1f}s")
-        _broadcast_progress(scan_run.id, "parsing", 30, f"Parsed {file_count} files, {len(all_chunks)} chunks ({parse_time:.1f}s)")
+        _broadcast_progress(scan_run.id, "parsing", 30, f"✅ Parsed {file_count} files, {len(all_chunks)} chunks ({parse_time:.1f}s)")
 
         # Phase 3: Generate embeddings (30-45%)
         # Check if we should skip embeddings entirely
         if settings.skip_embeddings:
             logger.info("Skipping embeddings (SKIP_EMBEDDINGS=true)")
-            _broadcast_progress(scan_run.id, "embedding", 45, "Embeddings skipped (disabled)")
+            _broadcast_progress(scan_run.id, "embedding", 45, "⏭️ Embeddings skipped (disabled)")
         else:
-            _broadcast_progress(scan_run.id, "embedding", 35, "Generating code embeddings")
+            _broadcast_progress(scan_run.id, "embedding", 35, "🧠 Generating code embeddings...")
             logger.debug("Checking for reusable embeddings from previous scans")
             
             # Get existing embeddings from previous scans of this project
@@ -1149,11 +1323,11 @@ def run_scan(
             
             db.add_all(all_chunks)
             db.commit()
-            _broadcast_progress(scan_run.id, "embedding", 45, "Embeddings complete")
+            _broadcast_progress(scan_run.id, "embedding", 45, "✅ Embeddings complete")
 
         # Phase 4-7: Run parallel scan phases (45-72%)
         # SAST, Docker, IaC, and Dependencies all run concurrently
-        _broadcast_progress(scan_run.id, "parallel_scanning", 45, "Running parallel scan phases")
+        _broadcast_progress(scan_run.id, "parallel_scanning", 45, "🔍 Starting security scanners...")
         logger.info("Starting parallel scan phase execution")
         
         tracker = ParallelPhaseTracker(scan_run.id, 45, 25)  # Progress from 45-70%
@@ -1213,12 +1387,12 @@ def run_scan(
         
         _broadcast_progress(
             scan_run.id, "scanning", 70, 
-            f"Parallel phases complete: {len(scanner_findings)} SAST, "
+            f"✅ Parallel phases complete: {len(scanner_findings)} SAST, "
             f"{docker_findings_count} Docker, {iac_findings_count} IaC"
         )
         
         # Phase 8: Deduplicate scanner findings (70-72%)
-        _broadcast_progress(scan_run.id, "deduplication", 70, "Deduplicating scanner findings")
+        _broadcast_progress(scan_run.id, "deduplication", 70, "🔄 Deduplicating scanner findings...")
         logger.debug("Running cross-scanner deduplication")
         
         original_count = len(findings)
@@ -1232,10 +1406,10 @@ def run_scan(
             )
             _broadcast_progress(
                 scan_run.id, "deduplication", 72, 
-                f"Merged {dedup_stats['duplicates_merged']} duplicates"
+                f"✅ Merged {dedup_stats['duplicates_merged']} duplicates ({original_count} → {len(findings)})"
             )
         else:
-            _broadcast_progress(scan_run.id, "deduplication", 72, "No duplicates found")
+            _broadcast_progress(scan_run.id, "deduplication", 72, "✅ No duplicates found")
         
         # Cross-file correlation analysis
         cross_file_correlations = deduplication_service.correlate_cross_file_findings(findings)
@@ -1245,14 +1419,14 @@ def run_scan(
             dedup_stats["cross_file_correlations"] = cross_file_correlations[:20]  # Limit for report
 
         # Phase 9: Save dependencies from parallel phase (72-75%)
-        _broadcast_progress(scan_run.id, "dependencies", 72, "Saving dependencies")
+        _broadcast_progress(scan_run.id, "dependencies", 72, "💾 Saving dependencies...")
         if deps:
             db.add_all(deps)
             db.commit()
         logger.info(f"Saved {len(deps)} dependencies")
         
         # Phase 10: Transitive dependency analysis (75-77%)
-        _broadcast_progress(scan_run.id, "transitive_deps", 75, "Analyzing dependency trees")
+        _broadcast_progress(scan_run.id, "transitive_deps", 75, "🌳 Analyzing dependency trees...")
         logger.debug("Building transitive dependency trees")
         
         try:
@@ -1268,27 +1442,27 @@ def run_scan(
             )
             _broadcast_progress(
                 scan_run.id, "transitive_deps", 77, 
-                f"Analyzed {tree_stats['total_packages']} packages in dependency trees"
+                f"✅ Analyzed {tree_stats['total_packages']} packages in dependency trees"
             )
         except Exception as e:
             logger.warning(f"Transitive dependency analysis failed (non-critical): {e}")
             dependency_trees = {}
-            _broadcast_progress(scan_run.id, "transitive_deps", 77, "Skipped (no lock files)")
+            _broadcast_progress(scan_run.id, "transitive_deps", 77, "⏭️ Skipped (no lock files)")
         
-        _broadcast_progress(scan_run.id, "dependencies", 78, f"Found {len(deps)} dependencies")
+        _broadcast_progress(scan_run.id, "dependencies", 78, f"✅ Found {len(deps)} dependencies")
 
         # Phase 11: CVE lookup (78-82%)
-        _broadcast_progress(scan_run.id, "cve_lookup", 78, "Looking up known vulnerabilities")
+        _broadcast_progress(scan_run.id, "cve_lookup", 78, "🔒 Looking up known vulnerabilities...")
         logger.debug("Looking up known vulnerabilities")
         vulns = asyncio.run(cve_service.lookup_dependencies(deps))
         db.add_all(vulns)
         db.commit()
         logger.info(f"Found {len(vulns)} known vulnerabilities")
-        _broadcast_progress(scan_run.id, "cve_lookup", 82, f"Found {len(vulns)} CVEs")
+        _broadcast_progress(scan_run.id, "cve_lookup", 82, f"✅ Found {len(vulns)} CVEs")
         
         # Phase 11b: Enrich with transitive dependency info (82-84%)
         if dependency_trees and vulns:
-            _broadcast_progress(scan_run.id, "transitive_analysis", 82, "Analyzing transitive vulnerabilities")
+            _broadcast_progress(scan_run.id, "transitive_analysis", 82, "🌳 Analyzing transitive vulnerabilities...")
             logger.debug("Enriching vulnerabilities with dependency tree info")
             
             try:
@@ -1312,7 +1486,7 @@ def run_scan(
         
         # Phase 11c: Reachability analysis (84-86%)
         if vulns:
-            _broadcast_progress(scan_run.id, "reachability", 84, "Analyzing vulnerability reachability")
+            _broadcast_progress(scan_run.id, "reachability", 84, "🎯 Analyzing vulnerability reachability...")
             logger.debug("Running reachability analysis")
             
             try:
@@ -1343,7 +1517,7 @@ def run_scan(
 
         # Phase 12: Parallel enrichment - EPSS + NVD + KEV (86-88%)
         # Run all enrichments in parallel for better performance
-        _broadcast_progress(scan_run.id, "enrichment", 86, "Enriching vulnerabilities (NVD/EPSS/KEV)")
+        _broadcast_progress(scan_run.id, "enrichment", 86, "📊 Enriching vulnerabilities (NVD/EPSS/KEV)...")
         logger.debug("Starting parallel vulnerability enrichment")
         
         vuln_dicts = [
@@ -1466,11 +1640,133 @@ def run_scan(
 
         logger.info(f"Total findings: {len(findings)}")
         
-        # Phase 11: AI-Enhanced Analysis (90-94%)
+        # ================================================================
+        # Phase: AI-Guided Deep Analysis (Unified Pipeline)
+        # ================================================================
+        # Run agentic scan WITH external intelligence from CVE/SAST phases.
+        # This enables AI to know about vulnerable dependencies BEFORE analyzing code.
+        # Agentic AI is ALWAYS enabled as part of the unified scan pipeline.
+        scan_options = scan_run.options or {}
+        enhanced_mode = scan_options.get("enhanced_scan", False)
+        mode_label = "Enhanced" if enhanced_mode else "Standard"
+        _broadcast_progress(scan_run.id, "agentic_scan", 89, 
+                           f"🤖 AI-Guided Deep Analysis ({mode_label}, with CVE/SAST context)...")
+        
+        try:
+            # Build external intelligence from CVE/SAST results
+            external_intel = build_external_intelligence(
+                vulns=vulns,
+                scanner_findings=scanner_findings,  # SAST findings
+                deps=deps,
+                enriched_vulns=epss_data,  # NVD/EPSS enrichment
+                source_root=source_root
+            )
+            
+            # Run agentic scan with full context
+            from backend.services.agentic_scan_service import AgenticScanService, ScanPhase
+            from backend.services.websocket_service import progress_manager
+            
+            agentic_service = AgenticScanService()
+            
+            # Map agentic phases to WebSocket phase names for granular tracking
+            PHASE_TO_WS_PHASE = {
+                ScanPhase.INITIALIZING: "agentic_initializing",
+                ScanPhase.FILE_TRIAGE: "agentic_file_triage",
+                ScanPhase.INITIAL_ANALYSIS: "agentic_initial_analysis",
+                ScanPhase.FOCUSED_ANALYSIS: "agentic_focused_analysis",
+                ScanPhase.DEEP_ANALYSIS: "agentic_deep_analysis",
+                ScanPhase.CHUNKING: "agentic_chunking",
+                ScanPhase.ENTRY_POINT_DETECTION: "agentic_entry_points",
+                ScanPhase.FLOW_TRACING: "agentic_flow_tracing",
+                ScanPhase.VULNERABILITY_ANALYSIS: "agentic_analyzing",
+                ScanPhase.FALSE_POSITIVE_FILTERING: "agentic_fp_filtering",
+                ScanPhase.SYNTHESIS: "agentic_synthesis",
+                ScanPhase.REPORT_GENERATION: "agentic_reporting",
+                ScanPhase.COMPLETE: "agentic_complete",
+                ScanPhase.ERROR: "agentic_error",
+            }
+            
+            def agentic_progress(progress):
+                """Update WebSocket with granular agentic phase tracking"""
+                # Map internal phase to WebSocket phase name
+                ws_phase = PHASE_TO_WS_PHASE.get(progress.phase, "agentic_scan")
+                msg = f"🤖 {progress.message or progress.phase.value}"
+                
+                # Build detailed stats line for UI
+                stats_parts = []
+                if progress.total_chunks > 0:
+                    stats_parts.append(f"📄 {progress.analyzed_chunks}/{progress.total_chunks} chunks")
+                if progress.entry_points_found > 0:
+                    stats_parts.append(f"🎯 {progress.entry_points_found} entry points")
+                if progress.flows_traced > 0:
+                    stats_parts.append(f"🔀 {progress.flows_traced} flows")
+                if progress.vulnerabilities_found > 0:
+                    stats_parts.append(f"⚠️ {progress.vulnerabilities_found} vulns")
+                
+                if stats_parts:
+                    msg += "\n" + " | ".join(stats_parts)
+                
+                progress_manager.publish_progress(scan_run.id, ws_phase, 89, msg)
+            
+            async def run_agentic_with_intel():
+                scan_id = await agentic_service.start_scan(
+                    project_id=project.id,
+                    project_path=str(source_root),
+                    progress_callback=agentic_progress,
+                    external_intel=external_intel,  # Pass the CVE/SAST context!
+                    enhanced_mode=enhanced_mode  # Pass enhanced mode for larger limits
+                )
+                return agentic_service.get_result(scan_id)
+            
+            agentic_result = asyncio.run(run_agentic_with_intel())
+            
+            if agentic_result and agentic_result.vulnerabilities:
+                # Convert agentic vulns to Finding models
+                for vuln in agentic_result.vulnerabilities:
+                    file_path = vuln.flow.entry_point.file_path if vuln.flow else "unknown"
+                    line_number = vuln.flow.entry_point.line_number if vuln.flow else 1
+                    
+                    agentic_finding = models.Finding(
+                        project_id=project.id,
+                        scan_run_id=scan_run.id,
+                        type=f"agentic-{vuln.vulnerability_type}",
+                        severity=vuln.severity,
+                        file_path=file_path,
+                        start_line=line_number,
+                        summary=vuln.description[:500] if vuln.description else "Agentic AI finding",
+                        details={
+                            "source": "agentic_ai",
+                            "vulnerability_type": vuln.vulnerability_type,
+                            "confidence": vuln.confidence,
+                            "remediation": vuln.remediation,
+                            "exploit_scenario": vuln.exploit_scenario,
+                            "cwe_id": vuln.cwe_id,
+                            "owasp_category": vuln.owasp_category,
+                            "title": vuln.title,
+                            "informed_by_cve": len(external_intel.cve_findings) > 0,
+                            "informed_by_sast": len(external_intel.sast_findings) > 0,
+                        }
+                    )
+                    findings.append(agentic_finding)
+                
+                db.add_all(findings[-len(agentic_result.vulnerabilities):])  # Add new findings
+                db.commit()
+                
+                logger.info(f"Agentic AI scan (with intel): {len(agentic_result.vulnerabilities)} findings")
+                _broadcast_progress(scan_run.id, "agentic_scan", 90,
+                                   f"🤖 AI found {len(agentic_result.vulnerabilities)} additional vulnerabilities")
+            else:
+                _broadcast_progress(scan_run.id, "agentic_scan", 90,
+                                   "🤖 AI analysis complete (no additional findings)")
+                
+        except Exception as e:
+            logger.warning(f"Agentic scan with intel failed (non-critical): {e}")
+            _broadcast_progress(scan_run.id, "agentic_scan", 90,
+                               f"🤖 AI deep analysis skipped: {str(e)[:50]}")
         attack_chains_data = []
         ai_summary = None
         if findings:
-            _broadcast_progress(scan_run.id, "ai_analysis", 90, "AI-enhanced vulnerability analysis")
+            _broadcast_progress(scan_run.id, "ai_analysis", 90, "🧠 AI-enhanced vulnerability analysis...")
             try:
                 # Convert findings to dicts for AI analysis
                 findings_dicts = []
@@ -1582,7 +1878,7 @@ def run_scan(
                 logger.warning(f"AI analysis failed (non-critical): {e}")
         
         # Phase 13: Generate report (94-98%)
-        _broadcast_progress(scan_run.id, "reporting", 94, "Generating report")
+        _broadcast_progress(scan_run.id, "reporting", 94, "📋 Generating final report...")
         # Build sensitive data inventory for UI (non-blocking; may be AI-enhanced if configured)
         sensitive_inventory: Dict[str, Any] = {}
         try:
@@ -1626,7 +1922,7 @@ def run_scan(
         total_scan_time = time.time() - scan_start
         
         # Phase 14: Complete (100%)
-        _broadcast_progress(scan_run.id, "complete", 100, f"Scan complete. {len(findings)} findings in {total_scan_time:.1f}s")
+        _broadcast_progress(scan_run.id, "complete", 100, f"✅ Scan complete! {len(findings)} findings in {total_scan_time:.1f}s")
         
         # Log performance summary
         logger.info(

@@ -44,6 +44,9 @@ import ScanProgress from "../components/ScanProgress";
 import ProjectNetworkTab from "../components/ProjectNetworkTab";
 import ProjectNotesTab from "../components/ProjectNotesTab";
 import ProjectReverseTab from "../components/ProjectReverseTab";
+import ProjectCollaboratorsTab from "../components/ProjectCollaboratorsTab";
+import ProjectTeamChatTab from "../components/ProjectTeamChatTab";
+import ProjectFilesTab from "../components/ProjectFilesTab";
 import { api } from "../api/client";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import PsychologyIcon from "@mui/icons-material/Psychology";
@@ -51,6 +54,9 @@ import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import SecurityIcon from "@mui/icons-material/Security";
 import CommentIcon from "@mui/icons-material/Comment";
 import BuildIcon from "@mui/icons-material/Build";
+import PeopleIcon from "@mui/icons-material/People";
+import ChatIcon from "@mui/icons-material/Chat";
+import FolderIcon from "@mui/icons-material/Folder";
 
 // Animations
 const float = keyframes`
@@ -254,8 +260,9 @@ export default function ProjectDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<{ id: number; date: string } | null>(null);
   const [scanCompleteSnackbar, setScanCompleteSnackbar] = useState(false);
-  const [includeAgenticScan, setIncludeAgenticScan] = useState(false);
-  const [mainTab, setMainTab] = useState<"security" | "network" | "reverse" | "notes">("security");
+  const [enhancedScan, setEnhancedScan] = useState(false);  // Enhanced mode: 80→30→12 files vs default 60→20→8
+  // Agentic AI scan is now always enabled as part of unified pipeline
+  const [mainTab, setMainTab] = useState<"security" | "network" | "reverse" | "notes" | "collaborators" | "team-chat" | "files">("security");
 
   const projectQuery = useQuery({
     queryKey: ["project", id],
@@ -270,7 +277,7 @@ export default function ProjectDetailPage() {
   });
 
   const scanMutation = useMutation({
-    mutationFn: () => api.triggerScan(id, { includeAgentic: includeAgenticScan }),
+    mutationFn: () => api.triggerScan(id, { enhancedScan }),
     onSuccess: (data) => {
       if (data?.id) {
         setActiveScanId(data.id);
@@ -424,18 +431,47 @@ export default function ProjectDetailPage() {
                 <ShieldIcon />
               </Box>
               <Box sx={{ flexGrow: 1 }}>
-                <Typography 
-                  variant="h4" 
-                  fontWeight={700} 
-                  sx={{
-                    background: `linear-gradient(135deg, ${theme.palette.text.primary} 0%, ${alpha(theme.palette.text.primary, 0.8)} 100%)`,
-                    backgroundClip: "text",
-                    WebkitBackgroundClip: "text",
-                    mb: 1,
-                  }}
-                >
-                  {projectQuery.data.name}
-                </Typography>
+                <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
+                  <Typography 
+                    variant="h4" 
+                    fontWeight={700} 
+                    sx={{
+                      background: `linear-gradient(135deg, ${theme.palette.text.primary} 0%, ${alpha(theme.palette.text.primary, 0.8)} 100%)`,
+                      backgroundClip: "text",
+                      WebkitBackgroundClip: "text",
+                    }}
+                  >
+                    {projectQuery.data.name}
+                  </Typography>
+                  {projectQuery.data.is_shared && (
+                    <Chip
+                      icon={<PeopleIcon sx={{ fontSize: 16 }} />}
+                      label="Shared Project"
+                      size="small"
+                      sx={{
+                        background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.15)}, ${alpha("#6366f1", 0.1)})`,
+                        border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+                        color: "#a78bfa",
+                        fontWeight: 600,
+                        "& .MuiChip-icon": {
+                          color: "#a78bfa",
+                        },
+                      }}
+                    />
+                  )}
+                  {projectQuery.data.user_role && projectQuery.data.user_role !== "owner" && (
+                    <Chip
+                      label={projectQuery.data.user_role.charAt(0).toUpperCase() + projectQuery.data.user_role.slice(1)}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(theme.palette.info.main, 0.15),
+                        color: theme.palette.info.main,
+                        fontWeight: 600,
+                        fontSize: "0.7rem",
+                      }}
+                    />
+                  )}
+                </Stack>
                 <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
                   {projectQuery.data.description || "No description provided"}
                 </Typography>
@@ -462,6 +498,9 @@ export default function ProjectDetailPage() {
         <Tabs
           value={mainTab}
           onChange={(_, v) => setMainTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{
             borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
             "& .MuiTabs-indicator": {
@@ -476,6 +515,12 @@ export default function ProjectDetailPage() {
               minHeight: 56,
               "&.Mui-selected": {
                 color: theme.palette.primary.main,
+              },
+            },
+            "& .MuiTabs-scrollButtons": {
+              color: theme.palette.text.secondary,
+              "&.Mui-disabled": {
+                opacity: 0.3,
               },
             },
           }}
@@ -504,6 +549,28 @@ export default function ProjectDetailPage() {
             label="Notes & Tracking" 
             value="notes" 
           />
+          <Tab 
+            icon={<FolderIcon />} 
+            iconPosition="start" 
+            label="Files & Docs" 
+            value="files" 
+          />
+          {projectQuery.data?.is_shared === true && (
+            <Tab 
+              icon={<ChatIcon />} 
+              iconPosition="start" 
+              label="Team Chat" 
+              value="team-chat" 
+            />
+          )}
+          {projectQuery.data?.is_shared === true && (
+            <Tab 
+              icon={<PeopleIcon />} 
+              iconPosition="start" 
+              label="Collaborators" 
+              value="collaborators" 
+            />
+          )}
         </Tabs>
       </Box>
 
@@ -597,52 +664,74 @@ export default function ProjectDetailPage() {
                     : "🔍 Start New Scan"}
               </Button>
 
-              {/* Agentic AI Scan Toggle */}
+              {/* AI-Guided Deep Analysis info - always enabled */}
               <Box
                 sx={{
                   mt: 2,
                   p: 2,
                   borderRadius: 2,
-                  background: includeAgenticScan 
-                    ? alpha("#8b5cf6", 0.1) 
+                  background: alpha("#8b5cf6", 0.08),
+                  border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+                }}
+              >
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <PsychologyIcon sx={{ color: "#8b5cf6", fontSize: 20 }} />
+                  <Box>
+                    <Typography variant="body2" fontWeight={600} color="#8b5cf6">
+                      AI-Guided Deep Analysis Included
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Multi-pass AI code analysis with CVE + SAST context
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
+
+              {/* Enhanced Scan Toggle */}
+              <Box
+                sx={{
+                  mt: 1.5,
+                  p: 1.5,
+                  borderRadius: 2,
+                  background: enhancedScan 
+                    ? alpha("#f59e0b", 0.1) 
                     : alpha(theme.palette.action.hover, 0.3),
-                  border: `1px solid ${includeAgenticScan ? alpha("#8b5cf6", 0.3) : alpha(theme.palette.divider, 0.5)}`,
+                  border: `1px solid ${enhancedScan ? alpha("#f59e0b", 0.3) : alpha(theme.palette.divider, 0.3)}`,
                   transition: "all 0.3s ease",
                 }}
               >
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={includeAgenticScan}
-                      onChange={(e) => setIncludeAgenticScan(e.target.checked)}
+                      size="small"
+                      checked={enhancedScan}
+                      onChange={(e) => setEnhancedScan(e.target.checked)}
                       disabled={scanMutation.isPending || activeScanId !== null}
                       sx={{
                         "& .MuiSwitch-switchBase.Mui-checked": {
-                          color: "#8b5cf6",
-                          "&:hover": {
-                            backgroundColor: alpha("#8b5cf6", 0.08),
-                          },
+                          color: "#f59e0b",
                         },
                         "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
-                          backgroundColor: "#8b5cf6",
+                          backgroundColor: "#f59e0b",
                         },
                       }}
                     />
                   }
                   label={
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <PsychologyIcon sx={{ color: includeAgenticScan ? "#8b5cf6" : "text.secondary", fontSize: 20 }} />
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
                       <Box>
-                        <Typography variant="body2" fontWeight={600} color={includeAgenticScan ? "#8b5cf6" : "text.primary"}>
-                          Agentic AI Deep Scan
+                        <Typography variant="caption" fontWeight={600} color={enhancedScan ? "#f59e0b" : "text.secondary"}>
+                          Enhanced Scan {enhancedScan && "✓"}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          LLM-powered code flow analysis (slower, more thorough)
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: "0.65rem" }}>
+                          {enhancedScan 
+                            ? "80→30→12 files, 2x content depth per pass" 
+                            : "60→20→8 files per pass (default)"}
                         </Typography>
                       </Box>
                     </Stack>
                   }
-                  sx={{ m: 0, width: "100%" }}
+                  sx={{ m: 0 }}
                 />
               </Box>
 
@@ -1075,6 +1164,32 @@ export default function ProjectDetailPage() {
       {/* Notes & Tracking Tab Content */}
       {mainTab === "notes" && (
         <ProjectNotesTab projectId={id} />
+      )}
+
+      {/* Files & Documents Tab Content */}
+      {mainTab === "files" && projectQuery.data && (
+        <ProjectFilesTab 
+          projectId={id}
+          projectName={projectQuery.data.name}
+          canEdit={projectQuery.data.user_role !== "viewer"}
+        />
+      )}
+
+      {/* Team Chat Tab Content */}
+      {mainTab === "team-chat" && projectQuery.data?.is_shared === true && (
+        <ProjectTeamChatTab 
+          projectId={id}
+          projectName={projectQuery.data.name}
+        />
+      )}
+
+      {/* Collaborators Tab Content */}
+      {mainTab === "collaborators" && projectQuery.data?.is_shared === true && (
+        <ProjectCollaboratorsTab 
+          projectId={id}
+          isOwner={projectQuery.data.user_role === "owner"}
+          userRole={projectQuery.data.user_role}
+        />
       )}
     </Box>
   );

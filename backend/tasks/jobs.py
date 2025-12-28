@@ -218,21 +218,11 @@ def perform_scan(project_id: int, scan_run_id: int) -> int:
             logger.error(f"Scan run {scan_run_id} not found")
             raise ScanRunNotFoundError(scan_run_id)
         
-        # Check if agentic scan is enabled - run it BEFORE main scan completes
-        # so findings are included in AI analysis and final report
-        scan_options = scan_run.options or {}
-        agentic_findings = []
-        if scan_options.get("include_agentic"):
-            logger.info(f"Agentic scan enabled for project {project_id}, running inline...")
-            try:
-                agentic_findings = run_agentic_scan_inline(db, project, scan_run)
-                logger.info(f"Agentic scan found {len(agentic_findings)} vulnerabilities")
-            except Exception as e:
-                logger.warning(f"Agentic scan failed (non-critical): {e}")
-        
         # Run main scan (includes AI analysis and report generation)
-        # Agentic findings will now be included in the report
-        report = run_scan(db, project, scan_run, agentic_findings=agentic_findings)
+        # Note: Agentic scan with CVE/SAST context is now handled INSIDE run_scan()
+        # when scan_options.get("include_agentic") is True. This ensures AI has
+        # full external intelligence (CVEs, EPSS, SAST findings) before analyzing code.
+        report = run_scan(db, project, scan_run)
         logger.info(f"Scan completed for project {project_id}, report {report.id}")
         
         # Enqueue background AI summary generation so it's ready when user views the report
@@ -305,8 +295,12 @@ def perform_ai_summaries(report_id: int) -> int:
     """
     Generate AI summaries for a report in the background.
     
-    This pre-generates the app and security summaries so they're ready
-    when the user views the report, avoiding long wait times.
+    Uses comprehensive context from:
+    - Deep-analyzed files (Pass 3 of agentic scan)
+    - Agentic scan synthesis results
+    - All security findings with details
+    - Attack chains detected
+    - CVE and dependency data
     
     Args:
         report_id: ID of the report to generate summaries for
@@ -334,25 +328,43 @@ def perform_ai_summaries(report_id: int) -> int:
         project_id = report.project_id
         project = db.get(models.Project, project_id)
         
-        # Get all code chunks for context
+        # Get all code chunks for context - prioritize security-relevant chunks
         chunks = db.query(models.CodeChunk).filter(
             models.CodeChunk.project_id == project_id
         ).all()
         
-        # Get findings for this report
+        # Get findings for this report - ALL findings for comprehensive analysis
         findings = db.query(models.Finding).filter(
             models.Finding.scan_run_id == report.scan_run_id
+        ).order_by(
+            # Prioritize: critical > high > medium > low
+            models.Finding.severity.desc()
         ).all()
         
+        # Get dependencies and vulnerabilities
+        dependencies = db.query(models.Dependency).filter(
+            models.Dependency.project_id == project_id
+        ).all()
+        
+        vulnerabilities = db.query(models.Vulnerability).filter(
+            models.Vulnerability.dependency_id.in_([d.id for d in dependencies])
+        ).all() if dependencies else []
+        
         # Build file metadata for statistics
-        file_metadata = defaultdict(lambda: {"lines": 0, "language": None})
+        file_metadata = defaultdict(lambda: {"lines": 0, "language": None, "chunks": [], "findings": []})
         for chunk in chunks:
             file_metadata[chunk.file_path]["language"] = chunk.language
+            file_metadata[chunk.file_path]["chunks"].append(chunk)
             if chunk.end_line:
                 file_metadata[chunk.file_path]["lines"] = max(
                     file_metadata[chunk.file_path]["lines"],
                     chunk.end_line
                 )
+        
+        # Map findings to files
+        for f in findings:
+            if f.file_path in file_metadata:
+                file_metadata[f.file_path]["findings"].append(f)
         
         # Calculate statistics
         total_files = len(file_metadata)
@@ -362,27 +374,84 @@ def perform_ai_summaries(report_id: int) -> int:
             lang = m["language"] or "Unknown"
             languages[lang] = languages.get(lang, 0) + 1
         
-        # Get sample file paths for context
-        sample_paths = list(file_metadata.keys())[:30]
+        # Get attack chains and AI summary from report data
+        report_data = report.data or {}
+        attack_chains = report_data.get("attack_chains", [])
+        existing_ai_summary = report_data.get("ai_analysis_summary", {})
+        scan_stats = report_data.get("scan_stats", {})
         
-        # Get sample code snippets
-        sample_code = []
-        for chunk in chunks[:5]:
-            sample_code.append({
-                "path": chunk.file_path,
-                "language": chunk.language,
-                "preview": chunk.code[:500] if chunk.code else ""
+        # Extract synthesis results from agentic scan (if available)
+        synthesis_data = scan_stats.get("synthesis", {})
+        agentic_assessment = synthesis_data.get("assessment", "")
+        agentic_recommendations = synthesis_data.get("recommendations", 0)
+        multi_pass_data = scan_stats.get("multi_pass", {})
+        
+        # PRIORITIZE files with findings (these were deeply analyzed in the scan)
+        files_with_findings = [(path, meta) for path, meta in file_metadata.items() if meta["findings"]]
+        files_with_findings.sort(key=lambda x: len(x[1]["findings"]), reverse=True)
+        
+        # Get the TOP 20 most security-relevant files (by finding count)
+        # These are the files that received deep analysis in Pass 2/3
+        priority_files = files_with_findings[:20]
+        
+        # Build comprehensive code context from priority files
+        priority_code_samples = []
+        for path, meta in priority_files:
+            # Get full code content for these files (up to 10000 chars each for security-critical files)
+            full_code = ""
+            for chunk in sorted(meta["chunks"], key=lambda c: c.start_line or 0):
+                full_code += (chunk.code or "") + "\n"
+            
+            # Include findings for this file
+            file_findings = [
+                f"Line {f.start_line}: [{f.severity.upper()}] {f.type} - {f.summary[:100]}"
+                for f in meta["findings"][:5]
+            ]
+            
+            priority_code_samples.append({
+                "path": path,
+                "language": meta["language"],
+                "code": full_code[:10000],  # More context for deep-analyzed files
+                "lines": meta["lines"],
+                "findings": file_findings
+            })
+        
+        # Also get significant files WITHOUT findings for architecture context
+        # These help understand what the app does beyond just security issues
+        clean_files = [(path, meta) for path, meta in file_metadata.items() 
+                       if not meta["findings"] and meta["lines"] > 50]
+        clean_files.sort(key=lambda x: x[1]["lines"], reverse=True)
+        
+        # Get 10 significant clean files for comprehensive app understanding
+        for path, meta in clean_files[:10]:
+            full_code = ""
+            for chunk in sorted(meta["chunks"], key=lambda c: c.start_line or 0):
+                full_code += (chunk.code or "") + "\n"
+            priority_code_samples.append({
+                "path": path,
+                "language": meta["language"],
+                "code": full_code[:6000],  # Good context for clean files too
+                "lines": meta["lines"],
+                "findings": []
             })
         
         # Build severity counts
         severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
-        finding_types = {}
+        finding_types = defaultdict(int)
+        agentic_findings = []
+        sast_findings = []
+        
         for f in findings:
             sev = (f.severity or "info").lower()
             if sev in severity_counts:
                 severity_counts[sev] += 1
-            ftype = f.type or "unknown"
-            finding_types[ftype] = finding_types.get(ftype, 0) + 1
+            finding_types[f.type or "unknown"] += 1
+            
+            # Categorize findings
+            if f.type and (f.type.startswith("agentic-") or (f.details and f.details.get("source") == "agentic_ai")):
+                agentic_findings.append(f)
+            else:
+                sast_findings.append(f)
         
         # Generate AI summaries if API key is available
         app_summary = None
@@ -394,64 +463,208 @@ def perform_ai_summaries(report_id: int) -> int:
                 
                 client = genai.Client(api_key=settings.gemini_api_key)
                 
-                # Build prompts
-                app_prompt = f"""You are a senior software architect analyzing a codebase. Provide a comprehensive overview.
+                # Build COMPREHENSIVE app prompt using ALL priority files (same context as security)
+                code_sections = []
+                for sample in priority_code_samples[:20]:  # ALL 20 deeply-analyzed + 10 clean files
+                    findings_note = ""
+                    if sample["findings"]:
+                        findings_note = f"\n  ⚠️ SECURITY ISSUES IN THIS FILE:\n    " + "\n    ".join(sample["findings"][:3])
+                    code_sections.append(
+                        f"### {sample['path']} ({sample['language']}, {sample['lines']} lines){findings_note}\n"
+                        f"```{sample['language']}\n{sample['code'][:5000]}\n```"
+                    )
+                
+                # Dependency context
+                dep_context = ""
+                if dependencies:
+                    dep_list = [f"- {d.name}@{d.version} ({d.ecosystem})" for d in dependencies[:20]]
+                    vuln_deps = [v for v in vulnerabilities if v.severity in ("critical", "high")]
+                    dep_context = f"""
+DEPENDENCIES ({len(dependencies)} packages):
+{chr(10).join(dep_list)}
+{"..." if len(dependencies) > 20 else ""}
+
+VULNERABLE DEPENDENCIES ({len(vuln_deps)} critical/high):
+{chr(10).join(f"- {v.external_id}: affects dependency (CVSS: {v.cvss_score})" for v in vuln_deps[:10])}
+"""
+                
+                # Include agentic scan synthesis if available
+                synthesis_context = ""
+                if agentic_assessment:
+                    synthesis_context = f"""
+## AI DEEP ANALYSIS SYNTHESIS:
+{agentic_assessment[:1000]}
+"""
+                
+                # Multi-pass scan stats context
+                scan_context = ""
+                if multi_pass_data:
+                    scan_context = f"""
+## SCAN ANALYSIS DEPTH:
+- Files Triaged: {multi_pass_data.get('total_files_triaged', 0)}
+- Pass 1 (Initial): {multi_pass_data.get('pass_1_files', 0)} files
+- Pass 2 (Focused): {multi_pass_data.get('pass_2_files', 0)} files  
+- Pass 3 (Deep): {multi_pass_data.get('pass_3_files', 0)} files
+- High-Risk Files Identified: {multi_pass_data.get('high_risk_files', 0)}
+"""
+                
+                app_prompt = f"""You are a senior software architect analyzing a codebase. Provide a COMPREHENSIVE overview.
 
 Project Name: {project.name if project else 'Unknown'}
-
-FILES ANALYZED ({total_files} files, {total_lines:,} lines):
-{chr(10).join(sample_paths[:20])}
-{"..." if len(sample_paths) > 20 else ""}
+Total: {total_files} files, {total_lines:,} lines of code
+Security Scan Results: {severity_counts['critical']} critical, {severity_counts['high']} high, {severity_counts['medium']} medium issues
 
 LANGUAGE BREAKDOWN:
-{chr(10).join(f"- {lang}: {count} files" for lang, count in sorted(languages.items(), key=lambda x: -x[1])[:5])}
+{chr(10).join(f"- {lang}: {count} files" for lang, count in sorted(languages.items(), key=lambda x: -x[1])[:8])}
+{dep_context}
+{scan_context}
+{synthesis_context}
 
-SAMPLE CODE:
-{chr(10).join(f"--- {s['path']} ({s['language']}) ---{chr(10)}{s['preview'][:300]}..." for s in sample_code[:3])}
+## DEEPLY ANALYZED SOURCE FILES ({len(priority_code_samples)} files with full context):
+{chr(10).join(code_sections)}
 
-Write a brief analysis in this format:
-**Purpose & Functionality** - 2-3 sentences
-**Technology Stack** - bullet list
-**Key Components** - 3-5 components with brief descriptions"""
+Based on this comprehensive code review (the same files analyzed for security), write a detailed analysis:
+
+**Purpose & Functionality**
+- What does this application do? (3-4 sentences)
+- What problem does it solve?
+- Who is the target user?
+
+**Technology Stack**
+- Backend frameworks and languages
+- Frontend technologies (if any)
+- Databases and storage
+- External services/APIs used
+- Key libraries and their purposes
+
+**Architecture Overview**
+- Key architectural patterns identified (MVC, microservices, monolith, etc.)
+- How components interact
+- Entry points and data flow
+- API structure (REST, GraphQL, etc.)
+
+**Key Components** (8-10 components)
+For each: name, purpose, and security relevance
+
+**Notable Implementation Details**
+- Authentication/authorization approach
+- Data validation patterns
+- Error handling approach
+- Logging and monitoring
+- Configuration management"""
 
                 # Generate app summary
-                logger.info(f"Generating app summary for report {report_id}")
+                logger.info(f"Generating comprehensive app summary for report {report_id}")
                 response = client.models.generate_content(
                     model=settings.gemini_model_id,
-                    contents=app_prompt
+                    contents=app_prompt,
+                    generation_config={"max_output_tokens": 4000}
                 )
                 if response and response.text:
                     app_summary = response.text
                     logger.info(f"Generated app summary for report {report_id}")
                 
-                # Generate security summary only if there are findings
+                # Generate COMPREHENSIVE security summary
                 if len(findings) > 0:
+                    # Get detailed findings - up to 40 most important (same depth as app summary)
+                    critical_high_findings = [f for f in findings if f.severity in ("critical", "high")][:25]
+                    other_findings = [f for f in findings if f.severity not in ("critical", "high")][:15]
+                    detailed_findings = critical_high_findings + other_findings
+                    
                     findings_details = []
-                    for f in findings[:10]:
+                    for f in detailed_findings:
+                        ai_analysis = f.details.get("ai_analysis", {}) if f.details else {}
+                        corroborated = "✓ AI-Confirmed" if ai_analysis.get("corroborated") else ""
+                        fp_note = f" (FP likelihood: {ai_analysis.get('false_positive_score', 0):.0%})" if ai_analysis.get("false_positive_score") else ""
+                        
                         findings_details.append({
                             "severity": f.severity,
                             "type": f.type,
                             "file": f.file_path,
-                            "summary": f.summary[:150] if f.summary else "",
+                            "line": f.start_line,
+                            "summary": f.summary[:250] if f.summary else "",  # More summary context
+                            "corroborated": corroborated,
+                            "fp_note": fp_note,
+                            "details": str(f.details)[:400] if f.details else ""  # More detail context
                         })
                     
-                    security_prompt = f"""You are a penetration tester. Analyze these vulnerabilities briefly.
+                    # Attack chains context
+                    attack_chain_context = ""
+                    if attack_chains:
+                        attack_chain_context = f"""
+## ATTACK CHAINS DETECTED ({len(attack_chains)}):
+{chr(10).join(f"- {chain.get('title', 'Unknown')}: {chain.get('description', '')[:200]}" for chain in attack_chains[:8])}
+"""
+                    
+                    # Finding type breakdown
+                    type_breakdown = "\n".join(f"- {ftype}: {count}" for ftype, count in 
+                                              sorted(finding_types.items(), key=lambda x: -x[1])[:15])
+                    
+                    # Include code context for security findings (same files as app summary)
+                    security_code_sections = []
+                    for sample in priority_code_samples[:15]:  # Top 15 files with findings
+                        if sample["findings"]:
+                            security_code_sections.append(
+                                f"### {sample['path']} ({sample['language']})\n"
+                                f"Issues: {chr(10).join(sample['findings'][:4])}\n"
+                                f"```{sample['language']}\n{sample['code'][:3000]}\n```"
+                            )
+                    
+                    security_prompt = f"""You are a senior penetration tester writing an executive security assessment.
 
 Project: {project.name if project else 'Unknown'}
-Findings: Critical={severity_counts['critical']}, High={severity_counts['high']}, Medium={severity_counts['medium']}, Low={severity_counts['low']}
+{scan_context}
 
-SAMPLE FINDINGS:
-{chr(10).join(f"- [{f['severity'].upper()}] {f['type']}: {f['summary']}" for f in findings_details)}
+## SECURITY SCAN SUMMARY:
+- Total Findings: {len(findings)}
+- Critical: {severity_counts['critical']}
+- High: {severity_counts['high']}
+- Medium: {severity_counts['medium']}
+- Low: {severity_counts['low']}
+- Agentic AI Findings (deep analysis): {len(agentic_findings)}
+- SAST Scanner Findings: {len(sast_findings)}
 
-Write a brief analysis:
-**Overall Risk Assessment** - CRITICAL/HIGH/MEDIUM/LOW with one sentence justification
-**Primary Attack Vectors** - 3 bullet points
-**Quick Wins** - 3 easiest exploits"""
+## FINDING TYPES:
+{type_breakdown}
+{attack_chain_context}
+{synthesis_context if agentic_assessment else ""}
 
-                    logger.info(f"Generating security summary for report {report_id}")
+## VULNERABLE CODE FILES WITH CONTEXT:
+{chr(10).join(security_code_sections[:10])}
+
+## DETAILED FINDINGS (sorted by severity):
+{chr(10).join(f"- [{f['severity'].upper()}] {f['type']} @ {f['file']}:{f['line']} {f['corroborated']}{f['fp_note']}" + chr(10) + f"  {f['summary']}" for f in findings_details)}
+
+## VULNERABLE DEPENDENCIES:
+{chr(10).join(f"- {v.external_id} (CVSS: {v.cvss_score}, Severity: {v.severity}): {v.description[:150] if v.description else 'N/A'}" for v in vulnerabilities[:15])}
+
+Write a comprehensive security assessment:
+
+**Executive Summary**
+- 2-3 sentence overview of security posture
+- Overall risk rating: CRITICAL/HIGH/MEDIUM/LOW with justification
+
+**Critical & High Priority Issues**
+- List the most dangerous findings with brief exploitation scenarios
+- Focus on findings confirmed by AI analysis
+
+**Attack Surface Analysis**
+- Primary entry points identified
+- Most likely attack vectors
+- Data flow risks
+
+**Top 5 Remediation Priorities**
+For each: what to fix, why it matters, effort estimate (quick/medium/extensive)
+
+**Positive Security Observations**
+- Any good security practices observed
+- Areas where the codebase is well-protected"""
+
+                    logger.info(f"Generating comprehensive security summary for report {report_id}")
                     response = client.models.generate_content(
                         model=settings.gemini_model_id,
-                        contents=security_prompt
+                        contents=security_prompt,
+                        generation_config={"max_output_tokens": 4000}
                     )
                     if response and response.text:
                         security_summary = response.text

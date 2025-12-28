@@ -14,7 +14,7 @@ router = APIRouter()
 
 class ScanOptions(BaseModel):
     """Options for triggering a security scan"""
-    include_agentic: bool = False  # Whether to include agentic AI deep analysis
+    enhanced_scan: bool = False   # Enhanced mode: 80→30→12 files (off by default)
 
 
 @router.post("/{project_id}/scan", response_model=ScanRun)
@@ -27,10 +27,12 @@ def trigger_scan(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Store scan options in the scan run for the worker to use
-    scan_options = {}
-    if options and options.include_agentic:
-        scan_options["include_agentic"] = True
+    # Store scan options - agentic AI is always enabled
+    scan_options = {
+        "include_agentic": True  # Always run agentic AI scan
+    }
+    if options and options.enhanced_scan:
+        scan_options["enhanced_scan"] = True
     
     scan_run = models.ScanRun(
         project_id=project.id, 

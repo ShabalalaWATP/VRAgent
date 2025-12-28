@@ -241,3 +241,134 @@ flowchart TD
     D --> F[fa6-solid:bug Vulnerability Found]
 ```
 """
+
+
+# ============================================================================
+# WEB APPLICATION ARCHITECTURE DIAGRAM ICONS
+# ============================================================================
+
+WEBAPP_DIAGRAM_ICONS = """
+## ICON SYNTAX - Use the icon block syntax for nodes:
+NodeId@{{ icon: "prefix:icon-name", form: "square", label: "Label Text" }}
+
+AVAILABLE ICONS BY CATEGORY:
+
+Languages & Frameworks:
+- fab:php (PHP)
+- fab:python (Python)
+- fab:java (Java)
+- fab:js (JavaScript)
+- fab:react (React)
+- fab:vuejs (Vue.js)
+- fab:angular (Angular)
+- fab:node-js (Node.js)
+- fab:laravel (Laravel)
+- fab:symfony (Symfony)
+- fab:html5 (HTML)
+- fab:css3 (CSS)
+- mdi:language-ruby (Ruby)
+- mdi:language-go (Go)
+- mdi:language-rust (Rust)
+- mdi:language-csharp (C#)
+- mdi:language-typescript (TypeScript)
+
+Devices & Platforms:
+- fa:mobile (Smartphone/Mobile)
+- fa:mobile-screen (Mobile with Screen)
+- fa:tablet (Tablet)
+- fa:laptop (Laptop)
+- fa:desktop (Desktop Computer)
+- fa:display (Monitor/Display)
+- fab:android (Android Device)
+- fab:apple (iOS/Apple Device)
+- fab:windows (Windows)
+- fab:linux (Linux)
+
+Databases:
+- mdi:database (Generic Database)
+- fa:database (SQL Database)
+- mdi:elephant (PostgreSQL)
+- mdi:dolphin (MySQL)
+- mdi:leaf (MongoDB)
+- mdi:memory (Redis)
+- mdi:firebase (Firebase)
+
+Web & Network:
+- fa:globe (Web/Browser)
+- fa:server (Server)
+- mdi:api (API/REST)
+- mdi:graphql (GraphQL)
+- fa:network-wired (Network)
+- fa:cloud (Cloud)
+- mdi:webhook (Webhook)
+- fab:docker (Docker)
+- fab:aws (AWS)
+- fab:google (Google Cloud)
+- mdi:microsoft-azure (Azure)
+
+Components & Architecture:
+- fa:cube (Component/Module)
+- fa:layer-group (Layer)
+- mdi:cog (Service/Engine)
+- mdi:package-variant (Package)
+- fa:folder (Folder/Directory)
+- fa:file-code (Code File)
+- mdi:view-dashboard (Dashboard)
+- fa:window-maximize (View/Page)
+- fa:rocket (Entry Point/Main)
+
+Security & Auth:
+- fa:shield-halved (Security)
+- fa:lock (Auth/Encrypted)
+- fa:key (API Key/Secret)
+- fa:fingerprint (Authentication)
+- fa:user-shield (Authorization)
+- fa:bug (Vulnerability)
+
+Data & Storage:
+- fa:file (File)
+- fa:folder-open (Folder)
+- fa:hard-drive (Storage)
+- fa:upload (Upload)
+- fa:download (Download)
+- mdi:file-document (Document)
+
+Actions & Status:
+- fa:play (Run/Start)
+- fa:gear (Config/Settings)
+- fa:check (Success)
+- fa:xmark (Error)
+- fa:triangle-exclamation (Warning)
+- mdi:email (Email)
+"""
+
+# Valid Mermaid icons for web app diagrams (used for sanitization)
+# Valid icons using short format (fa: fab: mdi:) for icon block syntax
+WEBAPP_VALID_ICONS = {
+    # Font Awesome (fa:) - solid icons
+    "fa:mobile", "fa:mobile-screen", "fa:tablet", "fa:laptop", "fa:desktop",
+    "fa:display", "fa:globe", "fa:server", "fa:network-wired", "fa:cloud",
+    "fa:database", "fa:layer-group", "fa:folder", "fa:file-code", "fa:cube",
+    "fa:shield-halved", "fa:lock", "fa:key", "fa:fingerprint", "fa:user-shield",
+    "fa:bug", "fa:file", "fa:folder-open", "fa:hard-drive", "fa:upload",
+    "fa:download", "fa:play", "fa:gear", "fa:check", "fa:xmark",
+    "fa:triangle-exclamation", "fa:window-maximize", "fa:rocket",
+    
+    # Font Awesome Brands (fab:) - brand icons
+    "fab:php", "fab:python", "fab:java", "fab:js", "fab:react", "fab:vuejs",
+    "fab:angular", "fab:node-js", "fab:laravel", "fab:symfony", "fab:html5",
+    "fab:css3", "fab:android", "fab:apple", "fab:windows", "fab:linux",
+    "fab:docker", "fab:aws", "fab:google",
+    
+    # Material Design Icons (mdi:)
+    "mdi:language-ruby", "mdi:language-go", "mdi:language-rust", "mdi:language-csharp",
+    "mdi:language-typescript", "mdi:database", "mdi:elephant", "mdi:dolphin",
+    "mdi:leaf", "mdi:memory", "mdi:firebase", "mdi:api", "mdi:graphql",
+    "mdi:webhook", "mdi:cog", "mdi:package-variant", "mdi:view-dashboard",
+    "mdi:file-document", "mdi:email", "mdi:microsoft-azure",
+}
+
+
+def get_webapp_diagram_prompt_icons() -> str:
+    """Get the icon instructions for web app architecture diagrams."""
+    return WEBAPP_DIAGRAM_ICONS

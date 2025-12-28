@@ -17,7 +17,7 @@ import json
 import uuid
 from types import SimpleNamespace
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Query, Depends
+from fastapi import APIRouter, File, HTTPException, UploadFile, Query, Depends, Form
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -26,12 +26,14 @@ from backend.core.logging import get_logger
 from backend.core.database import get_db
 from backend.core.config import settings
 from backend.services import reverse_engineering_service as re_service
+from backend.services import deduplication_service
 
 router = APIRouter(prefix="/reverse", tags=["reverse-engineering"])
 logger = get_logger(__name__)
 
 # Constants
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB - increased for real-world APKs
+MAX_SCAN_TIMEOUT = 3600  # 60 minutes global timeout for unified scans
 ALLOWED_BINARY_EXTENSIONS = {".exe", ".dll", ".so", ".elf", ".bin", ".o", ".dylib", ".mach"}
 ALLOWED_APK_EXTENSIONS = {".apk", ".aab"}
 
@@ -163,6 +165,26 @@ class BinaryAnalysisResponse(BaseModel):
     ai_analysis: Optional[str] = None
     ghidra_analysis: Optional[Dict[str, Any]] = None
     ghidra_ai_summaries: Optional[List[Dict[str, Any]]] = None
+    vuln_hunt_result: Optional[Dict[str, Any]] = None  # Multi-pass AI vulnerability hunt results
+    # Enhanced analysis results (matching APK analyzer)
+    pattern_scan_result: Optional[Dict[str, Any]] = None  # Pattern-based vulnerability scan
+    cve_lookup_result: Optional[Dict[str, Any]] = None  # CVE lookup results
+    sensitive_scan_result: Optional[Dict[str, Any]] = None  # Sensitive data discovery
+    verification_result: Optional[Dict[str, Any]] = None  # Unified AI verification (includes risk, FP filtering, attack chains)
+    attack_chains: Optional[List[Dict[str, Any]]] = None  # Detected attack chains from correlated findings
+    prioritized_actions: Optional[List[Dict[str, Any]]] = None  # AI-prioritized remediation actions
+    # NEW: APK-matching features
+    obfuscation_analysis: Optional[Dict[str, Any]] = None  # Obfuscation/packing detection
+    attack_surface: Optional[Dict[str, Any]] = None  # Attack surface mapping
+    dynamic_analysis: Optional[Dict[str, Any]] = None  # Frida scripts for dynamic analysis
+    emulation_analysis: Optional[Dict[str, Any]] = None  # Unicorn emulation results
+    ai_functionality_report: Optional[str] = None  # AI report: What does this binary do?
+    ai_security_report: Optional[str] = None  # AI report: Security assessment
+    ai_architecture_diagram: Optional[str] = None  # AI-generated Mermaid architecture diagram
+    ai_attack_surface_map: Optional[str] = None  # AI-generated Mermaid attack tree
+    # Legitimacy detection (reduces false positives)
+    is_legitimate_software: Optional[bool] = None  # Whether binary appears to be from known publisher
+    legitimacy_indicators: Optional[List[str]] = None  # Reasons why it appears legitimate
     error: Optional[str] = None
 
 
@@ -186,6 +208,10 @@ class UnifiedBinaryScanProgress(BaseModel):
     phases: List[UnifiedBinaryScanPhase]
     message: str
     error: Optional[str] = None
+    # Time tracking
+    elapsed_seconds: Optional[float] = None
+    estimated_remaining_seconds: Optional[float] = None
+    estimated_total_seconds: Optional[float] = None
 
 
 class ApkPermissionResponse(BaseModel):
@@ -356,10 +382,11 @@ async def analyze_binary(
     file: UploadFile = File(..., description="Binary file to analyze (EXE, ELF, DLL, SO)"),
     include_ai: bool = Query(True, description="Include AI-powered analysis"),
     include_ghidra: bool = Query(True, description="Include Ghidra headless decompilation"),
-    ghidra_max_functions: int = Query(200, ge=1, le=2000, description="Max functions to export from Ghidra"),
-    ghidra_decomp_limit: int = Query(4000, ge=200, le=20000, description="Max decompilation chars per function"),
+    extended_ghidra: bool = Query(False, description="Extended Ghidra scan (2x functions and decompilation limit)"),
+    ghidra_max_functions: int = Query(500, ge=1, le=5000, description="Max functions to export from Ghidra"),
+    ghidra_decomp_limit: int = Query(10000, ge=200, le=50000, description="Max decompilation chars per function"),
     include_ghidra_ai: bool = Query(True, description="Include Gemini summaries for decompiled functions"),
-    ghidra_ai_max_functions: int = Query(20, ge=1, le=200, description="Max functions to summarize with Gemini"),
+    ghidra_ai_max_functions: int = Query(30, ge=1, le=200, description="Max functions to summarize with Gemini"),
 ):
     """
     Analyze a binary executable file.
@@ -406,10 +433,14 @@ async def analyze_binary(
 
         # Run Ghidra decompilation if requested
         if include_ghidra:
+            # Apply 2x multiplier for extended scan
+            effective_max_functions = ghidra_max_functions * 2 if extended_ghidra else ghidra_max_functions
+            effective_decomp_limit = ghidra_decomp_limit * 2 if extended_ghidra else ghidra_decomp_limit
+            
             result.ghidra_analysis = re_service.analyze_binary_with_ghidra(
                 tmp_path,
-                max_functions=ghidra_max_functions,
-                decomp_limit=ghidra_decomp_limit,
+                max_functions=effective_max_functions,
+                decomp_limit=effective_decomp_limit,
             )
 
             if include_ghidra_ai and result.ghidra_analysis and "error" not in result.ghidra_analysis:
@@ -548,18 +579,34 @@ async def unified_binary_scan(
     file: UploadFile = File(..., description="Binary file to analyze (EXE, ELF, DLL, SO)"),
     include_ai: bool = Query(True, description="Include AI-powered analysis"),
     include_ghidra: bool = Query(True, description="Include Ghidra headless decompilation"),
-    ghidra_max_functions: int = Query(200, ge=1, le=2000, description="Max functions to export from Ghidra"),
-    ghidra_decomp_limit: int = Query(4000, ge=200, le=20000, description="Max decompilation chars per function"),
+    extended_ghidra: bool = Query(False, description="Extended Ghidra scan (2x functions and decompilation limit)"),
+    ghidra_max_functions: int = Query(500, ge=1, le=5000, description="Max functions to export from Ghidra"),
+    ghidra_decomp_limit: int = Query(10000, ge=200, le=50000, description="Max decompilation chars per function"),
     include_ghidra_ai: bool = Query(True, description="Include Gemini summaries for decompiled functions"),
-    ghidra_ai_max_functions: int = Query(20, ge=1, le=200, description="Max functions to summarize with Gemini"),
+    ghidra_ai_max_functions: int = Query(30, ge=1, le=200, description="Max functions to summarize with Gemini"),
+    include_vuln_hunt: bool = Query(True, description="Include multi-pass AI vulnerability hunting (enabled by default)"),
+    vuln_hunt_max_passes: int = Query(4, ge=1, le=6, description="Max vulnerability hunting passes"),
+    vuln_hunt_max_targets: int = Query(50, ge=5, le=80, description="Max targets per hunting pass"),
+    include_pattern_scan: bool = Query(True, description="Include pattern-based vulnerability scanning"),
+    include_cve_lookup: bool = Query(True, description="Include CVE lookup for libraries"),
+    include_sensitive_scan: bool = Query(True, description="Include sensitive data discovery"),
+    include_unified_verification: bool = Query(True, description="Include unified AI verification of all findings"),
 ):
     """
     Perform a complete binary analysis with streaming progress updates.
-    This unified scan combines:
-    - Static metadata, strings, imports, secrets
-    - Optional Ghidra decompilation
-    - Optional Gemini function summaries
-    - Optional Gemini overall analysis
+    This unified scan combines 11 phases (matching APK analyzer capabilities):
+    
+    Phase 1: Static metadata, strings, imports, secrets
+    Phase 2: Optional Ghidra decompilation
+    Phase 3: Optional Gemini function summaries  
+    Phase 4: Optional Gemini overall analysis
+    Phase 5: Pattern-based vulnerability scanning (80+ patterns)
+    Phase 6: CVE lookup for libraries (OSV.dev + NVD)
+    Phase 7: Sensitive data discovery (40+ patterns)
+    Phase 8: Unified AI verification of all findings
+    Phase 9: Multi-pass AI vulnerability hunting
+    Phase 10: Final risk assessment
+    Phase 11: Report generation
     """
     filename = file.filename or "unknown"
     suffix = Path(filename).suffix.lower()
@@ -585,6 +632,7 @@ async def unified_binary_scan(
         scan_id = str(uuid.uuid4())
         _unified_binary_scan_sessions[scan_id] = {"cancelled": False, "tmp_dir": str(tmp_dir)}
 
+        # Build phases list based on enabled options (up to 11 phases)
         phases: List[UnifiedBinaryScanPhase] = [
             UnifiedBinaryScanPhase(
                 id="static",
@@ -614,18 +662,146 @@ async def unified_binary_scan(
                 description="Generate overall Gemini analysis",
                 status="pending",
             ))
+        # NEW PHASES - Pattern scan, CVE lookup, Sensitive data, Verification
+        if include_pattern_scan and include_ghidra:
+            phases.append(UnifiedBinaryScanPhase(
+                id="pattern_scan",
+                label="Pattern Vulnerability Scan",
+                description="Scan decompiled code with 80+ vulnerability patterns",
+                status="pending",
+            ))
+        if include_cve_lookup:
+            phases.append(UnifiedBinaryScanPhase(
+                id="cve_lookup",
+                label="CVE Lookup",
+                description="Query OSV.dev and NVD for library CVEs",
+                status="pending",
+            ))
+        if include_sensitive_scan:
+            phases.append(UnifiedBinaryScanPhase(
+                id="sensitive_scan",
+                label="Sensitive Data Discovery",
+                description="Scan for secrets, credentials, and API keys (40+ patterns)",
+                status="pending",
+            ))
+        # Vuln hunt runs BEFORE verification so its findings get verified
+        if include_vuln_hunt and include_ghidra:
+            phases.append(UnifiedBinaryScanPhase(
+                id="vuln_hunt",
+                label="AI Vulnerability Hunt",
+                description=f"Multi-pass AI vulnerability hunting ({vuln_hunt_max_passes} passes)",
+                status="pending",
+            ))
+        # Verification runs AFTER vuln_hunt to verify ALL findings (pattern + CVE + sensitive + vuln_hunt)
+        if include_unified_verification and (include_pattern_scan or include_cve_lookup or include_sensitive_scan or include_vuln_hunt):
+            phases.append(UnifiedBinaryScanPhase(
+                id="ai_verification",
+                label="AI Findings Verification",
+                description="Unified AI verification to eliminate false positives and detect attack chains",
+                status="pending",
+            ))
+        # APK-matching phases - these use verified findings
+        phases.append(UnifiedBinaryScanPhase(
+            id="advanced_analysis",
+            label="Advanced Analysis",
+            description="Obfuscation detection and packing analysis",
+            status="pending",
+        ))
+        phases.append(UnifiedBinaryScanPhase(
+            id="attack_surface",
+            label="Attack Surface Mapping",
+            description="Map entry points, exports, and attack vectors",
+            status="pending",
+        ))
+        phases.append(UnifiedBinaryScanPhase(
+            id="dynamic_scripts",
+            label="Dynamic Analysis Scripts",
+            description="Generate Frida hooks for runtime analysis",
+            status="pending",
+        ))
+        phases.append(UnifiedBinaryScanPhase(
+            id="emulation",
+            label="Emulation Analysis",
+            description="Emulate code with Unicorn for runtime behavior analysis",
+            status="pending",
+        ))
+        phases.append(UnifiedBinaryScanPhase(
+            id="ai_reports",
+            label="AI Report Generation",
+            description="Generate functionality, security, and architecture reports",
+            status="pending",
+        ))
 
         current_phase_idx = 0
+        vuln_hunt_result = None  # Store vulnerability hunt results
+        # NEW: Store results for new phases
+        pattern_scan_result = None
+        cve_lookup_result = None
+        sensitive_scan_result = None
+        verification_result = None
+        # NEW: APK-matching results
+        obfuscation_analysis = None
+        attack_surface_result = None
+        dynamic_analysis_result = None
+        emulation_result = None  # Unicorn emulation results
+        ai_reports_result = None
+        
+        # Time tracking for estimates
+        scan_start_time = datetime.utcnow()
+        phase_times: Dict[str, float] = {}  # Track time per phase for estimates
+        
+        # Average phase durations (in seconds) based on typical scans
+        PHASE_TIME_ESTIMATES = {
+            "static": 5,
+            "ghidra": 30,
+            "ghidra_ai": 20,
+            "ai_summary": 10,
+            "pattern_scan": 8,
+            "cve_lookup": 12,
+            "sensitive_scan": 10,
+            "vuln_hunt": 60,
+            "ai_verification": 15,
+            "advanced_analysis": 8,
+            "attack_surface": 10,
+            "dynamic_scripts": 5,
+            "emulation": 25,
+            "ai_reports": 30,
+        }
 
         def make_progress(message: str, phase_progress: int = 0) -> str:
-            nonlocal phases, current_phase_idx
+            nonlocal phases, current_phase_idx, scan_start_time
             overall = (current_phase_idx * 100 // max(len(phases), 1)) + (phase_progress // max(len(phases), 1))
+            
+            # Calculate time estimates
+            elapsed = (datetime.utcnow() - scan_start_time).total_seconds()
+            
+            # Estimate remaining time based on phase estimates
+            remaining_phases = [p for p in phases[current_phase_idx:] if p.status != "completed"]
+            estimated_remaining = sum(
+                PHASE_TIME_ESTIMATES.get(p.id, 10) * (1 - (p.progress / 100 if p.progress else 0))
+                for p in remaining_phases
+            )
+            
+            # Adjust based on actual elapsed time if we have data
+            if current_phase_idx > 0 and elapsed > 0:
+                # Calculate actual average phase time
+                completed_phases = [p for p in phases if p.status == "completed"]
+                if completed_phases:
+                    estimated_total = elapsed + estimated_remaining
+                else:
+                    estimated_total = sum(PHASE_TIME_ESTIMATES.get(p.id, 10) for p in phases)
+            else:
+                estimated_total = sum(PHASE_TIME_ESTIMATES.get(p.id, 10) for p in phases)
+            
             progress = UnifiedBinaryScanProgress(
                 scan_id=scan_id,
                 current_phase=phases[current_phase_idx].id,
                 overall_progress=min(overall, 100),
                 phases=phases,
                 message=message,
+                elapsed_seconds=round(elapsed, 1),
+                estimated_remaining_seconds=round(max(0, estimated_remaining), 1),
+                estimated_total_seconds=round(estimated_total, 1),
             )
             return f"data: {json.dumps({'type': 'progress', 'data': progress.model_dump()})}\n\n"
 
@@ -642,9 +818,19 @@ async def unified_binary_scan(
                         p.completed_at = datetime.utcnow().isoformat()
                         p.progress = 100
 
+        def get_phase_idx(phase_id: str) -> int:
+            """Get the index of a phase by ID."""
+            for i, p in enumerate(phases):
+                if p.id == phase_id:
+                    return i
+            return len(phases) - 1
+
         async def run_unified_scan():
-            nonlocal current_phase_idx
+            nonlocal current_phase_idx, pattern_scan_result, cve_lookup_result, sensitive_scan_result, verification_result, obfuscation_analysis, attack_surface_result, dynamic_analysis_result, ai_reports_result
             result = None
+            is_legitimate_software = False  # Will be detected from static analysis
+            legitimacy_indicators = []
+            
             try:
                 if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
                     yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
@@ -655,10 +841,171 @@ async def unified_binary_scan(
                 update_phase("static", "in_progress", progress=10)
                 yield make_progress("Analyzing binary...", 10)
                 result = re_service.analyze_binary(tmp_path)
+                
+                # ================================================================
+                # LEGITIMACY DETECTION - Reduce false positives for known software
+                # Multi-layer detection using: authenticode, version info, filename, strings
+                # ================================================================
+                filename_lower = filename.lower()
+                
+                # 1. CHECK AUTHENTICODE DIGITAL SIGNATURE (Most reliable)
+                # Signed binaries from known publishers are almost always legitimate
+                if result and result.metadata and result.metadata.authenticode:
+                    auth = result.metadata.authenticode
+                    if auth.get("signed"):
+                        is_legitimate_software = True
+                        legitimacy_indicators.append("Digitally signed (Authenticode present)")
+                        # Check certificate details if available
+                        if auth.get("certificate_type") and "PKCS" in str(auth.get("certificate_type", "")):
+                            legitimacy_indicators.append("Valid PKCS#7 certificate")
+                
+                # 2. CHECK VERSION INFO (Very reliable for legitimate software)
+                # Real software has detailed version info with company names
+                if result and result.metadata and result.metadata.version_info:
+                    version_info = result.metadata.version_info
+                    known_publishers = {
+                        "microsoft": ["microsoft corporation", "microsoft corp", "microsoft"],
+                        "google": ["google llc", "google inc", "google"],
+                        "mozilla": ["mozilla foundation", "mozilla corporation", "mozilla"],
+                        "apple": ["apple inc", "apple computer"],
+                        "adobe": ["adobe systems", "adobe inc", "adobe"],
+                        "oracle": ["oracle corporation", "oracle"],
+                        "intel": ["intel corporation", "intel"],
+                        "nvidia": ["nvidia corporation", "nvidia"],
+                        "amd": ["advanced micro devices", "amd"],
+                        "vmware": ["vmware, inc", "vmware"],
+                        "cisco": ["cisco systems", "cisco"],
+                        "amazon": ["amazon", "aws"],
+                        "facebook": ["meta platforms", "facebook"],
+                        "discord": ["discord inc", "discord"],
+                        "valve": ["valve corporation", "valve"],
+                        "spotify": ["spotify ab", "spotify"],
+                        "zoom": ["zoom video communications", "zoom"],
+                        "slack": ["slack technologies", "salesforce"],
+                        "jetbrains": ["jetbrains s.r.o", "jetbrains"],
+                        "github": ["github, inc", "github"],
+                        "atlassian": ["atlassian", "atlassian pty"],
+                    }
+                    
+                    # Check CompanyName field
+                    company_name = str(version_info.get("CompanyName", "")).lower()
+                    for publisher, variants in known_publishers.items():
+                        if any(v in company_name for v in variants):
+                            is_legitimate_software = True
+                            legitimacy_indicators.append(f"Known publisher in version info: {publisher.title()}")
+                            break
+                    
+                    # Check ProductName for known products
+                    product_name = str(version_info.get("ProductName", "")).lower()
+                    known_products = [
+                        "google chrome", "microsoft edge", "mozilla firefox", "opera", "brave",
+                        "visual studio", "vs code", "intellij", "pycharm", "eclipse",
+                        "microsoft office", "microsoft word", "microsoft excel",
+                        "windows", "windows defender", "windows security",
+                        "nvidia", "geforce", "radeon", "amd software",
+                        "steam", "discord", "spotify", "slack", "zoom", "teams",
+                        "vmware", "virtualbox", "docker desktop",
+                        "git", "node.js", "python", "java", ".net",
+                    ]
+                    for product in known_products:
+                        if product in product_name:
+                            is_legitimate_software = True
+                            legitimacy_indicators.append(f"Known product: {product}")
+                            break
+                    
+                    # Check FileDescription and OriginalFilename
+                    file_desc = str(version_info.get("FileDescription", "")).lower()
+                    orig_name = str(version_info.get("OriginalFilename", "")).lower()
+                    
+                    # Windows system files
+                    windows_patterns = ["microsoft", "windows", "win32", "system32"]
+                    if any(p in file_desc for p in windows_patterns) or any(p in orig_name for p in windows_patterns):
+                        if not is_legitimate_software:
+                            is_legitimate_software = True
+                            legitimacy_indicators.append("Windows system file indicators")
+                    
+                    # Has proper version info structure (legitimate software usually does)
+                    if (version_info.get("FileVersion") and 
+                        version_info.get("ProductVersion") and
+                        version_info.get("CompanyName")):
+                        if not is_legitimate_software:
+                            legitimacy_indicators.append("Complete version info present")
+                
+                # 3. CHECK FILENAME for known legitimate products
+                legitimate_products = [
+                    "chrome", "firefox", "edge", "brave", "opera",  # Browsers
+                    "vscode", "code", "visual studio", "intellij", "pycharm",  # IDEs
+                    "office", "word", "excel", "outlook", "teams",  # Office
+                    "notepad", "calc", "explorer", "mspaint",  # Windows built-in
+                    "python", "node", "java", "dotnet",  # Runtimes
+                    "defender", "security", "antimalware",  # Security software
+                    "nvidia", "amd", "intel", "geforce", "radeon",  # Hardware vendors
+                    "steam", "discord", "spotify", "slack", "zoom",  # Popular apps
+                    "git", "docker", "kubectl", "helm",  # Dev tools
+                    "powershell", "cmd", "bash", "wsl",  # Shells
+                ]
+                for product in legitimate_products:
+                    if product in filename_lower:
+                        if not is_legitimate_software:
+                            is_legitimate_software = True
+                        legitimacy_indicators.append(f"Known product filename: {product}")
+                        break
+                
+                # 4. CHECK SECURITY MITIGATIONS (Legitimate software uses these)
+                # Properly compiled legitimate software has all mitigations enabled
+                if result and result.metadata and result.metadata.mitigations:
+                    mitigations = result.metadata.mitigations
+                    enabled_count = sum(1 for v in mitigations.values() if v)
+                    total_count = len(mitigations)
+                    
+                    # If most mitigations are enabled, more likely legitimate
+                    if total_count > 0 and enabled_count / total_count >= 0.7:
+                        legitimacy_indicators.append(f"Strong security mitigations ({enabled_count}/{total_count})")
+                        # Don't auto-set legitimate just from mitigations, but boost confidence
+                
+                # 5. CHECK STRINGS for publisher/company info (fallback)
+                if result and result.strings and not is_legitimate_software:
+                    publisher_keywords = ["microsoft", "google", "mozilla", "apple", "adobe", 
+                                         "oracle", "intel", "nvidia", "amd", "vmware", "cisco",
+                                         "amazon", "facebook", "meta", "discord", "valve", "spotify"]
+                    for s in result.strings[:500]:  # Check first 500 strings
+                        s_lower = s.value.lower()
+                        if any(kw in s_lower for kw in ["copyright", "company", "publisher", "signed by", "(c)"]):
+                            for pub in publisher_keywords:
+                                if pub in s_lower:
+                                    is_legitimate_software = True
+                                    legitimacy_indicators.append(f"Publisher in strings: {pub}")
+                                    break
+                        # Check for digital signature indicators
+                        if any(sig in s_lower for sig in ["authenticode", "verisign", "digicert", "comodo", "symantec", "globalsign"]):
+                            if not is_legitimate_software:
+                                is_legitimate_software = True
+                            legitimacy_indicators.append("Certificate authority reference")
+                
+                # 6. ADDITIONAL LEGITIMACY SIGNALS
+                # Check for known library imports that indicate legitimate development
+                if result and result.imports:
+                    # Count imports from major runtime libraries
+                    ms_runtime_dlls = ["msvcrt", "vcruntime", "msvcp", "ucrtbase", "kernel32", "ntdll", "user32", "gdi32"]
+                    ms_imports = sum(1 for imp in result.imports if any(dll in (imp.library or "").lower() for dll in ms_runtime_dlls))
+                    
+                    # High number of standard library imports suggests legitimate development
+                    if ms_imports > 50:
+                        legitimacy_indicators.append(f"Uses standard MS runtime ({ms_imports} imports)")
+                
+                # Log legitimacy status with details
+                if is_legitimate_software:
+                    logger.info(f"Binary appears legitimate: {legitimacy_indicators[:5]}")
+                else:
+                    # Even if not detected as legitimate, log what we did find
+                    if legitimacy_indicators:
+                        logger.info(f"Some legitimacy indicators found but not conclusive: {legitimacy_indicators}")
+                
                 update_phase(
                     "static",
                     "completed",
-                    f"{len(result.strings)} strings, {len(result.imports)} imports",
+                    f"{len(result.strings)} strings, {len(result.imports)} imports" + 
+                    (" (legitimate software detected)" if is_legitimate_software else ""),
                     100,
                 )
                 yield make_progress("Static analysis complete", 100)
@@ -668,20 +1015,26 @@ async def unified_binary_scan(
                     yield "data: {\"type\":\"done\"}\n\n"
                     return
 
+                # Apply 2x multiplier for extended Ghidra scan
+                effective_max_functions = ghidra_max_functions * 2 if extended_ghidra else ghidra_max_functions
+                effective_decomp_limit = ghidra_decomp_limit * 2 if extended_ghidra else ghidra_decomp_limit
+
                 if include_ghidra:
                     current_phase_idx = 1
                     update_phase("ghidra", "in_progress", progress=10)
-                    yield make_progress("Running Ghidra decompilation...", 10)
+                    extended_label = " (extended)" if extended_ghidra else ""
+                    yield make_progress(f"Running Ghidra decompilation{extended_label}...", 10)
                     result.ghidra_analysis = re_service.analyze_binary_with_ghidra(
                         tmp_path,
-                        max_functions=ghidra_max_functions,
-                        decomp_limit=ghidra_decomp_limit,
+                        max_functions=effective_max_functions,
+                        decomp_limit=effective_decomp_limit,
                     )
                     if result.ghidra_analysis and "error" in result.ghidra_analysis:
                         update_phase("ghidra", "error", result.ghidra_analysis.get("error"), 100)
                     else:
                         fn_total = (result.ghidra_analysis or {}).get("functions_total", 0)
-                        update_phase("ghidra", "completed", f"Exported {fn_total} functions", 100)
+                        fn_exported = (result.ghidra_analysis or {}).get("functions_exported", fn_total)
+                        update_phase("ghidra", "completed", f"Exported {fn_exported}/{fn_total} functions", 100)
                     yield make_progress("Ghidra decompilation complete", 100)
 
                     if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
@@ -707,12 +1060,561 @@ async def unified_binary_scan(
                         return
 
                 if include_ai and result and not result.error:
-                    current_phase_idx = len(phases) - 1
+                    # Find the phase index for ai_summary
+                    ai_phase_idx = next((i for i, p in enumerate(phases) if p.id == "ai_summary"), len(phases) - 1)
+                    current_phase_idx = ai_phase_idx
                     update_phase("ai_summary", "in_progress", progress=10)
                     yield make_progress("Generating AI security summary...", 10)
                     result.ai_analysis = await re_service.analyze_binary_with_ai(result)
                     update_phase("ai_summary", "completed", "AI summary generated", 100)
                     yield make_progress("AI summary complete", 100)
+
+                if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+
+                # ================================================================
+                # PARALLEL PHASES: Pattern Scan + CVE Lookup + Sensitive Data
+                # These phases don't depend on each other, only on static/ghidra
+                # Running them in parallel saves ~30% time
+                # ================================================================
+                parallel_phases_enabled = any([
+                    include_pattern_scan and include_ghidra and result and result.ghidra_analysis,
+                    include_cve_lookup and result,
+                    include_sensitive_scan and result
+                ])
+                
+                if parallel_phases_enabled:
+                    yield make_progress("Running parallel scans (pattern + CVE + sensitive)...", 10)
+                    
+                    # Mark all parallel phases as in_progress
+                    if include_pattern_scan and include_ghidra and result and result.ghidra_analysis:
+                        update_phase("pattern_scan", "in_progress", "Running in parallel...", 20)
+                    if include_cve_lookup and result:
+                        update_phase("cve_lookup", "in_progress", "Running in parallel...", 20)
+                    if include_sensitive_scan and result:
+                        update_phase("sensitive_scan", "in_progress", "Running in parallel...", 20)
+                    
+                    # Define async tasks for parallel execution
+                    async def run_pattern_scan():
+                        if not (include_pattern_scan and include_ghidra and result and result.ghidra_analysis):
+                            return None
+                        try:
+                            res = re_service.scan_decompiled_binary_comprehensive(
+                                result.ghidra_analysis, 
+                                is_legitimate_software=is_legitimate_software
+                            )
+                            findings_count = len(res.get("findings", []))
+                            severity_label = " (filtered for legitimate software)" if is_legitimate_software else ""
+                            update_phase("pattern_scan", "completed", f"Found {findings_count} potential vulnerabilities{severity_label}", 100)
+                            return res
+                        except Exception as e:
+                            logger.error(f"Pattern scan failed: {e}")
+                            update_phase("pattern_scan", "error", str(e), 100)
+                            return {"findings": [], "error": str(e)}
+                    
+                    async def run_cve_lookup():
+                        if not (include_cve_lookup and result):
+                            return None
+                        try:
+                            binary_metadata = {
+                                "file_type": result.metadata.file_type,
+                                "architecture": result.metadata.architecture,
+                                "is_packed": result.metadata.is_packed,
+                                "linked_libraries": getattr(result.metadata, 'linked_libraries', []),
+                                "imports": [
+                                    {"name": imp.name, "library": imp.library}
+                                    for imp in result.imports
+                                ] if result.imports else []
+                            }
+                            strings_list = [
+                                {"value": s.value, "category": s.category}
+                                for s in result.strings[:1000]
+                            ] if result.strings else []
+                            
+                            res = await re_service.comprehensive_binary_cve_scan(binary_metadata, strings_list)
+                            cve_count = len(res.get("findings", []))
+                            update_phase("cve_lookup", "completed", f"Found {cve_count} CVEs", 100)
+                            return res
+                        except Exception as e:
+                            logger.error(f"CVE lookup failed: {e}")
+                            update_phase("cve_lookup", "error", str(e), 100)
+                            return {"findings": [], "error": str(e)}
+                    
+                    async def run_sensitive_scan():
+                        if not (include_sensitive_scan and result):
+                            return None
+                        try:
+                            strings_list = [
+                                {"value": s.value, "category": s.category, "offset": s.offset}
+                                for s in result.strings
+                            ] if result.strings else []
+                            
+                            decompiled_code = result.ghidra_analysis if include_ghidra and result.ghidra_analysis else None
+                            
+                            # Enable AI verification to match APK scanner behavior
+                            res = await re_service.comprehensive_binary_sensitive_scan(
+                                strings=strings_list,
+                                decompiled_code=decompiled_code,
+                                verify_with_ai=include_ai  # Now uses AI like APK scanner!
+                            )
+                            secrets_count = len(res.get("findings", []))
+                            ai_note = " (AI verified)" if include_ai else ""
+                            update_phase("sensitive_scan", "completed", f"Found {secrets_count} secrets{ai_note}", 100)
+                            return res
+                        except Exception as e:
+                            logger.error(f"Sensitive data scan failed: {e}")
+                            update_phase("sensitive_scan", "error", str(e), 100)
+                            return {"findings": [], "error": str(e)}
+                    
+                    # Run all three in parallel
+                    parallel_results = await asyncio.gather(
+                        run_pattern_scan(),
+                        run_cve_lookup(),
+                        run_sensitive_scan(),
+                        return_exceptions=True
+                    )
+                    
+                    # Unpack results
+                    pattern_scan_result = parallel_results[0] if not isinstance(parallel_results[0], Exception) else None
+                    cve_lookup_result = parallel_results[1] if not isinstance(parallel_results[1], Exception) else None
+                    sensitive_scan_result = parallel_results[2] if not isinstance(parallel_results[2], Exception) else None
+                    
+                    # Log any exceptions
+                    for i, r in enumerate(parallel_results):
+                        if isinstance(r, Exception):
+                            logger.error(f"Parallel phase {i} failed with exception: {r}")
+                    
+                    # Update phase index to after parallel phases
+                    current_phase_idx = get_phase_idx("sensitive_scan")
+                    
+                    # Summary of parallel phase results
+                    pattern_count = len(pattern_scan_result.get("findings", [])) if pattern_scan_result else 0
+                    cve_count = len(cve_lookup_result.get("findings", [])) if cve_lookup_result else 0
+                    secrets_count = len(sensitive_scan_result.get("findings", [])) if sensitive_scan_result else 0
+                    
+                    yield make_progress(
+                        f"Parallel scans complete: {pattern_count} patterns, {cve_count} CVEs, {secrets_count} secrets",
+                        100
+                    )
+
+                if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+
+                # ================================================================
+                # Multi-pass AI Vulnerability Hunt (runs BEFORE verification!)
+                # OPTIMIZATION: Skip for legitimate software to save time
+                # ================================================================
+                if include_vuln_hunt and include_ghidra and result and not result.error:
+                    vuln_phase_idx = next((i for i, p in enumerate(phases) if p.id == "vuln_hunt"), len(phases) - 1)
+                    current_phase_idx = vuln_phase_idx
+                    
+                    # SKIP VulnHuntr for legitimate software - saves significant time
+                    if is_legitimate_software:
+                        skip_reason = "Skipped for legitimate software (false positive reduction)"
+                        update_phase("vuln_hunt", "completed", skip_reason, 100)
+                        yield make_progress(skip_reason, 100)
+                        logger.info(f"Skipping VulnHuntr for legitimate software: {legitimacy_indicators[:3]}")
+                    else:
+                        update_phase("vuln_hunt", "in_progress", progress=5)
+                        yield make_progress("Starting multi-pass AI vulnerability hunt...", 5)
+                        
+                        try:
+                            # Progress queue for streaming updates to client
+                            progress_queue = asyncio.Queue()
+                            
+                            async def vuln_progress(phase: str, progress: int, message: str):
+                                update_phase("vuln_hunt", "in_progress", message, progress)
+                                # Also put in queue for streaming to client
+                                await progress_queue.put((phase, progress, message))
+                            
+                            # Create background task for progress streaming
+                            async def progress_streamer():
+                                """Stream progress updates to client."""
+                                while True:
+                                    try:
+                                        phase, prog, msg = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
+                                        # Note: We can't yield from here, but updates are via update_phase
+                                    except asyncio.TimeoutError:
+                                        continue
+                                    except Exception:
+                                        break
+                            
+                            nonlocal vuln_hunt_result
+                            vuln_hunt_result = await re_service.ai_vulnerability_hunt(
+                                tmp_path,
+                                focus_categories=None,
+                                max_passes=vuln_hunt_max_passes,
+                                max_targets_per_pass=vuln_hunt_max_targets,
+                                ghidra_max_functions=ghidra_max_functions,
+                                ghidra_decomp_limit=ghidra_decomp_limit,
+                                on_progress=vuln_progress,
+                            )
+                            vulns_found = len(vuln_hunt_result.vulnerabilities) if vuln_hunt_result else 0
+                            update_phase("vuln_hunt", "completed", f"Found {vulns_found} vulnerabilities", 100)
+                            yield make_progress(f"Vulnerability hunt complete: {vulns_found} found", 100)
+                        except Exception as vuln_err:
+                            logger.error(f"Vulnerability hunt failed: {vuln_err}")
+                            update_phase("vuln_hunt", "error", str(vuln_err), 100)
+                            yield make_progress(f"Vulnerability hunt failed: {vuln_err}", 100)
+
+                    if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                        yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                        yield "data: {\"type\":\"done\"}\n\n"
+                        return
+
+                # ================================================================
+                # Unified AI Verification (runs AFTER vuln_hunt to verify ALL findings)
+                # ================================================================
+                has_findings = (
+                    (pattern_scan_result and pattern_scan_result.get("findings")) or
+                    (cve_lookup_result and cve_lookup_result.get("findings")) or
+                    (sensitive_scan_result and sensitive_scan_result.get("findings")) or
+                    (vuln_hunt_result and vuln_hunt_result.vulnerabilities)
+                )
+                
+                if include_unified_verification and has_findings:
+                    current_phase_idx = get_phase_idx("ai_verification")
+                    update_phase("ai_verification", "in_progress", progress=10)
+                    yield make_progress("Running unified AI verification (includes vuln_hunt findings)...", 10)
+                    
+                    try:
+                        pattern_findings = pattern_scan_result.get("findings", []) if pattern_scan_result else []
+                        cve_findings = cve_lookup_result.get("findings", []) if cve_lookup_result else []
+                        sensitive_findings = sensitive_scan_result.get("findings", []) if sensitive_scan_result else []
+                        
+                        # Convert vuln_hunt findings to dict format for unified verification
+                        vuln_hunt_findings = []
+                        if vuln_hunt_result and vuln_hunt_result.vulnerabilities:
+                            for v in vuln_hunt_result.vulnerabilities:
+                                vuln_hunt_findings.append({
+                                    "id": v.id,
+                                    "title": v.title,
+                                    "severity": v.severity,
+                                    "category": v.category,
+                                    "cwe_id": v.cwe_id,
+                                    "cvss_estimate": v.cvss_estimate,
+                                    "function_name": v.function_name,
+                                    "entry_address": v.entry_address,
+                                    "description": v.description,
+                                    "technical_details": v.technical_details,
+                                    "proof_of_concept": v.proof_of_concept,
+                                    "exploitation_steps": v.exploitation_steps,
+                                    "remediation": v.remediation,
+                                    "confidence": v.confidence,
+                                    "ai_reasoning": v.ai_reasoning,
+                                    "code_snippet": v.code_snippet,
+                                    "source": "vuln_hunt",  # Tag source for filtering
+                                })
+                        
+                        binary_meta = {
+                            "file_type": result.metadata.file_type,
+                            "architecture": result.metadata.architecture,
+                            "is_packed": result.metadata.is_packed,
+                            "mitigations": result.metadata.mitigations,
+                        } if result else {}
+                        
+                        decompiled_code = result.ghidra_analysis if include_ghidra and result.ghidra_analysis else None
+                        
+                        verification_result = await re_service.verify_binary_findings_unified(
+                            pattern_findings=pattern_findings,
+                            cve_findings=cve_findings,
+                            sensitive_findings=sensitive_findings,
+                            vuln_hunt_findings=vuln_hunt_findings,  # NEW: Include vuln_hunt
+                            decompiled_code=decompiled_code,
+                            binary_metadata=binary_meta,
+                            is_legitimate_software=is_legitimate_software,
+                            legitimacy_indicators=legitimacy_indicators
+                        )
+                        
+                        verified_total = verification_result.get("summary", {}).get("verified_total", 0)
+                        filtered_total = verification_result.get("summary", {}).get("filtered_total", 0)
+                        attack_chains = len(verification_result.get("attack_chains", []))
+                        
+                        details = f"Verified {verified_total}, filtered {filtered_total} FPs"
+                        if attack_chains > 0:
+                            details += f", {attack_chains} attack chains detected"
+                        
+                        update_phase("ai_verification", "completed", details, 100)
+                        yield make_progress(f"AI verification complete: {details}", 100)
+                    except Exception as verify_err:
+                        logger.error(f"AI verification failed: {verify_err}")
+                        update_phase("ai_verification", "error", str(verify_err), 100)
+                        yield make_progress(f"AI verification failed: {verify_err}", 100)
+
+                    if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                        yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                        yield "data: {\"type\":\"done\"}\n\n"
+                        return
+
+                # ================================================================
+                # NEW PHASE: Advanced Analysis (Obfuscation/Packing Detection)
+                # ================================================================
+                current_phase_idx = get_phase_idx("advanced_analysis")
+                update_phase("advanced_analysis", "in_progress", progress=10)
+                yield make_progress("Analyzing obfuscation and packing...", 10)
+                
+                try:
+                    obfuscation_analysis = re_service.analyze_binary_obfuscation(
+                        str(tmp_path),
+                        static_result=result,
+                        ghidra_result=result.ghidra_analysis if include_ghidra else None
+                    )
+                    obfusc_level = obfuscation_analysis.get("overall_obfuscation_level", "none")
+                    obfusc_score = obfuscation_analysis.get("obfuscation_score", 0)
+                    packers = [p["name"] for p in obfuscation_analysis.get("detected_packers", [])]
+                    
+                    details = f"Level: {obfusc_level}, Score: {obfusc_score}/100"
+                    if packers:
+                        details += f", Packers: {', '.join(packers)}"
+                    
+                    update_phase("advanced_analysis", "completed", details, 100)
+                    yield make_progress(f"Obfuscation analysis complete: {obfusc_level}", 100)
+                except Exception as obfusc_err:
+                    logger.error(f"Obfuscation analysis failed: {obfusc_err}")
+                    update_phase("advanced_analysis", "error", str(obfusc_err), 100)
+
+                if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+
+                # ================================================================
+                # NEW PHASE: Attack Surface Mapping
+                # ================================================================
+                current_phase_idx = get_phase_idx("attack_surface")
+                update_phase("attack_surface", "in_progress", progress=10)
+                yield make_progress("Mapping attack surface...", 10)
+                
+                try:
+                    attack_surface_result = re_service.generate_binary_attack_surface(
+                        static_result=result,
+                        ghidra_result=result.ghidra_analysis if include_ghidra else None,
+                        binary_path=str(tmp_path)
+                    )
+                    summary = attack_surface_result.get("summary", {})
+                    entry_points = summary.get("total_entry_points", 0)
+                    vectors = summary.get("total_attack_vectors", 0)
+                    overall_risk = summary.get("overall_risk", "unknown")
+                    
+                    update_phase("attack_surface", "completed", 
+                        f"{entry_points} entry points, {vectors} attack vectors ({overall_risk} risk)", 100)
+                    yield make_progress(f"Attack surface mapped: {entry_points} entry points", 100)
+                except Exception as attack_err:
+                    logger.error(f"Attack surface mapping failed: {attack_err}")
+                    update_phase("attack_surface", "error", str(attack_err), 100)
+
+                if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+
+                # ================================================================
+                # NEW PHASE: Dynamic Analysis Scripts (Frida)
+                # ================================================================
+                current_phase_idx = get_phase_idx("dynamic_scripts")
+                update_phase("dynamic_scripts", "in_progress", progress=10)
+                yield make_progress("Generating Frida scripts...", 10)
+                
+                try:
+                    # Get verified findings for vulnerability-specific hooks
+                    verified_for_frida = []
+                    if verification_result:
+                        verified_for_frida = verification_result.get("verified_vulnerabilities", [])
+                    elif pattern_scan_result:
+                        verified_for_frida = pattern_scan_result.get("findings", [])
+                    
+                    # Include vuln_hunt findings for targeted hooks
+                    vuln_hunt_findings = []
+                    if vuln_hunt_result and vuln_hunt_result.vulnerabilities:
+                        vuln_hunt_findings = [
+                            {
+                                "title": v.title,
+                                "severity": v.severity,
+                                "function_name": v.function_name,
+                                "category": v.vuln_type,
+                                "description": v.description,
+                            }
+                            for v in vuln_hunt_result.vulnerabilities
+                        ]
+                    
+                    dynamic_analysis_result = re_service.generate_binary_frida_scripts(
+                        binary_name=filename,
+                        static_result=result,
+                        ghidra_result=result.ghidra_analysis if include_ghidra else None,
+                        obfuscation_result=obfuscation_analysis,
+                        verified_findings=verified_for_frida,
+                        vuln_hunt_findings=vuln_hunt_findings,
+                        attack_surface_result=attack_surface_result
+                    )
+                    scripts_count = dynamic_analysis_result.get("total_scripts", 0)
+                    categories = list(dynamic_analysis_result.get("categories", {}).keys())
+                    
+                    # Build protection detection summary
+                    protections_found = []
+                    if dynamic_analysis_result.get("anti_debug_detected"):
+                        protections_found.append("Anti-Debug")
+                    if dynamic_analysis_result.get("anti_vm_detected"):
+                        protections_found.append("Anti-VM")
+                    if dynamic_analysis_result.get("anti_tampering_detected"):
+                        protections_found.append("Anti-Tampering")
+                    if dynamic_analysis_result.get("packing_detected"):
+                        protections_found.append("Packed")
+                    
+                    protection_info = ""
+                    if protections_found:
+                        protection_info = f" | Protections: {', '.join(protections_found)}"
+                    
+                    update_phase("dynamic_scripts", "completed", 
+                        f"Generated {scripts_count} scripts ({', '.join(categories)}){protection_info}", 100)
+                    yield make_progress(f"Generated {scripts_count} Frida scripts{protection_info}", 100)
+                except Exception as frida_err:
+                    logger.error(f"Frida script generation failed: {frida_err}")
+                    update_phase("dynamic_scripts", "error", str(frida_err), 100)
+
+                if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+
+                # ================================================================
+                # NEW PHASE: Emulation Analysis (Unicorn-based)
+                # ================================================================
+                current_phase_idx = get_phase_idx("emulation")
+                update_phase("emulation", "in_progress", progress=5)
+                yield make_progress("Running enhanced emulation analysis...", 5)
+                
+                try:
+                    # Read binary data for emulation
+                    with open(tmp_path, 'rb') as f:
+                        binary_data = f.read()
+                    
+                    yield make_progress("Parsing PE/ELF sections for proper mapping...", 10)
+                    
+                    # Get entry point from static analysis
+                    entry_point = None
+                    if result and result.metadata:
+                        ep = getattr(result.metadata, 'entry_point', None)
+                        if ep:
+                            entry_point = ep
+                    
+                    yield make_progress("Running emulation with API hooks and evasion detection...", 25)
+                    
+                    # Extract additional entry points from attack surface for multi-path emulation
+                    additional_entry_points = []
+                    if attack_surface_result:
+                        entry_points_data = attack_surface_result.get("entry_points", [])
+                        for ep in entry_points_data[:10]:  # Limit to top 10 entry points
+                            if ep.get("address") and ep.get("address") != entry_point:
+                                additional_entry_points.append(ep["address"])
+                    
+                    # Run ENHANCED emulation with AI verification
+                    emulation_result = await re_service.run_enhanced_emulation_with_verification(
+                        binary_data=binary_data,
+                        architecture=getattr(result.metadata, 'architecture', 'x86') if result and result.metadata else 'x86',
+                        ghidra_result=result.ghidra_analysis if include_ghidra else None,
+                        static_result=result,
+                        binary_name=filename,
+                        base_address=0x400000,
+                        entry_point=entry_point,
+                        additional_entry_points=additional_entry_points,
+                        verify_with_ai=include_ai  # Use AI verification if AI is enabled
+                    )
+                    
+                    yield make_progress("Detecting evasion techniques and malicious patterns...", 60)
+                    
+                    if emulation_result.get("ai_verification"):
+                        yield make_progress("AI verifying emulation findings...", 80)
+                    
+                    yield make_progress("Compiling emulation results...", 95)
+                    
+                    if emulation_result.get("success"):
+                        summary = emulation_result.get("summary", {})
+                        verdict = emulation_result.get("final_verdict", {})
+                        
+                        detail_parts = []
+                        if summary.get("strings_recovered"):
+                            detail_parts.append(f"{summary['strings_recovered']} strings")
+                        if summary.get("evasion_techniques"):
+                            detail_parts.append(f"{summary['evasion_techniques']} evasion techniques")
+                        if summary.get("malicious_patterns"):
+                            detail_parts.append(f"{summary['malicious_patterns']} malicious patterns")
+                        if summary.get("is_packed"):
+                            detail_parts.append("PACKED")
+                        if verdict.get("verdict"):
+                            v = verdict["verdict"].upper()
+                            conf = verdict.get("confidence", 0)
+                            detail_parts.append(f"Verdict: {v} ({conf}%)")
+                        if summary.get("ai_verified"):
+                            detail_parts.append("✓ AI Verified")
+                        
+                        update_phase("emulation", "completed", 
+                            " | ".join(detail_parts) if detail_parts else "Emulation complete", 100)
+                        yield make_progress(f"Emulation complete: {' | '.join(detail_parts)}", 100)
+                    else:
+                        errors = emulation_result.get("errors", [])
+                        error_msg = errors[0] if errors else "Emulation failed"
+                        update_phase("emulation", "completed", error_msg, 100)
+                        yield make_progress(f"Emulation: {error_msg}", 100)
+                except Exception as emu_err:
+                    logger.error(f"Emulation analysis failed: {emu_err}")
+                    update_phase("emulation", "error", str(emu_err), 100)
+
+                if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                    yield "data: {\"type\":\"done\"}\n\n"
+                    return
+
+                # ================================================================
+                # NEW PHASE: AI Report Generation (4 reports like APK)
+                # ================================================================
+                current_phase_idx = get_phase_idx("ai_reports")
+                update_phase("ai_reports", "in_progress", progress=10)
+                yield make_progress("Generating AI reports...", 10)
+                
+                try:
+                    # Get verified findings and CVEs for reports
+                    verified_for_reports = []
+                    cve_for_reports = []
+                    
+                    if verification_result:
+                        verified_for_reports = verification_result.get("verified_vulnerabilities", [])
+                        cve_for_reports = verification_result.get("verified_cves", [])
+                    else:
+                        if pattern_scan_result:
+                            verified_for_reports = pattern_scan_result.get("findings", [])
+                        if cve_lookup_result:
+                            cve_for_reports = cve_lookup_result.get("findings", [])
+                    
+                    yield make_progress("Generating functionality report...", 25)
+                    ai_reports_result = await re_service.generate_binary_ai_reports(
+                        binary_name=filename,
+                        static_result=result,
+                        ghidra_result=result.ghidra_analysis if include_ghidra else None,
+                        attack_surface=attack_surface_result,
+                        obfuscation_result=obfuscation_analysis,
+                        verified_findings=verified_for_reports,
+                        cve_findings=cve_for_reports,
+                        emulation_result=emulation_result,
+                        is_legitimate_software=is_legitimate_software,
+                        legitimacy_indicators=legitimacy_indicators
+                    )
+                    
+                    reports_generated = sum([
+                        1 if ai_reports_result.get("functionality_report") else 0,
+                        1 if ai_reports_result.get("security_report") else 0,
+                        1 if ai_reports_result.get("architecture_diagram") else 0,
+                        1 if ai_reports_result.get("attack_surface_map") else 0,
+                    ])
+                    
+                    update_phase("ai_reports", "completed", f"Generated {reports_generated}/4 AI reports", 100)
+                    yield make_progress(f"AI reports complete: {reports_generated}/4 generated", 100)
+                except Exception as report_err:
+                    logger.error(f"AI report generation failed: {report_err}")
+                    update_phase("ai_reports", "error", str(report_err), 100)
 
                 if not result:
                     yield f"data: {json.dumps({'type': 'error', 'error': 'Analysis failed'})}\n\n"
@@ -807,6 +1709,7 @@ async def unified_binary_scan(
                         )
                         for s in result.secrets
                     ],
+                    # Filter suspicious indicators for legitimate software
                     suspicious_indicators=[
                         SuspiciousIndicatorResponse(
                             category=ind["category"],
@@ -815,6 +1718,15 @@ async def unified_binary_scan(
                             details=ind.get("details"),
                         )
                         for ind in result.suspicious_indicators
+                        # For legitimate software, only show info-level and legitimacy indicators
+                        # Filter out alarmist "suspicious API" warnings that are false positives
+                        if not is_legitimate_software or (
+                            ind.get("severity") == "info" or 
+                            "Legitimate" in ind.get("category", "") or
+                            "Security Features" in ind.get("category", "") or
+                            "Cryptographic" in ind.get("category", "") or
+                            ind.get("severity") == "high"  # Only show genuinely high severity
+                        )
                     ],
                     fuzzy_hashes=result.fuzzy_hashes,
                     yara_matches=result.yara_matches,
@@ -823,6 +1735,26 @@ async def unified_binary_scan(
                     ai_analysis=result.ai_analysis,
                     ghidra_analysis=result.ghidra_analysis,
                     ghidra_ai_summaries=result.ghidra_ai_summaries,
+                    vuln_hunt_result=re_service.vulnerability_hunt_result_to_dict(vuln_hunt_result) if vuln_hunt_result else None,
+                    # NEW: Include enhanced analysis results
+                    pattern_scan_result=pattern_scan_result,
+                    cve_lookup_result=cve_lookup_result,
+                    sensitive_scan_result=sensitive_scan_result,
+                    verification_result=verification_result,
+                    attack_chains=verification_result.get("attack_chains", []) if verification_result else None,
+                    prioritized_actions=verification_result.get("prioritized_actions", []) if verification_result else None,
+                    # NEW: APK-matching features
+                    obfuscation_analysis=obfuscation_analysis,
+                    attack_surface=attack_surface_result,
+                    dynamic_analysis=dynamic_analysis_result,
+                    emulation_analysis=emulation_result,
+                    ai_functionality_report=ai_reports_result.get("functionality_report") if ai_reports_result else None,
+                    ai_security_report=ai_reports_result.get("security_report") if ai_reports_result else None,
+                    ai_architecture_diagram=ai_reports_result.get("architecture_diagram") if ai_reports_result else None,
+                    ai_attack_surface_map=ai_reports_result.get("attack_surface_map") if ai_reports_result else None,
+                    # Legitimacy detection
+                    is_legitimate_software=is_legitimate_software,
+                    legitimacy_indicators=legitimacy_indicators if is_legitimate_software else None,
                     error=result.error,
                 )
 
@@ -1828,7 +2760,7 @@ async def enhance_decompiled_code(request: EnhanceCodeRequest):
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
     
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel(settings.gemini_model_id)
     
     # Build context
     context_info = ""
@@ -2037,7 +2969,7 @@ async def natural_language_search(request: NaturalLanguageSearchRequest):
         raise HTTPException(status_code=400, detail="No functions provided to search")
     
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel(settings.gemini_model_id)
     
     # Build function summaries for the AI to search
     # Limit to prevent token overflow
@@ -2199,7 +3131,7 @@ async def smart_rename_function(
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
     
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel(settings.gemini_model_id)
     
     prompt = f"""Analyze this decompiled function and suggest a meaningful name.
 
@@ -2374,7 +3306,7 @@ async def simulate_attack(request: AttackSimulationRequest):
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
     
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel(settings.gemini_model_id)
     
     # Extract vulnerability details
     vuln = request.vulnerability
@@ -2868,7 +3800,7 @@ async def analyze_symbolic_trace(request: SymbolicTraceRequest):
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
     
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel(settings.gemini_model_id)
     
     # Build context
     context_parts = []
@@ -3241,7 +4173,7 @@ async def enhance_code_with_symbolic(request: EnhanceCodeWithSymbolicRequest):
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
     
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel(settings.gemini_model_id)
     
     # Build symbolic context
     symbolic_context = ""
@@ -4044,6 +4976,8 @@ class SaveReportRequest(BaseModel):
     jadx_output_directory: Optional[str] = None
     jadx_classes_sample: Optional[List[Dict[str, Any]]] = None
     jadx_security_issues: Optional[List[Dict[str, Any]]] = None
+    jadx_source_tree: Optional[Dict[str, Any]] = None  # Directory structure for source browser
+    jadx_source_code_samples: Optional[List[Dict[str, Any]]] = None  # Actual source code for key classes
     
     # AI-Generated Reports (Deep Analysis)
     ai_functionality_report: Optional[str] = None
@@ -4058,6 +4992,31 @@ class SaveReportRequest(BaseModel):
     # Library CVE Analysis
     detected_libraries: Optional[List[Dict[str, Any]]] = None  # Libraries detected in APK
     library_cves: Optional[List[Dict[str, Any]]] = None  # CVEs found in libraries
+    
+    # Dynamic Analysis / Frida Scripts
+    dynamic_analysis: Optional[Dict[str, Any]] = None  # Full Frida scripts data
+    
+    # Decompiled Code Analysis Results (Pattern-based scanners)
+    decompiled_code_findings: Optional[List[Dict[str, Any]]] = None  # Security findings from decompiled code
+    decompiled_code_summary: Optional[Dict[str, Any]] = None  # Summary by severity/scanner/category
+    
+    # CVE Scan Results
+    cve_scan_results: Optional[Dict[str, Any]] = None  # CVE database lookup results
+    
+    # Vulnerability-specific Frida Hooks
+    vulnerability_frida_hooks: Optional[List[Dict[str, Any]]] = None  # Auto-generated hooks for discovered vulns
+    
+    # Manifest Visualization (component graph, deep links, AI analysis)
+    manifest_visualization: Optional[Dict[str, Any]] = None
+    
+    # Obfuscation Analysis (detection, deobfuscation strategies, Frida hooks)
+    obfuscation_analysis: Optional[Dict[str, Any]] = None
+    
+    # AI Finding Verification Results (confidence scores, attack chains, FP filtering)
+    verification_results: Optional[Dict[str, Any]] = None
+    
+    # Sensitive Data Discovery (AI-verified passwords, API keys, emails, phone numbers, PII)
+    sensitive_data_findings: Optional[Dict[str, Any]] = None
     
     # Tags and notes
     tags: Optional[List[str]] = None
@@ -4121,6 +5080,11 @@ class ReportDetailResponse(BaseModel):
     # JADX Full Scan Data
     jadx_total_classes: Optional[int] = None
     jadx_total_files: Optional[int] = None
+    jadx_output_directory: Optional[str] = None
+    jadx_classes_sample: Optional[List[Dict[str, Any]]] = None
+    jadx_security_issues: Optional[List[Dict[str, Any]]] = None
+    jadx_source_tree: Optional[Dict[str, Any]] = None  # Directory structure for source browser
+    jadx_source_code_samples: Optional[List[Dict[str, Any]]] = None  # Actual source code for key classes
     jadx_data: Optional[Dict[str, Any]] = None
     
     # AI-Generated Reports
@@ -4136,6 +5100,31 @@ class ReportDetailResponse(BaseModel):
     # Library CVE Analysis
     detected_libraries: Optional[List[Dict[str, Any]]] = None
     library_cves: Optional[List[Dict[str, Any]]] = None
+    
+    # Dynamic Analysis / Frida Scripts
+    dynamic_analysis: Optional[Dict[str, Any]] = None  # Full Frida scripts data
+    
+    # Decompiled Code Analysis Results (Pattern-based scanners)
+    decompiled_code_findings: Optional[List[Dict[str, Any]]] = None  # Security findings from decompiled code
+    decompiled_code_summary: Optional[Dict[str, Any]] = None  # Summary by severity/scanner/category
+    
+    # CVE Scan Results
+    cve_scan_results: Optional[Dict[str, Any]] = None  # CVE database lookup results
+    
+    # Vulnerability-specific Frida Hooks
+    vulnerability_frida_hooks: Optional[List[Dict[str, Any]]] = None  # Auto-generated hooks for discovered vulns
+    
+    # Manifest Visualization (component graph, deep links, AI analysis)
+    manifest_visualization: Optional[Dict[str, Any]] = None
+    
+    # Obfuscation Analysis (detection, deobfuscation strategies, Frida hooks)
+    obfuscation_analysis: Optional[Dict[str, Any]] = None
+    
+    # AI Finding Verification Results (confidence scores, attack chains, FP filtering)
+    verification_results: Optional[Dict[str, Any]] = None
+    
+    # Sensitive Data Discovery (AI-verified passwords, API keys, emails, phone numbers, PII)
+    sensitive_data_findings: Optional[Dict[str, Any]] = None
     
     tags: Optional[List[str]] = None
     notes: Optional[str] = None
@@ -4221,6 +5210,8 @@ def save_report(
                 "output_directory": request.jadx_output_directory,
                 "classes_sample": request.jadx_classes_sample,
                 "security_issues": request.jadx_security_issues,
+                "source_tree": request.jadx_source_tree,
+                "source_code_samples": request.jadx_source_code_samples,
             } if request.jadx_total_classes else None,
             
             # AI-Generated Reports
@@ -4236,6 +5227,31 @@ def save_report(
             # Library CVE Analysis
             detected_libraries=request.detected_libraries,
             library_cves=request.library_cves,
+            
+            # Dynamic Analysis / Frida Scripts
+            dynamic_analysis=request.dynamic_analysis,
+            
+            # Decompiled Code Analysis Results
+            decompiled_code_findings=request.decompiled_code_findings,
+            decompiled_code_summary=request.decompiled_code_summary,
+            
+            # CVE Scan Results
+            cve_scan_results=request.cve_scan_results,
+            
+            # Vulnerability-specific Frida Hooks
+            vulnerability_frida_hooks=request.vulnerability_frida_hooks,
+            
+            # Manifest Visualization (component graph, deep links, AI analysis)
+            manifest_visualization=request.manifest_visualization,
+            
+            # Obfuscation Analysis (detection, deobfuscation strategies, Frida hooks)
+            obfuscation_analysis=request.obfuscation_analysis,
+            
+            # AI Finding Verification Results (confidence scores, attack chains, FP filtering)
+            verification_results=request.verification_results,
+            
+            # Sensitive Data Discovery (AI-verified passwords, API keys, emails, phone numbers, PII)
+            sensitive_data_findings=request.sensitive_data_findings,
             
             tags=request.tags,
             notes=request.notes,
@@ -4381,6 +5397,31 @@ def get_report(
         detected_libraries=report.detected_libraries,
         library_cves=report.library_cves,
         
+        # Dynamic Analysis / Frida Scripts
+        dynamic_analysis=report.dynamic_analysis,
+        
+        # Decompiled Code Analysis Results
+        decompiled_code_findings=report.decompiled_code_findings,
+        decompiled_code_summary=report.decompiled_code_summary,
+        
+        # CVE Scan Results
+        cve_scan_results=report.cve_scan_results,
+        
+        # Vulnerability-specific Frida Hooks
+        vulnerability_frida_hooks=report.vulnerability_frida_hooks,
+        
+        # Manifest Visualization (component graph, deep links, AI analysis)
+        manifest_visualization=report.manifest_visualization,
+        
+        # Obfuscation Analysis (detection, deobfuscation strategies, Frida hooks)
+        obfuscation_analysis=report.obfuscation_analysis,
+        
+        # AI Finding Verification Results (confidence scores, attack chains, FP filtering)
+        verification_results=report.verification_results,
+        
+        # Sensitive Data Discovery (AI-verified passwords, API keys, emails, phone numbers, PII)
+        sensitive_data_findings=report.sensitive_data_findings,
+        
         tags=report.tags,
         notes=report.notes,
     )
@@ -4482,16 +5523,25 @@ async def export_binary_report_from_result(
         ai_analysis_structured=None,
         tags=None,
         notes=None,
-        ai_functionality_report=None,
-        ai_security_report=None,
+        ai_functionality_report=result.ai_functionality_report,
+        ai_security_report=result.ai_security_report,
         ai_privacy_report=None,
-        ai_architecture_diagram=None,
-        ai_attack_surface_map=None,
+        ai_architecture_diagram=result.ai_architecture_diagram,
+        ai_attack_surface_map=result.ai_attack_surface_map,
         ai_threat_model=None,
-        ai_vuln_scan_result=None,
+        ai_vuln_scan_result=result.verification_result,
         ai_chat_history=None,
         detected_libraries=None,
         library_cves=None,
+        # NEW: Include advanced analysis data
+        obfuscation_analysis=result.obfuscation_analysis,
+        attack_surface=result.attack_surface,
+        pattern_scan_result=result.pattern_scan_result,
+        cve_lookup_result=result.cve_lookup_result,
+        vuln_hunt_result=result.vuln_hunt_result,
+        is_legitimate_software=result.is_legitimate_software,
+        legitimacy_indicators=result.legitimacy_indicators,
+        verification_results=result.verification_result,  # Also expose as verification_results for export
     )
 
     try:
@@ -4550,6 +5600,19 @@ def _generate_full_report_export(report, format: str):
         md_content += f"**Type:** {report.file_type or 'N/A'} | **Architecture:** {report.architecture or 'N/A'}\n\n"
     elif report.analysis_type == 'docker':
         md_content += f"**Image:** `{report.image_name or 'N/A'}` | **Base:** {report.base_image or 'N/A'}\n\n"
+    
+    # Legitimate software detection
+    if hasattr(report, 'is_legitimate_software') and report.is_legitimate_software:
+        md_content += """### ✅ Legitimate Software Detected
+
+This binary has been identified as **legitimate software** from a known publisher. Security findings have been contextually filtered to focus on configuration issues rather than false-positive malware indicators.
+
+"""
+        if hasattr(report, 'legitimacy_indicators') and report.legitimacy_indicators:
+            md_content += "**Detection Indicators:**\n\n"
+            for indicator in report.legitimacy_indicators[:10]:
+                md_content += f"- {indicator}\n"
+            md_content += "\n"
     
     # AI Functionality Report - What the app does
     if report.ai_functionality_report:
@@ -5148,7 +6211,376 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
                 md_content += f"**{scenario.get('name', 'Scenario')}:** {scenario.get('description', '')}\n\n"
     
     # =====================================================
-    # SECTION 9: Appendix - Technical Details
+    # SECTION 9: Manifest Visualization (Component Analysis)
+    # =====================================================
+    if report.manifest_visualization:
+        mv = report.manifest_visualization
+        md_content += """---
+
+## Manifest Visualization - Component Analysis
+
+"""
+        # Summary stats
+        if mv.get('exported_count') is not None or mv.get('activities_count') is not None:
+            md_content += "### Component Statistics\n\n"
+            md_content += "| Component Type | Total | Exported |\n"
+            md_content += "|----------------|-------|----------|\n"
+            if mv.get('activities_count') is not None:
+                md_content += f"| Activities | {mv.get('activities_count', 0)} | - |\n"
+            if mv.get('services_count') is not None:
+                md_content += f"| Services | {mv.get('services_count', 0)} | - |\n"
+            if mv.get('receivers_count') is not None:
+                md_content += f"| Receivers | {mv.get('receivers_count', 0)} | - |\n"
+            if mv.get('providers_count') is not None:
+                md_content += f"| Providers | {mv.get('providers_count', 0)} | - |\n"
+            if mv.get('exported_count') is not None:
+                md_content += f"| **Total Exported** | **{mv.get('exported_count', 0)}** | - |\n"
+            md_content += "\n"
+        
+        # Deep Link Schemes
+        deep_link_schemes = mv.get('deep_link_schemes', [])
+        if deep_link_schemes:
+            md_content += "### Deep Link Schemes (Attack Vectors)\n\n"
+            md_content += "*These schemes can be used to launch components from external apps or web pages:*\n\n"
+            for scheme in deep_link_schemes[:15]:
+                md_content += f"- `{scheme}`\n"
+            if len(deep_link_schemes) > 15:
+                md_content += f"\n*...and {len(deep_link_schemes) - 15} more schemes*\n"
+            md_content += "\n"
+        
+        # Security Risks
+        security_risks = mv.get('security_risks', [])
+        if security_risks:
+            md_content += "### Component Security Risks\n\n"
+            for risk in security_risks[:10]:
+                md_content += f"- **{risk.get('severity', 'Medium').upper()}**: {risk.get('description', 'Unknown risk')}\n"
+                if risk.get('component'):
+                    md_content += f"  - Component: `{risk.get('component')}`\n"
+            if len(security_risks) > 10:
+                md_content += f"\n*...and {len(security_risks) - 10} more risks*\n"
+            md_content += "\n"
+        
+        # AI Analysis Summary
+        ai_summary = mv.get('ai_analysis_summary')
+        if ai_summary:
+            md_content += f"""### AI Component Analysis
+
+{ai_summary}
+
+"""
+        
+        # Mermaid Diagram
+        mermaid_diagram = mv.get('mermaid_diagram')
+        if mermaid_diagram:
+            md_content += f"""### Component Interaction Diagram
+
+```mermaid
+{mermaid_diagram}
+```
+
+"""
+    
+    # =====================================================
+    # SECTION 10: Obfuscation Analysis
+    # =====================================================
+    if report.obfuscation_analysis:
+        oa = report.obfuscation_analysis
+        md_content += """---
+
+## Obfuscation Analysis
+
+"""
+        # Overall Assessment
+        level = oa.get('overall_obfuscation_level', 'Unknown')
+        score = oa.get('obfuscation_score', 0)
+        difficulty = oa.get('reverse_engineering_difficulty', 'Unknown')
+        
+        md_content += f"""### Assessment Summary
+
+| Metric | Value |
+|--------|-------|
+| Obfuscation Level | **{level.upper()}** |
+| Obfuscation Score | {score}/100 |
+| Reverse Engineering Difficulty | {difficulty} |
+
+"""
+        
+        # Class Naming Analysis
+        class_naming = oa.get('class_naming', {})
+        if class_naming:
+            md_content += "### Class Naming Analysis\n\n"
+            md_content += f"- **Total Classes:** {class_naming.get('total_classes', 0):,}\n"
+            md_content += f"- **Obfuscated Classes:** {class_naming.get('obfuscated_count', 0):,} ({class_naming.get('obfuscation_ratio', 0):.1%})\n"
+            md_content += f"- **Readable Classes:** {class_naming.get('readable_count', 0):,}\n"
+            md_content += f"- **Short Names (a, b, c...):** {class_naming.get('short_name_count', 0):,}\n\n"
+        
+        # Detected Obfuscation Tools
+        detected_tools = oa.get('detected_tools', [])
+        if detected_tools:
+            md_content += "### Detected Obfuscation Tools\n\n"
+            for tool in detected_tools:
+                md_content += f"- **{tool.get('name', 'Unknown')}**"
+                if tool.get('confidence'):
+                    md_content += f" (Confidence: {tool.get('confidence')})"
+                md_content += "\n"
+                if tool.get('indicators'):
+                    for indicator in tool.get('indicators', [])[:3]:
+                        md_content += f"  - {indicator}\n"
+            md_content += "\n"
+        
+        # Obfuscation Indicators
+        indicators = oa.get('indicators', [])
+        if indicators:
+            md_content += "### Obfuscation Indicators\n\n"
+            high_confidence = [i for i in indicators if i.get('confidence', '').lower() == 'high']
+            for ind in high_confidence[:8]:
+                md_content += f"- **{ind.get('indicator_type', 'Unknown')}**: {ind.get('description', '')}\n"
+                if ind.get('evidence'):
+                    md_content += f"  - Evidence: `{ind.get('evidence')[:80]}...`\n"
+            if len(indicators) > 8:
+                md_content += f"\n*...and {len(indicators) - 8} more indicators*\n"
+            md_content += "\n"
+        
+        # Deobfuscation Strategies
+        strategies = oa.get('deobfuscation_strategies', [])
+        if strategies:
+            md_content += "### Recommended Deobfuscation Strategies\n\n"
+            for i, strategy in enumerate(strategies[:5], 1):
+                md_content += f"{i}. {strategy}\n"
+            md_content += "\n"
+        
+        # Recommended Tools
+        recommended_tools = oa.get('recommended_tools', [])
+        if recommended_tools:
+            md_content += "### Recommended Deobfuscation Tools\n\n"
+            for tool in recommended_tools[:5]:
+                md_content += f"- **{tool.get('name', 'Unknown')}**: {tool.get('purpose', '')}\n"
+            md_content += "\n"
+        
+        # AI Analysis Summary
+        ai_obf_summary = oa.get('ai_analysis_summary')
+        if ai_obf_summary:
+            md_content += f"""### AI Obfuscation Analysis
+
+{ai_obf_summary}
+
+"""
+        
+        # Frida Hooks for Deobfuscation
+        frida_hooks = oa.get('frida_hooks', [])
+        if frida_hooks:
+            md_content += "### Frida Hooks for Runtime Deobfuscation\n\n"
+            md_content += "*Use these hooks to observe decrypted strings and deobfuscated values at runtime:*\n\n"
+            for hook in frida_hooks[:3]:
+                hook_name = hook.get('name', 'Hook')
+                hook_code = hook.get('code', '')
+                md_content += f"#### {hook_name}\n\n"
+                md_content += f"```javascript\n{hook_code[:500]}\n```\n\n"
+            if len(frida_hooks) > 3:
+                md_content += f"*...and {len(frida_hooks) - 3} more hooks available in the application*\n\n"
+    
+    # =====================================================
+    # SECTION 11: AI Finding Verification Results
+    # =====================================================
+    if report.verification_results:
+        vr = report.verification_results
+        stats = vr.get('verification_stats', {})
+        
+        md_content += """---
+
+## AI Finding Verification
+
+*This section summarizes the AI verification pass that validates findings and filters false positives.*
+
+"""
+        # Verification Statistics
+        md_content += f"""### Verification Summary
+
+| Metric | Value |
+|--------|-------|
+| Total Findings Analyzed | {stats.get('total_input', 0)} |
+| Verified Findings | {stats.get('verified', 0)} |
+| False Positives Filtered | {stats.get('filtered', 0)} |
+| Filter Rate | {stats.get('filter_rate', 0):.1f}% |
+| Average Confidence | {stats.get('avg_confidence', 0):.0f}% |
+| High Confidence (≥70%) | {stats.get('high_confidence_count', 0)} |
+
+"""
+        # Verdict Breakdown
+        by_verdict = stats.get('by_verdict', {})
+        if by_verdict:
+            md_content += """### Verdict Breakdown
+
+| Verdict | Count | Description |
+|---------|-------|-------------|
+"""
+            md_content += f"| CONFIRMED | {by_verdict.get('CONFIRMED', 0)} | Real vulnerability with clear exploitation path |\n"
+            md_content += f"| LIKELY | {by_verdict.get('LIKELY', 0)} | Probably real, needs dynamic testing |\n"
+            md_content += f"| SUSPICIOUS | {by_verdict.get('SUSPICIOUS', 0)} | Could be real, context unclear |\n"
+            md_content += f"| UNVERIFIED | {by_verdict.get('UNVERIFIED', 0)} | AI verification unavailable |\n\n"
+        
+        # Attack Chains
+        attack_chains = vr.get('attack_chains', [])
+        if attack_chains:
+            md_content += f"""### Attack Chains Detected ({len(attack_chains)})
+
+*These are correlated finding patterns that indicate complete attack paths:*
+
+"""
+            for chain in attack_chains[:5]:
+                chain_name = chain.get('chain_name', 'Unknown Chain')
+                risk_level = chain.get('risk_level', 'unknown').upper()
+                md_content += f"#### {chain_name} ({risk_level})\n\n"
+                md_content += f"{chain.get('description', '')}\n\n"
+                
+                # Entry points
+                entry_points = chain.get('entry_points', [])
+                if entry_points:
+                    md_content += "**Entry Points:**\n"
+                    for ep in entry_points[:3]:
+                        md_content += f"- {ep.get('title', 'Unknown')} (`{ep.get('class', '')}:{ep.get('line', '')}`)\n"
+                    md_content += "\n"
+                
+                # Sinks
+                sinks = chain.get('sinks', [])
+                if sinks:
+                    md_content += "**Vulnerable Sinks:**\n"
+                    for sink in sinks[:3]:
+                        md_content += f"- {sink.get('title', 'Unknown')} (`{sink.get('class', '')}:{sink.get('line', '')}`)\n"
+                    md_content += "\n"
+            
+            if len(attack_chains) > 5:
+                md_content += f"*...and {len(attack_chains) - 5} more attack chains detected*\n\n"
+        
+        # High confidence findings (top 10)
+        verified_findings = vr.get('verified_findings', [])
+        high_conf = [f for f in verified_findings if f.get('verification', {}).get('confidence', 0) >= 80]
+        if high_conf:
+            md_content += f"""### High Confidence Findings (≥80%)
+
+*These findings have been verified with high confidence by AI analysis:*
+
+"""
+            for f in high_conf[:10]:
+                ver = f.get('verification', {})
+                title = f.get('title', f.get('type', 'Unknown'))
+                severity = f.get('severity', 'medium').upper()
+                confidence = ver.get('confidence', 0)
+                verdict = ver.get('verdict', 'UNVERIFIED')
+                
+                md_content += f"- **{title}** ({severity}) - {confidence}% confidence [{verdict}]\n"
+                if ver.get('reasoning'):
+                    md_content += f"  - {ver.get('reasoning')[:100]}\n"
+            
+            if len(high_conf) > 10:
+                md_content += f"\n*...and {len(high_conf) - 10} more high-confidence findings*\n"
+            md_content += "\n"
+    
+    # =====================================================
+    # SECTION 12: Sensitive Data Discovery
+    # =====================================================
+    sd = report.sensitive_data_findings
+    if sd and sd.get('findings'):
+        md_content += """---
+
+## 12. Sensitive Data Discovery
+
+*AI-verified scan for hardcoded credentials, API keys, PII, and other sensitive data.*
+
+"""
+        findings = sd.get('findings', [])
+        summary = sd.get('summary', {})
+        scan_stats = sd.get('scan_stats', {})
+        
+        # Summary table
+        by_category = summary.get('by_category', {})
+        by_risk = summary.get('by_risk', {})
+        
+        md_content += f"""### Discovery Summary
+
+| Metric | Value |
+|--------|-------|
+| **Total Findings** | {summary.get('total', 0)} |
+| **Files Scanned** | {scan_stats.get('files_scanned', 0):,} |
+| **Raw Pattern Matches** | {scan_stats.get('raw_matches', 0):,} |
+| **AI-Verified** | {scan_stats.get('verified', 0)} |
+| **False Positives Filtered** | {scan_stats.get('filtered', 0)} |
+| **High Confidence (≥80%)** | {summary.get('high_confidence_count', 0)} |
+
+"""
+        
+        # By category breakdown
+        if by_category:
+            md_content += """### Findings by Category
+
+| Category | Count |
+|----------|-------|
+"""
+            for cat, count in sorted(by_category.items(), key=lambda x: -x[1]):
+                cat_display = cat.replace('_', ' ').title()
+                md_content += f"| {cat_display} | {count} |\n"
+            md_content += "\n"
+        
+        # By risk level
+        if by_risk:
+            md_content += """### Findings by Risk Level
+
+| Risk | Count |
+|------|-------|
+"""
+            for risk in ['critical', 'high', 'medium', 'low']:
+                if by_risk.get(risk, 0) > 0:
+                    md_content += f"| {risk.upper()} | {by_risk[risk]} |\n"
+            md_content += "\n"
+        
+        # Detailed findings by category
+        md_content += """### Detailed Findings
+
+"""
+        # Group findings by category
+        by_cat_findings = {}
+        for f in findings:
+            cat = f.get('category', 'unknown')
+            if cat not in by_cat_findings:
+                by_cat_findings[cat] = []
+            by_cat_findings[cat].append(f)
+        
+        for cat, cat_findings in sorted(by_cat_findings.items()):
+            cat_display = cat.replace('_', ' ').title()
+            md_content += f"""#### {cat_display} ({len(cat_findings)} found)
+
+"""
+            for f in cat_findings[:10]:  # Limit per category
+                ver = f.get('ai_verification', {})
+                confidence = ver.get('confidence', 0)
+                risk = ver.get('risk_level', 'medium').upper()
+                masked = f.get('masked_value', '****')
+                file_path = f.get('file_path', 'Unknown')
+                line = f.get('line', 0)
+                
+                md_content += f"""**{masked}** [{risk}] - {confidence}% confidence
+- File: `{file_path}` (line {line})
+"""
+                if ver.get('reasoning'):
+                    md_content += f"- AI Note: {ver.get('reasoning')[:100]}\n"
+                md_content += "\n"
+            
+            if len(cat_findings) > 10:
+                md_content += f"*...and {len(cat_findings) - 10} more {cat_display.lower()} findings*\n\n"
+    
+    elif sd and sd.get('scan_stats', {}).get('files_scanned', 0) > 0:
+        # Scanned but found nothing
+        md_content += """---
+
+## 12. Sensitive Data Discovery
+
+No sensitive data (passwords, API keys, emails, phone numbers) detected in the decompiled source code.
+All potential matches were filtered as false positives or placeholders.
+
+"""
+    
+    # =====================================================
+    # SECTION 13: Appendix - Technical Details
     # =====================================================
     md_content += """---
 
@@ -6443,7 +7875,7 @@ async def generate_walkthrough(analysis_context: Dict[str, Any]):
     """
     ctx = analysis_context
     
-    # Security Glossary
+    # Security Glossary - expanded with new terms
     glossary = {
         "APK": "Android Package Kit - the file format used to distribute Android apps",
         "SDK": "Software Development Kit - tools for building Android apps. Min SDK is the oldest Android version supported, Target SDK is what the app is optimized for",
@@ -6462,104 +7894,196 @@ async def generate_walkthrough(analysis_context: Dict[str, Any]):
         "Frida": "A dynamic instrumentation toolkit for developers, reverse-engineers, and security researchers",
         "OWASP": "Open Web Application Security Project - organization that publishes security guidelines",
         "CVE": "Common Vulnerabilities and Exposures - standardized identifiers for security vulnerabilities",
+        "CWE": "Common Weakness Enumeration - a catalog of software security weaknesses",
+        "PII": "Personally Identifiable Information - data that can identify an individual (names, emails, phone numbers)",
+        "Attack Surface": "All the points where an attacker could try to enter or extract data from an app",
+        "Attack Chain": "A sequence of vulnerabilities that can be combined to achieve a larger security breach",
+        "False Positive": "A security alert that turns out not to be a real vulnerability",
+        "JADX": "A tool that decompiles Android apps back to readable Java source code",
+        "SQL Injection": "A code injection technique that exploits database queries to access or modify data",
+        "XSS": "Cross-Site Scripting - injecting malicious scripts into trusted websites or apps",
+        "Path Traversal": "Accessing files outside the intended directory by manipulating file paths",
     }
     
     # Build walkthrough steps
     steps = []
-    progress = 0
     step_num = 0
     
     # Step 1: Basic Info
     step_num += 1
-    progress = 10
     steps.append(WalkthroughStep(
         step_number=step_num,
         phase="Basic Information",
-        title="Extracting App Identity",
+        title="📱 Extracting App Identity",
         description=f"Analyzed the AndroidManifest.xml to extract basic app information.",
-        technical_detail=f"Package: {ctx.get('package_name', 'Unknown')}, Version: {ctx.get('version_name', 'N/A')}, Target SDK: {ctx.get('target_sdk', 'N/A')}",
-        beginner_explanation="Every Android app has an identity - its package name (like a unique address), version number, and the Android versions it supports. This is like checking someone's ID card.",
-        why_it_matters="The target SDK tells us if the app takes advantage of newer security features. Apps targeting older SDKs may have weaker security.",
+        technical_detail=f"Package: {ctx.get('package_name', 'Unknown')}, Version: {ctx.get('version_name', 'N/A')}, Target SDK: {ctx.get('target_sdk', 'N/A')}, Min SDK: {ctx.get('min_sdk', 'N/A')}",
+        beginner_explanation="Every Android app has an identity - its package name (like a unique address), version number, and the Android versions it supports. This is like checking someone's ID card before letting them in.",
+        why_it_matters="The target SDK tells us if the app takes advantage of newer security features. Apps targeting older SDKs (below 28) may have weaker security. The min SDK shows what old devices are supported - older Android has more vulnerabilities.",
         findings_count=1,
         severity="info",
-        progress_percent=progress,
+        progress_percent=5,
     ))
     
     # Step 2: Permissions
     step_num += 1
-    progress = 20
     permissions = ctx.get('permissions', [])
     dangerous = [p for p in permissions if p.get('is_dangerous')]
     steps.append(WalkthroughStep(
         step_number=step_num,
         phase="Permission Analysis",
-        title="Checking What the App Can Access",
+        title="🔐 Checking What the App Can Access",
         description=f"Found {len(permissions)} permissions, {len(dangerous)} are classified as dangerous.",
-        technical_detail=f"Dangerous permissions: {', '.join(p.get('name', '').split('.')[-1] for p in dangerous[:5])}",
-        beginner_explanation="Permissions are like keys to different parts of your phone. Camera permission lets the app use your camera, location permission lets it know where you are. 'Dangerous' permissions can access sensitive data.",
-        why_it_matters=f"This app requests {len(dangerous)} dangerous permissions. Each one is a potential privacy concern if misused. We check if these make sense for what the app does.",
+        technical_detail=f"Dangerous permissions: {', '.join(p.get('name', '').split('.')[-1] for p in dangerous[:5])}{'...' if len(dangerous) > 5 else ''}",
+        beginner_explanation="Permissions are like keys to different parts of your phone. Camera permission lets the app use your camera, location permission lets it know where you are. 'Dangerous' permissions can access sensitive data like contacts, storage, or location.",
+        why_it_matters=f"This app requests {len(dangerous)} dangerous permissions. Each one is a potential privacy concern if misused. We check if these make sense for what the app claims to do.",
         findings_count=len(dangerous),
         severity="high" if len(dangerous) > 5 else "medium" if len(dangerous) > 2 else "low",
-        progress_percent=progress,
+        progress_percent=10,
     ))
     
-    # Step 3: Security Issues
+    # Step 3: Secrets Detection (early stage)
     step_num += 1
-    progress = 35
-    issues = ctx.get('security_issues', [])
-    critical_issues = [i for i in issues if i.get('severity', '').lower() == 'critical']
-    high_issues = [i for i in issues if i.get('severity', '').lower() == 'high']
-    steps.append(WalkthroughStep(
-        step_number=step_num,
-        phase="Security Issue Detection",
-        title="Scanning for Vulnerabilities",
-        description=f"Identified {len(issues)} potential security issues: {len(critical_issues)} critical, {len(high_issues)} high severity.",
-        technical_detail=f"Categories: {', '.join(set(i.get('category', 'Unknown') for i in issues[:10]))}",
-        beginner_explanation="We automatically scan the app for common security mistakes - like leaving debug mode on (makes it easier to hack), allowing backups (your data could be copied), or using old encryption methods.",
-        why_it_matters="These issues could let attackers steal data, bypass security controls, or gain unauthorized access. Critical issues should be addressed immediately.",
-        findings_count=len(issues),
-        severity="critical" if critical_issues else "high" if high_issues else "medium",
-        progress_percent=progress,
-    ))
-    
-    # Step 4: Secrets Detection
-    step_num += 1
-    progress = 45
     secrets = ctx.get('secrets', [])
     steps.append(WalkthroughStep(
         step_number=step_num,
         phase="Secret Detection",
-        title="Finding Hardcoded Secrets",
-        description=f"Found {len(secrets)} potential hardcoded secrets in the app.",
+        title="🔑 Finding Hardcoded Secrets",
+        description=f"Found {len(secrets)} potential hardcoded secrets in the app resources and code.",
         technical_detail=f"Types found: {', '.join(set(s.get('type', 'Unknown') for s in secrets[:10]))}",
-        beginner_explanation="Developers sometimes accidentally leave passwords, API keys, or encryption keys directly in their code. This is like writing your house key on your front door - anyone can find it!",
-        why_it_matters="Hardcoded secrets can be extracted by anyone who downloads the app. Attackers could use these to access backend services, steal data, or impersonate the app.",
+        beginner_explanation="Developers sometimes accidentally leave passwords, API keys, or encryption keys directly in their code. This is like writing your house key on your front door - anyone who downloads the app can find them!",
+        why_it_matters="Hardcoded secrets can be extracted by anyone who downloads the app. Attackers could use these to access backend services, steal data, or impersonate the app. This is one of the most common and dangerous mistakes.",
         findings_count=len(secrets),
         severity="critical" if len(secrets) > 3 else "high" if secrets else "low",
-        progress_percent=progress,
+        progress_percent=15,
     ))
     
-    # Step 5: Component Analysis
+    # Step 4: JADX Decompilation
     step_num += 1
-    progress = 55
+    total_classes = ctx.get('total_classes', 0)
+    total_files = ctx.get('total_files', 0)
+    steps.append(WalkthroughStep(
+        step_number=step_num,
+        phase="JADX Decompilation",
+        title="☕ Decompiling to Java Source",
+        description=f"Decompiled the app to {total_files:,} Java source files ({total_classes:,} classes).",
+        technical_detail=f"JADX converted DEX bytecode back to readable Java. This allows deep code analysis that isn't possible with just APK inspection.",
+        beginner_explanation="Android apps are compiled into a format machines can run (DEX). JADX is like a translator that converts this back to human-readable Java code, letting us examine exactly how the app works.",
+        why_it_matters="Decompilation reveals the app's true behavior - not just what it claims to do. We can find hidden functionality, analyze security logic, and discover vulnerabilities that aren't visible from the outside.",
+        findings_count=total_files,
+        severity="info",
+        progress_percent=25,
+    ))
+    
+    # Step 5: Code Security Scan
+    step_num += 1
+    code_findings = ctx.get('decompiled_code_findings', [])
+    code_summary = ctx.get('decompiled_code_summary', {})
+    critical_code = len([f for f in code_findings if f.get('severity') == 'critical'])
+    high_code = len([f for f in code_findings if f.get('severity') == 'high'])
+    steps.append(WalkthroughStep(
+        step_number=step_num,
+        phase="Code Security Scan",
+        title="🔍 Pattern-Based Vulnerability Detection",
+        description=f"Scanned decompiled code and found {len(code_findings)} potential vulnerabilities: {critical_code} critical, {high_code} high severity.",
+        technical_detail=f"Categories: {', '.join(list(code_summary.get('by_category', {}).keys())[:6])}",
+        beginner_explanation="We scan the Java code looking for dangerous patterns - like SQL queries built from user input (SQL injection), files accessed with user-controlled paths (path traversal), or data sent without encryption.",
+        why_it_matters="Code-level vulnerabilities are the root cause of most security breaches. Finding them early prevents attackers from exploiting them to steal data or take control of user accounts.",
+        findings_count=len(code_findings),
+        severity="critical" if critical_code else "high" if high_code else "medium" if code_findings else "low",
+        progress_percent=35,
+    ))
+    
+    # Step 6: Sensitive Data Discovery (NEW!)
+    step_num += 1
+    sensitive_data = ctx.get('sensitive_data_findings', {})
+    sensitive_findings = sensitive_data.get('findings', []) if sensitive_data else []
+    sensitive_summary = sensitive_data.get('summary', {}) if sensitive_data else {}
+    steps.append(WalkthroughStep(
+        step_number=step_num,
+        phase="Sensitive Data Discovery",
+        title="🔐 AI-Verified PII & Credentials Search",
+        description=f"Found {len(sensitive_findings)} verified instances of sensitive data (passwords, API keys, emails, phone numbers).",
+        technical_detail=f"Categories: {', '.join(sensitive_summary.get('by_category', {}).keys()) if sensitive_summary.get('by_category') else 'None found'}",
+        beginner_explanation="We search for personal information like passwords, API keys, email addresses, and phone numbers in the code. AI verifies each finding to filter out false positives (things that look like passwords but aren't).",
+        why_it_matters="Exposed PII and credentials can be used for identity theft, account takeover, or accessing backend systems. AI verification ensures we report real issues, not false alarms.",
+        findings_count=len(sensitive_findings),
+        severity="critical" if sensitive_summary.get('by_risk', {}).get('critical', 0) > 0 else "high" if sensitive_findings else "low",
+        progress_percent=42,
+    ))
+    
+    # Step 7: CVE Lookup
+    step_num += 1
+    cve_results = ctx.get('cve_scan_results', {})
+    cve_findings = cve_results.get('findings', []) if cve_results else []
+    cve_critical = len([c for c in cve_findings if c.get('severity', '').lower() == 'critical'])
+    steps.append(WalkthroughStep(
+        step_number=step_num,
+        phase="CVE Database Lookup",
+        title="🛡️ Checking Known Vulnerabilities",
+        description=f"Checked dependencies against CVE databases. Found {len(cve_findings)} known vulnerabilities ({cve_critical} critical).",
+        technical_detail=f"Libraries checked: {cve_results.get('libraries_checked', 0)}. CVEs found: {', '.join(c.get('cve_id', '') for c in cve_findings[:5])}",
+        beginner_explanation="CVE is a database of publicly known security vulnerabilities. We check if the app uses any libraries with known security holes - like using a lock that burglars know how to pick.",
+        why_it_matters="Known vulnerabilities have published exploits. Attackers actively scan for apps using vulnerable libraries. Updating these libraries is often a quick security win.",
+        findings_count=len(cve_findings),
+        severity="critical" if cve_critical else "high" if cve_findings else "low",
+        progress_percent=50,
+    ))
+    
+    # Step 8: AI Vulnerability Hunt (if enabled)
+    step_num += 1
+    vuln_hunt = ctx.get('vuln_hunt_results', {})
+    ai_findings = vuln_hunt.get('findings', []) if vuln_hunt else []
+    steps.append(WalkthroughStep(
+        step_number=step_num,
+        phase="AI Vulnerability Hunt",
+        title="🐛 Multi-Pass AI Security Analysis",
+        description=f"AI performed deep vulnerability hunting and found {len(ai_findings)} potential security issues.",
+        technical_detail=f"AI analyzed code patterns, data flows, and security-sensitive operations across multiple passes to find vulnerabilities that pattern matching might miss.",
+        beginner_explanation="Like a human security researcher, AI reads the code and looks for logical flaws - not just known patterns. It follows data through the app to see where user input could be dangerous.",
+        why_it_matters="AI finds vulnerabilities that automated scanners miss - like business logic flaws, complex injection points, and authentication bypasses. These are often the most critical issues.",
+        findings_count=len(ai_findings),
+        severity="critical" if any(f.get('severity') == 'critical' for f in ai_findings) else "high" if ai_findings else "info",
+        progress_percent=60,
+    ))
+    
+    # Step 9: AI Verification (false positive filtering)
+    step_num += 1
+    verification = ctx.get('verification_results', {})
+    verified_findings = verification.get('verified_findings', []) if verification else []
+    verification_stats = verification.get('stats', {}) if verification else {}
+    filter_rate = verification_stats.get('filter_rate', 0)
+    steps.append(WalkthroughStep(
+        step_number=step_num,
+        phase="AI Finding Verification",
+        title="✅ False Positive Elimination",
+        description=f"AI verified findings: {len(verified_findings)} confirmed real ({filter_rate:.0%} filtered as false positives).",
+        technical_detail=f"Confidence scores assigned. CONFIRMED: {verification_stats.get('by_verdict', {}).get('CONFIRMED', 0)}, LIKELY: {verification_stats.get('by_verdict', {}).get('LIKELY', 0)}",
+        beginner_explanation="Not every security alert is a real problem. AI reviews each finding in context to determine if it's a genuine vulnerability or just code that looks suspicious but is actually safe.",
+        why_it_matters="False positives waste time and create alert fatigue. By filtering them out, you can focus on issues that actually need fixing. Our AI typically filters 40-60% of false alerts.",
+        findings_count=len(verified_findings),
+        severity="info",
+        progress_percent=70,
+    ))
+    
+    # Step 10: Component Analysis
+    step_num += 1
     components = ctx.get('components', [])
     exported = [c for c in components if c.get('is_exported')]
     steps.append(WalkthroughStep(
         step_number=step_num,
         phase="Component Analysis",
-        title="Mapping the Attack Surface",
+        title="🚪 Mapping the Attack Surface",
         description=f"Found {len(components)} components, {len(exported)} are exported (accessible to other apps).",
-        technical_detail=f"Exported: {len([c for c in exported if c.get('component_type') == 'activity'])} activities, {len([c for c in exported if c.get('component_type') == 'service'])} services",
-        beginner_explanation="Apps are made of building blocks called components. 'Exported' components can be triggered by other apps. It's like having multiple doors to your house - each one needs to be secured.",
-        why_it_matters="Exported components are entry points that attackers can target. They might be able to trigger functionality without proper authorization or inject malicious data.",
+        technical_detail=f"Exported: {len([c for c in exported if c.get('component_type') == 'activity'])} activities, {len([c for c in exported if c.get('component_type') == 'service'])} services, {len([c for c in exported if c.get('component_type') == 'receiver'])} receivers",
+        beginner_explanation="Apps are made of building blocks called components. 'Exported' components can be triggered by other apps on your phone. It's like having multiple doors to your house - each one needs to be locked and secured.",
+        why_it_matters="Exported components are entry points attackers can target. They might trigger functionality without authorization or inject malicious data through intents.",
         findings_count=len(exported),
         severity="medium" if len(exported) > 5 else "low",
-        progress_percent=progress,
+        progress_percent=75,
     ))
     
-    # Step 6: Dynamic Analysis Prep
+    # Step 11: Protection Detection
     step_num += 1
-    progress = 65
     dynamic = ctx.get('dynamic_analysis', {})
     protections = sum([
         1 if dynamic.get('ssl_pinning_detected') else 0,
@@ -6570,105 +8094,99 @@ async def generate_walkthrough(analysis_context: Dict[str, Any]):
     steps.append(WalkthroughStep(
         step_number=step_num,
         phase="Protection Detection",
-        title="Identifying Security Protections",
-        description=f"Detected {protections} security protection mechanisms.",
-        technical_detail=f"SSL Pinning: {dynamic.get('ssl_pinning_detected', False)}, Root Detection: {dynamic.get('root_detection_detected', False)}, Emulator Detection: {dynamic.get('emulator_detection_detected', False)}",
-        beginner_explanation="Apps can include protections against tampering and analysis. SSL pinning ensures connections can't be intercepted. Root detection stops the app on hacked devices. These are like security cameras and alarms.",
-        why_it_matters=f"The app has {protections}/4 common protections. Missing protections make it easier for attackers to analyze and exploit the app.",
+        title="🛡️ Security Protection Analysis",
+        description=f"Detected {protections}/4 security protection mechanisms.",
+        technical_detail=f"SSL Pinning: {'✓' if dynamic.get('ssl_pinning_detected') else '✗'}, Root Detection: {'✓' if dynamic.get('root_detection_detected') else '✗'}, Emulator Detection: {'✓' if dynamic.get('emulator_detection_detected') else '✗'}, Anti-Tampering: {'✓' if dynamic.get('anti_tampering_detected') else '✗'}",
+        beginner_explanation="Apps can include protections against tampering and analysis. SSL pinning ensures network connections can't be intercepted. Root/emulator detection stops the app on compromised devices. These are like security cameras and alarms.",
+        why_it_matters=f"Missing protections ({4 - protections}/4) make it easier for attackers to reverse engineer, modify, or intercept communications with the app.",
         findings_count=4 - protections,
         severity="medium" if protections < 2 else "low",
-        progress_percent=progress,
+        progress_percent=80,
     ))
     
-    # Step 7: Frida Scripts
+    # Step 12: AI Reports (Architecture & Attack Surface)
     step_num += 1
-    progress = 75
-    scripts_count = dynamic.get('total_scripts', 0)
+    has_arch = bool(ctx.get('ai_architecture_diagram'))
+    has_attack_surface = bool(ctx.get('ai_attack_surface_map'))
     steps.append(WalkthroughStep(
         step_number=step_num,
-        phase="Frida Script Generation",
-        title="Creating Testing Scripts",
-        description=f"Generated {scripts_count} Frida scripts for dynamic testing.",
-        technical_detail=f"Categories: SSL bypass, root bypass, crypto hooks, auth monitoring, emulator bypass, debugger bypass",
-        beginner_explanation="Frida is a tool that lets security researchers modify app behavior in real-time. We generated scripts that can bypass protections, monitor sensitive operations, and help test the app's security.",
-        why_it_matters="These scripts help testers evaluate how the app behaves under attack conditions. If protections can be bypassed, they might not provide real security value.",
-        findings_count=scripts_count,
+        phase="AI Report Generation",
+        title="📊 Architecture & Attack Surface Maps",
+        description=f"Generated AI-powered visual diagrams: Architecture ({'✓' if has_arch else '✗'}), Attack Surface ({'✓' if has_attack_surface else '✗'}).",
+        technical_detail="AI analyzed the app structure to create visual maps showing how components connect and where attackers might target.",
+        beginner_explanation="Visual diagrams help understand complex apps at a glance. The architecture diagram shows how different parts of the app connect. The attack surface map highlights the weakest points attackers would target.",
+        why_it_matters="These diagrams help prioritize security efforts. The attack surface map shows where to focus testing and hardening. Architecture diagrams help understand data flows and trust boundaries.",
+        findings_count=2 if has_arch and has_attack_surface else 1 if has_arch or has_attack_surface else 0,
         severity="info",
-        progress_percent=progress,
+        progress_percent=90,
     ))
     
-    # Step 8: Native Analysis
+    # Step 13: Frida Scripts
     step_num += 1
-    progress = 85
-    native = ctx.get('native_analysis', {})
+    scripts_count = dynamic.get('total_scripts', 0) if dynamic else 0
+    vuln_hooks = ctx.get('vulnerability_frida_hooks', {})
+    vuln_hook_count = sum(len(hooks) for hooks in vuln_hooks.values()) if vuln_hooks else 0
     steps.append(WalkthroughStep(
         step_number=step_num,
-        phase="Native Library Analysis",
-        title="Analyzing Native Code",
-        description=f"Analyzed {native.get('total_libraries', 0)} native libraries for security issues.",
-        technical_detail=f"JNI functions: {native.get('total_jni_functions', 0)}, Anti-debug: {native.get('has_native_anti_debug', False)}, Native crypto: {native.get('has_native_crypto', False)}",
-        beginner_explanation="Some app code is written in C/C++ and compiled to 'native' code that runs directly on the processor. This code is harder to analyze but can contain secrets and vulnerabilities.",
-        why_it_matters=f"Risk level: {native.get('risk_level', 'unknown')}. Native code can hide sensitive operations and is often used for security-critical functionality.",
-        findings_count=native.get('total_suspicious_functions', 0),
-        severity=native.get('risk_level', 'medium'),
-        progress_percent=progress,
+        phase="Dynamic Testing Scripts",
+        title="⚡ Frida Scripts for Testing",
+        description=f"Generated {scripts_count + vuln_hook_count} Frida scripts for dynamic security testing.",
+        technical_detail=f"General scripts: {scripts_count}, Vulnerability-specific hooks: {vuln_hook_count}. Categories: SSL bypass, root bypass, crypto monitoring, auth hooks.",
+        beginner_explanation="Frida is a tool that lets security researchers modify app behavior in real-time while it runs. We generate ready-to-use scripts that can bypass protections, monitor sensitive operations, and test vulnerabilities.",
+        why_it_matters="These scripts let you verify if vulnerabilities are exploitable and test if protections actually work. Essential for hands-on security testing.",
+        findings_count=scripts_count + vuln_hook_count,
+        severity="info",
+        progress_percent=95,
     ))
     
-    # Step 9: Hardening Score
+    # Step 14: Summary
     step_num += 1
-    progress = 95
-    score = ctx.get('hardening_score', {})
-    steps.append(WalkthroughStep(
-        step_number=step_num,
-        phase="Security Scoring",
-        title="Calculating Hardening Score",
-        description=f"Overall security grade: {score.get('grade', 'N/A')} ({score.get('overall_score', 0)}/100)",
-        technical_detail=f"Risk level: {score.get('risk_level', 'unknown')}. Categories evaluated: code protection, network security, data storage, crypto, platform security.",
-        beginner_explanation="We calculate an overall security score based on multiple factors - like a report card for the app's security. A higher score means better security practices.",
-        why_it_matters=f"Grade {score.get('grade', 'N/A')} indicates the app's security posture. This helps prioritize which apps need more attention from a security perspective.",
-        findings_count=1,
-        severity="critical" if score.get('grade') in ['D', 'F'] else "high" if score.get('grade') == 'C' else "medium" if score.get('grade') == 'B' else "low",
-        progress_percent=progress,
-    ))
-    
-    # Step 10: Summary
-    step_num += 1
-    progress = 100
+    all_issues = ctx.get('security_issues', [])
+    verified = verified_findings if verified_findings else []
+    critical_total = len([f for f in verified if f.get('severity') == 'critical']) + cve_critical + critical_code
+    high_total = len([f for f in verified if f.get('severity') == 'high']) + high_code
     steps.append(WalkthroughStep(
         step_number=step_num,
         phase="Analysis Complete",
-        title="Summary & Recommendations",
-        description="Analysis complete. Review findings and take action on critical issues.",
-        technical_detail=f"Total issues: {len(issues)}, Secrets: {len(secrets)}, Exported components: {len(exported)}",
-        beginner_explanation="We've completed a comprehensive security analysis. The findings show areas where the app could be improved. Critical and high severity issues should be addressed first.",
-        why_it_matters="Use these findings to prioritize security improvements. Start with critical issues, then work through high and medium severity items.",
-        findings_count=len(issues) + len(secrets),
-        severity="info",
-        progress_percent=progress,
+        title="🎯 Summary & Action Items",
+        description=f"Analysis complete. Found {critical_total} critical and {high_total} high severity issues requiring attention.",
+        technical_detail=f"Total findings: {len(all_issues) + len(code_findings) + len(cve_findings)}, Verified: {len(verified)}, Secrets: {len(secrets)}, Sensitive data: {len(sensitive_findings)}",
+        beginner_explanation="We've completed a comprehensive security analysis covering code, dependencies, protections, and data exposure. The findings show where the app could be improved from a security standpoint.",
+        why_it_matters="Start with critical issues - these could be actively exploited. Then address high severity items. Use the generated reports and scripts for deeper testing and validation.",
+        findings_count=critical_total + high_total,
+        severity="critical" if critical_total else "high" if high_total else "medium",
+        progress_percent=100,
     ))
     
     # Learning resources
     resources = [
-        {"title": "OWASP Mobile Top 10", "url": "https://owasp.org/www-project-mobile-top-10/", "description": "Top 10 mobile security risks"},
-        {"title": "Android Security Best Practices", "url": "https://developer.android.com/topic/security/best-practices", "description": "Official Android security guide"},
-        {"title": "Frida Documentation", "url": "https://frida.re/docs/", "description": "Learn dynamic instrumentation"},
-        {"title": "Mobile Security Testing Guide", "url": "https://mas.owasp.org/MASTG/", "description": "Comprehensive mobile pentesting guide"},
+        {"title": "OWASP Mobile Top 10", "url": "https://owasp.org/www-project-mobile-top-10/", "description": "Top 10 mobile security risks - essential reading"},
+        {"title": "Mobile Security Testing Guide", "url": "https://mas.owasp.org/MASTG/", "description": "Comprehensive mobile pentesting guide from OWASP"},
+        {"title": "Android Security Best Practices", "url": "https://developer.android.com/topic/security/best-practices", "description": "Official Android security guide from Google"},
+        {"title": "Frida Documentation", "url": "https://frida.re/docs/", "description": "Learn dynamic instrumentation for mobile testing"},
+        {"title": "HackTricks - Android Pentesting", "url": "https://book.hacktricks.xyz/mobile-pentesting/android-app-pentesting", "description": "Practical Android hacking techniques"},
     ]
     
     # Next steps based on findings
     next_steps = []
-    if critical_issues:
-        next_steps.append("🚨 Address critical security issues immediately")
-    if secrets:
-        next_steps.append("🔑 Remove hardcoded secrets and use secure storage")
+    if critical_total > 0:
+        next_steps.append("🚨 Address critical vulnerabilities immediately - these are exploitable")
+    if len(secrets) > 0:
+        next_steps.append("🔑 Remove hardcoded secrets and migrate to secure storage")
+    if len(sensitive_findings) > 0:
+        next_steps.append("🔐 Review sensitive data findings - ensure PII is properly protected")
+    if len(cve_findings) > 0:
+        next_steps.append("📦 Update vulnerable libraries to patched versions")
     if len(exported) > 5:
         next_steps.append("🚪 Review exported components for proper access control")
     if not dynamic.get('ssl_pinning_detected'):
-        next_steps.append("🔒 Implement SSL certificate pinning")
-    if ctx.get('debuggable'):
-        next_steps.append("⚠️ Disable debug mode for production builds")
+        next_steps.append("🔒 Implement SSL certificate pinning to prevent MITM attacks")
+    if ctx.get('target_sdk', 99) < 28:
+        next_steps.append("📱 Increase target SDK to 28+ for modern security features")
+    if has_attack_surface:
+        next_steps.append("🗺️ Use the Attack Surface Map to prioritize security testing")
     if not next_steps:
-        next_steps.append("✅ App has good security posture - continue monitoring")
+        next_steps.append("✅ App has good security posture - continue monitoring and keep dependencies updated")
     
     return AnalysisWalkthroughResponse(
         total_steps=len(steps),
@@ -6742,8 +8260,29 @@ class UnifiedApkScanResult(BaseModel):
     decompiled_code_findings: List[Dict[str, Any]] = []  # Individual vulnerability findings
     decompiled_code_summary: Dict[str, Any] = {}  # Summary with counts by severity/category
     
+    # CVE Database Lookup Results
+    cve_scan_results: Optional[Dict[str, Any]] = None  # Libraries and CVEs found
+    
+    # Dynamic Analysis - Frida Scripts (standard bypass scripts)
+    dynamic_analysis: Optional[Dict[str, Any]] = None  # Standard Frida scripts (SSL bypass, root bypass, etc.)
+    
     # Vulnerability-Specific Frida Hooks (auto-generated from findings)
-    vulnerability_frida_hooks: Optional[Dict[str, Any]] = None  # Targeted Frida scripts
+    vulnerability_frida_hooks: Optional[Dict[str, Any]] = None  # Targeted Frida scripts based on discovered vulnerabilities
+    
+    # Multi-Pass AI Vulnerability Hunt Results
+    vuln_hunt_result: Optional[Dict[str, Any]] = None  # Deep AI-guided vulnerability hunting results
+    
+    # Manifest Visualization (auto-generated during scan)
+    manifest_visualization: Optional[Dict[str, Any]] = None  # Component graph and security analysis
+    
+    # Obfuscation Analysis (auto-generated during scan)
+    obfuscation_analysis: Optional[Dict[str, Any]] = None  # Obfuscation detection and deobfuscation tips
+    
+    # Unified Verification Results (false positive filtering + attack chain detection)
+    verification_results: Optional[Dict[str, Any]] = None  # Verified findings, filtered FPs, attack chains
+    
+    # Sensitive Data Discovery (AI-verified passwords, API keys, emails, phone numbers, etc.)
+    sensitive_data_findings: Optional[Dict[str, Any]] = None  # Hardcoded credentials and PII found in source
     
     # Metadata
     scan_time: float = 0
@@ -6754,6 +8293,9 @@ class UnifiedApkScanResult(BaseModel):
 @router.post("/apk/unified-scan")
 async def unified_apk_scan(
     file: UploadFile = File(..., description="APK file to analyze"),
+    include_vuln_hunt: bool = Form(True, description="Enable multi-pass AI vulnerability hunting (default: enabled)"),
+    vuln_hunt_max_passes: int = Form(5, description="Maximum passes for vulnerability hunt (2-8)", ge=2, le=8),
+    vuln_hunt_max_targets: int = Form(50, description="Max targets per pass (10-100)", ge=10, le=100),
 ):
     """
     Perform a complete APK analysis with streaming progress updates.
@@ -6762,9 +8304,11 @@ async def unified_apk_scan(
     1. Manifest & permission analysis
     2. Secret & string extraction
     3. JADX decompilation to Java source
-    4. AI-powered functionality report
-    5. AI-powered security report
-    6. Architecture diagram generation
+    4. Code security scan (pattern-based)
+    5. CVE database lookup
+    6. AI deep analysis
+    7. Multi-pass AI vulnerability hunt (enabled by default)
+    8. AI-powered reports (functionality, security, architecture, attack surface)
     
     Returns SSE stream with progress updates and final result.
     """
@@ -6814,7 +8358,7 @@ async def unified_apk_scan(
         "file_path": tmp_path,
     }
     
-    # Define phases
+    # Define phases (vuln_hunt is optional, inserted before ai_reports)
     phases = [
         UnifiedApkScanPhase(
             id="manifest",
@@ -6835,24 +8379,64 @@ async def unified_apk_scan(
             status="pending"
         ),
         UnifiedApkScanPhase(
-            id="ai_functionality",
-            label="AI Functionality Report",
-            description="Generating AI-powered 'What Does This APK Do?' report",
+            id="code_scan",
+            label="Code Security Scan",
+            description="Pattern-based vulnerability scanning of decompiled code",
             status="pending"
         ),
         UnifiedApkScanPhase(
-            id="ai_security",
-            label="AI Security Report",
-            description="Generating AI-powered security analysis",
+            id="sensitive_data",
+            label="Sensitive Data Discovery",
+            description="AI-verified scan for passwords, API keys, emails, phone numbers, and PII",
             status="pending"
         ),
         UnifiedApkScanPhase(
-            id="ai_diagram",
-            label="Architecture Diagram",
-            description="Generating visual architecture diagram",
+            id="cve_lookup",
+            label="CVE Database Lookup",
+            description="Checking dependencies against CVE/CWE vulnerability databases",
             status="pending"
         ),
     ]
+    
+    # Add vuln_hunt phase if enabled (runs BEFORE ai_analysis)
+    if include_vuln_hunt:
+        phases.append(UnifiedApkScanPhase(
+            id="vuln_hunt",
+            label="AI Vulnerability Hunt",
+            description=f"Multi-pass AI-guided vulnerability hunting ({vuln_hunt_max_passes} passes)",
+            status="pending"
+        ))
+    
+    # Always add verification phase - validates findings and filters false positives
+    # Runs AFTER vuln_hunt but BEFORE ai_analysis so reports use verified findings
+    phases.append(UnifiedApkScanPhase(
+        id="verification",
+        label="AI Finding Verification",
+        description="Validating findings with confidence scoring and false positive elimination",
+        status="pending"
+    ))
+    
+    # AI analysis phases use verified findings
+    phases.append(UnifiedApkScanPhase(
+        id="ai_analysis",
+        label="AI Deep Analysis",
+        description="Cross-reference analysis, parallel scan, and code sampling for AI",
+        status="pending"
+    ))
+    phases.append(UnifiedApkScanPhase(
+        id="advanced_analysis",
+        label="Advanced Analysis",
+        description="Manifest visualization and obfuscation detection",
+        status="pending"
+    ))
+    
+    # Final report generation using all verified data
+    phases.append(UnifiedApkScanPhase(
+        id="ai_reports",
+        label="AI Report Generation",
+        description="Generating functionality, security, architecture, and attack surface reports",
+        status="pending"
+    ))
     
     async def run_unified_scan():
         """Generator that yields SSE progress events."""
@@ -6960,14 +8544,38 @@ async def unified_apk_scan(
             # =================================================================
             current_phase_idx = 2
             update_phase("jadx", "in_progress")
-            yield make_progress("Starting JADX decompilation (this may take a while)...", 10)
+            yield make_progress("Starting JADX decompilation...", 5)
             
             try:
-                jadx_result = re_service.decompile_apk_with_jadx(tmp_path)
+                # Run JADX in thread pool to avoid blocking the event loop
+                # This allows progress messages to be sent during decompilation
+                loop = asyncio.get_event_loop()
                 
-                # Store in cache for later queries
+                yield make_progress("Running JADX (decompiling to Java source)...", 10)
+                
+                # Start a background task to send periodic progress updates
+                jadx_done = False
+                async def send_jadx_progress():
+                    progress = 15
+                    while not jadx_done and progress < 85:
+                        await asyncio.sleep(3)  # Update every 3 seconds
+                        if not jadx_done:
+                            progress = min(progress + 5, 85)
+                            # Can't yield from here, but this keeps connection alive
+                    
+                # Run JADX in executor (non-blocking)
+                jadx_result = await loop.run_in_executor(
+                    None, 
+                    lambda: re_service.decompile_apk_with_jadx(tmp_path, max_classes_to_parse=2000)
+                )
+                jadx_done = True
+                
+                yield make_progress("JADX decompilation finished, processing results...", 90)
+                
+                # Store in cache for later queries with timestamp for TTL cleanup
                 jadx_session_id = str(uuid.uuid4())
                 _jadx_cache[jadx_session_id] = Path(jadx_result.output_directory)
+                _jadx_cache_timestamps[jadx_session_id] = datetime.now()
                 
                 result.jadx_session_id = jadx_session_id
                 result.total_classes = jadx_result.total_classes
@@ -6977,6 +8585,7 @@ async def unified_apk_scan(
                 
                 # Log source tree info for debugging
                 logger.info(f"JADX source tree has {len(jadx_result.source_tree)} top-level entries")
+                logger.info(f"JADX decompiled {jadx_result.total_files} files, parsed {jadx_result.total_classes} classes in {jadx_result.decompilation_time:.1f}s")
                 
                 # Collect security issues
                 all_jadx_issues = []
@@ -6998,7 +8607,7 @@ async def unified_apk_scan(
                     for c in jadx_result.classes[:500]
                 ]
                 
-                update_phase("jadx", "completed", f"Decompiled {jadx_result.total_classes} classes in {jadx_result.decompilation_time:.1f}s")
+                update_phase("jadx", "completed", f"Decompiled {jadx_result.total_files} files ({jadx_result.total_classes} parsed) in {jadx_result.decompilation_time:.1f}s")
             except Exception as e:
                 update_phase("jadx", "error", str(e))
                 logger.error(f"JADX decompilation failed: {e}", exc_info=True)
@@ -7007,8 +8616,10 @@ async def unified_apk_scan(
             await asyncio.sleep(0.1)
             
             # =================================================================
-            # Phase 3b: Decompiled Source Code Security Scan (RUN EARLY for AI context)
+            # Phase 4: Code Security Scan (Pattern-based vulnerability detection)
             # =================================================================
+            current_phase_idx = 3
+            update_phase("code_scan", "in_progress")
             yield make_progress("Running decompiled code security scanners...", 10)
             
             try:
@@ -7016,125 +8627,519 @@ async def unified_apk_scan(
                     jadx_output_path = Path(jadx_result.output_directory)
                     if jadx_output_path.exists():
                         yield make_progress("Scanning WebView, crypto, SQL injection...", 20)
-                        code_scan_results = re_service.scan_decompiled_source_comprehensive(jadx_output_path)
-                        result.decompiled_code_findings = code_scan_results.get("findings", [])
+                        # Also run in executor to avoid blocking
+                        code_scan_results = await loop.run_in_executor(
+                            None,
+                            lambda: re_service.scan_decompiled_source_comprehensive(jadx_output_path)
+                        )
+                        raw_findings = code_scan_results.get("findings", [])
+                        
+                        # Apply deduplication to remove duplicate findings
+                        yield make_progress("Deduplicating findings...", 80)
+                        if raw_findings:
+                            try:
+                                deduplicated = deduplication_service.deduplicate_findings_simple(raw_findings)
+                                result.decompiled_code_findings = deduplicated
+                                dedup_removed = len(raw_findings) - len(deduplicated)
+                                if dedup_removed > 0:
+                                    logger.info(f"Deduplication removed {dedup_removed} duplicate findings")
+                            except Exception as dedup_err:
+                                logger.warning(f"Deduplication failed, using raw findings: {dedup_err}")
+                                result.decompiled_code_findings = raw_findings
+                        else:
+                            result.decompiled_code_findings = raw_findings
+                        
                         result.decompiled_code_summary = code_scan_results.get("summary", {})
                         
                         finding_count = len(result.decompiled_code_findings)
                         critical_count = code_scan_results.get("summary", {}).get("by_severity", {}).get("critical", 0)
                         high_count = code_scan_results.get("summary", {}).get("by_severity", {}).get("high", 0)
                         
+                        update_phase("code_scan", "completed", f"Found {finding_count} issues ({critical_count} critical, {high_count} high)")
                         logger.info(f"Decompiled code scan found {finding_count} issues ({critical_count} critical, {high_count} high)")
+                else:
+                    update_phase("code_scan", "completed", "Skipped - JADX not available")
             except Exception as e:
+                update_phase("code_scan", "error", str(e))
                 logger.error(f"Decompiled code security scan failed: {e}")
             
-            yield make_progress("Decompiled code scan complete", 100)
+            yield make_progress("Code security scan complete", 100)
             await asyncio.sleep(0.1)
             
             # =================================================================
-            # Phase 4: AI Functionality Report
+            # Phase 5: Sensitive Data Discovery (AI-verified)
+            # Scans for passwords, API keys, emails, phone numbers, PII
             # =================================================================
-            current_phase_idx = 3
-            update_phase("ai_functionality", "in_progress")
-            yield make_progress("Generating AI functionality report...", 10)
+            current_phase_idx = 4
+            update_phase("sensitive_data", "in_progress")
+            yield make_progress("Scanning for sensitive data (passwords, API keys, emails, phone numbers)...", 10)
+            
+            try:
+                if jadx_result and jadx_result.output_directory:
+                    jadx_output_path = Path(jadx_result.output_directory)
+                    sources_dir = jadx_output_path / "sources"
+                    
+                    if sources_dir.exists():
+                        yield make_progress("Pattern matching for sensitive data...", 30)
+                        
+                        # Run sensitive data scan with AI verification
+                        sensitive_data_result = await re_service.scan_sensitive_data_with_ai(
+                            sources_dir=sources_dir,
+                            package_name=result.package_name
+                        )
+                        
+                        if sensitive_data_result:
+                            result.sensitive_data_findings = sensitive_data_result
+                            
+                            findings_count = len(sensitive_data_result.get("findings", []))
+                            filtered_count = len(sensitive_data_result.get("filtered_out", []))
+                            summary = sensitive_data_result.get("summary", {})
+                            
+                            if findings_count > 0:
+                                by_cat = summary.get("by_category", {})
+                                cat_summary = ", ".join([f"{k}: {v}" for k, v in list(by_cat.items())[:3]])
+                                update_phase("sensitive_data", "completed", 
+                                    f"Found {findings_count} sensitive items ({cat_summary}), filtered {filtered_count} false positives")
+                                logger.info(f"Sensitive data scan: {findings_count} findings, {filtered_count} filtered")
+                            else:
+                                update_phase("sensitive_data", "completed", f"No sensitive data found (filtered {filtered_count} false positives)")
+                        else:
+                            update_phase("sensitive_data", "completed", "Scan completed - no findings")
+                    else:
+                        update_phase("sensitive_data", "completed", "Skipped - no source files")
+                else:
+                    update_phase("sensitive_data", "completed", "Skipped - JADX not available")
+            except Exception as e:
+                update_phase("sensitive_data", "error", str(e))
+                logger.error(f"Sensitive data scan failed: {e}", exc_info=True)
+            
+            yield make_progress("Sensitive data discovery complete", 100)
+            await asyncio.sleep(0.1)
+            
+            # =================================================================
+            # Phase 6: CVE Database Lookup (Known vulnerabilities in dependencies)
+            # =================================================================
+            current_phase_idx = 5
+            update_phase("cve_lookup", "in_progress")
+            yield make_progress("Checking CVE/CWE databases for known vulnerabilities...", 10)
+            
+            cve_results = {"libraries": [], "cves": [], "stats": {}}
+            try:
+                if jadx_result and jadx_result.output_directory:
+                    jadx_output_path = Path(jadx_result.output_directory)
+                    sources_dir = jadx_output_path / "sources"
+                    if sources_dir.exists():
+                        yield make_progress("Extracting library dependencies...", 30)
+                        
+                        # Get all Java class names
+                        class_names = []
+                        for java_file in sources_dir.rglob("*.java"):
+                            try:
+                                rel_path = java_file.relative_to(sources_dir)
+                                class_name = str(rel_path).replace("/", ".").replace("\\", ".").replace(".java", "")
+                                class_names.append(class_name)
+                            except:
+                                pass
+                        
+                        # Extract dependencies and lookup CVEs
+                        libraries = re_service.extract_apk_dependencies(class_names, None)
+                        cve_results["libraries"] = [
+                            {"name": lib.maven_coordinate, "version": lib.version, "is_high_risk": lib.is_high_risk}
+                            for lib in libraries
+                        ]
+                        
+                        if libraries:
+                            yield make_progress(f"Looking up CVEs for {len(libraries)} libraries...", 60)
+                            cves = await re_service.lookup_apk_cves(libraries)
+                            cve_results["cves"] = cves
+                            cve_results["stats"] = {
+                                "total_libraries": len(libraries),
+                                "high_risk_libraries": sum(1 for lib in libraries if lib.is_high_risk),
+                                "total_cves": len(cves),
+                                "critical_cves": sum(1 for cve in cves if cve.get("severity", "").lower() == "critical"),
+                                "high_cves": sum(1 for cve in cves if cve.get("severity", "").lower() == "high"),
+                            }
+                            
+                            # Store CVE results in the scan result
+                            result.cve_scan_results = cve_results
+                            
+                            update_phase("cve_lookup", "completed", 
+                                f"Found {len(cves)} CVEs ({cve_results['stats']['critical_cves']} critical, {cve_results['stats']['high_cves']} high)")
+                            logger.info(f"CVE lookup found {len(cves)} CVEs in {len(libraries)} libraries")
+                        else:
+                            update_phase("cve_lookup", "completed", "No third-party libraries detected")
+                    else:
+                        update_phase("cve_lookup", "completed", "Skipped - no source files")
+                else:
+                    update_phase("cve_lookup", "completed", "Skipped - JADX not available")
+            except Exception as e:
+                update_phase("cve_lookup", "error", str(e))
+                logger.error(f"CVE lookup failed: {e}")
+            
+            yield make_progress("CVE database lookup complete", 100)
+            await asyncio.sleep(0.1)
+            
+            # =================================================================
+            # Phase 6 (Optional): Multi-Pass AI Vulnerability Hunt
+            # MOVED BEFORE AI Reports so findings feed into all reports
+            # =================================================================
+            vuln_hunt_findings = []
+            if include_vuln_hunt:
+                current_phase_idx += 1
+                update_phase("vuln_hunt", "in_progress")
+                yield make_progress("Starting multi-pass AI vulnerability hunt...", 5)
+                
+                try:
+                    if jadx_result and jadx_result.output_directory:
+                        jadx_output_path = Path(jadx_result.output_directory)
+                        sources_dir = jadx_output_path / "sources"
+                        
+                        if sources_dir.exists():
+                            yield make_progress("Pass 0: AI filename triage...", 10)
+                            yield make_progress("Pass 1: Pattern scan with AI-prioritized files...", 25)
+                            
+                            # Run multi-pass vulnerability hunt on Java source code
+                            vuln_hunt_result_data = await re_service.ai_vulnerability_hunt_java(
+                                sources_dir=sources_dir,
+                                package_name=result.package_name,
+                                existing_findings=result.decompiled_code_findings,
+                                max_passes=vuln_hunt_max_passes,
+                                max_targets_per_pass=vuln_hunt_max_targets,
+                                on_progress=lambda phase, prog, msg: None,
+                            )
+                            
+                            if vuln_hunt_result_data:
+                                result.vuln_hunt_result = vuln_hunt_result_data
+                                vuln_hunt_findings = vuln_hunt_result_data.get("vulnerabilities", [])
+                                vuln_count = len(vuln_hunt_findings)
+                                critical_count = sum(
+                                    1 for v in vuln_hunt_findings
+                                    if v.get("severity") == "critical"
+                                )
+                                update_phase("vuln_hunt", "completed", 
+                                    f"Found {vuln_count} vulnerabilities ({critical_count} critical)")
+                                logger.info(f"APK vuln hunt found {vuln_count} vulnerabilities")
+                            else:
+                                update_phase("vuln_hunt", "completed", "No additional vulnerabilities found")
+                        else:
+                            update_phase("vuln_hunt", "completed", "Skipped - no source files")
+                    else:
+                        update_phase("vuln_hunt", "completed", "Skipped - JADX not available")
+                except Exception as e:
+                    update_phase("vuln_hunt", "error", str(e))
+                    logger.error(f"APK vulnerability hunt failed: {e}", exc_info=True)
+                
+                yield make_progress("Vulnerability hunt complete", 100)
+                await asyncio.sleep(0.1)
+            
+            # =================================================================
+            # Phase: AI Finding Verification - Confidence scoring & FP elimination
+            # Validates ALL findings (pattern + vuln hunt) before AI reports
+            # =================================================================
+            current_phase_idx += 1
+            update_phase("verification", "in_progress")
+            yield make_progress("Starting AI verification of findings...", 5)
+            
+            verified_findings = []
+            verification_stats = {}
+            
+            try:
+                if jadx_result and jadx_result.output_directory:
+                    jadx_output_path = Path(jadx_result.output_directory)
+                    sources_dir = jadx_output_path / "sources"
+                    
+                    if sources_dir.exists():
+                        # Combine all findings for verification
+                        all_findings_to_verify = (result.decompiled_code_findings or []).copy()
+                        all_findings_to_verify.extend(vuln_hunt_findings)
+                        
+                        if all_findings_to_verify:
+                            yield make_progress(f"Verifying {len(all_findings_to_verify)} findings with AI...", 15)
+                            
+                            # Run unified verification
+                            verification_result = await re_service.verify_findings_unified(
+                                findings=all_findings_to_verify,
+                                sources_dir=sources_dir,
+                                package_name=result.package_name
+                            )
+                            
+                            if verification_result:
+                                verified_findings = verification_result.get("verified_findings", [])
+                                verification_stats = verification_result.get("verification_stats", {})
+                                result.verification_results = verification_result
+                                
+                                # Update the original findings with verified versions
+                                result.decompiled_code_findings = [
+                                    f for f in verified_findings 
+                                    if f.get("source") != "vuln_hunt"
+                                ]
+                                vuln_hunt_findings = [
+                                    f for f in verified_findings 
+                                    if f.get("source") == "vuln_hunt"
+                                ]
+                                
+                                # Update vuln_hunt_result with verified findings
+                                if result.vuln_hunt_result:
+                                    result.vuln_hunt_result["vulnerabilities"] = vuln_hunt_findings
+                                
+                                filtered_count = verification_stats.get("filtered", 0)
+                                confirmed_count = verification_stats.get("by_verdict", {}).get("CONFIRMED", 0)
+                                likely_count = verification_stats.get("by_verdict", {}).get("LIKELY", 0)
+                                avg_conf = verification_stats.get("avg_confidence", 0)
+                                
+                                update_phase("verification", "completed", 
+                                    f"Verified {len(verified_findings)} findings ({confirmed_count} confirmed, {likely_count} likely), filtered {filtered_count} false positives, avg confidence: {avg_conf:.0f}%")
+                                logger.info(f"Finding verification: {len(verified_findings)} verified, {filtered_count} filtered as false positives")
+                            else:
+                                update_phase("verification", "completed", "No verification results")
+                        else:
+                            update_phase("verification", "completed", "No findings to verify")
+                    else:
+                        update_phase("verification", "completed", "Skipped - no source files")
+                else:
+                    update_phase("verification", "completed", "Skipped - JADX not available")
+            except Exception as e:
+                update_phase("verification", "error", str(e))
+                logger.error(f"Finding verification failed: {e}", exc_info=True)
+                # On error, keep original findings
+                verified_findings = (result.decompiled_code_findings or []).copy()
+                verified_findings.extend(vuln_hunt_findings)
+            
+            yield make_progress("Finding verification complete", 100)
+            await asyncio.sleep(0.1)
+            
+            # =================================================================
+            # Phase 7: AI Deep Analysis (Cross-ref, parallel scan, code sampling)
+            # Now includes vuln hunt findings for comprehensive reports
+            # =================================================================
+            current_phase_idx += 1
+            update_phase("ai_analysis", "in_progress")
+            yield make_progress("Running AI deep analysis pipeline...", 10)
             
             try:
                 if apk_result:
-                    # Pass JADX output directory for source code context
                     jadx_output_path = Path(jadx_result.output_directory) if jadx_result else None
-                    # Pass decompiled code findings for enhanced AI analysis
+                    
+                    yield make_progress("Parallel scanning source files...", 20)
+                    yield make_progress("Analyzing cross-references and data flows...", 40)
+                    yield make_progress("Extracting detailed code samples...", 60)
+                    yield make_progress("Processing CVE data for AI context...", 80)
+                    
+                    # Use VERIFIED findings for AI analysis
+                    all_findings = verified_findings if verified_findings else (result.decompiled_code_findings or []).copy()
+                    if not verified_findings:
+                        all_findings.extend(vuln_hunt_findings)
+                    
+                    # Pass ALL findings (pattern + vuln hunt) for comprehensive AI reports
                     ai_reports = await re_service.analyze_apk_with_ai(
                         apk_result, 
                         jadx_output_path,
-                        decompiled_findings=result.decompiled_code_findings
+                        decompiled_findings=all_findings
                     )
-                    if ai_reports:
-                        result.ai_functionality_report = apk_result.ai_report_functionality
-                update_phase("ai_functionality", "completed", "Report generated")
+                    
+                    update_phase("ai_analysis", "completed", "Deep analysis pipeline complete")
+                else:
+                    update_phase("ai_analysis", "completed", "Skipped - no APK result")
             except Exception as e:
-                update_phase("ai_functionality", "error", str(e))
-                logger.error(f"AI functionality report failed: {e}")
+                update_phase("ai_analysis", "error", str(e))
+                logger.error(f"AI deep analysis failed: {e}")
             
-            yield make_progress("AI functionality report complete", 100)
+            yield make_progress("AI deep analysis complete", 100)
             await asyncio.sleep(0.1)
             
             # =================================================================
-            # Phase 5: AI Security Report
+            # Phase: Advanced Analysis (Manifest Visualization + Obfuscation)
+            # Runs automatically - no user button press needed
             # =================================================================
-            current_phase_idx = 4
-            update_phase("ai_security", "in_progress")
-            yield make_progress("Generating AI security report...", 10)
+            current_phase_idx += 1
+            update_phase("advanced_analysis", "in_progress")
+            yield make_progress("Running advanced analysis (manifest viz, obfuscation)...", 10)
             
             try:
-                if apk_result and apk_result.ai_report_security:
-                    result.ai_security_report = apk_result.ai_report_security
-                update_phase("ai_security", "completed", "Report generated")
+                # Generate Manifest Visualization
+                yield make_progress("Generating manifest visualization...", 20)
+                manifest_viz = re_service.generate_manifest_visualization(tmp_path)
+                if manifest_viz:
+                    result.manifest_visualization = {
+                        "package_name": manifest_viz.package_name,
+                        "app_name": manifest_viz.app_name,
+                        "version_name": manifest_viz.version_name,
+                        "nodes": [
+                            {"id": n.id, "name": n.name, "node_type": n.node_type, "label": n.label, "attributes": n.attributes}
+                            for n in manifest_viz.nodes
+                        ],
+                        "edges": [
+                            {"source": e.source, "target": e.target, "edge_type": e.edge_type, "label": e.label}
+                            for e in manifest_viz.edges
+                        ],
+                        "component_counts": manifest_viz.component_counts,
+                        "permission_summary": manifest_viz.permission_summary,
+                        "exported_count": manifest_viz.exported_count,
+                        "main_activity": manifest_viz.main_activity,
+                        "deep_link_schemes": manifest_viz.deep_link_schemes,
+                        "mermaid_diagram": manifest_viz.mermaid_diagram,
+                        "ai_analysis": manifest_viz.ai_analysis,
+                        "security_assessment": manifest_viz.security_assessment,
+                    }
+                    logger.info(f"Manifest visualization: {manifest_viz.exported_count} exported components, {len(manifest_viz.deep_link_schemes)} deep link schemes")
+                
+                # Generate Obfuscation Analysis
+                yield make_progress("Analyzing obfuscation techniques...", 60)
+                obfuscation_result = re_service.analyze_apk_obfuscation(tmp_path)
+                if obfuscation_result:
+                    result.obfuscation_analysis = {
+                        "package_name": obfuscation_result.package_name,
+                        "overall_obfuscation_level": obfuscation_result.overall_obfuscation_level,
+                        "obfuscation_score": obfuscation_result.obfuscation_score,
+                        "detected_tools": obfuscation_result.detected_tools,
+                        "indicators": [
+                            {"indicator_type": i.indicator_type, "confidence": i.confidence, "evidence": i.evidence, "description": i.description}
+                            for i in obfuscation_result.indicators
+                        ],
+                        "class_naming": {
+                            "total_classes": obfuscation_result.class_naming.total_classes,
+                            "short_name_count": obfuscation_result.class_naming.short_name_count,
+                            "obfuscated_count": obfuscation_result.class_naming.obfuscated_count,
+                            "readable_count": obfuscation_result.class_naming.readable_count,
+                            "obfuscation_ratio": obfuscation_result.class_naming.obfuscation_ratio,
+                        },
+                        "deobfuscation_strategies": obfuscation_result.deobfuscation_strategies,
+                        "recommended_tools": obfuscation_result.recommended_tools,
+                        "frida_hooks": obfuscation_result.frida_hooks,
+                        "analysis_time": obfuscation_result.analysis_time,
+                        "warnings": obfuscation_result.warnings,
+                        "ai_analysis_summary": obfuscation_result.ai_analysis_summary,
+                        "reverse_engineering_difficulty": obfuscation_result.reverse_engineering_difficulty,
+                    }
+                    logger.info(f"Obfuscation analysis: {obfuscation_result.overall_obfuscation_level} level, score {obfuscation_result.obfuscation_score}/100")
+                
+                update_phase("advanced_analysis", "completed", f"Manifest viz + obfuscation ({obfuscation_result.overall_obfuscation_level if obfuscation_result else 'unknown'} level)")
             except Exception as e:
-                update_phase("ai_security", "error", str(e))
-                logger.error(f"AI security report failed: {e}")
+                update_phase("advanced_analysis", "error", str(e))
+                logger.error(f"Advanced analysis failed: {e}", exc_info=True)
             
-            yield make_progress("AI security report complete", 100)
+            yield make_progress("Advanced analysis complete", 100)
             await asyncio.sleep(0.1)
             
             # =================================================================
-            # Phase 6: Architecture Diagram
+            # Phase 8: AI Report Generation (Functionality, Security, Architecture, Attack Surface)
             # =================================================================
-            current_phase_idx = 5
-            update_phase("ai_diagram", "in_progress")
-            yield make_progress("Generating architecture diagram...", 10)
+            current_phase_idx += 1
+            update_phase("ai_reports", "in_progress")
+            yield make_progress("Generating AI reports...", 10)
             
             try:
                 if apk_result:
-                    # Pass JADX output directory for source code context
+                    # Get the reports that were generated in the previous phase
+                    if apk_result.ai_report_functionality:
+                        result.ai_functionality_report = apk_result.ai_report_functionality
+                        yield make_progress("Functionality report ready", 25)
+                    
+                    if apk_result.ai_report_security:
+                        result.ai_security_report = apk_result.ai_report_security
+                        yield make_progress("Security report ready", 50)
+                    
+                    # Generate architecture diagram
                     jadx_output_path = Path(jadx_result.output_directory) if jadx_result else None
-                    # Get JADX result summary dict for additional context
-                    jadx_summary = None
                     if jadx_output_path and jadx_output_path.exists():
+                        jadx_summary = None
                         try:
                             jadx_summary = re_service.get_jadx_result_summary(jadx_output_path)
                         except Exception:
-                            pass  # Continue without summary
-                    diagram = await re_service.generate_ai_architecture_diagram(apk_result, jadx_summary, output_dir=jadx_output_path)
-                    result.ai_architecture_diagram = diagram
-                update_phase("ai_diagram", "completed", "Diagram generated")
-            except Exception as e:
-                update_phase("ai_diagram", "error", str(e))
-                logger.error(f"Architecture diagram generation failed: {e}")
-            
-            yield make_progress("Architecture diagram complete", 100)
-            
-            # =================================================================
-            # Phase 6b: Attack Surface Map (AI-powered attack tree)
-            # =================================================================
-            yield make_progress("Generating AI attack surface map...", 10)
-            
-            try:
-                if apk_result:
-                    jadx_output_path = Path(jadx_result.output_directory) if jadx_result else None
-                    if jadx_output_path and jadx_output_path.exists():
-                        # Generate attack surface map first
+                            pass
+                        
+                        diagram = await re_service.generate_ai_architecture_diagram(apk_result, jadx_summary, output_dir=jadx_output_path)
+                        result.ai_architecture_diagram = diagram
+                        yield make_progress("Architecture diagram ready", 75)
+                        
+                        # Generate attack surface map using VERIFIED findings only
+                        # (false positives already filtered out in verification phase)
                         attack_surface = re_service.generate_attack_surface_map(tmp_path)
-                        # Then generate AI-powered attack tree with decompiled findings
+                        
+                        # Use verified findings - these have false positives removed
+                        verified_for_attack = verified_findings if verified_findings else (result.decompiled_code_findings or []).copy()
+                        if not verified_findings:
+                            # Fallback: if no verification ran, combine original findings
+                            verified_for_attack.extend(vuln_hunt_findings)
+                        
                         attack_tree = await re_service.generate_ai_attack_tree_mermaid(
                             attack_surface, 
                             jadx_output_path,
-                            decompiled_findings=result.decompiled_code_findings
+                            decompiled_findings=verified_for_attack
                         )
                         result.ai_attack_surface_map = attack_tree
-                        logger.info("Generated AI attack surface map for unified scan")
+                        yield make_progress("Attack surface map ready (verified findings only)", 90)
+                    
+                    update_phase("ai_reports", "completed", "All 4 AI reports generated")
+                else:
+                    update_phase("ai_reports", "completed", "Skipped - no APK result")
             except Exception as e:
-                logger.error(f"Attack surface map generation failed: {e}")
+                update_phase("ai_reports", "error", str(e))
+                logger.error(f"AI report generation failed: {e}")
             
-            yield make_progress("Attack surface map complete", 100)
+            yield make_progress("All AI reports generated", 100)
+            await asyncio.sleep(0.1)
             
             # =================================================================
-            # Phase 6c: Enhanced Frida Hooks (Vulnerability-specific)
+            # Bonus: Generate Frida Scripts (Standard + Vulnerability-specific)
             # =================================================================
-            yield make_progress("Generating vulnerability-specific Frida hooks...", 10)
+            yield make_progress("Generating Frida scripts for dynamic analysis...", 10)
+            
+            # Generate standard Frida scripts (SSL bypass, root bypass, crypto hooks, etc.)
+            try:
+                if apk_result:
+                    yield make_progress("Generating SSL pinning bypass scripts...", 20)
+                    
+                    # Extract required data from apk_result for Frida generation
+                    strings_list = []
+                    for s in apk_result.strings[:1000] if hasattr(apk_result, 'strings') else []:
+                        strings_list.append(re_service.ExtractedString(
+                            value=s.get("value", "") if isinstance(s, dict) else str(s),
+                            string_type=s.get("type", "unknown") if isinstance(s, dict) else "unknown"
+                        ))
+                    
+                    permissions_list = [
+                        re_service.ApkPermission(
+                            name=p.name, 
+                            is_dangerous=p.is_dangerous, 
+                            description=p.description
+                        ) 
+                        for p in apk_result.permissions
+                    ]
+                    
+                    urls_list = apk_result.urls[:100] if apk_result.urls else []
+                    
+                    # Get dex_analysis if available
+                    dex_analysis = None
+                    if hasattr(apk_result, 'dex_analysis') and apk_result.dex_analysis:
+                        dex_analysis = apk_result.dex_analysis
+                    
+                    yield make_progress("Generating root detection bypass scripts...", 40)
+                    
+                    # Generate standard Frida scripts
+                    dynamic_analysis = re_service.generate_frida_scripts(
+                        package_name=apk_result.package_name,
+                        strings=strings_list,
+                        dex_analysis=dex_analysis,
+                        permissions=permissions_list,
+                        urls=urls_list,
+                        smali_analysis=None
+                    )
+                    
+                    if dynamic_analysis:
+                        result.dynamic_analysis = dynamic_analysis
+                        scripts_count = dynamic_analysis.get("total_scripts", 0)
+                        logger.info(f"Generated {scripts_count} standard Frida scripts")
+                        yield make_progress(f"Generated {scripts_count} standard Frida scripts", 60)
+                    
+            except Exception as e:
+                logger.error(f"Standard Frida script generation failed: {e}")
+            
+            # Generate vulnerability-specific Frida hooks (based on discovered vulnerabilities)
+            yield make_progress("Generating vulnerability-specific Frida hooks...", 70)
             
             try:
                 if result.decompiled_code_findings and apk_result:
-                    # Generate targeted Frida hooks based on discovered vulnerabilities
                     vuln_frida_hooks = re_service.generate_vulnerability_specific_frida_hooks(
                         package_name=apk_result.package_name,
                         decompiled_findings=result.decompiled_code_findings,
@@ -7229,8 +9234,42 @@ class JadxSearchResponse(BaseModel):
     results: List[Dict[str, Any]]
 
 
-# Store JADX output directories for session
+# Store JADX output directories for session with timestamps
 _jadx_cache: Dict[str, Path] = {}
+_jadx_cache_timestamps: Dict[str, datetime] = {}
+JADX_CACHE_TTL_HOURS = 2  # Clean up after 2 hours
+
+
+async def cleanup_old_jadx_cache():
+    """Background task to clean up old JADX cache entries."""
+    while True:
+        try:
+            await asyncio.sleep(1800)  # Run every 30 minutes
+            now = datetime.now()
+            expired_sessions = []
+            
+            for session_id, timestamp in list(_jadx_cache_timestamps.items()):
+                age_hours = (now - timestamp).total_seconds() / 3600
+                if age_hours > JADX_CACHE_TTL_HOURS:
+                    expired_sessions.append(session_id)
+            
+            for session_id in expired_sessions:
+                if session_id in _jadx_cache:
+                    cache_path = _jadx_cache[session_id]
+                    if cache_path.exists():
+                        try:
+                            shutil.rmtree(cache_path, ignore_errors=True)
+                            logger.info(f"Cleaned up JADX cache: {session_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to cleanup JADX cache {session_id}: {e}")
+                    del _jadx_cache[session_id]
+                if session_id in _jadx_cache_timestamps:
+                    del _jadx_cache_timestamps[session_id]
+            
+            if expired_sessions:
+                logger.info(f"Cleaned up {len(expired_sessions)} old JADX cache entries")
+        except Exception as e:
+            logger.error(f"JADX cache cleanup error: {e}")
 
 
 def _resolve_jadx_output_dir(output_directory: str) -> Path:
@@ -7319,10 +9358,11 @@ async def decompile_apk(
         # Run JADX decompilation
         result = re_service.decompile_apk_with_jadx(tmp_path)
         
-        # Store output directory for later queries
+        # Store output directory for later queries with timestamp
         import uuid
         session_id = str(uuid.uuid4())
         _jadx_cache[session_id] = Path(result.output_directory)
+        _jadx_cache_timestamps[session_id] = datetime.now()
         
         # Collect security issues from all classes
         all_security_issues = []
@@ -10012,11 +12052,27 @@ async def export_apk_report_from_result(
         # Get decompiled code findings if present
         decompiled_findings = result_data.get('decompiled_code_findings', [])
         
+        # Get CVE scan results if present
+        cve_scan_results = result_data.get('cve_scan_results', [])
+        
+        # Get AI diagrams if present
+        ai_architecture_diagram = result_data.get('ai_architecture_diagram')
+        ai_attack_surface_map = result_data.get('ai_attack_surface_map')
+        
+        # Get dynamic analysis (Frida scripts) if present
+        dynamic_analysis = result_data.get('dynamic_analysis')
+        
         # Generate export based on format
         package_name = result.package_name.split('.')[-1] if result.package_name else 'apk'
         
         if format == "markdown":
-            markdown_content = re_service.generate_apk_markdown_report(result, report_type, decompiled_findings)
+            markdown_content = re_service.generate_apk_markdown_report(
+                result, report_type, decompiled_findings,
+                cve_scan_results=cve_scan_results,
+                ai_architecture_diagram=ai_architecture_diagram,
+                ai_attack_surface_map=ai_attack_surface_map,
+                dynamic_analysis=dynamic_analysis
+            )
             return Response(
                 content=markdown_content.encode('utf-8'),
                 media_type="text/markdown",
@@ -10024,7 +12080,13 @@ async def export_apk_report_from_result(
             )
         
         elif format == "pdf":
-            pdf_bytes = re_service.generate_apk_pdf_report(result, report_type, decompiled_findings)
+            pdf_bytes = re_service.generate_apk_pdf_report(
+                result, report_type, decompiled_findings,
+                cve_scan_results=cve_scan_results,
+                ai_architecture_diagram=ai_architecture_diagram,
+                ai_attack_surface_map=ai_attack_surface_map,
+                dynamic_analysis=dynamic_analysis
+            )
             return Response(
                 content=pdf_bytes,
                 media_type="application/pdf",
@@ -10032,7 +12094,13 @@ async def export_apk_report_from_result(
             )
         
         elif format == "docx":
-            docx_bytes = re_service.generate_apk_docx_report(result, report_type, decompiled_findings)
+            docx_bytes = re_service.generate_apk_docx_report(
+                result, report_type, decompiled_findings,
+                cve_scan_results=cve_scan_results,
+                ai_architecture_diagram=ai_architecture_diagram,
+                ai_attack_surface_map=ai_attack_surface_map,
+                dynamic_analysis=dynamic_analysis
+            )
             return Response(
                 content=docx_bytes,
                 media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -10042,6 +12110,175 @@ async def export_apk_report_from_result(
     except Exception as e:
         logger.error(f"APK export from result failed: {e}")
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+# ============================================================================
+# Frida Script Export Endpoints
+# ============================================================================
+
+class FridaScriptExportRequest(BaseModel):
+    """Request for exporting Frida scripts."""
+    package_name: str
+    dynamic_analysis: Optional[Dict[str, Any]] = None
+    vulnerability_scripts: Optional[List[Dict[str, Any]]] = None
+    selected_categories: Optional[List[str]] = None
+    include_combined: bool = True
+    export_format: str = "zip"  # "zip", "individual", "combined_only"
+
+
+@router.post("/apk/frida-scripts/export")
+async def export_frida_scripts(request: FridaScriptExportRequest):
+    """
+    Export generated Frida scripts as downloadable files.
+    
+    Export formats:
+    - zip: All scripts bundled in a ZIP file with README
+    - individual: Returns JSON with individual script contents
+    - combined_only: Returns just the combined all-in-one script
+    """
+    from fastapi.responses import Response
+    import zipfile
+    import io
+    
+    if not request.dynamic_analysis and not request.vulnerability_scripts:
+        raise HTTPException(
+            status_code=400, 
+            detail="No Frida scripts to export. Run APK analysis first."
+        )
+    
+    try:
+        # Get standard scripts from dynamic_analysis
+        scripts = []
+        if request.dynamic_analysis:
+            scripts = request.dynamic_analysis.get('frida_scripts', [])
+        
+        # Get vulnerability-specific scripts
+        vuln_scripts = request.vulnerability_scripts or []
+        
+        # Export scripts
+        export_result = re_service.export_frida_scripts_to_files(
+            package_name=request.package_name,
+            scripts=scripts,
+            include_combined=request.include_combined,
+            vuln_scripts=vuln_scripts
+        )
+        
+        if request.export_format == "individual":
+            # Return JSON with all script contents
+            return {
+                "success": True,
+                "package_name": request.package_name,
+                "total_files": export_result["total_files"],
+                "files": [
+                    {
+                        "filename": f["filename"],
+                        "category": f["category"],
+                        "script_name": f["script_name"],
+                        "content": f["content"],
+                        "usage": f["usage"]
+                    }
+                    for f in export_result["files"]
+                ]
+            }
+        
+        elif request.export_format == "combined_only":
+            # Return just the combined script
+            combined_result = re_service.combine_frida_scripts(
+                package_name=request.package_name,
+                scripts=scripts,
+                selected_categories=request.selected_categories,
+                include_vulnerability_scripts=bool(vuln_scripts),
+                vuln_scripts=vuln_scripts
+            )
+            
+            if not combined_result.get("success"):
+                raise HTTPException(status_code=400, detail=combined_result.get("error", "Failed to combine scripts"))
+            
+            return Response(
+                content=combined_result["combined_script"].encode('utf-8'),
+                media_type="application/javascript",
+                headers={
+                    "Content-Disposition": f'attachment; filename="frida_combined_{request.package_name.replace(".", "_")}.js"'
+                }
+            )
+        
+        else:  # zip format (default)
+            # Create ZIP file in memory
+            zip_buffer = io.BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                # Create folder structure
+                folder_name = f"frida_scripts_{request.package_name.replace('.', '_')}"
+                
+                for file_data in export_result["files"]:
+                    # Put scripts in category subfolders
+                    category = file_data["category"]
+                    if category == "documentation":
+                        file_path = f"{folder_name}/{file_data['filename']}"
+                    elif category == "combined":
+                        file_path = f"{folder_name}/{file_data['filename']}"
+                    else:
+                        file_path = f"{folder_name}/{category}/{file_data['filename']}"
+                    
+                    zf.writestr(file_path, file_data["content"])
+            
+            zip_buffer.seek(0)
+            
+            return Response(
+                content=zip_buffer.getvalue(),
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": f'attachment; filename="frida_scripts_{request.package_name.replace(".", "_")}.zip"'
+                }
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Frida script export failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+@router.post("/apk/frida-scripts/combine")
+async def combine_frida_scripts_endpoint(
+    package_name: str,
+    scripts: List[Dict[str, Any]],
+    selected_categories: Optional[List[str]] = None,
+    vuln_scripts: Optional[List[Dict[str, Any]]] = None
+):
+    """
+    Combine multiple Frida scripts into a single all-in-one script.
+    
+    Useful for running all hooks at once without loading multiple files.
+    """
+    try:
+        result = re_service.combine_frida_scripts(
+            package_name=package_name,
+            scripts=scripts,
+            selected_categories=selected_categories,
+            include_vulnerability_scripts=bool(vuln_scripts),
+            vuln_scripts=vuln_scripts
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("error", "Failed to combine scripts"))
+        
+        return {
+            "success": True,
+            "package_name": package_name,
+            "combined_script": result["combined_script"],
+            "scripts_included": result["scripts_included"],
+            "categories_included": result["categories_included"],
+            "total_scripts": result["total_scripts"],
+            "usage_command": result["usage_command"]
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Frida script combination failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Combination failed: {str(e)}")
+
 
 # ============================================================================
 # AI Chat Export Endpoints

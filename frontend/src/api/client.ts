@@ -165,15 +165,45 @@ export async function cloneRepository(
 
 export const api = {
   getProjects: () => request<ProjectSummary[]>("/projects"),
-  createProject: (payload: { name: string; description?: string; git_url?: string }) =>
+  createProject: (payload: { name: string; description?: string; git_url?: string; is_shared?: boolean }) =>
     request<ProjectSummary>("/projects", { method: "POST", body: JSON.stringify(payload) }),
   getProject: (id: number) => request<ProjectSummary>(`/projects/${id}`),
   deleteProject: (id: number) => 
     request<{ status: string; project_id: number }>(`/projects/${id}`, { method: "DELETE" }),
-  triggerScan: (projectId: number, options?: { includeAgentic?: boolean }) =>
+  
+  // Collaborator management
+  getProjectCollaborators: (projectId: number) => 
+    request<ProjectCollaborator[]>(`/projects/${projectId}/collaborators`),
+  addProjectCollaborator: (projectId: number, username: string, role: string = "editor") =>
+    request<ProjectCollaborator>(`/projects/${projectId}/collaborators`, {
+      method: "POST",
+      body: JSON.stringify({ username, role }),
+    }),
+  updateProjectCollaborator: (projectId: number, userId: number, role: string) =>
+    request<ProjectCollaborator>(`/projects/${projectId}/collaborators/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify({ role }),
+    }),
+  removeProjectCollaborator: (projectId: number, userId: number) =>
+    request<{ status: string; user_id: number }>(`/projects/${projectId}/collaborators/${userId}`, {
+      method: "DELETE",
+    }),
+  
+  // Project Team Chat
+  getProjectTeamChat: (projectId: number) =>
+    request<ProjectTeamChat>(`/projects/${projectId}/team-chat`),
+  syncTeamChatParticipants: (projectId: number) =>
+    request<{ status: string; added: number; removed: number; total_participants: number }>(
+      `/projects/${projectId}/team-chat/sync-participants`,
+      { method: "POST" }
+    ),
+  
+  triggerScan: (projectId: number, options?: { enhancedScan?: boolean }) =>
     request<ScanRun>(`/projects/${projectId}/scan`, { 
       method: "POST",
-      body: JSON.stringify({ include_agentic: options?.includeAgentic ?? false })
+      body: JSON.stringify({ 
+        enhanced_scan: options?.enhancedScan ?? false
+      })
     }),
   getReports: (projectId: number) => request<Report[]>(`/projects/${projectId}/reports`),
   getReport: (reportId: number) => request<Report>(`/reports/${reportId}`),
@@ -213,6 +243,10 @@ export const api = {
   getExploitability: (reportId: number) => request<ExploitScenario[]>(`/reports/${reportId}/exploitability`),
   startExploitability: (reportId: number, mode: "auto" | "summary" | "full" = "auto") =>
     request<{ status: string; mode: string }>(`/reports/${reportId}/exploitability?mode=${mode}`, { method: "POST" }),
+  getAttackChainDiagram: (reportId: number, useAi: boolean = true) =>
+    request<AttackChainDiagram>(`/reports/${reportId}/exploitability/attack-chain?use_ai=${useAi}`),
+  clearAttackChainDiagram: (reportId: number) =>
+    request<{ status: string; message: string }>(`/reports/${reportId}/exploitability/attack-chain`, { method: "DELETE" }),
   getAttackChains: (reportId: number) => request<AttackChain[]>(`/reports/${reportId}/attack-chains`),
   getAIInsights: (reportId: number) => request<AIInsights>(`/reports/${reportId}/ai-insights`),
   exportReport: (reportId: number, format: "markdown" | "pdf" | "docx") =>
@@ -243,8 +277,31 @@ export type ProjectSummary = {
   name: string;
   description?: string;
   git_url?: string;
+  is_shared: boolean;
   created_at: string;
   updated_at?: string;
+  owner_id?: number;
+  owner_username?: string;
+  collaborator_count: number;
+  user_role?: "owner" | "editor" | "viewer" | "admin";
+};
+
+export type ProjectCollaborator = {
+  id: number;
+  project_id: number;
+  user_id: number;
+  role: "viewer" | "editor" | "admin";
+  added_at: string;
+  username?: string;
+  email?: string;
+};
+
+export type ProjectTeamChat = {
+  conversation_id: number;
+  name: string;
+  description: string;
+  project_id: number;
+  created_at: string;
 };
 
 export type ScanRun = {
@@ -426,6 +483,16 @@ export type CodebaseDiagram = {
   diagram: string;
   diagram_type: string;
   cached: boolean;
+};
+
+// AI-generated Attack Chain diagram for exploitability
+export type AttackChainDiagram = {
+  report_id: number;
+  diagram: string;
+  diagram_type: string;
+  cached: boolean;
+  generated_by: "ai" | "template" | "unknown";
+  message?: string;
 };
 
 // File content for inline code preview
@@ -1095,7 +1162,9 @@ export async function getPcapReports(skip: number = 0, limit: number = 20): Prom
     skip: String(skip),
     limit: String(limit),
   });
-  const resp = await fetch(`${API_URL}/pcap/reports?${params}`);
+  const resp = await fetch(`${API_URL}/pcap/reports?${params}`, {
+    headers: getAuthHeaders(),
+  });
   if (!resp.ok) {
     throw new Error(await resp.text());
   }
@@ -1103,7 +1172,9 @@ export async function getPcapReports(skip: number = 0, limit: number = 20): Prom
 }
 
 export async function getPcapReport(reportId: number): Promise<SavedReportDetail> {
-  const resp = await fetch(`${API_URL}/pcap/reports/${reportId}`);
+  const resp = await fetch(`${API_URL}/pcap/reports/${reportId}`, {
+    headers: getAuthHeaders(),
+  });
   if (!resp.ok) {
     throw new Error(await resp.text());
   }
@@ -1113,6 +1184,7 @@ export async function getPcapReport(reportId: number): Promise<SavedReportDetail
 export async function deletePcapReport(reportId: number): Promise<{ message: string }> {
   const resp = await fetch(`${API_URL}/pcap/reports/${reportId}`, {
     method: "DELETE",
+    headers: getAuthHeaders(),
   });
   if (!resp.ok) {
     throw new Error(await resp.text());
@@ -1441,19 +1513,26 @@ export const apiClient = {
     if (analysisType) params.append("analysis_type", analysisType);
     if (projectId !== undefined) params.append("project_id", String(projectId));
     const queryString = params.toString() ? `?${params.toString()}` : "";
-    const resp = await fetch(`${API_URL}/network/reports${queryString}`);
+    const resp = await fetch(`${API_URL}/network/reports${queryString}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
 
   getNetworkReport: async (reportId: number): Promise<FullNetworkReport> => {
-    const resp = await fetch(`${API_URL}/network/reports/${reportId}`);
+    const resp = await fetch(`${API_URL}/network/reports/${reportId}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
 
   deleteNetworkReport: async (reportId: number): Promise<{ status: string; report_id: number }> => {
-    const resp = await fetch(`${API_URL}/network/reports/${reportId}`, { method: "DELETE" });
+    const resp = await fetch(`${API_URL}/network/reports/${reportId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -1998,6 +2077,264 @@ export const apiClient = {
     const resp = await fetch(`${API_URL}/vulnhuntr/results/${scanId}/markdown`);
     if (!resp.ok) throw new Error(await resp.text());
     return resp.blob();
+  },
+
+  // ============================================================================
+  // Project Files & Documents
+  // ============================================================================
+
+  getProjectFiles: async (projectId: number): Promise<ProjectFile[]> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/files`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  uploadProjectFile: async (
+    projectId: number, 
+    file: File, 
+    folder?: string,
+    description?: string,
+    onProgress?: (progress: number) => void
+  ): Promise<ProjectFile> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const formData = new FormData();
+    formData.append("file", file);
+    if (folder) formData.append("folder", folder);
+    if (description) formData.append("description", description);
+    
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_URL}/projects/${projectId}/files`);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      
+      if (onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+      }
+      
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(new Error(xhr.responseText || xhr.statusText));
+        }
+      };
+      
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.send(formData);
+    });
+  },
+
+  deleteProjectFile: async (projectId: number, fileId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/files/${fileId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getProjectDocuments: async (projectId: number): Promise<ProjectDocument[]> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/documents`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  uploadProjectDocument: async (
+    projectId: number,
+    file: File,
+    onProgress?: (progress: number) => void
+  ): Promise<ProjectDocument> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_URL}/projects/${projectId}/documents`);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      
+      if (onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+      }
+      
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(new Error(xhr.responseText || xhr.statusText));
+        }
+      };
+      
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.send(formData);
+    });
+  },
+
+  deleteProjectDocument: async (projectId: number, docId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/documents/${docId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  reprocessProjectDocument: async (projectId: number, docId: number): Promise<ProjectDocument> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/documents/${docId}/reprocess`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getDocumentChat: async (projectId: number, docId: number): Promise<DocumentChatMessage[]> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/documents/${docId}/chat`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  askDocumentQuestion: async (
+    projectId: number,
+    docId: number,
+    question: string
+  ): Promise<DocumentChatMessage> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/documents/${docId}/chat`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ question }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  clearDocumentChat: async (projectId: number, docId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/documents/${docId}/chat`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Analysis Reports (Multi-Document Analysis)
+  // ============================================================================
+
+  getAnalysisReports: async (projectId: number): Promise<DocumentAnalysisReport[]> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/analysis-reports`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  createAnalysisReport: async (
+    projectId: number,
+    files: File[],
+    customPrompt?: string,
+    onProgress?: (progress: number) => void
+  ): Promise<DocumentAnalysisReport> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file));
+    if (customPrompt) formData.append("custom_prompt", customPrompt);
+    
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_URL}/projects/${projectId}/analysis-reports`);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      
+      if (onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+      }
+      
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(new Error(xhr.responseText || xhr.statusText));
+        }
+      };
+      
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.send(formData);
+    });
+  },
+
+  getAnalysisReport: async (projectId: number, reportId: number): Promise<DocumentAnalysisReport> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/analysis-reports/${reportId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteAnalysisReport: async (projectId: number, reportId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/analysis-reports/${reportId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  reprocessAnalysisReport: async (projectId: number, reportId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/analysis-reports/${reportId}/reprocess`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getReportChat: async (projectId: number, reportId: number): Promise<ReportChatMessage[]> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/analysis-reports/${reportId}/chat`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  askReportQuestion: async (
+    projectId: number,
+    reportId: number,
+    question: string
+  ): Promise<{ question: string; answer: string; message_id: number }> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/analysis-reports/${reportId}/chat`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ question }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  clearReportChat: async (projectId: number, reportId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/analysis-reports/${reportId}/chat`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
   },
 };
 
@@ -4799,6 +5136,70 @@ export type BinaryAnalysisResult = {
   ai_analysis?: string;
   ghidra_analysis?: GhidraAnalysisResult;
   ghidra_ai_summaries?: GhidraAISummary[];
+  vuln_hunt_result?: VulnerabilityHuntResult;
+  // NEW: APK-matching AI reports
+  ai_functionality_report?: string;  // What does this binary do?
+  ai_security_report?: string;  // Security assessment with formatted findings
+  ai_architecture_diagram?: string;  // Mermaid architecture diagram
+  ai_attack_surface_map?: string;  // Mermaid attack tree
+  // NEW: Advanced analysis results  
+  obfuscation_analysis?: {
+    overall_obfuscation_level: string;
+    obfuscation_score: number;
+    detected_packers: Array<{ name: string; confidence: number; indicators: string[] }>;
+    entropy_analysis?: { average_entropy: number; high_entropy_sections: string[] };
+    anti_analysis_techniques?: string[];
+  };
+  attack_surface?: {
+    summary?: { total_entry_points: number; total_dangerous_functions: number; total_attack_vectors: number };
+    entry_points?: Array<{ name: string; address: string; type: string }>;
+    dangerous_functions?: Array<{ name: string; category: string; risk: string }>;
+  };
+  pattern_scan_result?: {
+    findings: Array<{
+      category: string;
+      severity: string;
+      title: string;
+      description: string;
+      function_name?: string;
+      evidence?: string;
+      cwe_id?: string;
+      remediation?: string;
+    }>;
+  };
+  cve_lookup_result?: {
+    findings: Array<{
+      cve_id: string;
+      library_name?: string;
+      severity: string;
+      description: string;
+      cvss_score?: number;
+    }>;
+  };
+  sensitive_scan_result?: {
+    findings: Array<{
+      type: string;
+      severity: string;
+      masked_value: string;
+      context?: string;
+    }>;
+  };
+  verification_result?: {
+    verified_vulnerabilities: Array<any>;
+    filtered_vulnerabilities: Array<any>;
+    verified_cves: Array<any>;
+    filtered_cves: Array<any>;
+    attack_chains: Array<any>;
+    summary: {
+      total_findings: number;
+      verified_total: number;
+      filtered_total: number;
+    };
+    overall_risk?: string;
+  };
+  // NEW: Legitimacy detection
+  is_legitimate_software?: boolean;
+  legitimacy_indicators?: string[];
   error?: string;
 };
 
@@ -5335,6 +5736,246 @@ export type UnifiedApkScanResult = {
   decompiled_code_findings?: Array<DecompiledCodeFinding>;
   decompiled_code_summary?: DecompiledCodeSummary;
   
+  // CVE Database Lookup Results
+  cve_scan_results?: {
+    libraries: Array<{ name: string; version?: string; is_high_risk: boolean }>;
+    cves: Array<{
+      cve_id: string;
+      library: string;
+      library_version?: string;
+      severity: string;
+      cvss_score?: number;
+      summary: string;
+      fixed_version?: string;
+      attack_vector?: string;
+    }>;
+    stats: {
+      total_libraries: number;
+      high_risk_libraries: number;
+      total_cves: number;
+      critical_cves: number;
+      high_cves: number;
+    };
+  };
+  
+  // Pre-loaded enhanced security result (for saved reports)
+  saved_enhanced_security?: EnhancedSecurityResult;
+  
+  // Saved source code samples (for saved reports - allows browsing source without live JADX session)
+  saved_source_code_samples?: Array<{
+    class_name: string;
+    package_name: string;
+    file_path: string;
+    source_code: string;
+    is_activity: boolean;
+    is_service: boolean;
+    line_count: number;
+  }>;
+  
+  // Dynamic Analysis - Frida Scripts (standard bypass scripts)
+  dynamic_analysis?: DynamicAnalysis;
+  
+  // Vulnerability-Specific Frida Hooks (auto-generated from findings)
+  vulnerability_frida_hooks?: VulnerabilityFridaHooks;
+  
+  // Manifest Visualization (auto-generated during scan)
+  manifest_visualization?: {
+    package_name: string;
+    app_name?: string;
+    version_name?: string;
+    nodes: Array<{
+      id: string;
+      name: string;
+      node_type: string;
+      label: string;
+      attributes?: Record<string, unknown>;
+    }>;
+    edges: Array<{
+      source: string;
+      target: string;
+      edge_type: string;
+      label?: string;
+    }>;
+    component_counts: Record<string, number>;
+    permission_summary: Record<string, number>;
+    exported_count: number;
+    main_activity?: string;
+    deep_link_schemes: string[];
+    mermaid_diagram: string;
+    ai_analysis?: string;
+    security_assessment?: string;
+  };
+  
+  // Obfuscation Analysis (auto-generated during scan)
+  obfuscation_analysis?: {
+    package_name: string;
+    overall_obfuscation_level: string;
+    obfuscation_score: number;
+    detected_tools: string[];
+    indicators: Array<{
+      indicator_type: string;
+      confidence: string;
+      evidence: string[];
+      description: string;
+    }>;
+    class_naming: {
+      total_classes: number;
+      short_name_count: number;
+      obfuscated_count: number;
+      readable_count: number;
+      obfuscation_ratio: number;
+    };
+    deobfuscation_strategies: string[];
+    recommended_tools: string[];
+    frida_hooks: string[];
+    analysis_time: number;
+    warnings: string[];
+    ai_analysis_summary?: string;
+    reverse_engineering_difficulty?: string;
+  };
+  
+  // Multi-Pass AI Vulnerability Hunt Results
+  vuln_hunt_result?: {
+    scan_id: string;
+    package_name?: string;
+    total_passes: number;
+    files_scanned?: number;
+    dangerous_patterns_found?: number;
+    targets: Array<{
+      file_path: string;
+      priority: number;
+      category: string;
+      reason: string;
+      attack_hypothesis?: string;
+      analyzed: boolean;
+    }>;
+    vulnerabilities: Array<{
+      title: string;
+      severity: string;
+      category: string;
+      cwe?: string;
+      description: string;
+      affected_code?: string;
+      file_path?: string;
+      line_number?: number;
+      exploitation_steps?: string;
+      proof_of_concept?: string;
+      remediation?: string;
+      confidence?: number;
+      discovered_in_pass?: number;
+    }>;
+    hunting_log: Array<{
+      timestamp: string;
+      type: string;
+      message: string;
+      details?: Record<string, unknown>;
+    }>;
+    summary?: {
+      total_vulnerabilities: number;
+      by_severity: {
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+      };
+      by_category?: Record<string, number>;
+    };
+    error?: string;
+  };
+  
+  // AI Finding Verification Results (confidence scoring & FP elimination)
+  verification_results?: {
+    verified_findings: Array<DecompiledCodeFinding & {
+      verification?: {
+        verdict: 'CONFIRMED' | 'LIKELY' | 'SUSPICIOUS' | 'FALSE_POSITIVE' | 'UNVERIFIED';
+        confidence: number;
+        reasoning: string;
+        exploitation_notes?: string;
+        verified: boolean;
+      };
+      source?: string;
+      original_severity?: string;
+    }>;
+    filtered_out: Array<DecompiledCodeFinding & {
+      filtered_reason?: string;
+    }>;
+    attack_chains: Array<{
+      chain_name: string;
+      risk_level: string;
+      entry_points: Array<{
+        title: string;
+        class?: string;
+        line?: number;
+      }>;
+      sinks: Array<{
+        title: string;
+        class?: string;
+        line?: number;
+      }>;
+      description: string;
+    }>;
+    verification_stats: {
+      total_input: number;
+      verified: number;
+      filtered: number;
+      filter_rate: number;
+      attack_chains_found: number;
+      by_verdict: {
+        CONFIRMED: number;
+        LIKELY: number;
+        SUSPICIOUS: number;
+        UNVERIFIED: number;
+      };
+      avg_confidence: number;
+      high_confidence_count: number;
+    };
+  };
+  
+  // Sensitive Data Discovery Results (AI-verified passwords, API keys, emails, phone numbers, PII)
+  sensitive_data_findings?: {
+    findings: Array<{
+      category: 'password' | 'api_key' | 'username' | 'email' | 'phone' | 'personal_name' | 'private_key' | 'database_url';
+      value: string;
+      masked_value: string;
+      file_path: string;
+      line: number;
+      code_context: string;
+      pattern_matched?: string;
+      ai_verification?: {
+        verdict: 'REAL' | 'FALSE_POSITIVE' | 'UNVERIFIED';
+        confidence: number;
+        reasoning: string;
+        risk_level: 'critical' | 'high' | 'medium' | 'low' | 'none';
+        specific_type?: string;
+      };
+    }>;
+    filtered_out: Array<{
+      category: string;
+      value: string;
+      file_path: string;
+      line: number;
+      filter_reason: string;
+    }>;
+    summary: {
+      total: number;
+      by_category: Record<string, number>;
+      by_risk: {
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+      };
+      high_confidence_count: number;
+    };
+    scan_stats: {
+      files_scanned: number;
+      raw_matches: number;
+      verified: number;
+      filtered: number;
+      scan_time: number;
+    };
+  };
+  
   // Metadata
   scan_time: number;
   filename: string;
@@ -5369,6 +6010,62 @@ export type DecompiledCodeSummary = {
   files_scanned: number;
 };
 
+// Vulnerability-specific Frida script (auto-generated from discovered vulnerabilities)
+export type VulnerabilityFridaScript = {
+  name: string;
+  category: string;  // e.g., "deep_link_exploit", "crypto_exploit", "provider_exploit", "webview_exploit", "auth_bypass"
+  description: string;
+  script_code: string;
+  target_classes: string[];
+  findings_count: number;
+  usage_instructions: string;
+};
+
+// Collection of vulnerability-specific Frida hooks
+export type VulnerabilityFridaHooks = {
+  package_name: string;
+  vulnerability_scripts: VulnerabilityFridaScript[];
+  total_targeted_hooks: number;
+  findings_analyzed: number;
+};
+
+// Frida Script Export Types
+export type FridaScriptExportFile = {
+  filename: string;
+  category: string;
+  script_name: string;
+  content: string;
+  usage: string;
+  size_bytes?: number;
+  scripts_included?: string[];
+};
+
+export type FridaScriptExportRequest = {
+  package_name: string;
+  dynamic_analysis?: DynamicAnalysis;
+  vulnerability_scripts?: VulnerabilityFridaScript[];
+  selected_categories?: string[];
+  include_combined?: boolean;
+  export_format?: "zip" | "individual" | "combined_only";
+};
+
+export type FridaScriptExportResponse = {
+  success: boolean;
+  package_name: string;
+  total_files: number;
+  files: FridaScriptExportFile[];
+};
+
+export type FridaCombinedScriptResponse = {
+  success: boolean;
+  package_name: string;
+  combined_script: string;
+  scripts_included: string[];
+  categories_included: string[];
+  total_scripts: number;
+  usage_command: string;
+};
+
 export type UnifiedApkScanEvent = 
   | { type: "progress"; data: UnifiedApkScanProgress }
   | { type: "result"; data: UnifiedApkScanResult }
@@ -5398,6 +6095,10 @@ export type UnifiedBinaryScanProgress = {
   phases: UnifiedBinaryScanPhase[];
   message: string;
   error?: string;
+  // Time tracking fields
+  elapsed_seconds?: number;
+  estimated_remaining_seconds?: number;
+  estimated_total_seconds?: number;
 };
 
 export type UnifiedBinaryScanEvent =
@@ -5975,6 +6676,11 @@ export const reverseEngineeringClient = {
     onResult: (result: UnifiedApkScanResult) => void,
     onError: (error: string) => void,
     onDone?: () => void,
+    options?: {
+      includeVulnHunt?: boolean;
+      vulnHuntMaxPasses?: number;
+      vulnHuntMaxTargets?: number;
+    },
   ): { abort: () => void; scanId: string | null } => {
     const abortController = new AbortController();
     let scanId: string | null = null;
@@ -5988,6 +6694,17 @@ export const reverseEngineeringClient = {
       
       const form = new FormData();
       form.append("file", file);
+      
+      // Add vuln hunt options if specified
+      if (options?.includeVulnHunt !== undefined) {
+        form.append("include_vuln_hunt", String(options.includeVulnHunt));
+      }
+      if (options?.vulnHuntMaxPasses !== undefined) {
+        form.append("vuln_hunt_max_passes", String(options.vulnHuntMaxPasses));
+      }
+      if (options?.vulnHuntMaxTargets !== undefined) {
+        form.append("vuln_hunt_max_targets", String(options.vulnHuntMaxTargets));
+      }
       
       try {
         const resp = await fetch(`${API_URL}/reverse/apk/unified-scan`, {
@@ -6007,6 +6724,8 @@ export const reverseEngineeringClient = {
         
         const decoder = new TextDecoder();
         let buffer = "";
+        let receivedResult = false;
+        let receivedDone = false;
         
         while (true) {
           const { done, value } = await reader.read();
@@ -6025,10 +6744,12 @@ export const reverseEngineeringClient = {
                   scanId = event.data.scan_id;
                   onProgress(event.data);
                 } else if (event.type === "result") {
+                  receivedResult = true;
                   onResult(event.data);
                 } else if (event.type === "error") {
                   onError(event.error);
                 } else if (event.type === "done") {
+                  receivedDone = true;
                   onDone?.();
                 }
               } catch (e) {
@@ -6036,6 +6757,11 @@ export const reverseEngineeringClient = {
               }
             }
           }
+        }
+        
+        // If stream ended without receiving result or done, something went wrong
+        if (!receivedResult && !receivedDone) {
+          onError("Scan stream ended unexpectedly. The server may have restarted. Please try again.");
         }
       } catch (e) {
         if ((e as Error).name !== "AbortError") {
@@ -6076,6 +6802,10 @@ export const reverseEngineeringClient = {
       ghidraDecompLimit?: number;
       includeGhidraAi?: boolean;
       ghidraAiMaxFunctions?: number;
+      extendedGhidra?: boolean;
+      includeVulnHunt?: boolean;
+      vulnHuntMaxPasses?: number;
+      vulnHuntMaxTargets?: number;
     },
     onProgress: (progress: UnifiedBinaryScanProgress) => void,
     onResult: (result: BinaryAnalysisResult) => void,
@@ -6098,10 +6828,14 @@ export const reverseEngineeringClient = {
       const params = new URLSearchParams({
         include_ai: String(options.includeAi ?? true),
         include_ghidra: String(options.includeGhidra ?? true),
-        ghidra_max_functions: String(options.ghidraMaxFunctions ?? 200),
-        ghidra_decomp_limit: String(options.ghidraDecompLimit ?? 4000),
+        ghidra_max_functions: String(options.ghidraMaxFunctions ?? 500),
+        ghidra_decomp_limit: String(options.ghidraDecompLimit ?? 10000),
         include_ghidra_ai: String(options.includeGhidraAi ?? true),
         ghidra_ai_max_functions: String(options.ghidraAiMaxFunctions ?? 20),
+        extended_ghidra: String(options.extendedGhidra ?? false),
+        include_vuln_hunt: String(options.includeVulnHunt ?? false),
+        vuln_hunt_max_passes: String(options.vulnHuntMaxPasses ?? 3),
+        vuln_hunt_max_targets: String(options.vulnHuntMaxTargets ?? 15),
       });
 
       try {
@@ -6665,11 +7399,19 @@ export const reverseEngineeringClient = {
       ai_report_functionality: result.ai_functionality_report,
       ai_report_security: result.ai_security_report,
       ai_architecture_diagram: result.ai_architecture_diagram,
+      ai_attack_surface_map: result.ai_attack_surface_map,
       // JADX deep scan data
       jadx_total_classes: result.total_classes,
       jadx_total_files: result.total_files,
       jadx_security_issues: result.jadx_security_issues,
       classes_summary: result.classes_summary,
+      // Decompiled code findings (pattern-based scanners)
+      decompiled_code_findings: result.decompiled_code_findings,
+      decompiled_code_summary: result.decompiled_code_summary,
+      // CVE scan results
+      cve_scan_results: result.cve_scan_results,
+      // Dynamic analysis (Frida scripts)
+      dynamic_analysis: result.dynamic_analysis,
     };
 
     const params = new URLSearchParams({ format, report_type: "both" });
@@ -6713,6 +7455,20 @@ export const reverseEngineeringClient = {
       ai_analysis: result.ai_analysis,
       ghidra_analysis: result.ghidra_analysis,
       ghidra_ai_summaries: result.ghidra_ai_summaries,
+      vuln_hunt_result: result.vuln_hunt_result,
+      // AI-generated reports
+      ai_functionality_report: result.ai_functionality_report,
+      ai_security_report: result.ai_security_report,
+      ai_architecture_diagram: result.ai_architecture_diagram,
+      ai_attack_surface_map: result.ai_attack_surface_map,
+      // Advanced analysis results
+      obfuscation_analysis: result.obfuscation_analysis,
+      attack_surface: result.attack_surface,
+      pattern_scan_result: result.pattern_scan_result,
+      cve_lookup_result: result.cve_lookup_result,
+      verification_result: result.verification_result,
+      is_legitimate_software: result.is_legitimate_software,
+      legitimacy_indicators: result.legitimacy_indicators,
       error: result.error,
     };
 
@@ -6721,6 +7477,156 @@ export const reverseEngineeringClient = {
       method: "POST",
       headers,
       body: JSON.stringify(exportData),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.blob();
+  },
+
+  /**
+   * Export Frida scripts as a ZIP bundle
+   */
+  exportFridaScriptsZip: async (
+    packageName: string,
+    dynamicAnalysis?: DynamicAnalysis,
+    vulnerabilityScripts?: VulnerabilityFridaScript[],
+    selectedCategories?: string[]
+  ): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const requestData: FridaScriptExportRequest = {
+      package_name: packageName,
+      dynamic_analysis: dynamicAnalysis,
+      vulnerability_scripts: vulnerabilityScripts,
+      selected_categories: selectedCategories,
+      include_combined: true,
+      export_format: "zip",
+    };
+
+    const resp = await fetch(`${API_URL}/reverse/apk/frida-scripts/export`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestData),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.blob();
+  },
+
+  /**
+   * Export Frida scripts as individual files (JSON response)
+   */
+  exportFridaScriptsIndividual: async (
+    packageName: string,
+    dynamicAnalysis?: DynamicAnalysis,
+    vulnerabilityScripts?: VulnerabilityFridaScript[]
+  ): Promise<FridaScriptExportResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const requestData: FridaScriptExportRequest = {
+      package_name: packageName,
+      dynamic_analysis: dynamicAnalysis,
+      vulnerability_scripts: vulnerabilityScripts,
+      include_combined: true,
+      export_format: "individual",
+    };
+
+    const resp = await fetch(`${API_URL}/reverse/apk/frida-scripts/export`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestData),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.json();
+  },
+
+  /**
+   * Get combined all-in-one Frida script
+   */
+  getCombinedFridaScript: async (
+    packageName: string,
+    dynamicAnalysis?: DynamicAnalysis,
+    vulnerabilityScripts?: VulnerabilityFridaScript[],
+    selectedCategories?: string[]
+  ): Promise<FridaCombinedScriptResponse> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const scripts = dynamicAnalysis?.frida_scripts || [];
+
+    const resp = await fetch(`${API_URL}/reverse/apk/frida-scripts/combine`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        package_name: packageName,
+        scripts: scripts,
+        selected_categories: selectedCategories,
+        vuln_scripts: vulnerabilityScripts,
+      }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.json();
+  },
+
+  /**
+   * Download combined Frida script as .js file
+   */
+  downloadCombinedFridaScript: async (
+    packageName: string,
+    dynamicAnalysis?: DynamicAnalysis,
+    vulnerabilityScripts?: VulnerabilityFridaScript[]
+  ): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const requestData: FridaScriptExportRequest = {
+      package_name: packageName,
+      dynamic_analysis: dynamicAnalysis,
+      vulnerability_scripts: vulnerabilityScripts,
+      include_combined: true,
+      export_format: "combined_only",
+    };
+
+    const resp = await fetch(`${API_URL}/reverse/apk/frida-scripts/export`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestData),
     });
 
     if (!resp.ok) {
@@ -8654,6 +9560,16 @@ export interface SaveREReportRequest {
   jadx_output_directory?: string;
   jadx_classes_sample?: Array<Record<string, unknown>>;
   jadx_security_issues?: Array<Record<string, unknown>>;
+  jadx_source_tree?: Record<string, unknown>;  // Directory structure for source browser
+  jadx_source_code_samples?: Array<{  // Actual source code for key classes
+    class_name: string;
+    package_name: string;
+    file_path: string;
+    source_code: string;
+    is_activity: boolean;
+    is_service: boolean;
+    line_count: number;
+  }>;
   
   // AI-Generated Reports (Deep Analysis)
   ai_functionality_report?: string;
@@ -8664,6 +9580,25 @@ export interface SaveREReportRequest {
   ai_threat_model?: Record<string, unknown>;
   ai_vuln_scan_result?: Record<string, unknown>;
   ai_chat_history?: Array<Record<string, unknown>>;
+  
+  // Dynamic Analysis / Frida Scripts
+  dynamic_analysis?: DynamicAnalysis;
+  
+  // Decompiled Code Analysis Results (Pattern-based scanners)
+  decompiled_code_findings?: Array<Record<string, unknown>>;
+  decompiled_code_summary?: Record<string, unknown>;
+  
+  // CVE Scan Results
+  cve_scan_results?: Record<string, unknown>;
+  
+  // Vulnerability-specific Frida Hooks
+  vulnerability_frida_hooks?: Array<Record<string, unknown>>;
+  
+  // Manifest Visualization (component graph, deep links, AI analysis)
+  manifest_visualization?: Record<string, unknown>;
+  
+  // Obfuscation Analysis (detection, deobfuscation strategies, Frida hooks)
+  obfuscation_analysis?: Record<string, unknown>;
   
   // Metadata
   tags?: string[];
@@ -8721,6 +9656,16 @@ export interface REReportDetail extends REReportSummary {
     output_directory?: string;
     classes_sample?: Array<Record<string, unknown>>;
     security_issues?: Array<Record<string, unknown>>;
+    source_tree?: Record<string, unknown>;
+    source_code_samples?: Array<{
+      class_name: string;
+      package_name: string;
+      file_path: string;
+      source_code: string;
+      is_activity: boolean;
+      is_service: boolean;
+      line_count: number;
+    }>;
   };
   
   // AI-Generated Reports (Deep Analysis)
@@ -8732,6 +9677,12 @@ export interface REReportDetail extends REReportSummary {
   ai_threat_model?: Record<string, unknown>;
   ai_vuln_scan_result?: Record<string, unknown>;
   ai_chat_history?: Array<Record<string, unknown>>;
+  
+  // Manifest Visualization (component graph, deep links, AI analysis)
+  manifest_visualization?: Record<string, unknown>;
+  
+  // Obfuscation Analysis (detection, deobfuscation strategies, Frida hooks)
+  obfuscation_analysis?: Record<string, unknown>;
   
   notes?: string;
 }
@@ -9756,4 +10707,1391 @@ export type SymbolLookupResult = {
     files_indexed: number;
   };
   error?: string;
+};
+
+// ============================================================================
+// Social / Messaging Types
+// ============================================================================
+
+export type UserPublicProfile = {
+  id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  bio?: string;
+  avatar_url?: string;
+  created_at: string;
+  is_friend: boolean;
+  has_pending_request: boolean;
+  request_direction?: "sent" | "received";
+};
+
+export type UserSearchResponse = {
+  users: UserPublicProfile[];
+  total: number;
+  query: string;
+};
+
+export type FriendRequestStatus = "pending" | "accepted" | "rejected";
+
+export type FriendRequest = {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  sender_username: string;
+  receiver_username: string;
+  sender_first_name?: string;
+  sender_last_name?: string;
+  receiver_first_name?: string;
+  receiver_last_name?: string;
+  status: FriendRequestStatus;
+  message?: string;
+  created_at: string;
+  responded_at?: string;
+};
+
+export type FriendRequestListResponse = {
+  incoming: FriendRequest[];
+  outgoing: FriendRequest[];
+  incoming_count: number;
+  outgoing_count: number;
+};
+
+export type Friend = {
+  id: number;
+  user_id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  bio?: string;
+  avatar_url?: string;
+  friends_since: string;
+  last_login?: string;
+};
+
+export type FriendsListResponse = {
+  friends: Friend[];
+  total: number;
+};
+
+export type ParticipantRole = "owner" | "admin" | "member";
+
+export type ConversationParticipant = {
+  user_id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  avatar_url?: string;
+  joined_at: string;
+  role: ParticipantRole;
+  nickname?: string;
+  is_muted: boolean;
+};
+
+export type ConversationSummary = {
+  id: number;
+  name?: string;
+  description?: string;
+  avatar_url?: string;
+  is_group: boolean;
+  participants: ConversationParticipant[];
+  participant_count: number;
+  last_message_preview?: string;
+  last_message_sender?: string;
+  last_message_at?: string;
+  unread_count: number;
+  created_at: string;
+  created_by?: number;
+  my_role?: ParticipantRole;
+};
+
+export type ConversationsListResponse = {
+  conversations: ConversationSummary[];
+  total: number;
+};
+
+export type MessageType = "text" | "report_share" | "file" | "image" | "system" | "poll";
+
+// Reaction Types
+export type ReactionInfo = {
+  emoji: string;
+  count: number;
+  users: string[];
+  has_reacted: boolean;
+};
+
+export type ReactionSummary = {
+  [emoji: string]: ReactionInfo;
+};
+
+export type MessageReactionsResponse = {
+  message_id: number;
+  reactions: ReactionSummary;
+  total_reactions: number;
+};
+
+// Reply Types
+export type ReplyInfo = {
+  id: number;
+  sender_username: string;
+  content_preview: string;
+  is_deleted: boolean;
+};
+
+// Attachment Types
+export type AttachmentData = {
+  file_name?: string;
+  file_type?: string;
+  file_size?: number;
+  file_url?: string;
+  thumbnail_url?: string;
+  report_id?: number;
+  report_title?: string;
+};
+
+export type FileUploadResponse = {
+  file_url: string;
+  filename: string;      // matches backend: filename (not file_name)
+  mime_type: string;     // matches backend: mime_type (not file_type)
+  file_size: number;
+  thumbnail_url?: string;
+  file_category?: string;  // image, document, archive, code, mobile, binary, security, data, text, other
+};
+
+// WebSocket Event Types
+export type WSEventType = 
+  | "new_message"
+  | "message_edited"
+  | "message_deleted"
+  | "reaction_added"
+  | "reaction_removed"
+  | "typing"
+  | "presence"
+  | "read_receipt";
+
+export type WSNewMessageEvent = {
+  type: "new_message";
+  message: SocialMessage;
+  conversation_id: number;
+};
+
+export type WSMessageEditEvent = {
+  type: "message_edited";
+  message_id: number;
+  conversation_id: number;
+  content: string;
+  updated_at: string;
+};
+
+export type WSMessageDeleteEvent = {
+  type: "message_deleted";
+  message_id: number;
+  conversation_id: number;
+};
+
+export type WSReactionEvent = {
+  type: "reaction_added" | "reaction_removed";
+  message_id: number;
+  conversation_id: number;
+  emoji: string;
+  user_id: number;
+  username: string;
+};
+
+export type WSTypingEvent = {
+  type: "typing";
+  conversation_id: number;
+  user_id: number;
+  username: string;
+  is_typing: boolean;
+};
+
+export type WSPresenceEvent = {
+  type: "presence";
+  user_id: number;
+  username: string;
+  is_online: boolean;
+};
+
+export type WSReadReceiptEvent = {
+  type: "read_receipt";
+  conversation_id: number;
+  user_id: number;
+  last_read_message_id: number;
+};
+
+export type WSPinEvent = {
+  type: "message_pinned" | "message_unpinned";
+  conversation_id: number;
+  message_id: number;
+  user_id: number;
+  username: string;
+  pinned_at?: string;
+};
+
+export type WSForwardEvent = {
+  type: "forwarded_message";
+  conversation_id: number;
+  message: SocialMessage;
+};
+
+export type WSMentionEvent = {
+  type: "mention";
+  conversation_id: number;
+  message_id: number;
+  sender_username: string;
+  content_preview: string;
+};
+
+export type WSEvent = 
+  | WSNewMessageEvent
+  | WSMessageEditEvent
+  | WSMessageDeleteEvent
+  | WSReactionEvent
+  | WSTypingEvent
+  | WSPresenceEvent
+  | WSReadReceiptEvent
+  | WSPinEvent
+  | WSForwardEvent
+  | WSMentionEvent;
+
+// Pinned Message Types
+export type PinnedMessageInfo = {
+  id: number;
+  message_id: number;
+  pinned_by: number;
+  pinned_by_username: string;
+  pinned_at: string;
+  message_content: string;
+  message_sender: string;
+  message_created_at: string;
+};
+
+export type PinnedMessagesResponse = {
+  conversation_id: number;
+  pinned_messages: PinnedMessageInfo[];
+  total: number;
+};
+
+// Forward Message Types
+export type ForwardMessageRequest = {
+  target_conversation_ids: number[];
+};
+
+export type ForwardedMessageInfo = {
+  conversation_id: number;
+  message_id: number;
+  success: boolean;
+};
+
+export type ForwardMessageResponse = {
+  original_message_id: number;
+  forwarded_to: ForwardedMessageInfo[];
+  failed_count: number;
+};
+
+// Read Receipt Types  
+export type ReadReceiptInfo = {
+  user_id: number;
+  username: string;
+  avatar_url?: string;
+  last_read_message_id: number;
+  read_at: string;
+};
+
+export type ConversationReadReceipts = {
+  conversation_id: number;
+  receipts: ReadReceiptInfo[];
+};
+
+export type MessageReadBy = {
+  message_id: number;
+  read_by: ReadReceiptInfo[];
+};
+
+// Mention Types
+export type MentionInfo = {
+  user_id: number;
+  username: string;
+  start_index: number;
+  end_index: number;
+};
+
+// ============================================================================
+// Message Search Types
+// ============================================================================
+
+export type MessageSearchResult = {
+  message_id: number;
+  conversation_id: number;
+  conversation_name?: string;
+  sender_username: string;
+  content: string;
+  highlighted_content: string;
+  created_at: string;
+  message_type: MessageType;
+};
+
+export type MessageSearchResponse = {
+  query: string;
+  results: MessageSearchResult[];
+  total: number;
+  has_more: boolean;
+};
+
+// ============================================================================
+// Poll Types
+// ============================================================================
+
+export type PollType = "single" | "multiple";
+
+export type PollOptionResponse = {
+  id: number;
+  text: string;
+  vote_count: number;
+  voters?: string[];
+  has_voted: boolean;
+  percentage: number;
+};
+
+export type PollResponse = {
+  id: number;
+  conversation_id: number;
+  message_id?: number;
+  created_by: number;
+  creator_username: string;
+  question: string;
+  poll_type: PollType;
+  is_anonymous: boolean;
+  allow_add_options: boolean;
+  closes_at?: string;
+  is_closed: boolean;
+  total_votes: number;
+  options: PollOptionResponse[];
+  created_at: string;
+};
+
+export type PollCreate = {
+  question: string;
+  options: string[];
+  poll_type?: PollType;
+  is_anonymous?: boolean;
+  allow_add_options?: boolean;
+  closes_at?: string;
+};
+
+export type PollVoteRequest = {
+  option_ids: number[];
+};
+
+export type PollAddOptionRequest = {
+  text: string;
+};
+
+// ============================================================================
+// GIF Types
+// ============================================================================
+
+export type GifItem = {
+  id: string;
+  title: string;
+  url: string;
+  preview_url: string;
+  width: number;
+  height: number;
+  source: string;
+};
+
+export type GifSearchResponse = {
+  query: string;
+  gifs: GifItem[];
+  next_offset?: string;
+};
+
+export type GifTrendingResponse = {
+  gifs: GifItem[];
+  next_offset?: string;
+};
+
+// ============================================================================
+// Mute Types
+// ============================================================================
+
+export type MuteRequest = {
+  mute: boolean;
+  duration_hours?: number;
+};
+
+export type MuteStatusResponse = {
+  conversation_id: number;
+  is_muted: boolean;
+  muted_until?: string;
+};
+
+// ============================================================================
+// Bookmark Types
+// ============================================================================
+
+export type BookmarkCreate = {
+  message_id: number;
+  note?: string;
+};
+
+export type BookmarkUpdate = {
+  note?: string;
+};
+
+export type BookmarkResponse = {
+  id: number;
+  user_id: number;
+  message_id: number;
+  conversation_id: number;
+  conversation_name?: string;
+  message_content: string;
+  message_sender_username: string;
+  message_sender_avatar_url?: string;
+  message_type: MessageType;
+  message_created_at: string;
+  note?: string;
+  created_at: string;
+};
+
+export type BookmarksListResponse = {
+  bookmarks: BookmarkResponse[];
+  total: number;
+};
+
+// ============================================================================
+// Edit History Types
+// ============================================================================
+
+export type EditHistoryEntry = {
+  id: number;
+  message_id: number;
+  previous_content: string;
+  edited_at: string;
+  edit_number: number;
+};
+
+export type MessageEditHistoryResponse = {
+  message_id: number;
+  current_content: string;
+  edit_count: number;
+  history: EditHistoryEntry[];
+};
+
+// ============================================================================
+// Project Files & Documents Types
+// ============================================================================
+
+export type ProjectFile = {
+  id: number;
+  project_id: number;
+  filename: string;
+  original_filename: string;
+  file_url: string;
+  file_size: number;
+  mime_type: string | null;
+  description: string | null;
+  folder: string | null;
+  created_at: string;
+  uploaded_by_username: string | null;
+};
+
+export type ProjectDocument = {
+  id: number;
+  project_id: number;
+  filename: string;
+  original_filename: string;
+  file_url: string;
+  file_size: number;
+  mime_type: string | null;
+  summary: string | null;
+  key_points: string[] | null;
+  status: "pending" | "processing" | "completed" | "failed";
+  error_message: string | null;
+  created_at: string;
+  processed_at: string | null;
+  uploaded_by_username: string | null;
+};
+
+export type DocumentChatMessage = {
+  id: number;
+  document_id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  username: string | null;
+};
+
+export type DocumentAnalysisReport = {
+  id: number;
+  project_id: number;
+  custom_prompt: string | null;
+  combined_summary: string | null;
+  combined_key_points: string[] | null;
+  status: "pending" | "processing" | "completed" | "failed";
+  error_message: string | null;
+  created_at: string;
+  processed_at: string | null;
+  created_by_username: string | null;
+  documents: ProjectDocument[];
+};
+
+export type ReportChatMessage = {
+  id: number;
+  report_id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  username: string | null;
+};
+
+// ============================================================================
+// Poll WebSocket Event
+// ============================================================================
+
+export type WSPollEvent = {
+  type: "poll_created" | "poll_vote" | "poll_closed" | "poll_option_added";
+  conversation_id: number;
+  poll_id: number;
+  poll?: PollResponse;
+  user_id?: number;
+  username?: string;
+};
+
+export type SocialMessage = {
+  id: number;
+  conversation_id: number;
+  sender_id: number;
+  sender_username: string;
+  sender_first_name?: string;
+  sender_avatar_url?: string;
+  content: string;
+  message_type: MessageType;
+  attachment_data?: AttachmentData;
+  created_at: string;
+  updated_at: string;
+  is_edited: boolean;
+  is_deleted: boolean;
+  is_own_message: boolean;
+  reply_to?: ReplyInfo;
+  reactions?: ReactionSummary;
+};
+
+export type MessagesListResponse = {
+  messages: SocialMessage[];
+  total: number;
+  has_more: boolean;
+  conversation_id: number;
+};
+
+export type ConversationDetail = {
+  id: number;
+  name?: string;
+  description?: string;
+  avatar_url?: string;
+  is_group: boolean;
+  participants: ConversationParticipant[];
+  participant_count: number;
+  messages: SocialMessage[];
+  total_messages: number;
+  has_more_messages: boolean;
+  created_at: string;
+  created_by?: number;
+  my_role?: ParticipantRole;
+};
+
+export type UnreadCountResponse = {
+  total_unread: number;
+  by_conversation: Record<number, number>;
+};
+
+// Group Chat Types
+export type GroupCreate = {
+  name: string;
+  description?: string;
+  avatar_url?: string;
+  participant_ids?: number[];
+};
+
+export type GroupUpdate = {
+  name?: string;
+  description?: string;
+  avatar_url?: string;
+};
+
+export type GroupMemberInfo = {
+  user_id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  avatar_url?: string;
+  role: ParticipantRole;
+  nickname?: string;
+  is_muted: boolean;
+  joined_at: string;
+  added_by_username?: string;
+};
+
+// User Notes Types
+export type UserNote = {
+  id: number;
+  owner_id: number;
+  subject_id: number;
+  subject_username: string;
+  subject_first_name?: string;
+  subject_avatar_url?: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UserNotesListResponse = {
+  notes: UserNote[];
+  total: number;
+};
+
+// ============================================================================
+// Social API Client
+// ============================================================================
+
+export const socialApi = {
+  // User Search
+  getSuggestedUsers: async (skip = 0, limit = 20): Promise<UserSearchResponse> => {
+    const params = new URLSearchParams({
+      skip: String(skip),
+      limit: String(limit),
+    });
+    const resp = await fetch(`${API_URL}/social/users/suggested?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  searchUsers: async (query: string, skip = 0, limit = 20, excludeFriends = false): Promise<UserSearchResponse> => {
+    const params = new URLSearchParams({
+      q: query,
+      skip: String(skip),
+      limit: String(limit),
+      exclude_friends: String(excludeFriends),
+    });
+    const resp = await fetch(`${API_URL}/social/users/search?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getUserProfile: async (userId: number): Promise<UserPublicProfile> => {
+    const resp = await fetch(`${API_URL}/social/users/${userId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Friend Requests
+  sendFriendRequest: async (receiverId: number, message?: string): Promise<FriendRequest> => {
+    const resp = await fetch(`${API_URL}/social/friend-requests`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ receiver_id: receiverId, message }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getFriendRequests: async (): Promise<FriendRequestListResponse> => {
+    const resp = await fetch(`${API_URL}/social/friend-requests`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  respondToFriendRequest: async (requestId: number, accept: boolean): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/friend-requests/${requestId}/respond`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ action: accept ? "accept" : "reject" }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  cancelFriendRequest: async (requestId: number): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/friend-requests/${requestId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Friends
+  getFriends: async (): Promise<FriendsListResponse> => {
+    const resp = await fetch(`${API_URL}/social/friends`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  removeFriend: async (friendId: number): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/friends/${friendId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Conversations
+  createConversation: async (participantId: number, initialMessage?: string): Promise<ConversationSummary> => {
+    const resp = await fetch(`${API_URL}/social/conversations`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        participant_ids: [participantId],
+        initial_message: initialMessage,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getConversations: async (skip = 0, limit = 50): Promise<ConversationsListResponse> => {
+    const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+    const resp = await fetch(`${API_URL}/social/conversations?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getConversation: async (conversationId: number, skip = 0, limit = 50): Promise<ConversationDetail> => {
+    const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  markConversationRead: async (conversationId: number): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/read`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteConversation: async (conversationId: number): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Messages
+  sendMessage: async (
+    conversationId: number,
+    content: string,
+    messageType: MessageType = "text",
+    attachmentData?: Record<string, any>
+  ): Promise<SocialMessage> => {
+    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/messages`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        content,
+        message_type: messageType,
+        attachment_data: attachmentData,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getMessages: async (
+    conversationId: number,
+    skip = 0,
+    limit = 50,
+    beforeId?: number
+  ): Promise<MessagesListResponse> => {
+    const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+    if (beforeId) params.append("before_id", String(beforeId));
+    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/messages?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  editMessage: async (messageId: number, content: string): Promise<SocialMessage> => {
+    const resp = await fetch(`${API_URL}/social/messages/${messageId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ content }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteMessage: async (messageId: number): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/messages/${messageId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Unread Counts
+  getUnreadCounts: async (): Promise<UnreadCountResponse> => {
+    const resp = await fetch(`${API_URL}/social/unread`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Profile Update
+  updateProfile: async (data: {
+    first_name?: string;
+    last_name?: string;
+    bio?: string;
+    avatar_url?: string;
+  }): Promise<any> => {
+    const resp = await fetch(`${API_URL}/auth/profile`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Group Chats
+  createGroup: async (data: GroupCreate): Promise<ConversationSummary> => {
+    const resp = await fetch(`${API_URL}/social/groups`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateGroup: async (groupId: number, data: GroupUpdate): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/groups/${groupId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getGroupMembers: async (groupId: number): Promise<GroupMemberInfo[]> => {
+    const resp = await fetch(`${API_URL}/social/groups/${groupId}/members`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  addGroupMembers: async (groupId: number, userIds: number[]): Promise<{ message: string; detail?: string }> => {
+    const resp = await fetch(`${API_URL}/social/groups/${groupId}/members`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ user_ids: userIds }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  removeGroupMember: async (groupId: number, userId: number): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/groups/${groupId}/members/${userId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateMemberRole: async (groupId: number, userId: number, role: ParticipantRole): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/groups/${groupId}/members/${userId}/role`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ role }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  leaveGroup: async (groupId: number, userId: number): Promise<{ message: string }> => {
+    // Same endpoint as removing, but pass your own user ID
+    return socialApi.removeGroupMember(groupId, userId);
+  },
+
+  // User Notes
+  getAllNotes: async (): Promise<UserNotesListResponse> => {
+    const resp = await fetch(`${API_URL}/social/notes`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getNoteForUser: async (userId: number): Promise<UserNote> => {
+    const resp = await fetch(`${API_URL}/social/notes/${userId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  createOrUpdateNote: async (subjectId: number, content: string): Promise<UserNote> => {
+    const resp = await fetch(`${API_URL}/social/notes`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ subject_id: subjectId, content }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteNote: async (userId: number): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/notes/${userId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Message Reactions
+  addReaction: async (messageId: number, emoji: string): Promise<{ message: string; reactions: ReactionSummary }> => {
+    const resp = await fetch(`${API_URL}/social/messages/${messageId}/reactions`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ emoji }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  removeReaction: async (messageId: number, emoji: string): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getMessageReactions: async (messageId: number): Promise<MessageReactionsResponse> => {
+    const resp = await fetch(`${API_URL}/social/messages/${messageId}/reactions`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // File Upload
+  uploadFile: async (file: File): Promise<FileUploadResponse> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    const headers: Record<string, string> = {};
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    
+    const resp = await fetch(`${API_URL}/social/upload`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Reply to Message
+  replyToMessage: async (
+    conversationId: number,
+    replyToMessageId: number,
+    content: string,
+    messageType: MessageType = "text",
+    attachmentData?: AttachmentData
+  ): Promise<SocialMessage> => {
+    const resp = await fetch(
+      `${API_URL}/social/conversations/${conversationId}/messages/${replyToMessageId}/reply`,
+      {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          content,
+          message_type: messageType,
+          attachment_data: attachmentData,
+        }),
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Message Pinning
+  // ============================================================================
+
+  pinMessage: async (conversationId: number, messageId: number): Promise<PinnedMessageInfo> => {
+    const resp = await fetch(
+      `${API_URL}/social/conversations/${conversationId}/messages/${messageId}/pin`,
+      {
+        method: "POST",
+        headers: getAuthHeaders(),
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  unpinMessage: async (conversationId: number, messageId: number): Promise<{ message: string }> => {
+    const resp = await fetch(
+      `${API_URL}/social/conversations/${conversationId}/messages/${messageId}/pin`,
+      {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getPinnedMessages: async (conversationId: number): Promise<PinnedMessagesResponse> => {
+    const resp = await fetch(
+      `${API_URL}/social/conversations/${conversationId}/pinned`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Message Forwarding
+  // ============================================================================
+
+  forwardMessage: async (
+    messageId: number, 
+    targetConversationIds: number[]
+  ): Promise<ForwardMessageResponse> => {
+    const resp = await fetch(`${API_URL}/social/messages/${messageId}/forward`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ target_conversation_ids: targetConversationIds }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Read Receipts
+  // ============================================================================
+
+  updateReadReceipt: async (
+    conversationId: number, 
+    messageId: number
+  ): Promise<ReadReceiptInfo> => {
+    const resp = await fetch(
+      `${API_URL}/social/conversations/${conversationId}/read/${messageId}`,
+      {
+        method: "POST",
+        headers: getAuthHeaders(),
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getConversationReadReceipts: async (
+    conversationId: number
+  ): Promise<ConversationReadReceipts> => {
+    const resp = await fetch(
+      `${API_URL}/social/conversations/${conversationId}/read-receipts`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getMessageReadBy: async (messageId: number): Promise<MessageReadBy> => {
+    const resp = await fetch(`${API_URL}/social/messages/${messageId}/read-by`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Mentions
+  // ============================================================================
+
+  checkMentions: async (conversationId: number, content: string): Promise<MentionInfo[]> => {
+    const resp = await fetch(
+      `${API_URL}/social/conversations/${conversationId}/mentions/check?content=${encodeURIComponent(content)}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Message Search
+  // ============================================================================
+
+  searchMessages: async (
+    query: string,
+    conversationId?: number,
+    skip = 0,
+    limit = 50
+  ): Promise<MessageSearchResponse> => {
+    const params = new URLSearchParams({
+      q: query,
+      skip: String(skip),
+      limit: String(limit),
+    });
+    if (conversationId) params.append("conversation_id", String(conversationId));
+    
+    const resp = await fetch(`${API_URL}/social/messages/search?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Polls
+  // ============================================================================
+
+  createPoll: async (conversationId: number, poll: PollCreate): Promise<PollResponse> => {
+    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/polls`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(poll),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getConversationPolls: async (
+    conversationId: number,
+    includeClosed = true
+  ): Promise<PollResponse[]> => {
+    const params = new URLSearchParams({ include_closed: String(includeClosed) });
+    const resp = await fetch(
+      `${API_URL}/social/conversations/${conversationId}/polls?${params}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getPoll: async (pollId: number): Promise<PollResponse> => {
+    const resp = await fetch(`${API_URL}/social/polls/${pollId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  voteOnPoll: async (
+    pollId: number,
+    optionIds: number[]
+  ): Promise<{ message: string; poll: PollResponse }> => {
+    const resp = await fetch(`${API_URL}/social/polls/${pollId}/vote`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ option_ids: optionIds }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  addPollOption: async (
+    pollId: number,
+    text: string
+  ): Promise<{ message: string; poll: PollResponse }> => {
+    const resp = await fetch(`${API_URL}/social/polls/${pollId}/options`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ text }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  closePoll: async (pollId: number): Promise<{ message: string; poll: PollResponse }> => {
+    const resp = await fetch(`${API_URL}/social/polls/${pollId}/close`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // GIF Search
+  // ============================================================================
+
+  searchGifs: async (
+    query: string,
+    limit = 25,
+    offset = "0"
+  ): Promise<GifSearchResponse> => {
+    const params = new URLSearchParams({
+      q: query,
+      limit: String(limit),
+      offset,
+    });
+    const resp = await fetch(`${API_URL}/social/gifs/search?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getTrendingGifs: async (limit = 25, offset = "0"): Promise<GifTrendingResponse> => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset,
+    });
+    const resp = await fetch(`${API_URL}/social/gifs/trending?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Mute Conversation
+  // ============================================================================
+
+  muteConversation: async (
+    conversationId: number,
+    mute: boolean,
+    durationHours?: number
+  ): Promise<MuteStatusResponse> => {
+    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/mute`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ mute, duration_hours: durationHours }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getMuteStatus: async (conversationId: number): Promise<MuteStatusResponse> => {
+    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/mute`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Message Bookmarks
+  // ============================================================================
+
+  addBookmark: async (messageId: number, note?: string): Promise<BookmarkResponse> => {
+    const resp = await fetch(`${API_URL}/social/bookmarks`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ message_id: messageId, note }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getBookmarks: async (skip = 0, limit = 50): Promise<BookmarksListResponse> => {
+    const params = new URLSearchParams({
+      skip: String(skip),
+      limit: String(limit),
+    });
+    const resp = await fetch(`${API_URL}/social/bookmarks?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateBookmark: async (bookmarkId: number, note?: string): Promise<BookmarkResponse> => {
+    const resp = await fetch(`${API_URL}/social/bookmarks/${bookmarkId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ note }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  removeBookmark: async (messageId: number): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/social/bookmarks/message/${messageId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  isMessageBookmarked: async (messageId: number): Promise<{ is_bookmarked: boolean }> => {
+    const resp = await fetch(`${API_URL}/social/messages/${messageId}/bookmarked`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Message Edit History
+  // ============================================================================
+
+  getMessageEditHistory: async (messageId: number): Promise<MessageEditHistoryResponse> => {
+    const resp = await fetch(`${API_URL}/social/messages/${messageId}/history`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // WebSocket URL helper
+  getWebSocketUrl: (): string => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    
+    // Handle relative API_URL (like "/api") vs absolute URL (like "http://localhost:8000/api")
+    if (API_URL.startsWith("/")) {
+      // Relative URL - use current host
+      return `${wsProtocol}//${window.location.host}/api/ws/chat?token=${token}`;
+    } else {
+      // Absolute URL - extract host from it
+      const baseUrl = API_URL.replace(/^https?:\/\//, "").replace(/\/api$/, "");
+      return `${wsProtocol}//${baseUrl}/api/ws/chat?token=${token}`;
+    }
+  },
 };

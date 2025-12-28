@@ -34,6 +34,8 @@ import {
   RadioGroup,
   FormControlLabel,
   FormControl,
+  Zoom,
+  useScrollTrigger,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CalculateIcon from "@mui/icons-material/Calculate";
@@ -617,7 +619,12 @@ const ComputerNetworkingPage: React.FC = () => {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [showBackToTop, setShowBackToTop] = useState(false);
+  // Scroll trigger for back-to-top button
+  const showBackToTop = useScrollTrigger({
+    target: typeof window !== 'undefined' ? window : undefined,
+    disableHysteresis: true,
+    threshold: 400,
+  });
 
   // Select 10 random questions from the 100-question bank
   const selectRandomQuestions = useCallback(() => {
@@ -670,14 +677,7 @@ const ComputerNetworkingPage: React.FC = () => {
     return { answered, total: quizQuestions.length };
   }, [quizAnswers, quizQuestions.length]);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setShowBackToTop(window.scrollY > 600);
-    };
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  // Scroll handler for back-to-top is now handled by useScrollTrigger hook
 
   // Get score color
   const getScoreColor = (score: number) => {
@@ -6402,23 +6402,76 @@ Response Codes:
         )}
       </Paper>
 
-      {showBackToTop && (
-        <Tooltip title="Back to top">
+      {/* Completion Banner */}
+      <Paper
+        sx={{
+          p: 4,
+          mt: 6,
+          mb: 4,
+          borderRadius: 4,
+          background: `linear-gradient(135deg, ${alpha("#22c55e", 0.15)} 0%, ${alpha("#10b981", 0.1)} 100%)`,
+          border: `1px solid ${alpha("#22c55e", 0.3)}`,
+          textAlign: "center",
+        }}
+      >
+        <EmojiEventsIcon sx={{ fontSize: 60, color: "#22c55e", mb: 2 }} />
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 2, color: "#22c55e" }}>
+          🎉 Congratulations!
+        </Typography>
+        <Typography variant="h6" color="text.secondary" sx={{ mb: 3, maxWidth: 600, mx: "auto" }}>
+          You've explored all the core networking concepts. Keep practicing with the quiz above,
+          and use the quick navigation to review any section!
+        </Typography>
+        <Box sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
+          <Button
+            variant="contained"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            sx={{
+              bgcolor: "#22c55e",
+              "&:hover": { bgcolor: "#16a34a" },
+              fontWeight: 700,
+              px: 3,
+            }}
+          >
+            ↑ Back to Top
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={() => navigate("/learn")}
+            sx={{
+              borderColor: "#22c55e",
+              color: "#22c55e",
+              "&:hover": { borderColor: "#16a34a", bgcolor: alpha("#22c55e", 0.05) },
+              fontWeight: 700,
+              px: 3,
+            }}
+          >
+            More Learning Resources
+          </Button>
+        </Box>
+      </Paper>
+
+      {/* Floating Back to Top Button with Zoom Animation */}
+      <Zoom in={showBackToTop}>
+        <Tooltip title="Back to top" placement="left">
           <Fab
             color="primary"
-            size="small"
+            size="medium"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             sx={{
               position: "fixed",
-              right: { xs: 16, md: 24 },
-              bottom: { xs: 16, md: 24 },
+              right: { xs: 16, md: 32 },
+              bottom: { xs: 16, md: 32 },
               zIndex: 1200,
+              bgcolor: "#0ea5e9",
+              "&:hover": { bgcolor: "#0284c7" },
+              boxShadow: `0 4px 20px ${alpha("#0ea5e9", 0.4)}`,
             }}
           >
             <KeyboardArrowUpIcon />
           </Fab>
         </Tooltip>
-      )}
+      </Zoom>
 
       </Container>
     </LearnPageLayout>

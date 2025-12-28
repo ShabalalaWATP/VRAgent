@@ -491,7 +491,7 @@ INPUT:
 """
 
         response = genai_client.models.generate_content(
-            model=settings.gemini_model_id or "gemini-2.5-flash",
+            model=settings.gemini_model_id or "gemini-3-flash-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1,
@@ -665,7 +665,7 @@ def build_sensitive_data_inventory(
         try:
             candidates = _build_gemini_candidates(items_by_hash)
             if candidates:
-                gemini_model = settings.gemini_model_id or "gemini-2.5-flash"
+                gemini_model = settings.gemini_model_id or "gemini-3-flash-preview"
                 results = _gemini_classify(candidates)
                 if results:
                     gemini_used = True

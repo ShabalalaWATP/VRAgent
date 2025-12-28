@@ -222,7 +222,7 @@ Answer the user's question based on this security scan report. Be helpful, speci
         })
         
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=settings.gemini_model_id,
             contents=conversation,
             config=types.GenerateContentConfig(
                 temperature=0.7,

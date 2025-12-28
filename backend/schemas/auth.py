@@ -69,6 +69,14 @@ class RoleUpdate(BaseModel):
     role: UserRole
 
 
+class ProfileUpdate(BaseModel):
+    """Schema for updating user profile."""
+    first_name: Optional[str] = Field(None, max_length=50)
+    last_name: Optional[str] = Field(None, max_length=50)
+    bio: Optional[str] = Field(None, max_length=500)
+    avatar_url: Optional[str] = Field(None, max_length=500)
+
+
 # ============================================================================
 # Response Schemas
 # ============================================================================
@@ -94,6 +102,8 @@ class UserResponse(BaseModel):
     username: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
     role: UserRole
     status: AccountStatus
     created_at: datetime

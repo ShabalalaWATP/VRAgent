@@ -12,9 +12,9 @@ class Settings(BaseSettings):
     database_url: str = Field(..., validation_alias="DATABASE_URL")
     redis_url: str = Field(..., validation_alias="REDIS_URL")
     gemini_api_key: str = Field("", validation_alias="GEMINI_API_KEY")
-    # Default to Gemini 2.5 Flash - best balance of cost and capability
+    # Default to Gemini 3 Flash Preview - latest and most capable flash model
     # Other options: gemini-2.5-flash, gemini-3-pro-preview (most capable)
-    gemini_model_id: str = Field("gemini-2.5-flash", validation_alias="GEMINI_MODEL_ID")
+    gemini_model_id: str = Field("gemini-3-flash-preview", validation_alias="GEMINI_MODEL_ID")
     # Ghidra configuration (optional, for binary decompilation)
     ghidra_home: str = Field("", validation_alias="GHIDRA_HOME")
     ghidra_headless_path: str = Field("", validation_alias="GHIDRA_HEADLESS_PATH")
@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     
     # File upload settings
     max_upload_size: int = Field(100 * 1024 * 1024, validation_alias="MAX_UPLOAD_SIZE")  # 100MB default
+    upload_dir: str = Field("/tmp/uploads", validation_alias="UPLOAD_DIR")  # Base upload directory
 
     # Reverse engineering signature settings
     yara_rules_path: str = Field("backend/yara_rules", validation_alias="YARA_RULES_PATH")

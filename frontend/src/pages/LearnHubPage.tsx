@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -19,8 +19,28 @@ import {
   IconButton,
   Tooltip,
   Badge,
+  TextField,
+  InputAdornment,
+  Fab,
+  Zoom,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Drawer,
+  useMediaQuery,
+  ClickAwayListener,
+  Popper,
+  Fade,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import ClearIcon from "@mui/icons-material/Clear";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import KeyboardIcon from "@mui/icons-material/Keyboard";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import LearnPageLayout from "../components/LearnPageLayout";
 import SchoolIcon from "@mui/icons-material/School";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -33,6 +53,7 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import CodeIcon from "@mui/icons-material/Code";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
+import PhoneIphoneIcon from "@mui/icons-material/PhoneIphone";
 import LockIcon from "@mui/icons-material/Lock";
 import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
 import RadarIcon from "@mui/icons-material/Radar";
@@ -72,6 +93,14 @@ import ScienceIcon from "@mui/icons-material/Science";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ComputerIcon from "@mui/icons-material/Computer";
 import DesktopWindowsIcon from "@mui/icons-material/DesktopWindows";
+import WebIcon from "@mui/icons-material/Web";
+import LocalCafeIcon from "@mui/icons-material/LocalCafe";
+import SpeedIcon from "@mui/icons-material/Speed";
+import DataObjectIcon from "@mui/icons-material/DataObject";
+import SettingsIcon from "@mui/icons-material/Settings";
+import AppleIcon from "@mui/icons-material/Apple";
+import ViewInArIcon from "@mui/icons-material/ViewInAr";
+import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
 
 interface LearnCard {
   title: string;
@@ -107,11 +136,11 @@ const appCards: LearnCard[] = [
   },
   {
     title: "AI Analysis Explained",
-    description: "See how Gemini AI transforms raw vulnerability data into actionable security intelligence.",
+    description: "Multi-pass deep scanning, Agentic AI corroboration, exploit scenarios, and how Gemini transforms findings into intelligence.",
     icon: <PsychologyIcon sx={{ fontSize: 40 }} />,
     path: "/learn/ai-analysis",
     color: "#8b5cf6",
-    tags: ["Gemini AI", "Prompts", "Red Team"],
+    tags: ["Gemini AI", "Multi-Pass", "Agentic"],
   },
   {
     title: "VRAgent Architecture",
@@ -367,6 +396,24 @@ const reverseEngineeringCards: LearnCard[] = [
     tags: ["Disassembly", "Decompiler", "NSA"],
   },
   {
+    title: "Binary Ninja Essentials",
+    description: "IL-first workflow with HLIL/MLIL/LLIL, type recovery, and Python scripting for automation.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/binary-ninja",
+    color: "#14b8a6",
+    tags: ["IL", "Scripting", "Types"],
+    badge: "New",
+  },
+  {
+    title: "IDA Pro Essentials",
+    description: "Industry-standard disassembly and decompilation: navigation, xrefs, types, IDAPython, and debugging basics.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/ida-pro",
+    color: "#2563eb",
+    tags: ["IDA", "Decompiler", "IDAPython"],
+    badge: "New",
+  },
+  {
     title: "Android Reverse Engineering",
     description: "Android RE fundamentals: APK structure, JADX, Frida, static/dynamic analysis, and common vulnerabilities.",
     icon: <PhoneAndroidIcon sx={{ fontSize: 40 }} />,
@@ -375,12 +422,56 @@ const reverseEngineeringCards: LearnCard[] = [
     tags: ["Android", "Frida", "JADX"],
   },
   {
+    title: "iOS Reverse Engineering Fundamentals",
+    description: "iOS app analysis: Mach-O, code signing, Objective-C/Swift metadata, and dynamic instrumentation basics.",
+    icon: <PhoneIphoneIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/ios-reverse-engineering",
+    color: "#3b82f6",
+    tags: ["iOS", "Mach-O", "LLDB"],
+    badge: "New",
+  },
+  {
     title: "Windows Internals for RE",
     description: "PE format, TEB/PEB, API patterns, hooking, DLL injection, and anti-debugging techniques.",
     icon: <MemoryIcon sx={{ fontSize: 40 }} />,
     path: "/learn/windows-internals",
     color: "#8b5cf6",
     tags: ["PE", "TEB/PEB", "Injection"],
+  },
+  {
+    title: "Linux Internals for RE",
+    description: "ELF format deep dive, process memory layout, syscalls, dynamic linking (PLT/GOT), GDB debugging, binary protections (ASLR, PIE, NX), libc internals, and exploitation patterns.",
+    icon: <TerminalIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/linux-internals",
+    color: "#f97316",
+    tags: ["ELF", "GDB", "Exploitation"],
+    badge: "New",
+  },
+  {
+    title: "Malware Analysis",
+    description: "Comprehensive guide to analyzing malicious software: static/dynamic analysis, sandboxing, debugging, unpacking, YARA rules, and threat intelligence.",
+    icon: <BugReportIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/malware-analysis",
+    color: "#ef4444",
+    tags: ["Malware", "Sandbox", "YARA", "Threat Intel"],
+    badge: "New",
+  },
+  {
+    title: "Anti-Debugging Techniques",
+    description: "Comprehensive guide to anti-debugging: API checks, PEB flags, timing attacks, exception handling, VM detection, and bypass strategies.",
+    icon: <SecurityIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/anti-debugging",
+    color: "#f97316",
+    tags: ["Anti-Debug", "Evasion", "Protection", "Bypass"],
+    badge: "New",
+  },
+  {
+    title: "Firmware Reverse Engineering Fundamentals",
+    description: "Embedded device analysis: firmware extraction, filesystems, bootloaders, emulation, and IoT security basics.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/firmware-re",
+    color: "#06b6d4",
+    tags: ["Firmware", "IoT", "Hardware"],
     badge: "New",
   },
 ];
@@ -727,6 +818,194 @@ const mobileSecurityCards: LearnCard[] = [
   },
 ];
 
+// ========== CATEGORY: Software Engineering ==========
+const softwareEngineeringCards: LearnCard[] = [
+  {
+    title: "Software Engineering Fundamentals",
+    description: "Beginner guide to tools, IDEs, Git/GitHub, workflows, and software engineering roles across web, mobile, backend, cloud, and security.",
+    icon: <SchoolIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/software-engineering-fundamentals",
+    color: "#f97316",
+    tags: ["Beginner", "Git", "IDEs", "Workflows"],
+    badge: "New",
+  },
+  {
+    title: "Secure by Design",
+    description: "Build security into software from the ground up: security principles, threat modeling, STRIDE, OWASP Top 10, secure coding, and cryptography.",
+    icon: <ShieldIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/secure-by-design",
+    color: "#dc2626",
+    tags: ["Security", "OWASP", "Threat Modeling", "Cryptography"],
+    badge: "New",
+  },
+  {
+    title: "Python Fundamentals",
+    description: "Beginner-friendly Python guide: setup, syntax, data types, control flow, functions, files, and basic OOP.",
+    icon: <ScienceIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/python-fundamentals",
+    color: "#3776ab",
+    tags: ["Python", "Beginner", "Syntax", "Automation"],
+    badge: "New",
+  },
+  {
+    title: "Assembly Language",
+    description: "Master the language of the machine: x86/x64 registers, memory, instructions, and CPU architecture.",
+    icon: <MemoryIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/assembly",
+    color: "#f97316",
+    tags: ["x86", "x64", "Registers", "CPU"],
+    badge: "New",
+  },
+  {
+    title: "HTML & CSS Fundamentals",
+    description: "Build the foundation of the web: document structure, semantic HTML, CSS styling, Flexbox, Grid, and responsive design.",
+    icon: <WebIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/html-css",
+    color: "#e91e63",
+    tags: ["HTML5", "CSS3", "Flexbox", "Grid"],
+    badge: "New",
+  },
+  {
+    title: "JavaScript Fundamentals",
+    description: "Master JavaScript from basics to frameworks: ES6+, DOM, async programming, React, Node.js, TypeScript, and testing.",
+    icon: <DataObjectIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/javascript",
+    color: "#f7df1e",
+    tags: ["ES6+", "React", "Node.js", "TypeScript"],
+    badge: "New",
+  },
+  {
+    title: "C Programming",
+    description: "Master the foundation of modern computing: memory management, pointers, data structures, and system-level programming.",
+    icon: <TerminalIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/c-programming",
+    color: "#5c6bc0",
+    tags: ["Pointers", "Memory", "Systems", "Low-Level"],
+    badge: "New",
+  },
+  {
+    title: "C++ Programming",
+    description: "Master object-oriented programming, templates, STL, smart pointers, and modern C++ features for high-performance applications.",
+    icon: <SpeedIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/cpp-programming",
+    color: "#e91e63",
+    tags: ["OOP", "Templates", "STL", "Modern C++"],
+    badge: "New",
+  },
+  {
+    title: "Go Programming",
+    description: "Master the language of cloud infrastructure: goroutines, channels, interfaces, and building scalable services with Go.",
+    icon: <CloudIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/go-programming",
+    color: "#00ADD8",
+    tags: ["Golang", "Concurrency", "Cloud", "DevOps"],
+    badge: "New",
+  },
+  {
+    title: "Rust Programming",
+    description: "Learn the systems language loved by developers: ownership, memory safety without garbage collection, and fearless concurrency.",
+    icon: <SettingsIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/rust-programming",
+    color: "#DEA584",
+    tags: ["Systems", "Memory Safety", "Concurrency", "WASM"],
+    badge: "New",
+  },
+  {
+    title: "Java Programming",
+    description: "Master the enterprise standard: object-oriented programming, JVM architecture, Spring Boot, and building scalable applications.",
+    icon: <LocalCafeIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/java-programming",
+    color: "#E76F00",
+    tags: ["OOP", "Enterprise", "Spring", "Android"],
+    badge: "New",
+  },
+  {
+    title: "PHP Programming",
+    description: "Master the web's most widely deployed language: server-side scripting, database integration, frameworks, and modern PHP development.",
+    icon: <StorageIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/php-programming",
+    color: "#777BB4",
+    tags: ["Web", "Laravel", "MySQL", "WordPress"],
+    badge: "New",
+  },
+  {
+    title: "C# Programming",
+    description: "Master the .NET ecosystem: object-oriented programming, LINQ, async patterns, ASP.NET Core, and cross-platform development.",
+    icon: <ViewInArIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/csharp-programming",
+    color: "#512BD4",
+    tags: [".NET", "Unity", "ASP.NET", "Enterprise"],
+    badge: "New",
+  },
+  {
+    title: "Kotlin Programming",
+    description: "Master Android's preferred language: null safety, coroutines, functional programming, and multiplatform development.",
+    icon: <AndroidIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/kotlin-programming",
+    color: "#7F52FF",
+    tags: ["Android", "Multiplatform", "Coroutines", "JetBrains"],
+    badge: "New",
+  },
+  {
+    title: "Swift Programming",
+    description: "Master Apple's modern programming language: optionals, protocols, SwiftUI, Combine, and building iOS/macOS applications.",
+    icon: <PhoneIphoneIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/swift-programming",
+    color: "#F05138",
+    tags: ["iOS", "macOS", "SwiftUI", "Apple"],
+    badge: "New",
+  },
+  {
+    title: "Git & Version Control",
+    description: "Master Git fundamentals: repositories, commits, branches, merging, rebasing, workflows, GitHub/GitLab, and collaboration best practices.",
+    icon: <AccountTreeIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/git-version-control",
+    color: "#f14e32",
+    tags: ["Git", "GitHub", "Branching", "Collaboration"],
+    badge: "New",
+  },
+];
+
+// ========== CATEGORY: Project & Service Management ==========
+const projectServiceManagementCards: LearnCard[] = [
+  {
+    title: "Agile Project Management",
+    description: "Master Agile methodologies: Scrum, Kanban, user stories, estimation, sprints, retrospectives, and scaling frameworks like SAFe.",
+    icon: <SpeedIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/agile-pm",
+    color: "#6366f1",
+    tags: ["Scrum", "Kanban", "Sprints", "User Stories"],
+    badge: "New",
+  },
+  {
+    title: "The Scrum Guide",
+    description: "The definitive guide to Scrum: theory, values, roles (Product Owner, Scrum Master, Developers), events, artifacts, and Definition of Done.",
+    icon: <AutorenewIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/scrum",
+    color: "#0891b2",
+    tags: ["Framework", "Sprints", "Roles", "Artifacts"],
+    badge: "New",
+  },
+  {
+    title: "PRINCE2 Guide",
+    description: "Master PRINCE2 project management: 7 principles, 7 themes, 7 processes, roles, management products, tailoring, and certification paths.",
+    icon: <AccountTreeIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/prince2",
+    color: "#7c3aed",
+    tags: ["Methodology", "Governance", "AXELOS", "Processes"],
+    badge: "New",
+  },
+  {
+    title: "ITIL 4 Guide",
+    description: "Master IT Service Management: Service Value System, 7 guiding principles, Service Value Chain, 34 practices, and certification paths.",
+    icon: <SupportAgentIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/itil-v4",
+    color: "#059669",
+    tags: ["ITSM", "Practices", "AXELOS", "Service Value"],
+    badge: "New",
+  },
+];
+
 // ========== CATEGORY: Career & Certifications ==========
 const careerCards: LearnCard[] = [
   {
@@ -868,6 +1147,26 @@ const allCategories: CategorySection[] = [
     cards: mobileSecurityCards,
   },
   {
+    id: "software-engineering",
+    title: "Software Engineering",
+    emoji: "⚙️",
+    description: "Core software engineering concepts: HTML/CSS, assembly language, compilers, and low-level programming.",
+    icon: <MemoryIcon sx={{ fontSize: 32 }} />,
+    color: "#f97316",
+    gradientEnd: "#ea580c",
+    cards: softwareEngineeringCards,
+  },
+  {
+    id: "project-service-management",
+    title: "Project & Service Management",
+    emoji: "📋",
+    description: "Project management methodologies, service delivery frameworks, and team collaboration practices for successful software delivery.",
+    icon: <IntegrationInstructionsIcon sx={{ fontSize: 32 }} />,
+    color: "#6366f1",
+    gradientEnd: "#8b5cf6",
+    cards: projectServiceManagementCards,
+  },
+  {
     id: "career",
     title: "Career & Certifications",
     emoji: "🏆",
@@ -986,12 +1285,137 @@ function CardGrid({ cards, columns = { xs: 12, sm: 6, md: 4, lg: 3 }, centered =
 export default function LearnHubPage() {
   const theme = useTheme();
   const navigate = useNavigate();
+  const isLargeScreen = useMediaQuery(theme.breakpoints.up("lg"));
+  const isMediumScreen = useMediaQuery(theme.breakpoints.up("md"));
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchAnchorRef = useRef<HTMLDivElement>(null);
+  
+  // Quick navigation state
+  const [quickNavOpen, setQuickNavOpen] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
   
   // Filter state - all categories visible by default
   const [visibleCategories, setVisibleCategories] = useState<Record<string, boolean>>(
     () => Object.fromEntries(allCategories.map((cat) => [cat.id, true]))
   );
   const [filterExpanded, setFilterExpanded] = useState(false);
+
+  // Flatten all cards for search
+  const allCards = useMemo(() => {
+    return allCategories.flatMap((category) =>
+      category.cards.map((card) => ({
+        ...card,
+        category: category.title,
+        categoryId: category.id,
+        categoryEmoji: category.emoji,
+        categoryColor: category.color,
+      }))
+    );
+  }, []);
+
+  // Fuzzy search function
+  const fuzzyMatch = useCallback((text: string, query: string): boolean => {
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    
+    // Direct substring match
+    if (lowerText.includes(lowerQuery)) return true;
+    
+    // Fuzzy character match
+    let queryIndex = 0;
+    for (let i = 0; i < lowerText.length && queryIndex < lowerQuery.length; i++) {
+      if (lowerText[i] === lowerQuery[queryIndex]) {
+        queryIndex++;
+      }
+    }
+    return queryIndex === lowerQuery.length;
+  }, []);
+
+  // Search results
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    
+    const query = searchQuery.trim();
+    return allCards
+      .filter((card) => {
+        // Search in title, description, tags, and category
+        return (
+          fuzzyMatch(card.title, query) ||
+          fuzzyMatch(card.description, query) ||
+          card.tags.some((tag) => fuzzyMatch(tag, query)) ||
+          fuzzyMatch(card.category, query)
+        );
+      })
+      .slice(0, 12); // Limit to 12 results
+  }, [searchQuery, allCards, fuzzyMatch]);
+
+  // Keyboard shortcut for search (Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (e.key === "Escape" && searchFocused) {
+        setSearchQuery("");
+        searchInputRef.current?.blur();
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [searchFocused]);
+
+  // Scroll detection for back-to-top button and active section
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 400);
+      
+      // Detect active section
+      const sections = allCategories.map((cat) => document.getElementById(`category-${cat.id}`));
+      let currentSection = "";
+      
+      for (const section of sections) {
+        if (section) {
+          const rect = section.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = section.id.replace("category-", "");
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+    
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const scrollToCategory = (categoryId: string) => {
+    const element = document.getElementById(`category-${categoryId}`);
+    if (element) {
+      const offset = 100; // Account for sticky header
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+      
+      window.scrollTo({ top: offsetPosition, behavior: "smooth" });
+    }
+    setQuickNavOpen(false);
+  };
+
+  const handleSearchResultClick = (path: string) => {
+    setSearchQuery("");
+    setSearchFocused(false);
+    navigate(path);
+  };
 
   const handleToggleCategory = (categoryId: string) => {
     setVisibleCategories((prev) => ({
@@ -1028,44 +1452,350 @@ export default function LearnHubPage() {
 
   const pageContext = `VRAgent Security Learning Hub - A comprehensive cybersecurity learning platform with ${allCategories.length} categories and ${totalCards} learning topics. Categories include: About VRAgent (scanning, AI analysis, tools), Network Security (Wireshark, Nmap, protocols), Reverse Engineering (debugging, Ghidra), Vulnerability Research (buffer overflows, ROP), Web Security (OWASP Top 10, SQLi, SSRF), Offensive Security (MITRE ATT&CK, C2, lateral movement), Defensive Security (threat intelligence, incident response, forensics), Mobile Security (OWASP Mobile Top 10, pentesting), Career & Certifications (OSCP, CISSP, CTF), and Quick Reference (glossary, commands). This hub provides structured learning paths for security professionals at all levels.`;
 
+  // Quick Navigation Sidebar Content
+  const QuickNavContent = (
+    <Box sx={{ width: isLargeScreen ? 280 : 300, p: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+          <ListAltIcon color="primary" /> Quick Navigation
+        </Typography>
+        {!isLargeScreen && (
+          <IconButton size="small" onClick={() => setQuickNavOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        )}
+      </Box>
+      <List dense sx={{ py: 0 }}>
+        {allCategories.map((category) => (
+          <ListItem key={category.id} disablePadding>
+            <ListItemButton
+              onClick={() => scrollToCategory(category.id)}
+              selected={activeSection === category.id}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                py: 1,
+                border: `1px solid ${alpha(category.color, activeSection === category.id ? 0.3 : 0)}`,
+                bgcolor: activeSection === category.id ? alpha(category.color, 0.1) : "transparent",
+                "&:hover": {
+                  bgcolor: alpha(category.color, 0.1),
+                },
+                "&.Mui-selected": {
+                  bgcolor: alpha(category.color, 0.15),
+                  "&:hover": { bgcolor: alpha(category.color, 0.2) },
+                },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 36, color: category.color }}>
+                <Typography variant="body1">{category.emoji}</Typography>
+              </ListItemIcon>
+              <ListItemText
+                primary={category.title}
+                secondary={`${category.cards.length} topics`}
+                primaryTypographyProps={{
+                  variant: "body2",
+                  fontWeight: activeSection === category.id ? 700 : 500,
+                  color: activeSection === category.id ? category.color : "text.primary",
+                }}
+                secondaryTypographyProps={{
+                  variant: "caption",
+                }}
+              />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
+
   return (
     <LearnPageLayout pageTitle="Security Learning Hub" pageContext={pageContext}>
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box sx={{ textAlign: "center", mb: 6 }}>
+      {/* Quick Nav Sidebar - Fixed on large screens */}
+      {isLargeScreen && (
         <Box
           sx={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 100,
-            height: 100,
-            borderRadius: "50%",
-            background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`,
-            mb: 3,
-            boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.3)}`,
-            border: `3px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+            position: "fixed",
+            left: 0,
+            top: 80,
+            height: "calc(100vh - 80px)",
+            overflowY: "auto",
+            zIndex: 100,
+            borderRight: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            bgcolor: alpha(theme.palette.background.paper, 0.95),
+            backdropFilter: "blur(10px)",
+            "&::-webkit-scrollbar": { width: 6 },
+            "&::-webkit-scrollbar-thumb": { 
+              bgcolor: alpha(theme.palette.primary.main, 0.2),
+              borderRadius: 3,
+            },
           }}
         >
-          <SchoolIcon sx={{ fontSize: 50, color: "primary.main" }} />
+          {QuickNavContent}
         </Box>
-        <Typography
-          variant="h2"
-          sx={{
-            fontWeight: 800,
-            mb: 2,
-            background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-            backgroundClip: "text",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          Security Learning Hub
-        </Typography>
-        <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 700, mx: "auto", lineHeight: 1.7 }}>
-          Master cybersecurity concepts, frameworks, and tools. From understanding how VRAgent scans your code to advanced threat modeling with MITRE ATT&CK.
-        </Typography>
-      </Box>
+      )}
+
+      {/* Quick Nav Drawer - For smaller screens */}
+      <Drawer
+        anchor="left"
+        open={quickNavOpen && !isLargeScreen}
+        onClose={() => setQuickNavOpen(false)}
+        PaperProps={{
+          sx: { bgcolor: theme.palette.background.paper },
+        }}
+      >
+        {QuickNavContent}
+      </Drawer>
+
+      {/* Main Content - offset on large screens for sidebar */}
+      <Box sx={{ ml: isLargeScreen ? "280px" : 0 }}>
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          {/* Header */}
+          <Box sx={{ textAlign: "center", mb: 4 }}>
+            <Box
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 80,
+                height: 80,
+                borderRadius: "50%",
+                background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`,
+                mb: 2,
+                boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.3)}`,
+                border: `3px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+              }}
+            >
+              <SchoolIcon sx={{ fontSize: 40, color: "primary.main" }} />
+            </Box>
+            <Typography
+              variant="h3"
+              sx={{
+                fontWeight: 800,
+                mb: 1,
+                background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                backgroundClip: "text",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              Security Learning Hub
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 600, mx: "auto", mb: 3 }}>
+              Master cybersecurity concepts, frameworks, and tools.
+            </Typography>
+
+            {/* Global Search Bar */}
+            <Box ref={searchAnchorRef} sx={{ maxWidth: 600, mx: "auto", position: "relative" }}>
+              <TextField
+                inputRef={searchInputRef}
+                fullWidth
+                placeholder="Search topics, tags, categories... (Ctrl+K)"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: searchFocused ? "primary.main" : "text.secondary" }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      {searchQuery ? (
+                        <IconButton size="small" onClick={() => setSearchQuery("")}>
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      ) : (
+                        <Chip
+                          label="Ctrl+K"
+                          size="small"
+                          icon={<KeyboardIcon sx={{ fontSize: 14 }} />}
+                          sx={{
+                            height: 24,
+                            fontSize: "0.7rem",
+                            bgcolor: alpha(theme.palette.primary.main, 0.1),
+                            "& .MuiChip-icon": { ml: 0.5 },
+                          }}
+                        />
+                      )}
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 3,
+                    bgcolor: alpha(theme.palette.background.paper, 0.8),
+                    backdropFilter: "blur(10px)",
+                    transition: "all 0.3s ease",
+                    "&:hover": {
+                      bgcolor: theme.palette.background.paper,
+                    },
+                    "&.Mui-focused": {
+                      bgcolor: theme.palette.background.paper,
+                      boxShadow: `0 4px 20px ${alpha(theme.palette.primary.main, 0.15)}`,
+                    },
+                  },
+                }}
+              />
+
+              {/* Search Results Dropdown */}
+              <Popper
+                open={searchFocused && searchResults.length > 0}
+                anchorEl={searchAnchorRef.current}
+                placement="bottom-start"
+                transition
+                style={{ zIndex: 1300, width: searchAnchorRef.current?.offsetWidth }}
+              >
+                {({ TransitionProps }) => (
+                  <Fade {...TransitionProps} timeout={200}>
+                    <Paper
+                      sx={{
+                        mt: 1,
+                        borderRadius: 3,
+                        boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.15)}`,
+                        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                        maxHeight: 400,
+                        overflow: "auto",
+                      }}
+                    >
+                      <Box sx={{ p: 1.5, borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} found
+                        </Typography>
+                      </Box>
+                      <List dense sx={{ py: 0 }}>
+                        {searchResults.map((result, index) => (
+                          <ListItem key={result.path} disablePadding>
+                            <ListItemButton
+                              onClick={() => handleSearchResultClick(result.path)}
+                              sx={{
+                                py: 1.5,
+                                px: 2,
+                                borderBottom: index < searchResults.length - 1 ? `1px solid ${alpha(theme.palette.divider, 0.05)}` : "none",
+                                "&:hover": {
+                                  bgcolor: alpha(result.color, 0.08),
+                                },
+                              }}
+                            >
+                              <Box sx={{ flex: 1 }}>
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                    {result.title}
+                                  </Typography>
+                                  <Chip
+                                    label={`${result.categoryEmoji} ${result.category}`}
+                                    size="small"
+                                    sx={{
+                                      height: 20,
+                                      fontSize: "0.65rem",
+                                      bgcolor: alpha(result.categoryColor, 0.1),
+                                      color: result.categoryColor,
+                                    }}
+                                  />
+                                </Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                                  {result.description.length > 80
+                                    ? result.description.substring(0, 80) + "..."
+                                    : result.description}
+                                </Typography>
+                                <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                                  {result.tags.slice(0, 3).map((tag) => (
+                                    <Chip
+                                      key={tag}
+                                      label={tag}
+                                      size="small"
+                                      sx={{
+                                        height: 18,
+                                        fontSize: "0.6rem",
+                                        bgcolor: alpha(result.color, 0.08),
+                                        color: result.color,
+                                      }}
+                                    />
+                                  ))}
+                                </Box>
+                              </Box>
+                              <ArrowForwardIcon sx={{ color: "text.secondary", fontSize: 18 }} />
+                            </ListItemButton>
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Paper>
+                  </Fade>
+                )}
+              </Popper>
+
+              {/* No results message */}
+              <Popper
+                open={searchFocused && searchQuery.length > 0 && searchResults.length === 0}
+                anchorEl={searchAnchorRef.current}
+                placement="bottom-start"
+                transition
+                style={{ zIndex: 1300, width: searchAnchorRef.current?.offsetWidth }}
+              >
+                {({ TransitionProps }) => (
+                  <Fade {...TransitionProps} timeout={200}>
+                    <Paper
+                      sx={{
+                        mt: 1,
+                        p: 3,
+                        borderRadius: 3,
+                        textAlign: "center",
+                        boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.15)}`,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        No results found for "{searchQuery}"
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Try different keywords or browse categories below
+                      </Typography>
+                    </Paper>
+                  </Fade>
+                )}
+              </Popper>
+            </Box>
+          </Box>
+
+          {/* Quick Jump Chips - Horizontal scroll on mobile */}
+          <Box
+            sx={{
+              mb: 3,
+              display: "flex",
+              gap: 1,
+              flexWrap: { xs: "nowrap", md: "wrap" },
+              overflowX: { xs: "auto", md: "visible" },
+              pb: { xs: 1, md: 0 },
+              justifyContent: { md: "center" },
+              "&::-webkit-scrollbar": { height: 4 },
+              "&::-webkit-scrollbar-thumb": {
+                bgcolor: alpha(theme.palette.primary.main, 0.2),
+                borderRadius: 2,
+              },
+            }}
+          >
+            {allCategories.map((category) => (
+              <Chip
+                key={category.id}
+                label={`${category.emoji} ${category.title}`}
+                clickable
+                onClick={() => scrollToCategory(category.id)}
+                sx={{
+                  fontWeight: 600,
+                  flexShrink: 0,
+                  borderColor: activeSection === category.id ? category.color : alpha(category.color, 0.3),
+                  bgcolor: activeSection === category.id ? alpha(category.color, 0.15) : alpha(category.color, 0.05),
+                  color: activeSection === category.id ? category.color : "text.primary",
+                  transition: "all 0.2s ease",
+                  "&:hover": {
+                    bgcolor: alpha(category.color, 0.15),
+                    borderColor: category.color,
+                  },
+                }}
+                variant="outlined"
+              />
+            ))}
+          </Box>
 
       {/* Stats Bar */}
       <Paper
@@ -1210,7 +1940,7 @@ export default function LearnHubPage() {
       {/* Category Sections */}
       {allCategories.map((category, index) => (
         <Collapse key={category.id} in={visibleCategories[category.id]}>
-          <Box sx={{ mb: 6 }}>
+          <Box id={`category-${category.id}`} sx={{ mb: 6, scrollMarginTop: 100 }}>
             <Paper
               sx={{
                 p: 3,
@@ -1311,7 +2041,49 @@ export default function LearnHubPage() {
           }}
         />
       </Paper>
-    </Container>
+        </Container>
+      </Box>
+
+      {/* Floating Action Buttons */}
+      {/* Quick Nav Button - only on smaller screens */}
+      {!isLargeScreen && (
+        <Tooltip title="Quick Navigation" placement="left">
+          <Fab
+            color="primary"
+            size="medium"
+            onClick={() => setQuickNavOpen(true)}
+            sx={{
+              position: "fixed",
+              bottom: 90,
+              right: 20,
+              zIndex: 1000,
+              boxShadow: `0 4px 20px ${alpha(theme.palette.primary.main, 0.4)}`,
+            }}
+          >
+            <ListAltIcon />
+          </Fab>
+        </Tooltip>
+      )}
+
+      {/* Back to Top Button */}
+      <Zoom in={showBackToTop}>
+        <Tooltip title="Back to Top" placement="left">
+          <Fab
+            color="secondary"
+            size="small"
+            onClick={scrollToTop}
+            sx={{
+              position: "fixed",
+              bottom: 20,
+              right: 20,
+              zIndex: 1000,
+              boxShadow: `0 4px 20px ${alpha(theme.palette.secondary.main, 0.4)}`,
+            }}
+          >
+            <KeyboardArrowUpIcon />
+          </Fab>
+        </Tooltip>
+      </Zoom>
     </LearnPageLayout>
   );
 }

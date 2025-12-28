@@ -129,6 +129,24 @@ export default function ApkChatPanel({
       suggestions.push("Tell me about the hardcoded secrets found");
     }
     
+    // NEW: Sensitive data findings
+    const sensitiveFindings = (result as any).sensitive_data_findings?.findings || [];
+    if (sensitiveFindings.length > 0) {
+      suggestions.push("Explain the sensitive data (passwords, emails, PII) found");
+    }
+    
+    // NEW: CVE findings
+    const cveFindings = (result as any).cve_scan_results?.findings || [];
+    if (cveFindings.length > 0) {
+      suggestions.push("What CVEs affect this app's dependencies?");
+    }
+    
+    // NEW: Verified findings
+    const verifiedFindings = (result as any).verification_results?.verified_findings || [];
+    if (verifiedFindings.length > 0) {
+      suggestions.push("Walk me through the AI-verified vulnerabilities");
+    }
+    
     if (result.dangerous_permissions_count > 0) {
       suggestions.push("Explain the dangerous permissions this app uses");
     }
@@ -142,25 +160,55 @@ export default function ApkChatPanel({
       suggestions.push("What attack vectors should I focus on?");
     }
     
-    return suggestions.slice(0, 4);
+    return suggestions.slice(0, 5);
   };
 
   const buildAnalysisContext = useCallback(() => {
     if (!unifiedScanResult) return {};
     
     const context: Record<string, unknown> = {
+      // Basic app info
       package_name: unifiedScanResult.package_name,
       version_name: unifiedScanResult.version_name,
       version_code: unifiedScanResult.version_code,
       min_sdk: unifiedScanResult.min_sdk,
       target_sdk: unifiedScanResult.target_sdk,
+      
+      // Permissions
       permissions: unifiedScanResult.permissions,
       dangerous_permissions_count: unifiedScanResult.dangerous_permissions_count,
+      
+      // Security findings
       security_issues: unifiedScanResult.security_issues,
       secrets: unifiedScanResult.secrets,
+      
+      // Components
       components: unifiedScanResult.components,
+      
+      // AI Reports
       ai_functionality_report: unifiedScanResult.ai_functionality_report,
       ai_security_report: unifiedScanResult.ai_security_report,
+      ai_architecture_diagram: unifiedScanResult.ai_architecture_diagram,
+      ai_attack_surface_map: unifiedScanResult.ai_attack_surface_map,
+      
+      // NEW: Decompiled code analysis
+      decompiled_code_findings: unifiedScanResult.decompiled_code_findings,
+      decompiled_code_summary: unifiedScanResult.decompiled_code_summary,
+      
+      // NEW: Sensitive data discovery (PII, passwords, emails, etc.)
+      sensitive_data_findings: unifiedScanResult.sensitive_data_findings,
+      
+      // NEW: CVE/Vulnerability database scan
+      cve_scan_results: unifiedScanResult.cve_scan_results,
+      
+      // NEW: AI vulnerability hunt results (note: vuln_hunt_result singular)
+      vuln_hunt_results: unifiedScanResult.vuln_hunt_result,
+      
+      // NEW: AI verification results (false positive filtering)
+      verification_results: unifiedScanResult.verification_results,
+      
+      // Dynamic analysis & protections
+      dynamic_analysis: unifiedScanResult.dynamic_analysis,
     };
 
     // Add selected finding context if available

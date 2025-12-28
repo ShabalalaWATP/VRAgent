@@ -315,6 +315,14 @@ const NetworkAnalysisHub: React.FC = () => {
     <Box>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
+        <Button
+          component={Link}
+          to="/"
+          startIcon={<HubIcon />}
+          sx={{ mb: 2 }}
+        >
+          Back to Projects
+        </Button>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <HubIcon sx={{ fontSize: 40, color: "primary.main" }} />
           <Box>

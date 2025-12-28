@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
@@ -15,6 +15,10 @@ import {
   alpha,
   useTheme,
   Divider,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  LinearProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MemoryIcon from "@mui/icons-material/Memory";
@@ -36,7 +40,1343 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import HistoryIcon from "@mui/icons-material/History";
 import ExtensionIcon from "@mui/icons-material/Extension";
 import StorageIcon from "@mui/icons-material/Storage";
+import QuizIcon from "@mui/icons-material/Quiz";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { useNavigate } from "react-router-dom";
+
+// Question bank for the quiz (75 questions)
+interface QuizQuestion {
+  id: number;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  topic: string;
+}
+
+const questionBank: QuizQuestion[] = [
+  // Topic 1: What is Reverse Engineering (Questions 1-6)
+  {
+    id: 1,
+    question: "What is reverse engineering in the context of software?",
+    options: [
+      "Writing code from scratch",
+      "Analyzing compiled software to understand its functionality without source code",
+      "Copying someone else's source code",
+      "Creating documentation for existing code"
+    ],
+    correctAnswer: 1,
+    explanation: "Reverse engineering is the process of analyzing compiled software to understand its functionality, structure, and behavior without access to the original source code.",
+    topic: "What is RE"
+  },
+  {
+    id: 2,
+    question: "What happens during the compilation process that makes RE necessary?",
+    options: [
+      "Code becomes faster",
+      "Variable names, comments, and high-level structure are lost",
+      "Security is added to the code",
+      "The code becomes open source"
+    ],
+    correctAnswer: 1,
+    explanation: "During compilation, much information is lost including variable names, comments, and high-level structure. This is why RE is needed to reconstruct understanding of the code.",
+    topic: "What is RE"
+  },
+  {
+    id: 3,
+    question: "Why is reverse engineering compared to archaeology?",
+    options: [
+      "Because it involves digging through old files",
+      "Because you excavate layers of abstraction to understand original design and intent",
+      "Because it requires ancient tools",
+      "Because it only works on old software"
+    ],
+    correctAnswer: 1,
+    explanation: "RE is like archaeology because you're excavating layers of abstraction to understand the original design and intent of the software creators.",
+    topic: "What is RE"
+  },
+  {
+    id: 4,
+    question: "What is the primary output of reverse engineering?",
+    options: [
+      "The exact original source code",
+      "Understanding of what the program does and how it works",
+      "A faster version of the program",
+      "A new programming language"
+    ],
+    correctAnswer: 1,
+    explanation: "You won't get the exact original source code back, but you can understand what the program does, how it does it, and often find bugs, vulnerabilities, or hidden functionality.",
+    topic: "What is RE"
+  },
+  {
+    id: 5,
+    question: "Which of the following is NOT a common use case for reverse engineering?",
+    options: [
+      "Malware analysis",
+      "Creating original software from scratch",
+      "Vulnerability research",
+      "Legacy system maintenance"
+    ],
+    correctAnswer: 1,
+    explanation: "Creating original software from scratch is not reverse engineering - it's forward engineering. RE is about understanding existing compiled software.",
+    topic: "What is RE"
+  },
+  {
+    id: 6,
+    question: "What skills does reverse engineering require?",
+    options: [
+      "Only programming knowledge",
+      "Patience, curiosity, pattern recognition, and systematic thinking",
+      "Only mathematical skills",
+      "Only networking knowledge"
+    ],
+    correctAnswer: 1,
+    explanation: "RE requires a unique combination of patience, curiosity, pattern recognition, and systematic thinking to work backwards from compiled binaries.",
+    topic: "What is RE"
+  },
+  // Topic 2: Why Learn RE (Questions 7-12)
+  {
+    id: 7,
+    question: "Why is malware analysis an important application of reverse engineering?",
+    options: [
+      "To create new malware",
+      "To understand threats and develop defenses against them",
+      "To sell malware on the black market",
+      "To make malware run faster"
+    ],
+    correctAnswer: 1,
+    explanation: "Malware analysts use RE to understand how malicious software works, what it targets, and how to defend against it. This is critical for threat intelligence and incident response.",
+    topic: "Why Learn RE"
+  },
+  {
+    id: 8,
+    question: "How does reverse engineering help with interoperability?",
+    options: [
+      "It makes software run slower",
+      "It allows understanding proprietary protocols to build compatible software",
+      "It removes all security features",
+      "It converts all code to Python"
+    ],
+    correctAnswer: 1,
+    explanation: "When systems need to communicate without documentation, RE provides answers. It helps understand proprietary protocols, file formats, and APIs to build compatible software.",
+    topic: "Why Learn RE"
+  },
+  {
+    id: 9,
+    question: "Why is RE valuable for legacy system maintenance?",
+    options: [
+      "Legacy systems are always well-documented",
+      "Because source code gets lost and RE is the only option for maintenance",
+      "Legacy systems never need maintenance",
+      "Because old code is easier to read"
+    ],
+    correctAnswer: 1,
+    explanation: "Source code gets lost, companies go out of business, and developers move on. When critical software needs maintenance but no source exists, RE is the only option.",
+    topic: "Why Learn RE"
+  },
+  {
+    id: 10,
+    question: "What career field uses RE to find security bugs before attackers?",
+    options: [
+      "Web design",
+      "Vulnerability research",
+      "Project management",
+      "Database administration"
+    ],
+    correctAnswer: 1,
+    explanation: "Vulnerability researchers use RE to find security bugs in software before attackers do. They discover zero-days, write exploits for pen testing, and help vendors fix issues through responsible disclosure.",
+    topic: "Why Learn RE"
+  },
+  {
+    id: 11,
+    question: "Why is embedded/IoT security a growing field for RE?",
+    options: [
+      "IoT devices are never connected to the internet",
+      "Billions of embedded devices run firmware that rarely gets security audits",
+      "IoT devices have no software",
+      "Embedded systems are always secure by default"
+    ],
+    correctAnswer: 1,
+    explanation: "Billions of embedded devices run firmware that rarely gets security audits. RE skills let you analyze routers, smart devices, automotive systems, and more for vulnerabilities.",
+    topic: "Why Learn RE"
+  },
+  {
+    id: 12,
+    question: "Why is game hacking considered a 'fun entry point' to RE?",
+    options: [
+      "Games have no protection",
+      "Many security researchers started with game hacking and it teaches core RE concepts",
+      "Games are always open source",
+      "Game companies encourage hacking"
+    ],
+    correctAnswer: 1,
+    explanation: "Many security researchers started with game hacking. It teaches core RE concepts while being engaging, and the skills transfer to security work.",
+    topic: "Why Learn RE"
+  },
+  // Topic 3: Legal & Ethical (Questions 13-18)
+  {
+    id: 13,
+    question: "What does DMCA stand for and what does it regulate?",
+    options: [
+      "Digital Music Copyright Act - music piracy",
+      "Digital Millennium Copyright Act - circumventing copy protection",
+      "Data Management Control Act - database access",
+      "Digital Media Creation Act - content creation"
+    ],
+    correctAnswer: 1,
+    explanation: "DMCA (Digital Millennium Copyright Act) prohibits circumventing copy protection, though it has security research exemptions.",
+    topic: "Legal & Ethical"
+  },
+  {
+    id: 14,
+    question: "What makes the CFAA potentially problematic for researchers?",
+    options: [
+      "It only applies to government computers",
+      "It has a vague 'exceeds authorization' clause",
+      "It encourages all forms of hacking",
+      "It doesn't apply to software"
+    ],
+    correctAnswer: 1,
+    explanation: "The CFAA (Computer Fraud and Abuse Act) criminalizes unauthorized computer access and has a vague 'exceeds authorization' clause that has been controversial for researchers.",
+    topic: "Legal & Ethical"
+  },
+  {
+    id: 15,
+    question: "Which RE activity is generally considered legal?",
+    options: [
+      "Bypassing copy protection for piracy",
+      "Analyzing software you own for interoperability",
+      "Distributing cracked software",
+      "Breaking into others' computers to analyze their software"
+    ],
+    correctAnswer: 1,
+    explanation: "Analyzing software you own or have licensed for interoperability purposes is generally legal. Always ensure you have proper authorization.",
+    topic: "Legal & Ethical"
+  },
+  {
+    id: 16,
+    question: "What is 'responsible disclosure' in vulnerability research?",
+    options: [
+      "Never reporting bugs to anyone",
+      "Selling bugs to the highest bidder",
+      "Coordinating with vendors to fix issues before public disclosure",
+      "Immediately publishing all vulnerabilities publicly"
+    ],
+    correctAnswer: 2,
+    explanation: "Responsible disclosure involves reporting vulnerabilities to vendors, giving them reasonable time to fix (typically 90 days), and coordinating the public disclosure timing.",
+    topic: "Legal & Ethical"
+  },
+  {
+    id: 17,
+    question: "What should you do before engaging in any RE activity with legal implications?",
+    options: [
+      "Just proceed if it seems harmless",
+      "Consult with a qualified legal professional",
+      "Ask your friends for advice",
+      "Assume all RE is illegal"
+    ],
+    correctAnswer: 1,
+    explanation: "Laws vary significantly by country and jurisdiction. Always consult with a qualified legal professional before engaging in RE activities that could have legal implications.",
+    topic: "Legal & Ethical"
+  },
+  {
+    id: 18,
+    question: "Why is documentation important during RE work?",
+    options: [
+      "It's not important at all",
+      "It helps show your methodology for legal protection and reproducibility",
+      "It makes the analysis slower",
+      "It's required by all software licenses"
+    ],
+    correctAnswer: 1,
+    explanation: "Documentation helps show your methodology for legal protection, ensures reproducibility, and helps when explaining findings to others.",
+    topic: "Legal & Ethical"
+  },
+  // Topic 4: RE Mindset (Questions 19-25)
+  {
+    id: 19,
+    question: "What characteristic drives the best reverse engineers?",
+    options: [
+      "Desire for fame",
+      "Insatiable curiosity about how things work",
+      "Fear of failure",
+      "Dislike of programming"
+    ],
+    correctAnswer: 1,
+    explanation: "The best reverse engineers are driven by an almost obsessive need to understand how things work. This curiosity sustains you through the difficult parts of analysis.",
+    topic: "RE Mindset"
+  },
+  {
+    id: 20,
+    question: "Why is 'extreme patience' listed as a key RE trait?",
+    options: [
+      "Because RE only takes a few minutes",
+      "Because you might spend hours or days on a single function with dead ends and backtracking",
+      "Because all binaries are simple",
+      "Because decompilers always produce perfect output"
+    ],
+    correctAnswer: 1,
+    explanation: "RE is slow, methodical work. You might spend hours (or days) on a single function, hit dead ends, misunderstand code, and need to backtrack repeatedly.",
+    topic: "RE Mindset"
+  },
+  {
+    id: 21,
+    question: "What is pattern recognition in the context of RE?",
+    options: [
+      "Recognizing image patterns",
+      "Recognizing common code structures like loops, conditionals, and compiler patterns",
+      "Recognizing faces in code",
+      "Recognizing programming languages by file extension"
+    ],
+    correctAnswer: 1,
+    explanation: "With experience, you'll recognize common patterns: how compilers generate code for loops, conditionals, virtual function calls, etc. This dramatically speeds up analysis.",
+    topic: "RE Mindset"
+  },
+  {
+    id: 22,
+    question: "What is hypothesis-driven analysis?",
+    options: [
+      "Randomly clicking through a disassembler",
+      "Forming theories about what code does and testing them with breakpoints",
+      "Assuming all code is malicious",
+      "Writing reports without testing"
+    ],
+    correctAnswer: 1,
+    explanation: "Hypothesis-driven analysis means forming hypotheses about what code does, then testing them. For example: 'I think this function validates passwords. Let me set a breakpoint and check.'",
+    topic: "RE Mindset"
+  },
+  {
+    id: 23,
+    question: "Why is documentation called a 'habit' in RE?",
+    options: [
+      "Because you only document once at the end",
+      "Because you should document as you go - future you will forget discoveries",
+      "Because documentation is optional",
+      "Because notes slow you down"
+    ],
+    correctAnswer: 1,
+    explanation: "Always document as you go. Rename functions, add comments, create diagrams. Future you (even tomorrow-you) will forget what you discovered.",
+    topic: "RE Mindset"
+  },
+  {
+    id: 24,
+    question: "What does 'systematic approach' mean in RE methodology?",
+    options: [
+      "Randomly exploring code",
+      "Developing a structured methodology: reconnaissance, key functions, data structures, call graph",
+      "Only using automated tools",
+      "Skipping documentation"
+    ],
+    correctAnswer: 1,
+    explanation: "A systematic approach involves developing a methodology: start with reconnaissance, identify key functions, understand data structures, map the call graph, and take notes obsessively.",
+    topic: "RE Mindset"
+  },
+  {
+    id: 25,
+    question: "What should you do when stuck on an RE problem?",
+    options: [
+      "Give up immediately",
+      "Take breaks, reduce the input, or shorten the path",
+      "Never take breaks",
+      "Delete all your notes and start over"
+    ],
+    correctAnswer: 1,
+    explanation: "When stuck, take breaks but don't give up. Try reducing the input or shortening the path to isolate the problem.",
+    topic: "RE Mindset"
+  },
+  // Topic 5: Types of RE (Questions 26-31)
+  {
+    id: 26,
+    question: "What is Software RE (Binary Analysis)?",
+    options: [
+      "Analyzing hardware circuits",
+      "Analyzing compiled executables, libraries, and applications",
+      "Analyzing network packets only",
+      "Analyzing physical devices"
+    ],
+    correctAnswer: 1,
+    explanation: "Software RE is the most common form - analyzing compiled executables, libraries, and applications. This covers Windows PE files, Linux ELF binaries, mobile apps, and more.",
+    topic: "Types of RE"
+  },
+  {
+    id: 27,
+    question: "What makes Malware RE different from general Software RE?",
+    options: [
+      "It's exactly the same",
+      "It requires understanding anti-analysis techniques and safe analysis environments",
+      "It's easier than regular RE",
+      "It doesn't require any special tools"
+    ],
+    correctAnswer: 1,
+    explanation: "Malware RE is specialized - it requires understanding anti-analysis techniques, safe analysis environments (sandboxes), and threat intelligence. It's often time-sensitive.",
+    topic: "Types of RE"
+  },
+  {
+    id: 28,
+    question: "What does Hardware RE involve?",
+    options: [
+      "Only analyzing software",
+      "Analyzing physical circuits, chips, extracting firmware, and understanding hardware security",
+      "Only reading documentation",
+      "Only using software tools"
+    ],
+    correctAnswer: 1,
+    explanation: "Hardware RE involves analyzing physical circuits, chips, and electronic systems. It includes probing PCBs, extracting firmware from chips, and understanding hardware security modules.",
+    topic: "Types of RE"
+  },
+  {
+    id: 29,
+    question: "What is Firmware RE?",
+    options: [
+      "Analyzing only web applications",
+      "Analyzing software embedded in devices like routers, IoT devices, and automotive systems",
+      "Analyzing only desktop software",
+      "Analyzing only mobile apps"
+    ],
+    correctAnswer: 1,
+    explanation: "Firmware RE analyzes software embedded in devices: routers, IoT devices, automotive ECUs, medical devices, industrial controllers. It bridges hardware and software RE.",
+    topic: "Types of RE"
+  },
+  {
+    id: 30,
+    question: "What is Protocol RE focused on?",
+    options: [
+      "Understanding compiled executables",
+      "Understanding proprietary network protocols, file formats, and communication standards",
+      "Understanding hardware circuits",
+      "Understanding user interfaces"
+    ],
+    correctAnswer: 1,
+    explanation: "Protocol RE focuses on understanding proprietary network protocols, file formats, and communication standards. It often involves packet capture analysis and fuzzing.",
+    topic: "Types of RE"
+  },
+  {
+    id: 31,
+    question: "Why is Game RE considered a specialized field?",
+    options: [
+      "Games don't have any protection",
+      "Games often use custom formats, engines, and protection schemes requiring specialized knowledge",
+      "Games are always open source",
+      "Game RE doesn't require any special skills"
+    ],
+    correctAnswer: 1,
+    explanation: "Games often use custom formats, engines, and protection schemes that require specialized knowledge. Game RE enables mods, cheats (single-player), and anti-cheat systems.",
+    topic: "Types of RE"
+  },
+  // Topic 6: Static vs Dynamic Analysis (Questions 32-38)
+  {
+    id: 32,
+    question: "What is static analysis in reverse engineering?",
+    options: [
+      "Running the program and watching it",
+      "Examining the binary without executing it",
+      "Only looking at network traffic",
+      "Testing the program with user input"
+    ],
+    correctAnswer: 1,
+    explanation: "Static analysis means examining the binary without executing it. You analyze disassembly, decompiled code, strings, imports/exports, and structure.",
+    topic: "Static vs Dynamic"
+  },
+  {
+    id: 33,
+    question: "What is a key advantage of static analysis?",
+    options: [
+      "It requires running potentially malicious code",
+      "It's safe - no risk of malware execution",
+      "It only shows executed code paths",
+      "It requires a specific environment"
+    ],
+    correctAnswer: 1,
+    explanation: "Static analysis is safe - there's no risk of malware execution. You can see the complete codebase at once and analyze code paths that are hard to trigger.",
+    topic: "Static vs Dynamic"
+  },
+  {
+    id: 34,
+    question: "What is a limitation of static analysis?",
+    options: [
+      "It's too dangerous",
+      "Obfuscation and packing make analysis harder; you can't see runtime values",
+      "It's too fast",
+      "It shows too much information"
+    ],
+    correctAnswer: 1,
+    explanation: "Static analysis limitations include: obfuscation/packing makes analysis harder, you can't see runtime values, self-modifying code is invisible, and you may miss dynamically loaded code.",
+    topic: "Static vs Dynamic"
+  },
+  {
+    id: 35,
+    question: "What is dynamic analysis in reverse engineering?",
+    options: [
+      "Looking at code without running it",
+      "Running the program and observing its behavior",
+      "Only reading documentation",
+      "Only examining file headers"
+    ],
+    correctAnswer: 1,
+    explanation: "Dynamic analysis involves running the program and observing its behavior. You use debuggers to step through code, monitor system calls, network traffic, file operations, and memory state.",
+    topic: "Static vs Dynamic"
+  },
+  {
+    id: 36,
+    question: "What is a key advantage of dynamic analysis?",
+    options: [
+      "It's always completely safe",
+      "It automatically bypasses obfuscation/packing and shows actual runtime behavior",
+      "It never requires any setup",
+      "It shows all code paths at once"
+    ],
+    correctAnswer: 1,
+    explanation: "Dynamic analysis automatically bypasses obfuscation/packing, shows actual runtime behavior and values, and makes it easier to understand complex logic.",
+    topic: "Static vs Dynamic"
+  },
+  {
+    id: 37,
+    question: "What is a limitation of dynamic analysis?",
+    options: [
+      "It's completely safe for malware",
+      "Risk of malware infection, anti-debugging interference, and only seeing executed paths",
+      "It's too fast",
+      "It never requires any tools"
+    ],
+    correctAnswer: 1,
+    explanation: "Dynamic analysis limitations: risk of malware infection (requires isolation), anti-debugging techniques can interfere, you only see executed code paths, and may require specific environment/inputs.",
+    topic: "Static vs Dynamic"
+  },
+  {
+    id: 38,
+    question: "What is the recommended approach for RE analysis?",
+    options: [
+      "Only use static analysis",
+      "Only use dynamic analysis",
+      "Combine both techniques iteratively (hybrid approach)",
+      "Avoid both and only read documentation"
+    ],
+    correctAnswer: 2,
+    explanation: "The most effective approach combines both techniques iteratively: start with static analysis for overview, use dynamic to understand specific functions or bypass protections, return to static with new insights, repeat.",
+    topic: "Static vs Dynamic"
+  },
+  // Topic 7: Essential Tools (Questions 39-45)
+  {
+    id: 39,
+    question: "What is Ghidra?",
+    options: [
+      "A commercial debugging tool",
+      "A free, NSA-developed disassembler with an excellent decompiler",
+      "A text editor",
+      "A network scanner"
+    ],
+    correctAnswer: 1,
+    explanation: "Ghidra is a free, NSA-developed disassembler and decompiler. It's extensible with excellent decompilation capabilities and widely used in the security community.",
+    topic: "Essential Tools"
+  },
+  {
+    id: 40,
+    question: "What is IDA Pro known for?",
+    options: [
+      "Being free and open source",
+      "Being the industry standard disassembler, though expensive",
+      "Only working on mobile apps",
+      "Being a network analysis tool"
+    ],
+    correctAnswer: 1,
+    explanation: "IDA Pro is the industry standard disassembler. It's expensive but considered best-in-class for professional reverse engineering work.",
+    topic: "Essential Tools"
+  },
+  {
+    id: 41,
+    question: "What is x64dbg?",
+    options: [
+      "A compiler",
+      "A free, Windows-focused debugger with modern UI and plugin support",
+      "A decompiler only",
+      "A mobile app analyzer"
+    ],
+    correctAnswer: 1,
+    explanation: "x64dbg is a free, Windows-focused debugger with a modern UI and plugin support. It's widely used for dynamic analysis on Windows.",
+    topic: "Essential Tools"
+  },
+  {
+    id: 42,
+    question: "What is GDB primarily used for?",
+    options: [
+      "Windows kernel debugging",
+      "Linux/Unix debugging (powerful but steep learning curve)",
+      "Web application testing",
+      "Mobile app development"
+    ],
+    correctAnswer: 1,
+    explanation: "GDB (GNU Debugger) is the Linux/Unix standard debugger. It's powerful but has a steep learning curve with its command-line interface.",
+    topic: "Essential Tools"
+  },
+  {
+    id: 43,
+    question: "What is the purpose of hex editors like HxD or 010 Editor?",
+    options: [
+      "Writing source code",
+      "Viewing and editing raw binary data, understanding file structures",
+      "Creating graphics",
+      "Managing databases"
+    ],
+    correctAnswer: 1,
+    explanation: "Hex editors let you view and edit raw binary data. They're essential for understanding file structures, patching binaries, and analyzing non-executable data.",
+    topic: "Essential Tools"
+  },
+  {
+    id: 44,
+    question: "What does 'Detect It Easy' (DIE) tool help with?",
+    options: [
+      "Writing code",
+      "Identifying packers, compilers, and protections used on a binary",
+      "Creating network traffic",
+      "Editing images"
+    ],
+    correctAnswer: 1,
+    explanation: "Detect It Easy helps identify packers, compilers, and protections used on a binary. This is crucial for the initial triage phase of RE.",
+    topic: "Essential Tools"
+  },
+  {
+    id: 45,
+    question: "What is Process Monitor used for?",
+    options: [
+      "Editing source code",
+      "Windows syscall/file/registry monitoring during dynamic analysis",
+      "Compiling programs",
+      "Creating documentation"
+    ],
+    correctAnswer: 1,
+    explanation: "Process Monitor is a Windows tool for monitoring syscalls, file operations, and registry access during dynamic analysis. It shows what a program does on the system.",
+    topic: "Essential Tools"
+  },
+  // Topic 8: File Formats (Questions 46-52)
+  {
+    id: 46,
+    question: "What file format does Windows use for executables?",
+    options: [
+      "ELF",
+      "PE (Portable Executable)",
+      "Mach-O",
+      "APK"
+    ],
+    correctAnswer: 1,
+    explanation: "Windows uses the PE (Portable Executable) format for .exe, .dll, and .sys files. Understanding PE is essential for Windows RE.",
+    topic: "File Formats"
+  },
+  {
+    id: 47,
+    question: "What does the PE Import Table contain?",
+    options: [
+      "The program's source code",
+      "API dependencies - functions the program uses from DLLs",
+      "User documentation",
+      "Encryption keys"
+    ],
+    correctAnswer: 1,
+    explanation: "The Import Table lists API dependencies - functions the program imports from external DLLs. This reveals what system functionality the program uses.",
+    topic: "File Formats"
+  },
+  {
+    id: 48,
+    question: "What file format does Linux use for executables?",
+    options: [
+      "PE",
+      "ELF (Executable and Linkable Format)",
+      "Mach-O",
+      "DEX"
+    ],
+    correctAnswer: 1,
+    explanation: "Linux uses ELF (Executable and Linkable Format). It's the standard for Linux, BSD, and many embedded systems.",
+    topic: "File Formats"
+  },
+  {
+    id: 49,
+    question: "What are GOT and PLT in ELF files?",
+    options: [
+      "Compression algorithms",
+      "Global Offset Table and Procedure Linkage Table - used for dynamic linking",
+      "Graphics formats",
+      "Text sections"
+    ],
+    correctAnswer: 1,
+    explanation: "GOT (Global Offset Table) and PLT (Procedure Linkage Table) are used for dynamic linking in ELF files, resolving function addresses at runtime.",
+    topic: "File Formats"
+  },
+  {
+    id: 50,
+    question: "What file format does macOS/iOS use?",
+    options: [
+      "PE",
+      "ELF",
+      "Mach-O",
+      "APK"
+    ],
+    correctAnswer: 2,
+    explanation: "macOS and iOS use Mach-O (Mach Object) format. It has unique features for the Apple ecosystem including Universal/Fat binaries for multi-architecture support.",
+    topic: "File Formats"
+  },
+  {
+    id: 51,
+    question: "What is an APK file?",
+    options: [
+      "A Windows executable",
+      "An Android Package containing DEX bytecode",
+      "A Linux kernel module",
+      "A macOS application"
+    ],
+    correctAnswer: 1,
+    explanation: "APK (Android Package) is a ZIP archive containing DEX (Dalvik Executable) bytecode, AndroidManifest.xml, resources, and native libraries for Android apps.",
+    topic: "File Formats"
+  },
+  {
+    id: 52,
+    question: "Why is knowing file formats important for RE?",
+    options: [
+      "It's not important at all",
+      "It helps you find code, data, imports, and critical information quickly",
+      "It's only needed for legal reasons",
+      "It only matters for web development"
+    ],
+    correctAnswer: 1,
+    explanation: "Knowing file formats helps you quickly find code, data, imports, and other critical information. Each OS uses different formats with specific headers, sections, and metadata.",
+    topic: "File Formats"
+  },
+  // Topic 9: Assembly Language (Questions 53-59)
+  {
+    id: 53,
+    question: "Why is assembly language important for RE?",
+    options: [
+      "It's the only programming language",
+      "It's the human-readable representation of machine code that CPUs execute",
+      "It's only used for web development",
+      "It's optional and rarely needed"
+    ],
+    correctAnswer: 1,
+    explanation: "Assembly is a human-readable representation of machine code - the actual instructions CPUs execute. You don't need to write it, but you must be able to read it for effective RE.",
+    topic: "Assembly Language"
+  },
+  {
+    id: 54,
+    question: "In x86/x64 assembly, what does 'mov eax, 5' do?",
+    options: [
+      "Moves the value 5 to memory",
+      "Sets the EAX register to the value 5",
+      "Compares EAX with 5",
+      "Jumps to address 5"
+    ],
+    correctAnswer: 1,
+    explanation: "MOV is the move instruction. 'mov eax, 5' sets the EAX register to the value 5.",
+    topic: "Assembly Language"
+  },
+  {
+    id: 55,
+    question: "What does the PUSH instruction do?",
+    options: [
+      "Removes a value from the stack",
+      "Pushes a value onto the stack",
+      "Compares two values",
+      "Jumps to a new address"
+    ],
+    correctAnswer: 1,
+    explanation: "PUSH pushes a value onto the stack. The stack is used for function calls, return addresses, and local variables.",
+    topic: "Assembly Language"
+  },
+  {
+    id: 56,
+    question: "What does 'cmp eax, 0' followed by 'je label' do?",
+    options: [
+      "Always jumps to label",
+      "Compares EAX with 0 and jumps to label if they are equal",
+      "Sets EAX to 0",
+      "Never jumps anywhere"
+    ],
+    correctAnswer: 1,
+    explanation: "CMP compares two values and sets CPU flags. JE (Jump if Equal) then jumps to the label if the comparison showed equality (EAX == 0).",
+    topic: "Assembly Language"
+  },
+  {
+    id: 57,
+    question: "In x86/x64, what register typically holds function return values?",
+    options: [
+      "ESP/RSP",
+      "EAX/RAX",
+      "EBP/RBP",
+      "EIP/RIP"
+    ],
+    correctAnswer: 1,
+    explanation: "EAX (32-bit) or RAX (64-bit) typically holds function return values in x86/x64 calling conventions.",
+    topic: "Assembly Language"
+  },
+  {
+    id: 58,
+    question: "What is the stack pointer register in x86?",
+    options: [
+      "EAX",
+      "ESP (or RSP in 64-bit)",
+      "EBX",
+      "ECX"
+    ],
+    correctAnswer: 1,
+    explanation: "ESP (Stack Pointer) in 32-bit or RSP in 64-bit points to the current top of the stack. It's crucial for understanding function calls and local variables.",
+    topic: "Assembly Language"
+  },
+  {
+    id: 59,
+    question: "What does 'ret' instruction do?",
+    options: [
+      "Returns a value to the caller",
+      "Pops the return address from the stack and jumps to it",
+      "Resets all registers",
+      "Terminates the program"
+    ],
+    correctAnswer: 1,
+    explanation: "RET pops the return address from the stack and jumps to it, returning control to the calling function.",
+    topic: "Assembly Language"
+  },
+  // Topic 10: Common Patterns (Questions 60-65)
+  {
+    id: 60,
+    question: "How does a FOR loop typically appear in assembly?",
+    options: [
+      "A single instruction",
+      "Initialization, comparison, body, increment, and backward jump",
+      "Only forward jumps",
+      "No jumps at all"
+    ],
+    correctAnswer: 1,
+    explanation: "Loops have initialization (counter = 0), comparison (counter < limit), body (the loop code), increment (counter++), and a backward jump to repeat.",
+    topic: "Common Patterns"
+  },
+  {
+    id: 61,
+    question: "What assembly pattern indicates array access?",
+    options: [
+      "Only using immediate values",
+      "Base address + (index × element size) pattern",
+      "Only using jumps",
+      "Only using stack operations"
+    ],
+    correctAnswer: 1,
+    explanation: "Array access uses the pattern: base address + (index × element size). For example, [ebx + ecx*4] accesses array[ecx] where elements are 4 bytes.",
+    topic: "Common Patterns"
+  },
+  {
+    id: 62,
+    question: "How can you recognize struct field access in assembly?",
+    options: [
+      "Random memory accesses",
+      "Fixed offsets from a base pointer",
+      "No memory accesses",
+      "Only stack operations"
+    ],
+    correctAnswer: 1,
+    explanation: "Struct field access shows as fixed offsets from a base pointer. For example, [ebx], [ebx+4], [ebx+8] indicates accessing fields at offsets 0, 4, and 8.",
+    topic: "Common Patterns"
+  },
+  {
+    id: 63,
+    question: "What indicates an if-else statement in assembly?",
+    options: [
+      "Only MOV instructions",
+      "Compare (CMP) followed by conditional jump (JE, JNE, etc.)",
+      "Only arithmetic operations",
+      "No jumps"
+    ],
+    correctAnswer: 1,
+    explanation: "If-else statements use compare (CMP) followed by conditional jumps. The true branch executes, then jumps past the false branch (or vice versa).",
+    topic: "Common Patterns"
+  },
+  {
+    id: 64,
+    question: "How are function calls typically structured in x64?",
+    options: [
+      "Arguments only on stack",
+      "First arguments in registers (RCX, RDX, R8, R9), then CALL, return in RAX",
+      "Arguments in random order",
+      "No registers used"
+    ],
+    correctAnswer: 1,
+    explanation: "x64 calling convention: first four arguments in RCX, RDX, R8, R9, additional on stack, CALL instruction, return value in RAX.",
+    topic: "Common Patterns"
+  },
+  {
+    id: 65,
+    question: "What pattern suggests string operations?",
+    options: [
+      "Only arithmetic",
+      "Loops with byte comparisons or calls to strlen, strcmp, strcpy",
+      "Only jump instructions",
+      "Only stack operations"
+    ],
+    correctAnswer: 1,
+    explanation: "String operations show as loops checking bytes for null terminator (0), or calls to string functions like strlen, strcmp, strcpy.",
+    topic: "Common Patterns"
+  },
+  // Topic 11: Anti-RE Techniques (Questions 66-70)
+  {
+    id: 66,
+    question: "What is a 'packer' in the context of software protection?",
+    options: [
+      "A compression tool for images",
+      "Software that compresses/encrypts code and adds an unpacking stub",
+      "A debugging tool",
+      "A type of compiler"
+    ],
+    correctAnswer: 1,
+    explanation: "A packer compresses or encrypts the original code and adds a 'stub' that unpacks it at runtime. The real code only exists in memory during execution.",
+    topic: "Anti-RE Techniques"
+  },
+  {
+    id: 67,
+    question: "What is code obfuscation?",
+    options: [
+      "Making code run faster",
+      "Transforming code to make it harder to understand while preserving functionality",
+      "Removing all code",
+      "Adding helpful comments"
+    ],
+    correctAnswer: 1,
+    explanation: "Code obfuscation transforms code to make it harder to understand while preserving functionality. Techniques include control flow flattening, dead code insertion, and string encryption.",
+    topic: "Anti-RE Techniques"
+  },
+  {
+    id: 68,
+    question: "What is IsDebuggerPresent()?",
+    options: [
+      "A decompiler function",
+      "A Windows API that checks if a debugger is attached to the process",
+      "A compiler optimization",
+      "A network function"
+    ],
+    correctAnswer: 1,
+    explanation: "IsDebuggerPresent() is a Windows API that returns TRUE if a debugger is attached. It's a simple anti-debugging check that can be easily bypassed.",
+    topic: "Anti-RE Techniques"
+  },
+  {
+    id: 69,
+    question: "How do VM/sandbox detection techniques work?",
+    options: [
+      "They speed up the program",
+      "They check for artifacts like VM tools, registry keys, or resource limitations",
+      "They improve security",
+      "They help debugging"
+    ],
+    correctAnswer: 1,
+    explanation: "VM/sandbox detection checks for artifacts like VMware tools, registry keys, MAC address prefixes, low resources, or lack of mouse movement to detect analysis environments.",
+    topic: "Anti-RE Techniques"
+  },
+  {
+    id: 70,
+    question: "What is VMProtect?",
+    options: [
+      "A free debugger",
+      "A commercial protector that converts code to virtual machine bytecode",
+      "An open source tool",
+      "A documentation tool"
+    ],
+    correctAnswer: 1,
+    explanation: "VMProtect is a commercial protection tool that converts code to custom virtual machine bytecode, making RE much more difficult as analysts must first understand the VM.",
+    topic: "Anti-RE Techniques"
+  },
+  // Topic 12: Methodology (Questions 71-75)
+  {
+    id: 71,
+    question: "What is the first phase in RE methodology?",
+    options: [
+      "Deep dive into assembly",
+      "Initial triage - identify file type, check for packers, extract strings",
+      "Writing the final report",
+      "Running the program immediately"
+    ],
+    correctAnswer: 1,
+    explanation: "Initial triage comes first: identify file type, check for packers/protections, extract strings, review imports/exports, and document file hashes.",
+    topic: "Methodology"
+  },
+  {
+    id: 72,
+    question: "What should you do during static analysis phase?",
+    options: [
+      "Only run the program",
+      "Load in disassembler, find entry point, identify interesting functions, cross-reference strings",
+      "Delete the binary",
+      "Skip to documentation"
+    ],
+    correctAnswer: 1,
+    explanation: "During static analysis: load in disassembler (Ghidra, IDA), find entry point and main(), identify interesting functions from names/imports, cross-reference strings, map program structure.",
+    topic: "Methodology"
+  },
+  {
+    id: 73,
+    question: "What is important for dynamic analysis setup?",
+    options: [
+      "Use your main computer without protection",
+      "Set up a safe environment (VM, sandbox) first",
+      "Skip all safety measures",
+      "Only use production systems"
+    ],
+    correctAnswer: 1,
+    explanation: "For dynamic analysis, always set up a safe environment first (VM, sandbox). Then run with monitoring tools, set breakpoints, trace execution, and capture network traffic.",
+    topic: "Methodology"
+  },
+  {
+    id: 74,
+    question: "What does the 'deep dive' phase involve?",
+    options: [
+      "Quick surface-level analysis",
+      "Focus on specific functions, rename variables, document algorithms, handle anti-analysis",
+      "Ignoring all details",
+      "Only reading documentation"
+    ],
+    correctAnswer: 1,
+    explanation: "Deep dive phase: focus on specific functions of interest, rename variables and functions, document algorithms and data structures, handle anti-analysis techniques, iterate between static and dynamic.",
+    topic: "Methodology"
+  },
+  {
+    id: 75,
+    question: "Why is documentation the final phase but should be ongoing?",
+    options: [
+      "Documentation is optional",
+      "You should document as you go for reproducibility, legal protection, and knowledge retention",
+      "Documentation should only be done once",
+      "Notes slow down analysis"
+    ],
+    correctAnswer: 1,
+    explanation: "While documentation is listed as a final phase, you should document as you go. Write detailed notes, create diagrams, document methodology for reproducibility, save annotated projects, and prepare findings summary.",
+    topic: "Methodology"
+  },
+];
+
+// Quiz Section Component
+function QuizSection() {
+  const theme = useTheme();
+  const [quizState, setQuizState] = useState<'start' | 'active' | 'results'>('start');
+  const [currentQuestions, setCurrentQuestions] = useState<QuizQuestion[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [answers, setAnswers] = useState<(number | null)[]>([]);
+  const [showExplanation, setShowExplanation] = useState(false);
+
+  const startQuiz = () => {
+    // Randomly select 10 questions from the bank
+    const shuffled = [...questionBank].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, 10);
+    setCurrentQuestions(selected);
+    setCurrentQuestionIndex(0);
+    setSelectedAnswer(null);
+    setAnswers([]);
+    setShowExplanation(false);
+    setQuizState('active');
+  };
+
+  const handleAnswerSelect = (answerIndex: number) => {
+    if (showExplanation) return;
+    setSelectedAnswer(answerIndex);
+  };
+
+  const handleSubmitAnswer = () => {
+    if (selectedAnswer === null) return;
+    setShowExplanation(true);
+    setAnswers([...answers, selectedAnswer]);
+  };
+
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < currentQuestions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+      setSelectedAnswer(null);
+      setShowExplanation(false);
+    } else {
+      setQuizState('results');
+    }
+  };
+
+  const calculateScore = () => {
+    let correct = 0;
+    answers.forEach((answer, index) => {
+      if (answer === currentQuestions[index].correctAnswer) {
+        correct++;
+      }
+    });
+    return correct;
+  };
+
+  const getScoreMessage = (score: number) => {
+    const percentage = (score / 10) * 100;
+    if (percentage >= 90) return { message: "Outstanding! You're an RE expert!", color: "#10b981" };
+    if (percentage >= 70) return { message: "Great job! Solid understanding of RE fundamentals.", color: "#3b82f6" };
+    if (percentage >= 50) return { message: "Good effort! Review the topics you missed.", color: "#f59e0b" };
+    return { message: "Keep learning! RE takes time and practice.", color: "#ef4444" };
+  };
+
+  if (quizState === 'start') {
+    return (
+      <Paper sx={{ p: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+        <Box sx={{ textAlign: "center" }}>
+          <QuizIcon sx={{ fontSize: 64, color: "#8b5cf6", mb: 2 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+            Test Your Knowledge
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: "auto" }}>
+            Take this quiz to test your understanding of reverse engineering fundamentals. 
+            10 questions will be randomly selected from our question bank of 75 covering all topics.
+          </Typography>
+          <Box sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap", mb: 3 }}>
+            <Chip label="10 Questions" color="primary" />
+            <Chip label="Random Selection" variant="outlined" />
+            <Chip label="Instant Feedback" variant="outlined" />
+          </Box>
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<QuizIcon />}
+            onClick={startQuiz}
+            sx={{
+              px: 4,
+              py: 1.5,
+              borderRadius: 2,
+              bgcolor: "#8b5cf6",
+              "&:hover": { bgcolor: "#7c3aed" },
+            }}
+          >
+            Start Quiz
+          </Button>
+        </Box>
+      </Paper>
+    );
+  }
+
+  if (quizState === 'results') {
+    const score = calculateScore();
+    const { message, color } = getScoreMessage(score);
+    
+    return (
+      <Paper sx={{ p: 4, borderRadius: 3, bgcolor: alpha(color, 0.03), border: `1px solid ${alpha(color, 0.2)}` }}>
+        <Box sx={{ textAlign: "center", mb: 4 }}>
+          <EmojiEventsIcon sx={{ fontSize: 64, color, mb: 2 }} />
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            Quiz Complete!
+          </Typography>
+          <Typography variant="h2" sx={{ fontWeight: 800, color, mb: 1 }}>
+            {score}/10
+          </Typography>
+          <Typography variant="h6" sx={{ color, mb: 3 }}>
+            {message}
+          </Typography>
+          <LinearProgress 
+            variant="determinate" 
+            value={(score / 10) * 100} 
+            sx={{ 
+              height: 12, 
+              borderRadius: 6, 
+              mb: 3,
+              maxWidth: 300,
+              mx: "auto",
+              bgcolor: alpha(color, 0.1),
+              "& .MuiLinearProgress-bar": { bgcolor: color, borderRadius: 6 }
+            }} 
+          />
+        </Box>
+        
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+          Review Your Answers:
+        </Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {currentQuestions.map((q, index) => {
+            const isCorrect = answers[index] === q.correctAnswer;
+            return (
+              <Grid item xs={12} key={q.id}>
+                <Paper sx={{ 
+                  p: 2, 
+                  borderRadius: 2, 
+                  bgcolor: alpha(isCorrect ? "#10b981" : "#ef4444", 0.05),
+                  border: `1px solid ${alpha(isCorrect ? "#10b981" : "#ef4444", 0.2)}`
+                }}>
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+                    <Box sx={{ 
+                      width: 28, 
+                      height: 28, 
+                      borderRadius: "50%", 
+                      bgcolor: isCorrect ? "#10b981" : "#ef4444",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0
+                    }}>
+                      <Typography variant="caption" sx={{ color: "white", fontWeight: 700 }}>
+                        {index + 1}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        {q.question}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: isCorrect ? "#10b981" : "#ef4444" }}>
+                        {isCorrect ? "✓ Correct" : `✗ Your answer: ${q.options[answers[index] || 0]}`}
+                      </Typography>
+                      {!isCorrect && (
+                        <Typography variant="caption" sx={{ display: "block", color: "#10b981" }}>
+                          Correct answer: {q.options[q.correctAnswer]}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                </Paper>
+              </Grid>
+            );
+          })}
+        </Grid>
+        
+        <Box sx={{ display: "flex", justifyContent: "center", gap: 2 }}>
+          <Button
+            variant="contained"
+            startIcon={<RefreshIcon />}
+            onClick={startQuiz}
+            sx={{
+              px: 4,
+              py: 1.5,
+              borderRadius: 2,
+              bgcolor: "#8b5cf6",
+              "&:hover": { bgcolor: "#7c3aed" },
+            }}
+          >
+            Try Again
+          </Button>
+        </Box>
+      </Paper>
+    );
+  }
+
+  // Active quiz state
+  const currentQuestion = currentQuestions[currentQuestionIndex];
+  const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
+
+  return (
+    <Paper sx={{ p: 4, borderRadius: 3, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+      {/* Progress */}
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+          <Typography variant="subtitle2" color="text.secondary">
+            Question {currentQuestionIndex + 1} of {currentQuestions.length}
+          </Typography>
+          <Chip label={currentQuestion.topic} size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6" }} />
+        </Box>
+        <LinearProgress 
+          variant="determinate" 
+          value={((currentQuestionIndex + 1) / currentQuestions.length) * 100} 
+          sx={{ 
+            height: 8, 
+            borderRadius: 4,
+            bgcolor: alpha("#8b5cf6", 0.1),
+            "& .MuiLinearProgress-bar": { bgcolor: "#8b5cf6", borderRadius: 4 }
+          }} 
+        />
+      </Box>
+
+      {/* Question */}
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
+        {currentQuestion.question}
+      </Typography>
+
+      {/* Options */}
+      <RadioGroup value={selectedAnswer} onChange={(e) => handleAnswerSelect(parseInt(e.target.value))}>
+        <Grid container spacing={2}>
+          {currentQuestion.options.map((option, index) => {
+            let bgColor = "transparent";
+            let borderColor = alpha(theme.palette.divider, 0.2);
+            
+            if (showExplanation) {
+              if (index === currentQuestion.correctAnswer) {
+                bgColor = alpha("#10b981", 0.1);
+                borderColor = "#10b981";
+              } else if (index === selectedAnswer && !isCorrect) {
+                bgColor = alpha("#ef4444", 0.1);
+                borderColor = "#ef4444";
+              }
+            } else if (selectedAnswer === index) {
+              bgColor = alpha("#8b5cf6", 0.1);
+              borderColor = "#8b5cf6";
+            }
+
+            return (
+              <Grid item xs={12} key={index}>
+                <Paper
+                  onClick={() => handleAnswerSelect(index)}
+                  sx={{
+                    p: 2,
+                    cursor: showExplanation ? "default" : "pointer",
+                    borderRadius: 2,
+                    bgcolor: bgColor,
+                    border: `2px solid ${borderColor}`,
+                    transition: "all 0.2s ease",
+                    "&:hover": !showExplanation ? {
+                      borderColor: "#8b5cf6",
+                      bgcolor: alpha("#8b5cf6", 0.05),
+                    } : {},
+                  }}
+                >
+                  <FormControlLabel
+                    value={index}
+                    control={<Radio disabled={showExplanation} />}
+                    label={option}
+                    sx={{ m: 0, width: "100%" }}
+                  />
+                </Paper>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </RadioGroup>
+
+      {/* Explanation */}
+      {showExplanation && (
+        <Paper sx={{ 
+          p: 2, 
+          mt: 3, 
+          borderRadius: 2, 
+          bgcolor: alpha(isCorrect ? "#10b981" : "#f59e0b", 0.1),
+          border: `1px solid ${alpha(isCorrect ? "#10b981" : "#f59e0b", 0.3)}`
+        }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: isCorrect ? "#10b981" : "#f59e0b", mb: 1 }}>
+            {isCorrect ? "✓ Correct!" : "✗ Incorrect"}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {currentQuestion.explanation}
+          </Typography>
+        </Paper>
+      )}
+
+      {/* Actions */}
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3, gap: 2 }}>
+        {!showExplanation ? (
+          <Button
+            variant="contained"
+            onClick={handleSubmitAnswer}
+            disabled={selectedAnswer === null}
+            sx={{
+              px: 4,
+              borderRadius: 2,
+              bgcolor: "#8b5cf6",
+              "&:hover": { bgcolor: "#7c3aed" },
+            }}
+          >
+            Submit Answer
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            onClick={handleNextQuestion}
+            sx={{
+              px: 4,
+              borderRadius: 2,
+              bgcolor: "#8b5cf6",
+              "&:hover": { bgcolor: "#7c3aed" },
+            }}
+          >
+            {currentQuestionIndex < currentQuestions.length - 1 ? "Next Question" : "See Results"}
+          </Button>
+        )}
+      </Box>
+    </Paper>
+  );
+}
 
 // Outline sections for future expansion
 const outlineSections = [
@@ -2203,6 +3543,26 @@ export default function IntroToReverseEngineeringPage() {
             </Grid>
           </Grid>
         </Paper>
+
+        {/* ==================== QUIZ SECTION ==================== */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+          <Divider sx={{ flex: 1 }} />
+          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
+            TEST YOUR KNOWLEDGE
+          </Typography>
+          <Divider sx={{ flex: 1 }} />
+        </Box>
+
+        <Typography id="quiz" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+          📝 Knowledge Quiz
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Test your understanding of reverse engineering fundamentals with this interactive quiz
+        </Typography>
+
+        <Box sx={{ mb: 5 }}>
+          <QuizSection />
+        </Box>
 
         {/* Footer Navigation */}
         <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>

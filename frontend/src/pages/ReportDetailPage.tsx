@@ -67,7 +67,7 @@ import {
   Snackbar,
 } from "@mui/material";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, AIInsights, AttackChain, ChatMessage, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, CodebaseDiagram, ExploitScenario, Finding, FileContent, DependencyGraph, ScanDiff, FileTrends, TodoScanResult, TodoItem, CodeSearchResult, CodeSearchMatch, CodeExplanation, SecretsScanResult, SecretItem, VulnerabilitySummary, CVEEntry, CWEEntry } from "../api/client";
+import { api, AIInsights, AttackChain, AttackChainDiagram, ChatMessage, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, CodebaseDiagram, ExploitScenario, Finding, FileContent, DependencyGraph, ScanDiff, FileTrends, TodoScanResult, TodoItem, CodeSearchResult, CodeSearchMatch, CodeExplanation, SecretsScanResult, SecretItem, VulnerabilitySummary, CVEEntry, CWEEntry } from "../api/client";
 import { FindingNotesBadge } from "../components/FindingNotesPanel";
 import { MermaidDiagram } from "../components/MermaidDiagram";
 
@@ -4500,6 +4500,14 @@ export default function ReportDetailPage() {
     refetchInterval: pollExploit ? 3000 : false,
   });
 
+  // Attack chain diagram for exploitability visualization
+  const attackChainDiagramQuery = useQuery({
+    queryKey: ["attack-chain-diagram", id],
+    queryFn: () => api.getAttackChainDiagram(id, true),
+    enabled: !!id && (exploitQuery.data?.length ?? 0) > 0,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
   const aiInsightsQuery = useQuery({
     queryKey: ["ai-insights", id],
     queryFn: () => api.getAIInsights(id),
@@ -5660,6 +5668,69 @@ export default function ReportDetailPage() {
                   Lower confidence findings are shown at the bottom in grey
                 </Typography>
               )}
+            </Paper>
+          )}
+
+          {/* Attack Chain Diagram - Visual exploit path map */}
+          {attackChainDiagramQuery.data && attackChainDiagramQuery.data.diagram && (
+            <Paper
+              sx={{
+                p: 3,
+                mb: 3,
+                background: `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.05)} 0%, ${alpha(theme.palette.warning.main, 0.03)} 100%)`,
+                border: `1px solid ${alpha(theme.palette.error.main, 0.15)}`,
+                borderRadius: 2,
+              }}
+            >
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                <Typography variant="h6" fontWeight={700} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  🗺️ Attack Chain Map
+                  {attackChainDiagramQuery.data.generated_by === "ai" && (
+                    <Chip 
+                      size="small" 
+                      label="AI Generated"
+                      sx={{ 
+                        bgcolor: alpha(theme.palette.info.main, 0.15),
+                        color: theme.palette.info.main,
+                        fontSize: "0.7rem",
+                      }}
+                    />
+                  )}
+                </Typography>
+                <Tooltip title="Regenerate diagram">
+                  <IconButton 
+                    size="small"
+                    onClick={() => {
+                      api.clearAttackChainDiagram(id).then(() => {
+                        queryClient.invalidateQueries({ queryKey: ["attack-chain-diagram", id] });
+                      });
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+                    </svg>
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Visual representation of how vulnerabilities can be chained for exploitation.
+              </Typography>
+              <Box sx={{ 
+                bgcolor: "background.paper", 
+                borderRadius: 1, 
+                p: 2,
+                border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+                minHeight: 300,
+              }}>
+                <MermaidDiagram code={attackChainDiagramQuery.data.diagram} />
+              </Box>
+            </Paper>
+          )}
+
+          {attackChainDiagramQuery.isLoading && exploitQuery.data && exploitQuery.data.length > 0 && (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ mb: 2 }}>🗺️ Generating Attack Chain Map...</Typography>
+              <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 1 }} />
             </Paper>
           )}
 

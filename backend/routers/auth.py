@@ -14,6 +14,7 @@ from backend.schemas.auth import (
     UserResponse,
     MessageResponse,
     PasswordChange,
+    ProfileUpdate,
 )
 from backend.services.auth_service import (
     authenticate_user,
@@ -201,3 +202,30 @@ async def change_password(
     update_user_password(db, current_user, password_data.new_password)
     
     return MessageResponse(message="Password changed successfully")
+
+
+@router.put("/profile", response_model=UserResponse)
+async def update_profile(
+    profile_data: ProfileUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update current user's profile.
+    """
+    # Update only provided fields
+    if profile_data.first_name is not None:
+        current_user.first_name = profile_data.first_name
+    if profile_data.last_name is not None:
+        current_user.last_name = profile_data.last_name
+    if profile_data.bio is not None:
+        current_user.bio = profile_data.bio
+    if profile_data.avatar_url is not None:
+        current_user.avatar_url = profile_data.avatar_url
+    
+    db.commit()
+    db.refresh(current_user)
+    
+    logger.info(f"User profile updated: {current_user.email}")
+    
+    return UserResponse.model_validate(current_user)

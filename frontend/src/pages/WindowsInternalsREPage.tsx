@@ -30,6 +30,7 @@ import {
   Divider,
   alpha,
   useTheme,
+  Button,
 } from "@mui/material";
 import { Link } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -53,7 +54,847 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WarningIcon from "@mui/icons-material/Warning";
 import InfoIcon from "@mui/icons-material/Info";
 import BuildIcon from "@mui/icons-material/Build";
+import QuizIcon from "@mui/icons-material/Quiz";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import LearnPageLayout from "../components/LearnPageLayout";
+
+// Question bank for Windows Internals quiz (75 questions)
+interface QuizQuestion {
+  id: number;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  topic: string;
+}
+
+const questionBank: QuizQuestion[] = [
+  // Section 1: PE File Format (10 questions)
+  {
+    id: 1,
+    question: "What does PE stand for in Windows executables?",
+    options: ["Program Executable", "Portable Executable", "Process Executable", "Primary Executable"],
+    correctAnswer: 1,
+    explanation: "PE stands for Portable Executable, the file format for executables on Windows.",
+    topic: "PE File Format"
+  },
+  {
+    id: 2,
+    question: "What is the magic number at the start of a PE file's DOS header?",
+    options: ["PE\\0\\0", "MZ", "ELF", "PK"],
+    correctAnswer: 1,
+    explanation: "MZ (0x5A4D) is the magic number at the start of all PE files, named after Mark Zbikowski.",
+    topic: "PE File Format"
+  },
+  {
+    id: 3,
+    question: "Which PE section typically contains executable code?",
+    options: [".data", ".text", ".rsrc", ".reloc"],
+    correctAnswer: 1,
+    explanation: "The .text section contains the executable code (machine instructions).",
+    topic: "PE File Format"
+  },
+  {
+    id: 4,
+    question: "What is the purpose of the .reloc section?",
+    options: ["Store resources", "Hold base relocation data for ASLR", "Store read-only data", "Hold import tables"],
+    correctAnswer: 1,
+    explanation: "The .reloc section contains base relocation data needed when the image loads at a different address (ASLR).",
+    topic: "PE File Format"
+  },
+  {
+    id: 5,
+    question: "Where are imported DLL functions listed in a PE file?",
+    options: ["Export Table", "Import Address Table (IAT)", ".text section", "DOS Header"],
+    correctAnswer: 1,
+    explanation: "The Import Address Table (IAT) contains pointers to functions imported from DLLs.",
+    topic: "PE File Format"
+  },
+  {
+    id: 6,
+    question: "What does the AddressOfEntryPoint field specify?",
+    options: ["The file size", "The RVA where execution begins", "The import count", "The section alignment"],
+    correctAnswer: 1,
+    explanation: "AddressOfEntryPoint is the Relative Virtual Address (RVA) where program execution starts.",
+    topic: "PE File Format"
+  },
+  {
+    id: 7,
+    question: "What is an RVA (Relative Virtual Address)?",
+    options: ["An absolute memory address", "An offset relative to the image base when loaded in memory", "A file offset", "A section index"],
+    correctAnswer: 1,
+    explanation: "RVA is an address relative to where the image is loaded in memory (ImageBase + RVA = VA).",
+    topic: "PE File Format"
+  },
+  {
+    id: 8,
+    question: "Which section contains embedded resources like icons and version info?",
+    options: [".text", ".data", ".rsrc", ".rdata"],
+    correctAnswer: 2,
+    explanation: "The .rsrc section contains resources such as icons, dialogs, strings, and version information.",
+    topic: "PE File Format"
+  },
+  {
+    id: 9,
+    question: "What is the difference between .data and .rdata sections?",
+    options: ["No difference", ".data is read-write, .rdata is read-only", ".data is code, .rdata is data", ".data is larger"],
+    correctAnswer: 1,
+    explanation: ".data contains initialized read-write data, while .rdata contains read-only data like constants and imports.",
+    topic: "PE File Format"
+  },
+  {
+    id: 10,
+    question: "What tool can you use to view PE headers on Windows?",
+    options: ["notepad", "PE-bear, CFF Explorer, or dumpbin", "Task Manager", "Registry Editor"],
+    correctAnswer: 1,
+    explanation: "Tools like PE-bear, CFF Explorer, and dumpbin are designed for viewing and analyzing PE file structures.",
+    topic: "PE File Format"
+  },
+
+  // Section 2: PEB & TEB (10 questions)
+  {
+    id: 11,
+    question: "What does PEB stand for?",
+    options: ["Program Execution Block", "Process Environment Block", "Primary Entry Block", "Process Entry Base"],
+    correctAnswer: 1,
+    explanation: "PEB stands for Process Environment Block, a structure containing process-wide information.",
+    topic: "PEB & TEB"
+  },
+  {
+    id: 12,
+    question: "What does TEB stand for?",
+    options: ["Thread Entry Block", "Thread Environment Block", "Task Execution Block", "Thread Execution Base"],
+    correctAnswer: 1,
+    explanation: "TEB stands for Thread Environment Block, containing per-thread information.",
+    topic: "PEB & TEB"
+  },
+  {
+    id: 13,
+    question: "How can you access the PEB from a running process?",
+    options: ["Through the registry", "Via the TEB's ProcessEnvironmentBlock pointer", "Reading a file", "Using Task Manager"],
+    correctAnswer: 1,
+    explanation: "The TEB contains a pointer to the PEB at offset 0x60 (x64) or 0x30 (x86).",
+    topic: "PEB & TEB"
+  },
+  {
+    id: 14,
+    question: "Which PEB field is commonly checked for anti-debugging?",
+    options: ["ImageBaseAddress", "BeingDebugged", "ProcessParameters", "Ldr"],
+    correctAnswer: 1,
+    explanation: "PEB.BeingDebugged is set to 1 when a debugger is attached, commonly checked in anti-debug code.",
+    topic: "PEB & TEB"
+  },
+  {
+    id: 15,
+    question: "What does the NtGlobalFlag in PEB indicate?",
+    options: ["Process priority", "Debug heap flags that indicate debugging", "Thread count", "Memory usage"],
+    correctAnswer: 1,
+    explanation: "NtGlobalFlag contains debug-related flags (like FLG_HEAP_*) that differ when being debugged.",
+    topic: "PEB & TEB"
+  },
+  {
+    id: 16,
+    question: "What structure does PEB.Ldr point to?",
+    options: ["Thread list", "PEB_LDR_DATA containing loaded modules list", "Heap structure", "Environment variables"],
+    correctAnswer: 1,
+    explanation: "PEB.Ldr points to PEB_LDR_DATA which contains three linked lists of loaded modules (DLLs).",
+    topic: "PEB & TEB"
+  },
+  {
+    id: 17,
+    question: "How can malware hide a DLL from the PEB.Ldr module list?",
+    options: ["Deleting the DLL file", "Unlinking the module entry from the linked lists", "Renaming the DLL", "Changing permissions"],
+    correctAnswer: 1,
+    explanation: "Malware can unlink a module from the InLoadOrderModuleList, InMemoryOrderModuleList, and InInitializationOrderModuleList.",
+    topic: "PEB & TEB"
+  },
+  {
+    id: 18,
+    question: "On x64, which segment register points to the TEB?",
+    options: ["FS", "GS", "ES", "DS"],
+    correctAnswer: 1,
+    explanation: "On x64 Windows, GS:[0] points to the TEB. On x86, FS:[0] points to the TEB.",
+    topic: "PEB & TEB"
+  },
+  {
+    id: 19,
+    question: "What information does the TEB's StackBase and StackLimit contain?",
+    options: ["Heap addresses", "The boundaries of the thread's stack", "Code section addresses", "DLL addresses"],
+    correctAnswer: 1,
+    explanation: "StackBase and StackLimit define the upper and lower bounds of the thread's stack memory.",
+    topic: "PEB & TEB"
+  },
+  {
+    id: 20,
+    question: "What is stored in TEB.LastErrorValue?",
+    options: ["System time", "The last Win32 error code (GetLastError value)", "Thread ID", "Process ID"],
+    correctAnswer: 1,
+    explanation: "TEB.LastErrorValue stores the value returned by GetLastError() for the current thread.",
+    topic: "PEB & TEB"
+  },
+
+  // Section 3: Windows Memory (8 questions)
+  {
+    id: 21,
+    question: "What is the user-mode address space limit on 32-bit Windows by default?",
+    options: ["1 GB", "2 GB", "3 GB", "4 GB"],
+    correctAnswer: 1,
+    explanation: "By default, 32-bit Windows gives 2GB to user mode and 2GB to kernel mode.",
+    topic: "Windows Memory"
+  },
+  {
+    id: 22,
+    question: "What Windows API allocates virtual memory?",
+    options: ["malloc", "VirtualAlloc", "HeapAlloc", "GlobalAlloc"],
+    correctAnswer: 1,
+    explanation: "VirtualAlloc reserves, commits, or changes the state of virtual memory pages.",
+    topic: "Windows Memory"
+  },
+  {
+    id: 23,
+    question: "What memory protection constant allows execute and read access?",
+    options: ["PAGE_READONLY", "PAGE_EXECUTE_READ", "PAGE_READWRITE", "PAGE_NOACCESS"],
+    correctAnswer: 1,
+    explanation: "PAGE_EXECUTE_READ (0x20) allows the memory to be executed and read.",
+    topic: "Windows Memory"
+  },
+  {
+    id: 24,
+    question: "What is DEP (Data Execution Prevention)?",
+    options: ["A firewall feature", "A security feature that prevents code execution from data pages", "A memory compression technique", "A disk encryption system"],
+    correctAnswer: 1,
+    explanation: "DEP marks memory regions as non-executable, preventing shellcode execution from data areas.",
+    topic: "Windows Memory"
+  },
+  {
+    id: 25,
+    question: "What is ASLR (Address Space Layout Randomization)?",
+    options: ["A memory leak detector", "A security feature that randomizes memory addresses", "A heap optimization", "A debugging tool"],
+    correctAnswer: 1,
+    explanation: "ASLR randomizes the base addresses of executables, DLLs, stack, and heap to prevent exploitation.",
+    topic: "Windows Memory"
+  },
+  {
+    id: 26,
+    question: "What does VirtualProtect do?",
+    options: ["Encrypts memory", "Changes the protection attributes of memory pages", "Allocates memory", "Frees memory"],
+    correctAnswer: 1,
+    explanation: "VirtualProtect changes the access protection (read, write, execute) of memory pages.",
+    topic: "Windows Memory"
+  },
+  {
+    id: 27,
+    question: "What is a memory-mapped file?",
+    options: ["A compressed file", "A file mapped directly into the process's address space", "An encrypted file", "A temporary file"],
+    correctAnswer: 1,
+    explanation: "Memory-mapped files allow file contents to be accessed as if they were in memory, using virtual memory.",
+    topic: "Windows Memory"
+  },
+  {
+    id: 28,
+    question: "What is the Windows heap used for?",
+    options: ["Only stack allocations", "Dynamic memory allocations smaller than a page", "Code execution only", "File storage"],
+    correctAnswer: 1,
+    explanation: "The heap is used for dynamic memory allocations, typically smaller blocks managed by the heap manager.",
+    topic: "Windows Memory"
+  },
+
+  // Section 4: System Calls & Native API (8 questions)
+  {
+    id: 29,
+    question: "What is ntdll.dll?",
+    options: ["A user interface DLL", "The lowest user-mode DLL that interfaces with the kernel", "A network DLL", "A graphics DLL"],
+    correctAnswer: 1,
+    explanation: "ntdll.dll contains the native API functions that transition to kernel mode via system calls.",
+    topic: "System Calls & Native API"
+  },
+  {
+    id: 30,
+    question: "What prefix do native API functions typically have?",
+    options: ["Win", "Nt or Zw", "Sys", "Kernel"],
+    correctAnswer: 1,
+    explanation: "Native API functions are prefixed with Nt (user mode origin) or Zw (kernel mode origin).",
+    topic: "System Calls & Native API"
+  },
+  {
+    id: 31,
+    question: "What instruction transitions from user mode to kernel mode on x64?",
+    options: ["INT 0x80", "syscall", "sysenter", "CALL"],
+    correctAnswer: 1,
+    explanation: "On x64 Windows, the syscall instruction performs the transition to kernel mode.",
+    topic: "System Calls & Native API"
+  },
+  {
+    id: 32,
+    question: "What is the System Service Descriptor Table (SSDT)?",
+    options: ["A file table", "A kernel table containing pointers to system call handlers", "A network table", "A user table"],
+    correctAnswer: 1,
+    explanation: "The SSDT is a kernel structure containing pointers to native system call handler functions.",
+    topic: "System Calls & Native API"
+  },
+  {
+    id: 33,
+    question: "What is direct system call invocation?",
+    options: ["Calling Win32 API", "Calling Nt* functions directly, bypassing kernel32/user32 hooks", "Using the command line", "Remote procedure calls"],
+    correctAnswer: 1,
+    explanation: "Direct syscalls bypass higher-level APIs and hooks by calling Nt* functions or using raw syscall instructions.",
+    topic: "System Calls & Native API"
+  },
+  {
+    id: 34,
+    question: "What is the difference between Nt and Zw function prefixes?",
+    options: ["No difference", "Zw functions perform additional access checks when called from kernel mode", "Nt functions are faster", "Zw functions are deprecated"],
+    correctAnswer: 1,
+    explanation: "Zw functions set the previous mode to kernel mode, bypassing access checks; Nt functions preserve the previous mode.",
+    topic: "System Calls & Native API"
+  },
+  {
+    id: 35,
+    question: "What does NtQuerySystemInformation retrieve?",
+    options: ["User preferences", "Various system information (processes, handles, etc.)", "Network status", "Disk space"],
+    correctAnswer: 1,
+    explanation: "NtQuerySystemInformation retrieves various system info like process lists, handle tables, and system stats.",
+    topic: "System Calls & Native API"
+  },
+  {
+    id: 36,
+    question: "Why might malware use direct syscalls?",
+    options: ["For better performance", "To bypass API hooks placed by security software", "To use less memory", "For compatibility"],
+    correctAnswer: 1,
+    explanation: "Direct syscalls bypass user-mode API hooks, helping malware evade EDR and antivirus detection.",
+    topic: "System Calls & Native API"
+  },
+
+  // Section 5: Processes & Threads (8 questions)
+  {
+    id: 37,
+    question: "What Windows API creates a new process?",
+    options: ["CreateThread", "CreateProcess", "NtCreateProcess", "fork"],
+    correctAnswer: 1,
+    explanation: "CreateProcess (and CreateProcessEx) creates a new process and its primary thread.",
+    topic: "Processes & Threads"
+  },
+  {
+    id: 38,
+    question: "What is a handle in Windows?",
+    options: ["A file path", "An opaque reference to a kernel object", "A memory address", "A thread ID"],
+    correctAnswer: 1,
+    explanation: "A handle is an integer that references a kernel object like a file, process, or thread.",
+    topic: "Processes & Threads"
+  },
+  {
+    id: 39,
+    question: "What does OpenProcess with PROCESS_ALL_ACCESS allow?",
+    options: ["Read-only access", "Full access to perform any operation on the process", "Network access only", "File access only"],
+    correctAnswer: 1,
+    explanation: "PROCESS_ALL_ACCESS grants full permissions to the process including reading, writing memory, and termination.",
+    topic: "Processes & Threads"
+  },
+  {
+    id: 40,
+    question: "What is process hollowing?",
+    options: ["Deleting a process", "Creating a suspended process and replacing its code with malicious code", "Compressing a process", "Debugging a process"],
+    correctAnswer: 1,
+    explanation: "Process hollowing creates a legitimate process in suspended state, unmaps its code, and injects malicious code.",
+    topic: "Processes & Threads"
+  },
+  {
+    id: 41,
+    question: "What is a Remote Thread?",
+    options: ["A network connection", "A thread created in another process's address space", "A background thread", "A kernel thread"],
+    correctAnswer: 1,
+    explanation: "CreateRemoteThread creates a thread in another process, commonly used for DLL injection.",
+    topic: "Processes & Threads"
+  },
+  {
+    id: 42,
+    question: "What is the APC (Asynchronous Procedure Call) queue?",
+    options: ["A message queue", "A per-thread queue of functions to be executed", "A network queue", "A print queue"],
+    correctAnswer: 1,
+    explanation: "APCs are functions queued to execute in the context of a specific thread, used in some injection techniques.",
+    topic: "Processes & Threads"
+  },
+  {
+    id: 43,
+    question: "What does the CREATE_SUSPENDED flag do in CreateProcess?",
+    options: ["Creates a hidden process", "Creates the process with its main thread suspended", "Creates a higher priority process", "Creates a process without a window"],
+    correctAnswer: 1,
+    explanation: "CREATE_SUSPENDED creates the process but doesn't run it until ResumeThread is called, allowing manipulation before execution.",
+    topic: "Processes & Threads"
+  },
+  {
+    id: 44,
+    question: "What is PID?",
+    options: ["Program Identifier", "Process Identifier - a unique number for each process", "Primary ID", "Parent ID"],
+    correctAnswer: 1,
+    explanation: "PID (Process Identifier) is a unique number assigned to each running process.",
+    topic: "Processes & Threads"
+  },
+
+  // Section 6: DLLs & Injection (8 questions)
+  {
+    id: 45,
+    question: "What does DLL stand for?",
+    options: ["Data Link Library", "Dynamic Link Library", "Direct Load Library", "Distributed Link Library"],
+    correctAnswer: 1,
+    explanation: "DLL stands for Dynamic Link Library, containing code and data shared between programs.",
+    topic: "DLLs & Injection"
+  },
+  {
+    id: 46,
+    question: "What is DLL injection?",
+    options: ["Installing a DLL", "Forcing a process to load an attacker-controlled DLL", "Compiling a DLL", "Signing a DLL"],
+    correctAnswer: 1,
+    explanation: "DLL injection forces a target process to load a DLL, allowing code execution in that process's context.",
+    topic: "DLLs & Injection"
+  },
+  {
+    id: 47,
+    question: "Which function is commonly used for classic DLL injection?",
+    options: ["LoadLibrary", "CreateRemoteThread with LoadLibraryA", "FreeLibrary", "GetModuleHandle"],
+    correctAnswer: 1,
+    explanation: "Classic DLL injection uses CreateRemoteThread to call LoadLibraryA in the target process.",
+    topic: "DLLs & Injection"
+  },
+  {
+    id: 48,
+    question: "What is reflective DLL injection?",
+    options: ["Loading from disk", "Loading a DLL from memory without using LoadLibrary", "Loading a signed DLL", "Loading a system DLL"],
+    correctAnswer: 1,
+    explanation: "Reflective DLL injection loads a DLL entirely from memory, avoiding disk writes and LoadLibrary.",
+    topic: "DLLs & Injection"
+  },
+  {
+    id: 49,
+    question: "What is DLL search order hijacking?",
+    options: ["Renaming a DLL", "Placing a malicious DLL in a location searched before the legitimate one", "Deleting DLLs", "Compressing DLLs"],
+    correctAnswer: 1,
+    explanation: "DLL hijacking exploits the search order by placing a malicious DLL where it's found first.",
+    topic: "DLLs & Injection"
+  },
+  {
+    id: 50,
+    question: "What does DllMain's DLL_PROCESS_ATTACH reason indicate?",
+    options: ["DLL is being unloaded", "DLL is being loaded into a process", "A thread is starting", "A thread is ending"],
+    correctAnswer: 1,
+    explanation: "DLL_PROCESS_ATTACH is called when the DLL is first loaded into a process's address space.",
+    topic: "DLLs & Injection"
+  },
+  {
+    id: 51,
+    question: "What is module stomping?",
+    options: ["Deleting modules", "Overwriting a legitimately loaded DLL's code with malicious code", "Compressing modules", "Signing modules"],
+    correctAnswer: 1,
+    explanation: "Module stomping overwrites the code section of a legitimately loaded DLL to hide malicious code.",
+    topic: "DLLs & Injection"
+  },
+  {
+    id: 52,
+    question: "What does GetProcAddress do?",
+    options: ["Gets a process handle", "Retrieves the address of an exported function from a DLL", "Gets a thread address", "Allocates memory"],
+    correctAnswer: 1,
+    explanation: "GetProcAddress retrieves the memory address of a function exported by a loaded DLL.",
+    topic: "DLLs & Injection"
+  },
+
+  // Section 7: Registry & Persistence (7 questions)
+  {
+    id: 53,
+    question: "What is a common persistence location in the registry?",
+    options: ["HKEY_CLASSES_ROOT", "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "HKEY_LOCAL_MACHINE\\HARDWARE", "HKEY_USERS\\.DEFAULT"],
+    correctAnswer: 1,
+    explanation: "The Run key automatically executes programs at user logon, making it a common persistence location.",
+    topic: "Registry & Persistence"
+  },
+  {
+    id: 54,
+    question: "What is HKLM short for?",
+    options: ["Host Key Local Machine", "HKEY_LOCAL_MACHINE", "Hardware Key LM", "Host Kernel Local Manager"],
+    correctAnswer: 1,
+    explanation: "HKLM is the abbreviation for HKEY_LOCAL_MACHINE, containing system-wide settings.",
+    topic: "Registry & Persistence"
+  },
+  {
+    id: 55,
+    question: "What is the difference between HKCU and HKLM Run keys?",
+    options: ["No difference", "HKCU is per-user, HKLM is system-wide (requires admin)", "HKCU requires admin", "HKLM is per-user"],
+    correctAnswer: 1,
+    explanation: "HKCU\\...\\Run runs for the current user; HKLM\\...\\Run runs for all users but requires admin to modify.",
+    topic: "Registry & Persistence"
+  },
+  {
+    id: 56,
+    question: "What is a Scheduled Task used for in persistence?",
+    options: ["Only for backups", "Running programs at specific times or events, surviving reboots", "Only for updates", "Only for cleanup"],
+    correctAnswer: 1,
+    explanation: "Scheduled tasks can run programs at login, startup, or schedules, providing robust persistence.",
+    topic: "Registry & Persistence"
+  },
+  {
+    id: 57,
+    question: "What is a Windows Service?",
+    options: ["A web service", "A background process that runs without user interaction", "A customer service feature", "A cloud service"],
+    correctAnswer: 1,
+    explanation: "Windows services are long-running executables that perform system functions, often starting at boot.",
+    topic: "Registry & Persistence"
+  },
+  {
+    id: 58,
+    question: "Where are service configurations stored?",
+    options: ["In a file", "HKLM\\SYSTEM\\CurrentControlSet\\Services", "In the user profile", "In Program Files"],
+    correctAnswer: 1,
+    explanation: "Service configurations are stored in the registry under HKLM\\SYSTEM\\CurrentControlSet\\Services.",
+    topic: "Registry & Persistence"
+  },
+  {
+    id: 59,
+    question: "What is WMI persistence?",
+    options: ["A file-based persistence", "Using WMI event subscriptions to trigger malicious actions", "A network persistence", "A temporary persistence"],
+    correctAnswer: 1,
+    explanation: "WMI persistence uses permanent event subscriptions to trigger malicious code on system events.",
+    topic: "Registry & Persistence"
+  },
+
+  // Section 8: Windows Security (8 questions)
+  {
+    id: 60,
+    question: "What is a Security Descriptor?",
+    options: ["A file name", "A structure that contains security info (owner, ACL) for an object", "A password", "A network address"],
+    correctAnswer: 1,
+    explanation: "Security descriptors contain the owner, group, and Access Control Lists (ACLs) for securable objects.",
+    topic: "Windows Security"
+  },
+  {
+    id: 61,
+    question: "What does ACL stand for?",
+    options: ["Access Control Layer", "Access Control List", "Advanced Control Logic", "Authorization Control List"],
+    correctAnswer: 1,
+    explanation: "ACL (Access Control List) is a list of Access Control Entries (ACEs) defining who can access an object.",
+    topic: "Windows Security"
+  },
+  {
+    id: 62,
+    question: "What is an access token?",
+    options: ["A password", "An object representing the security context of a process or thread", "A network key", "A file permission"],
+    correctAnswer: 1,
+    explanation: "Access tokens contain the security identity, privileges, and group memberships for a process or thread.",
+    topic: "Windows Security"
+  },
+  {
+    id: 63,
+    question: "What is UAC (User Account Control)?",
+    options: ["A login system", "A security feature that prompts for elevation when admin rights are needed", "A firewall", "A backup system"],
+    correctAnswer: 1,
+    explanation: "UAC prompts users before allowing programs to make changes requiring administrator privileges.",
+    topic: "Windows Security"
+  },
+  {
+    id: 64,
+    question: "What is privilege escalation?",
+    options: ["Logging in", "Gaining higher privileges than originally granted", "Installing software", "Network access"],
+    correctAnswer: 1,
+    explanation: "Privilege escalation is gaining elevated access (e.g., from standard user to admin or SYSTEM).",
+    topic: "Windows Security"
+  },
+  {
+    id: 65,
+    question: "What privileges does the SYSTEM account have?",
+    options: ["Limited privileges", "Full unrestricted access to the local system", "Network only access", "Read-only access"],
+    correctAnswer: 1,
+    explanation: "SYSTEM (LocalSystem) has complete control over the local machine, higher than Administrator.",
+    topic: "Windows Security"
+  },
+  {
+    id: 66,
+    question: "What is CFG (Control Flow Guard)?",
+    options: ["A firewall", "A security feature that validates indirect call targets", "A password manager", "A disk encryption"],
+    correctAnswer: 1,
+    explanation: "CFG validates that indirect call targets are valid, preventing many control-flow hijack exploits.",
+    topic: "Windows Security"
+  },
+  {
+    id: 67,
+    question: "What is Credential Guard?",
+    options: ["A password manager", "Virtualization-based security that isolates credentials from the OS", "A firewall rule", "An antivirus feature"],
+    correctAnswer: 1,
+    explanation: "Credential Guard uses VBS to isolate secrets like NTLM hashes in a separate virtualized environment.",
+    topic: "Windows Security"
+  },
+
+  // Section 9: Debugging & Analysis Tools (8 questions)
+  {
+    id: 68,
+    question: "What is WinDbg?",
+    options: ["A text editor", "Microsoft's debugger for Windows user-mode and kernel-mode debugging", "A file manager", "A network tool"],
+    correctAnswer: 1,
+    explanation: "WinDbg is Microsoft's powerful debugger for debugging Windows applications and the kernel.",
+    topic: "Debugging & Analysis"
+  },
+  {
+    id: 69,
+    question: "What command shows the call stack in WinDbg?",
+    options: ["list", "k or kb", "stack", "show"],
+    correctAnswer: 1,
+    explanation: "The 'k' command (and variants like kb, kv, kp) display the call stack.",
+    topic: "Debugging & Analysis"
+  },
+  {
+    id: 70,
+    question: "What is Process Monitor (Procmon) used for?",
+    options: ["Only CPU monitoring", "Real-time monitoring of file, registry, network, and process activity", "Only memory monitoring", "Only network monitoring"],
+    correctAnswer: 1,
+    explanation: "Procmon monitors real-time file system, registry, network, and process/thread activity.",
+    topic: "Debugging & Analysis"
+  },
+  {
+    id: 71,
+    question: "What does Process Explorer show that Task Manager doesn't?",
+    options: ["Nothing extra", "DLL list, handles, detailed process tree, parent relationships", "CPU usage", "Memory usage"],
+    correctAnswer: 1,
+    explanation: "Process Explorer shows loaded DLLs, handles, parent process info, and much more detail than Task Manager.",
+    topic: "Debugging & Analysis"
+  },
+  {
+    id: 72,
+    question: "What is x64dbg?",
+    options: ["A hex editor", "An open-source x64/x32 debugger for Windows", "A compiler", "A disassembler only"],
+    correctAnswer: 1,
+    explanation: "x64dbg is a popular open-source debugger for Windows, supporting both 32-bit and 64-bit applications.",
+    topic: "Debugging & Analysis"
+  },
+  {
+    id: 73,
+    question: "What does the !peb command do in WinDbg?",
+    options: ["Prints error buffer", "Displays the Process Environment Block", "Pauses execution", "Prints entry breakpoints"],
+    correctAnswer: 1,
+    explanation: "!peb displays the contents of the current process's Process Environment Block.",
+    topic: "Debugging & Analysis"
+  },
+  {
+    id: 74,
+    question: "What is API Monitor used for?",
+    options: ["Network monitoring", "Monitoring and controlling API calls made by applications", "CPU monitoring", "Disk monitoring"],
+    correctAnswer: 1,
+    explanation: "API Monitor captures API calls, showing parameters and return values for application analysis.",
+    topic: "Debugging & Analysis"
+  },
+  {
+    id: 75,
+    question: "What does the lm command do in WinDbg?",
+    options: ["Lists memory", "Lists loaded modules", "Lists mutexes", "Lists messages"],
+    correctAnswer: 1,
+    explanation: "The 'lm' command lists all modules (DLLs) loaded in the current process or kernel.",
+    topic: "Debugging & Analysis"
+  }
+];
+
+// Quiz Section Component
+function QuizSection() {
+  const theme = useTheme();
+  const [quizStarted, setQuizStarted] = React.useState(false);
+  const [currentQuestions, setCurrentQuestions] = React.useState<QuizQuestion[]>([]);
+  const [userAnswers, setUserAnswers] = React.useState<{ [key: number]: number }>({});
+  const [showResults, setShowResults] = React.useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
+
+  const shuffleAndSelectQuestions = () => {
+    const shuffled = [...questionBank].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 10);
+  };
+
+  const startQuiz = () => {
+    setCurrentQuestions(shuffleAndSelectQuestions());
+    setUserAnswers({});
+    setShowResults(false);
+    setCurrentQuestionIndex(0);
+    setQuizStarted(true);
+  };
+
+  const handleAnswerSelect = (questionId: number, answerIndex: number) => {
+    setUserAnswers((prev) => ({ ...prev, [questionId]: answerIndex }));
+  };
+
+  const calculateScore = () => {
+    let correct = 0;
+    currentQuestions.forEach((q) => {
+      if (userAnswers[q.id] === q.correctAnswer) correct++;
+    });
+    return correct;
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 8) return "#22c55e";
+    if (score >= 6) return "#f97316";
+    return "#ef4444";
+  };
+
+  const getScoreMessage = (score: number) => {
+    if (score === 10) return "Perfect! You're a Windows internals expert! 🏆";
+    if (score >= 8) return "Excellent work! Strong Windows knowledge! 🌟";
+    if (score >= 6) return "Good job! Keep studying Windows internals! 📚";
+    if (score >= 4) return "Not bad, but review the material again. 💪";
+    return "Keep learning! Review the sections above. 📖";
+  };
+
+  if (!quizStarted) {
+    return (
+      <Paper
+        id="quiz-section"
+        sx={{
+          p: 4,
+          mb: 5,
+          borderRadius: 4,
+          bgcolor: alpha(theme.palette.background.paper, 0.6),
+          border: `2px solid ${alpha("#3b82f6", 0.3)}`,
+          background: `linear-gradient(135deg, ${alpha("#3b82f6", 0.05)} 0%, ${alpha("#2563eb", 0.05)} 100%)`,
+        }}
+      >
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ width: 56, height: 56, borderRadius: 2, background: "linear-gradient(135deg, #3b82f6, #2563eb)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <QuizIcon sx={{ color: "white", fontSize: 32 }} />
+          </Box>
+          Test Your Windows Internals Knowledge
+        </Typography>
+
+        <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8, fontSize: "1.05rem" }}>
+          Ready to test what you've learned? Take this <strong>10-question quiz</strong> covering Windows internals 
+          for reverse engineering. Questions are randomly selected from a pool of <strong>75 questions</strong>!
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#3b82f6", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#3b82f6" }}>10</Typography>
+              <Typography variant="caption" color="text.secondary">Questions</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#22c55e", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#22c55e" }}>75</Typography>
+              <Typography variant="caption" color="text.secondary">Question Pool</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#8b5cf6", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#8b5cf6" }}>9</Typography>
+              <Typography variant="caption" color="text.secondary">Topics Covered</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#f97316", 0.1), borderRadius: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#f97316" }}>∞</Typography>
+              <Typography variant="caption" color="text.secondary">Retakes Allowed</Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        <Button
+          variant="contained"
+          size="large"
+          onClick={startQuiz}
+          startIcon={<QuizIcon />}
+          sx={{ background: "linear-gradient(135deg, #3b82f6, #2563eb)", fontWeight: 700, px: 4, py: 1.5, fontSize: "1.1rem", "&:hover": { background: "linear-gradient(135deg, #2563eb, #1d4ed8)" } }}
+        >
+          Start Quiz
+        </Button>
+      </Paper>
+    );
+  }
+
+  if (showResults) {
+    const score = calculateScore();
+    return (
+      <Paper id="quiz-section" sx={{ p: 4, mb: 5, borderRadius: 4, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `2px solid ${alpha(getScoreColor(score), 0.3)}` }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <EmojiEventsIcon sx={{ color: getScoreColor(score), fontSize: 40 }} />
+          Quiz Results
+        </Typography>
+
+        <Box sx={{ textAlign: "center", mb: 4 }}>
+          <Typography variant="h1" sx={{ fontWeight: 900, color: getScoreColor(score), mb: 1 }}>{score}/10</Typography>
+          <Typography variant="h6" sx={{ color: "text.secondary", mb: 2 }}>{getScoreMessage(score)}</Typography>
+          <Chip label={`${score * 10}%`} sx={{ bgcolor: alpha(getScoreColor(score), 0.15), color: getScoreColor(score), fontWeight: 700, fontSize: "1rem", px: 2 }} />
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Review Your Answers:</Typography>
+
+        {currentQuestions.map((q, index) => {
+          const isCorrect = userAnswers[q.id] === q.correctAnswer;
+          return (
+            <Paper key={q.id} sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: alpha(isCorrect ? "#22c55e" : "#ef4444", 0.05), border: `1px solid ${alpha(isCorrect ? "#22c55e" : "#ef4444", 0.2)}` }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1 }}>
+                <Chip label={`Q${index + 1}`} size="small" sx={{ bgcolor: isCorrect ? "#22c55e" : "#ef4444", color: "white", fontWeight: 700 }} />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{q.question}</Typography>
+              </Box>
+              <Typography variant="body2" sx={{ color: "text.secondary", ml: 4.5 }}>
+                <strong>Your answer:</strong> {q.options[userAnswers[q.id]] || "Not answered"}
+                {!isCorrect && (<><br /><strong style={{ color: "#22c55e" }}>Correct:</strong> {q.options[q.correctAnswer]}</>)}
+              </Typography>
+              {!isCorrect && (<Alert severity="info" sx={{ mt: 1, ml: 4.5 }}><Typography variant="caption">{q.explanation}</Typography></Alert>)}
+            </Paper>
+          );
+        })}
+
+        <Box sx={{ display: "flex", gap: 2, mt: 3 }}>
+          <Button variant="contained" onClick={startQuiz} startIcon={<RefreshIcon />} sx={{ background: "linear-gradient(135deg, #3b82f6, #2563eb)", fontWeight: 700 }}>Try Again</Button>
+          <Button variant="outlined" onClick={() => setQuizStarted(false)} sx={{ fontWeight: 600 }}>Back to Overview</Button>
+        </Box>
+      </Paper>
+    );
+  }
+
+  const currentQuestion = currentQuestions[currentQuestionIndex];
+  const answeredCount = Object.keys(userAnswers).length;
+
+  return (
+    <Paper id="quiz-section" sx={{ p: 4, mb: 5, borderRadius: 4, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `2px solid ${alpha("#3b82f6", 0.3)}` }}>
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Question {currentQuestionIndex + 1} of 10</Typography>
+          <Chip label={currentQuestion.topic} size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.15), color: "#8b5cf6", fontWeight: 600 }} />
+        </Box>
+        <Box sx={{ width: "100%", bgcolor: alpha("#3b82f6", 0.1), borderRadius: 1, height: 8 }}>
+          <Box sx={{ width: `${((currentQuestionIndex + 1) / 10) * 100}%`, bgcolor: "#3b82f6", borderRadius: 1, height: "100%", transition: "width 0.3s ease" }} />
+        </Box>
+      </Box>
+
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 3, lineHeight: 1.6 }}>{currentQuestion.question}</Typography>
+
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {currentQuestion.options.map((option, index) => {
+          const isSelected = userAnswers[currentQuestion.id] === index;
+          return (
+            <Grid item xs={12} key={index}>
+              <Paper
+                onClick={() => handleAnswerSelect(currentQuestion.id, index)}
+                sx={{ p: 2, borderRadius: 2, cursor: "pointer", bgcolor: isSelected ? alpha("#3b82f6", 0.15) : alpha(theme.palette.background.paper, 0.5), border: `2px solid ${isSelected ? "#3b82f6" : alpha(theme.palette.divider, 0.2)}`, transition: "all 0.2s ease", "&:hover": { borderColor: "#3b82f6", bgcolor: alpha("#3b82f6", 0.08) } }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: isSelected ? "#3b82f6" : alpha(theme.palette.divider, 0.3), color: isSelected ? "white" : "text.secondary", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.9rem" }}>
+                    {String.fromCharCode(65 + index)}
+                  </Box>
+                  <Typography variant="body1" sx={{ fontWeight: isSelected ? 600 : 400 }}>{option}</Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
+
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Button variant="outlined" disabled={currentQuestionIndex === 0} onClick={() => setCurrentQuestionIndex((prev) => prev - 1)}>Previous</Button>
+        <Typography variant="body2" color="text.secondary">{answeredCount}/10 answered</Typography>
+        {currentQuestionIndex < 9 ? (
+          <Button variant="contained" onClick={() => setCurrentQuestionIndex((prev) => prev + 1)} sx={{ background: "linear-gradient(135deg, #3b82f6, #2563eb)" }}>Next</Button>
+        ) : (
+          <Button variant="contained" onClick={() => setShowResults(true)} disabled={answeredCount < 10} sx={{ background: answeredCount >= 10 ? "linear-gradient(135deg, #22c55e, #16a34a)" : undefined, fontWeight: 700 }}>Submit Quiz</Button>
+        )}
+      </Box>
+    </Paper>
+  );
+}
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -317,12 +1158,92 @@ const WindowsInternalsREPage: React.FC = () => {
               </Typography>
             </Box>
           </Box>
+        </Paper>
 
-          <Typography variant="body1" sx={{ maxWidth: 800, fontSize: "1.1rem", lineHeight: 1.7 }}>
-            Understanding Windows internals is essential for effective reverse engineering. This guide covers 
-            the PE file format, process architecture, memory layout, API patterns, and common techniques used 
-            in malware analysis and vulnerability research.
+        {/* Comprehensive Introduction Section */}
+        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+            🔬 What is Windows Internals for Reverse Engineering?
           </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 2 }}>
+            <strong>Windows Internals</strong> refers to the deep technical knowledge of how the Windows operating system 
+            actually works under the hood — the data structures, algorithms, and mechanisms that make everything from running 
+            programs to displaying windows possible. For reverse engineers, this knowledge is absolutely essential because 
+            most malware targets Windows, most commercial software runs on Windows, and understanding the OS internals lets 
+            you comprehend what programs are actually doing when they interact with the system.
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 2 }}>
+            <strong>Why does this matter for security research?</strong> When you analyze a program in a disassembler or 
+            debugger, you'll see calls to Windows API functions like <code>CreateFile</code>, <code>VirtualAlloc</code>, 
+            or <code>CreateRemoteThread</code>. Without understanding what these functions actually do at the OS level, 
+            you're just seeing names. With Windows internals knowledge, you understand that <code>CreateRemoteThread</code> 
+            creates a thread in another process — a technique commonly used for code injection by both legitimate software 
+            and malware. You understand that <code>VirtualAlloc</code> with certain flags can allocate executable memory, 
+            a prerequisite for shellcode execution.
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 2 }}>
+            <strong>The PE (Portable Executable) format</strong> is where it all begins. Every .exe, .dll, and .sys file on 
+            Windows follows this format. The PE header contains critical information: where the program's code starts 
+            (AddressOfEntryPoint), which DLLs it needs (Import Table), what functions it exports (Export Table), and memory 
+            layout instructions for the loader. Malware authors often manipulate PE headers to evade detection — understanding 
+            this format lets you spot anomalies like sections with both write and execute permissions (suspicious), unusually 
+            high entropy (possibly packed), or imports loaded at runtime to hide capabilities.
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 2 }}>
+            <strong>Process architecture</strong> is equally crucial. Every Windows process has key data structures: the 
+            <em>Process Environment Block (PEB)</em> contains information about loaded modules and process parameters that 
+            malware frequently queries; the <em>Thread Environment Block (TEB)</em> holds thread-specific data including the 
+            stack base and structured exception handling chain. Malware often walks these structures to find loaded DLLs 
+            (avoiding detectable API calls), enumerate modules, or detect debuggers. Understanding PEB/TEB walking is 
+            essential for analyzing stealthy malware.
+          </Typography>
+
+          <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.9, mb: 3 }}>
+            <strong>Code injection techniques</strong> are a cornerstone of both offensive security and malware analysis. 
+            From classic DLL injection using <code>CreateRemoteThread</code>, to process hollowing that spawns a suspended 
+            process and replaces its memory, to sophisticated techniques like Early Bird injection that executes before 
+            security tools load — each technique leaves specific artifacts and requires different detection strategies. 
+            This guide covers the most important techniques with practical examples and detection approaches.
+          </Typography>
+
+          <Divider sx={{ my: 3 }} />
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+            📚 What You'll Learn in This Guide
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { title: "PE File Format", desc: "Headers, sections, imports/exports, and how the Windows loader uses this information", icon: <StorageIcon />, color: "#3b82f6" },
+              { title: "Process Architecture", desc: "TEB, PEB, loaded module lists, and how processes are represented in memory", icon: <AccountTreeIcon />, color: "#8b5cf6" },
+              { title: "Windows APIs for RE", desc: "Critical API patterns for file I/O, networking, registry, process manipulation", icon: <CodeIcon />, color: "#10b981" },
+              { title: "DLL Injection Techniques", desc: "CreateRemoteThread, Process Hollowing, APC Injection, and how to detect them", icon: <BugReportIcon />, color: "#ef4444" },
+              { title: "API Hooking", desc: "IAT hooks, inline hooks, and how malware intercepts API calls", icon: <LayersIcon />, color: "#f59e0b" },
+              { title: "Anti-Debugging", desc: "Common techniques programs use to detect debuggers and how to bypass them", icon: <LockIcon />, color: "#ec4899" },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={4} key={item.title}>
+                <Paper sx={{ p: 2, bgcolor: alpha(item.color, 0.08), borderRadius: 2, border: `1px solid ${alpha(item.color, 0.2)}`, height: "100%" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    <Box sx={{ color: item.color }}>{item.icon}</Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color }}>{item.title}</Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Alert severity="info">
+            <AlertTitle sx={{ fontWeight: 700 }}>For Beginners</AlertTitle>
+            If you're new to Windows internals, start with the PE Format tab to understand how executables are structured, 
+            then move to TEB/PEB to see how processes work. Don't try to memorize everything — use this as a reference 
+            while you analyze real programs. The best way to learn is hands-on: load a program in a debugger, examine its 
+            PEB, walk the loaded module list, and see these concepts in action.
+          </Alert>
 
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 3 }}>
             <Chip icon={<StorageIcon />} label="PE Format" color="primary" variant="outlined" />
@@ -2004,6 +2925,9 @@ dt ntdll!_TEB       # Dump TEB structure
             </Accordion>
           </TabPanel>
         </Paper>
+
+        {/* Quiz Section */}
+        <QuizSection />
       </Container>
     </LearnPageLayout>
   );

@@ -62,6 +62,8 @@ import PublicIcon from "@mui/icons-material/Public";
 import HandshakeIcon from "@mui/icons-material/Handshake";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import StarIcon from "@mui/icons-material/Star";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import PersonIcon from "@mui/icons-material/Person";
 import DiversityIcon from "@mui/icons-material/Diversity3";
@@ -84,6 +86,17 @@ import InsightsIcon from "@mui/icons-material/Insights";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
 import VpnLockIcon from "@mui/icons-material/VpnLock";
 import DnsIcon from "@mui/icons-material/Dns";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import LocalFireDepartmentIcon from "@mui/icons-material/LocalFireDepartment";
+import FavoriteIcon from "@mui/icons-material/Favorite";
+import ComputerIcon from "@mui/icons-material/Computer";
+import MemoryIcon from "@mui/icons-material/Memory";
+import DownloadIcon from "@mui/icons-material/Download";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import SettingsIcon from "@mui/icons-material/Settings";
+import ChecklistIcon from "@mui/icons-material/Checklist";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
 import { useNavigate } from "react-router-dom";
 
 interface TabPanelProps {
@@ -101,6 +114,27 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
+interface LearningPathItem {
+  course: string;
+  provider: string;
+  description: string;
+  duration: string;
+  link?: string;
+}
+
+interface CareerLearningPath {
+  beginner: LearningPathItem[];
+  intermediate: LearningPathItem[];
+  advanced: LearningPathItem[];
+}
+
+interface CareerAdvice {
+  gettingStarted: string[];
+  commonMistakes: string[];
+  successTips: string[];
+  dayOneActionPlan: string[];
+}
+
 interface CareerPath {
   title: string;
   icon: React.ReactNode;
@@ -112,6 +146,9 @@ interface CareerPath {
   salaryRange: string;
   demand: number;
   dayInLife: string[];
+  learningPath: CareerLearningPath;
+  careerAdvice: CareerAdvice;
+  certPathType: string; // Maps to CyberSecurityCertificationsPage CareerPathType
 }
 
 const careerPaths: CareerPath[] = [
@@ -142,6 +179,64 @@ const careerPaths: CareerPath[] = [
       "Document findings with detailed remediation steps",
       "Present findings to technical and executive teams",
     ],
+    certPathType: "offensive",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", description: "Foundation in security concepts, threats, and tools", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "CompTIA Network+", provider: "CompTIA", description: "Networking fundamentals essential for pentesting", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "TryHackMe Complete Beginner Path", provider: "TryHackMe", description: "Hands-on introduction to hacking fundamentals", duration: "1-2 months", link: "/learn/certifications" },
+        { course: "eJPT (eLearnSecurity Junior Penetration Tester)", provider: "INE", description: "Entry-level penetration testing certification", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "TCM Practical Ethical Hacking", provider: "TCM Security", description: "Practical beginner-friendly pentesting course", duration: "1-2 months", link: "/learn/certifications" },
+      ],
+      intermediate: [
+        { course: "OSCP (Offensive Security Certified Professional)", provider: "Offensive Security", description: "Industry gold standard for penetration testing", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "PNPT (Practical Network Penetration Tester)", provider: "TCM Security", description: "Practical pentesting with AD focus", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "CRTP (Certified Red Team Professional)", provider: "Altered Security", description: "Active Directory attacks and enumeration", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "eCPPT (Certified Professional Penetration Tester)", provider: "INE", description: "Advanced penetration testing methodology", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "GPEN (GIAC Penetration Tester)", provider: "SANS", description: "Comprehensive penetration testing certification", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "HackTheBox CPTS", provider: "HackTheBox", description: "Advanced pentesting with real-world scenarios", duration: "4-6 months", link: "/learn/certifications" },
+      ],
+      advanced: [
+        { course: "OSEP (PEN-300)", provider: "Offensive Security", description: "Advanced evasion and red team operations", duration: "6-9 months", link: "/learn/certifications" },
+        { course: "CRTO (Certified Red Team Operator)", provider: "Zero-Point Security", description: "Cobalt Strike and advanced red team tactics", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "OSWE (Web Expert)", provider: "Offensive Security", description: "Advanced web application exploitation", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "GXPN (GIAC Exploit Researcher)", provider: "SANS", description: "Advanced exploit development and research", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "OSCE3 (Triple Offensive Security)", provider: "Offensive Security", description: "OSEP + OSWE + OSED combination", duration: "12-18 months", link: "/learn/certifications" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Build a home lab with vulnerable VMs (VulnHub, HackTheBox)",
+        "Practice on CTF platforms daily (TryHackMe, HackTheBox)",
+        "Learn Python scripting for automation and tool development",
+        "Master Linux command line and bash scripting",
+        "Study the OWASP Top 10 and practice on WebGoat/Juice Shop",
+        "Network with other pentesters on Discord communities",
+      ],
+      commonMistakes: [
+        "Jumping to OSCP without proper foundations",
+        "Relying only on automated tools without understanding",
+        "Neglecting report writing and communication skills",
+        "Not documenting methodologies and findings properly",
+        "Ignoring defensive security knowledge",
+      ],
+      successTips: [
+        "Always think about the 'why' behind vulnerabilities, not just the 'how'",
+        "Develop your own methodology and checklists",
+        "Create writeups for CTFs and share your learning journey",
+        "Build relationships with blue team - they're your allies",
+        "Stay current with new CVEs and exploitation techniques",
+        "Practice explaining technical findings to non-technical audiences",
+      ],
+      dayOneActionPlan: [
+        "Sign up for TryHackMe and start the 'Pre Security' path",
+        "Download and install Kali Linux in a VM",
+        "Set up a GitHub account for your security projects",
+        "Join the TryHackMe and HackTheBox Discord servers",
+        "Start learning basic networking (TCP/IP, DNS, HTTP)",
+        "Watch John Hammond or IppSec videos on YouTube",
+      ],
+    },
   },
   {
     title: "Defensive Security (Blue Team)",
@@ -171,6 +266,66 @@ const careerPaths: CareerPath[] = [
       "Document incidents and create after-action reports",
       "Brief leadership on security posture and incidents",
     ],
+    certPathType: "defensive",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", description: "Foundation security concepts and SOC fundamentals", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "CompTIA CySA+", provider: "CompTIA", description: "Security analytics and threat detection basics", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "TryHackMe SOC Level 1 Path", provider: "TryHackMe", description: "Hands-on SOC analyst training", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "LetsDefend SOC Analyst Path", provider: "LetsDefend", description: "Realistic SOC training with alert triage", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Blue Team Level 1 (BTL1)", provider: "Security Blue Team", description: "Entry-level defensive security certification", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "ISC2 CC (Certified in Cybersecurity)", provider: "ISC2", description: "Free foundational security certification", duration: "1-2 months", link: "/learn/certifications" },
+      ],
+      intermediate: [
+        { course: "GCIH (GIAC Certified Incident Handler)", provider: "SANS SEC504", description: "Incident handling and hacker techniques", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "GCFA (GIAC Certified Forensic Analyst)", provider: "SANS FOR508", description: "Digital forensics and incident response", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "Blue Team Level 2 (BTL2)", provider: "Security Blue Team", description: "Advanced incident response and threat hunting", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "Microsoft SC-200", provider: "Microsoft", description: "Security operations analyst certification", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Splunk Core Certified Power User", provider: "Splunk", description: "Advanced SIEM skills with Splunk", duration: "1-2 months", link: "/learn/certifications" },
+        { course: "Elastic Certified Analyst", provider: "Elastic", description: "Security analytics with Elastic Stack", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "GCTI (GIAC Cyber Threat Intelligence)", provider: "SANS FOR578", description: "Threat intelligence collection and analysis", duration: "3-4 months", link: "/learn/certifications" },
+      ],
+      advanced: [
+        { course: "GCIA (GIAC Certified Intrusion Analyst)", provider: "SANS SEC503", description: "Network traffic analysis and intrusion detection", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "GNFA (GIAC Network Forensic Analyst)", provider: "SANS FOR572", description: "Advanced network forensics", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "GREM (GIAC Reverse Engineering Malware)", provider: "SANS FOR610", description: "Malware analysis and reverse engineering", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "GDAT (GIAC Defending Advanced Threats)", provider: "SANS", description: "Advanced threat detection and hunting", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "CISSP", provider: "ISC2", description: "Senior security management certification", duration: "4-6 months", link: "/learn/certifications" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Set up a home SIEM lab (Splunk Free, Elastic Stack, or Wazuh)",
+        "Practice with Blue Team Labs Online challenges",
+        "Learn to read and analyze logs (Windows Event Logs, Syslog)",
+        "Study the MITRE ATT&CK framework thoroughly",
+        "Practice malware analysis basics in a sandbox",
+        "Build familiarity with common attack patterns",
+      ],
+      commonMistakes: [
+        "Alert fatigue - learn to prioritize and not burn out",
+        "Not documenting investigation steps and findings",
+        "Tunnel vision - always consider the broader context",
+        "Ignoring soft skills and communication",
+        "Not automating repetitive tasks",
+      ],
+      successTips: [
+        "Develop your own investigation playbooks and checklists",
+        "Learn to write effective detection rules (Sigma, YARA)",
+        "Build relationships with red team to understand attack techniques",
+        "Practice explaining incidents to non-technical stakeholders",
+        "Stay current with threat intelligence feeds and advisories",
+        "Contribute to the community with writeups and detection rules",
+      ],
+      dayOneActionPlan: [
+        "Sign up for LetsDefend free tier and start SOC training",
+        "Set up Splunk Free in a VM for hands-on SIEM practice",
+        "Start the TryHackMe 'SOC Level 1' learning path",
+        "Join the Blue Team Discord and Reddit communities",
+        "Learn to read Windows Event Logs (start with 4624, 4625, 4688)",
+        "Study MITRE ATT&CK tactics - start with Initial Access and Execution",
+      ],
+    },
   },
   {
     title: "Security Engineering",
@@ -200,6 +355,67 @@ const careerPaths: CareerPath[] = [
       "Evaluate and implement security tools",
       "Participate in architecture review boards",
     ],
+    certPathType: "engineering",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", description: "Security fundamentals for engineers", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "AWS Cloud Practitioner", provider: "AWS", description: "Cloud fundamentals prerequisite", duration: "1 month", link: "/learn/certifications" },
+        { course: "AZ-900 Azure Fundamentals", provider: "Microsoft", description: "Azure cloud basics", duration: "1 month", link: "/learn/certifications" },
+        { course: "Linux Essentials / Linux+", provider: "LPI/CompTIA", description: "Linux administration skills", duration: "2 months", link: "/learn/certifications" },
+        { course: "Docker Fundamentals", provider: "Docker", description: "Containerization basics", duration: "1 month", link: "/learn/certifications" },
+        { course: "Git & GitHub Security", provider: "Various", description: "Version control and secrets management", duration: "2 weeks", link: "/learn/certifications" },
+      ],
+      intermediate: [
+        { course: "AWS Security Specialty", provider: "AWS", description: "AWS security services and best practices", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "AZ-500 Azure Security Engineer", provider: "Microsoft", description: "Azure security implementation", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "GCP Professional Cloud Security Engineer", provider: "Google", description: "Google Cloud security", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "CKS (Certified Kubernetes Security)", provider: "CNCF", description: "Kubernetes security specialist", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Terraform Associate", provider: "HashiCorp", description: "Infrastructure as Code security", duration: "1-2 months", link: "/learn/certifications" },
+        { course: "GCSA (GIAC Cloud Security Automation)", provider: "SANS SEC540", description: "DevSecOps and cloud security automation", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "SC-300 Identity and Access Administrator", provider: "Microsoft", description: "Azure AD and identity security", duration: "2-3 months", link: "/learn/certifications" },
+      ],
+      advanced: [
+        { course: "CCSP (Certified Cloud Security Professional)", provider: "ISC2", description: "Advanced cloud security certification", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "CISSP", provider: "ISC2", description: "Security management and architecture", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "CISSP-ISSAP (Architecture)", provider: "ISC2", description: "Security architecture specialization", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "SC-100 Cybersecurity Architect", provider: "Microsoft", description: "Azure security architecture expert", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "AWS Solutions Architect Professional", provider: "AWS", description: "Advanced AWS architecture with security", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "TOGAF Certification", provider: "The Open Group", description: "Enterprise architecture framework", duration: "2-3 months", link: "/learn/certifications" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Learn Python and/or Go for security automation",
+        "Set up a cloud lab (AWS Free Tier, Azure Free Account)",
+        "Practice Infrastructure as Code with Terraform",
+        "Study OWASP Top 10 and secure coding principles",
+        "Build CI/CD pipelines with security gates",
+        "Learn containerization (Docker, Kubernetes basics)",
+      ],
+      commonMistakes: [
+        "Building security tools that developers won't use",
+        "Not understanding the developer workflow and pain points",
+        "Over-engineering security controls that slow development",
+        "Ignoring the business context and risk priorities",
+        "Not keeping security tools and controls maintained",
+      ],
+      successTips: [
+        "Make security easy for developers - be an enabler, not a blocker",
+        "Automate everything you can - manual gates don't scale",
+        "Build relationships with dev teams and understand their challenges",
+        "Document your architecture decisions and security patterns",
+        "Stay current with cloud provider security features",
+        "Contribute to internal security libraries and templates",
+      ],
+      dayOneActionPlan: [
+        "Set up an AWS Free Tier account and enable CloudTrail",
+        "Install Docker and run your first container",
+        "Create a GitHub repo and set up a basic CI/CD pipeline",
+        "Deploy a simple app to AWS/Azure with security controls",
+        "Learn Terraform basics with a simple infrastructure project",
+        "Follow key DevSecOps practitioners on Twitter/LinkedIn",
+      ],
+    },
   },
   {
     title: "Governance, Risk & Compliance",
@@ -229,6 +445,67 @@ const careerPaths: CareerPath[] = [
       "Develop and manage security awareness programs",
       "Coordinate with legal, privacy, and business teams",
     ],
+    certPathType: "grc",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", description: "Security fundamentals for GRC professionals", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "ISC2 CC (Certified in Cybersecurity)", provider: "ISC2", description: "Free foundational security certification", duration: "1-2 months", link: "/learn/certifications" },
+        { course: "ISO 27001 Foundation", provider: "Various", description: "Understanding information security management", duration: "1 month", link: "/learn/certifications" },
+        { course: "NIST Cybersecurity Framework", provider: "NIST", description: "Free framework training and implementation", duration: "2-4 weeks", link: "/learn/certifications" },
+        { course: "SC-900 Security Fundamentals", provider: "Microsoft", description: "Security, compliance, and identity basics", duration: "1 month", link: "/learn/certifications" },
+        { course: "Cyber Essentials", provider: "NCSC UK", description: "UK government security baseline certification", duration: "2-4 weeks", link: "/learn/certifications" },
+      ],
+      intermediate: [
+        { course: "CISA (Certified Information Systems Auditor)", provider: "ISACA", description: "IT audit and control certification", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "CRISC (Certified in Risk and Information Systems Control)", provider: "ISACA", description: "IT risk management certification", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "ISO 27001 Lead Implementer", provider: "Various", description: "Implement ISMS in organizations", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "CDPSE (Certified Data Privacy Solutions Engineer)", provider: "ISACA", description: "Privacy engineering and data protection", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "CIPM/CIPP (Privacy Management/Professional)", provider: "IAPP", description: "Privacy program management", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "SOC 2 Practitioner", provider: "Various", description: "SOC 2 audit preparation and management", duration: "1-2 months", link: "/learn/certifications" },
+        { course: "PCI DSS Training", provider: "PCI Council", description: "Payment card industry compliance", duration: "1-2 months", link: "/learn/certifications" },
+      ],
+      advanced: [
+        { course: "CISM (Certified Information Security Manager)", provider: "ISACA", description: "Security management and governance", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "CISSP", provider: "ISC2", description: "Comprehensive security management certification", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "CISSP-ISSMP (Management)", provider: "ISC2", description: "Security management specialization", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "CGEIT (Certified in Governance of Enterprise IT)", provider: "ISACA", description: "IT governance expertise", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "ISO 27001 Lead Auditor", provider: "Various", description: "Audit ISMS implementations", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "CCISO (Certified Chief Information Security Officer)", provider: "EC-Council", description: "CISO-level leadership certification", duration: "4-6 months", link: "/learn/certifications" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Learn a compliance framework deeply (SOC 2, ISO 27001, or NIST)",
+        "Practice writing clear, concise security policies",
+        "Develop strong Excel/spreadsheet skills for risk tracking",
+        "Understand how business decisions impact security risk",
+        "Study regulatory requirements relevant to your industry",
+        "Build communication skills for stakeholder management",
+      ],
+      commonMistakes: [
+        "Being too technical and not speaking business language",
+        "Creating policies that no one reads or follows",
+        "Not understanding the business context and priorities",
+        "Checkbox compliance vs. actual security improvement",
+        "Not building relationships with other business functions",
+      ],
+      successTips: [
+        "Learn to quantify and communicate risk in business terms",
+        "Build relationships across the organization (legal, HR, IT)",
+        "Stay current with regulatory changes and industry trends",
+        "Develop board-level presentation and communication skills",
+        "Focus on continuous improvement, not just compliance",
+        "Understand the technical security controls you're auditing",
+      ],
+      dayOneActionPlan: [
+        "Download and read the NIST Cybersecurity Framework",
+        "Study the SOC 2 Trust Services Criteria",
+        "Practice writing a simple security policy document",
+        "Learn about risk assessment methodologies (FAIR, qualitative)",
+        "Join ISACA or ISC2 local chapters for networking",
+        "Start learning about GDPR and major privacy regulations",
+      ],
+    },
   },
   {
     title: "Vulnerability Research",
@@ -259,6 +536,68 @@ const careerPaths: CareerPath[] = [
       "Stay current with latest exploitation techniques",
       "Mentor junior researchers on methodology",
     ],
+    certPathType: "vulnresearch",
+    learningPath: {
+      beginner: [
+        { course: "C Programming Fundamentals", provider: "Various", description: "Essential for understanding memory corruption", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "x86/x64 Assembly Basics", provider: "pwn.college/OpenSecurityTraining", description: "Understanding low-level code execution", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "ROP Emporium", provider: "ROP Emporium", description: "Return-oriented programming fundamentals", duration: "1-2 months", link: "/learn/certifications" },
+        { course: "pwn.college Intro Challenges", provider: "pwn.college", description: "Binary exploitation fundamentals", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "Nightmare Binary Exploitation", provider: "GitHub/Nightmare", description: "Comprehensive binary exploitation course", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "OSCP", provider: "Offensive Security", description: "Foundation before specializing in research", duration: "6-12 months", link: "/learn/certifications" },
+      ],
+      intermediate: [
+        { course: "OSED (EXP-301)", provider: "Offensive Security", description: "Windows exploit development fundamentals", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "GXPN (GIAC Exploit Researcher)", provider: "SANS SEC660", description: "Advanced penetration testing and exploit writing", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "GREM (GIAC Reverse Engineering Malware)", provider: "SANS FOR610", description: "Reverse engineering and malware analysis", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "Corelan Exploit Development", provider: "Corelan", description: "Classic Windows exploitation tutorials", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Fuzzing with AFL++", provider: "AFL++/Self-study", description: "Modern fuzzing techniques and automation", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Ghidra/IDA Pro Mastery", provider: "Various", description: "Advanced reverse engineering with disassemblers", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "HeapLAB", provider: "Max Kamper", description: "Linux heap exploitation techniques", duration: "2-3 months", link: "/learn/certifications" },
+      ],
+      advanced: [
+        { course: "OSEE (EXP-401)", provider: "Offensive Security", description: "Advanced Windows exploitation (elite cert)", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "SANS SEC760", provider: "SANS", description: "Advanced exploit development for pentesters", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "Browser Exploitation", provider: "Self-study/Conferences", description: "JavaScript engine and browser security", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "Kernel Exploitation", provider: "Self-study/Courses", description: "Operating system kernel vulnerabilities", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "Symbolic Execution (angr, Manticore)", provider: "Self-study", description: "Automated vulnerability discovery", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "iOS/Android Security Research", provider: "Various", description: "Mobile platform vulnerability research", duration: "6-12 months", link: "/learn/certifications" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Master C programming and understand memory management",
+        "Learn x86/x64 assembly language thoroughly",
+        "Practice on pwn.college and ROP Emporium challenges",
+        "Set up a debugging environment (GDB with pwndbg/peda)",
+        "Study classic vulnerability types (buffer overflow, use-after-free)",
+        "Read past CVE writeups and exploit techniques",
+      ],
+      commonMistakes: [
+        "Skipping fundamentals (C, assembly) to jump to advanced topics",
+        "Not understanding exploitation mitigations (ASLR, DEP, stack canaries)",
+        "Giving up too early on difficult problems",
+        "Not documenting your research process and findings",
+        "Working in isolation instead of engaging with the community",
+      ],
+      successTips: [
+        "Be patient - finding vulnerabilities takes time and persistence",
+        "Develop a systematic methodology for target analysis",
+        "Follow security researchers on Twitter and read their blogs",
+        "Attend and speak at conferences (even small ones)",
+        "Participate in bug bounty programs for real-world experience",
+        "Contribute to open-source security tools and research",
+        "Build relationships with vendor security teams",
+      ],
+      dayOneActionPlan: [
+        "Start learning C with 'The C Programming Language' book",
+        "Sign up for pwn.college and complete intro challenges",
+        "Install a Linux VM with GDB, pwntools, and pwndbg",
+        "Practice basic buffer overflow on simple challenges",
+        "Read 'Hacking: The Art of Exploitation' by Jon Erickson",
+        "Follow LiveOverflow on YouTube for binary exploitation content",
+      ],
+    },
   },
   {
     title: "Network Security Engineering",
@@ -289,11 +628,99 @@ const careerPaths: CareerPath[] = [
       "Document network security policies and standards",
       "Collaborate with IT on infrastructure changes",
     ],
+    certPathType: "network",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Network+", provider: "CompTIA", description: "Networking fundamentals essential for security", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "CompTIA Security+", provider: "CompTIA", description: "Security concepts with networking context", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "CCNA (Cisco Certified Network Associate)", provider: "Cisco", description: "Cisco networking fundamentals", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "Palo Alto Networks Fundamentals", provider: "Palo Alto/Beacon", description: "Next-gen firewall basics", duration: "1-2 months", link: "/learn/certifications" },
+        { course: "Fortinet NSE 1-3", provider: "Fortinet", description: "Free foundational network security training", duration: "1-2 months", link: "/learn/certifications" },
+        { course: "pfSense/OPNsense Home Lab", provider: "Self-study", description: "Hands-on firewall experience", duration: "1-2 months", link: "/learn/certifications" },
+      ],
+      intermediate: [
+        { course: "CCNP Security (SCOR + Concentration)", provider: "Cisco", description: "Advanced Cisco security technologies", duration: "6-9 months", link: "/learn/certifications" },
+        { course: "PCNSA/PCNSE (Palo Alto)", provider: "Palo Alto Networks", description: "Palo Alto firewall administration and engineering", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "Fortinet NSE 4-6", provider: "Fortinet", description: "FortiGate administration and security", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "GCIA (GIAC Certified Intrusion Analyst)", provider: "SANS SEC503", description: "Network traffic analysis and IDS", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "F5 Certified Administrator", provider: "F5", description: "Load balancer and WAF administration", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Check Point CCSA", provider: "Check Point", description: "Check Point firewall administration", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Wireshark WCNA", provider: "Wireshark", description: "Advanced packet analysis certification", duration: "2-3 months", link: "/learn/certifications" },
+      ],
+      advanced: [
+        { course: "CCIE Security", provider: "Cisco", description: "Expert-level Cisco security certification", duration: "12-18 months", link: "/learn/certifications" },
+        { course: "PCNSE (Expert)", provider: "Palo Alto Networks", description: "Palo Alto expert-level certification", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "Fortinet NSE 7-8", provider: "Fortinet", description: "Expert-level Fortinet certification", duration: "6-9 months", link: "/learn/certifications" },
+        { course: "JNCIE-SEC (Juniper Expert)", provider: "Juniper", description: "Juniper expert security certification", duration: "6-9 months", link: "/learn/certifications" },
+        { course: "CISSP", provider: "ISC2", description: "Security management with network focus", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "Zero Trust Architecture Design", provider: "Various/NIST", description: "Modern network security architecture", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "SASE/SSE Architecture", provider: "Vendor-specific", description: "Secure access service edge design", duration: "2-3 months", link: "/learn/certifications" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Set up a home lab with pfSense or OPNsense firewall",
+        "Master TCP/IP fundamentals and common protocols",
+        "Learn to read packet captures in Wireshark",
+        "Understand network segmentation and VLANs",
+        "Practice with GNS3 or EVE-NG for network simulation",
+        "Study the OSI model and how security applies at each layer",
+      ],
+      commonMistakes: [
+        "Not understanding the network before securing it",
+        "Creating firewall rules without proper documentation",
+        "Over-blocking that impacts business operations",
+        "Ignoring logging and monitoring capabilities",
+        "Not testing changes in a lab environment first",
+      ],
+      successTips: [
+        "Always document your firewall rules and their business purpose",
+        "Build strong relationships with network operations teams",
+        "Stay current with emerging threats targeting networks",
+        "Learn multiple vendor platforms - don't be single-vendor focused",
+        "Understand the business context for network changes",
+        "Develop automation skills (Python, Ansible) for scale",
+      ],
+      dayOneActionPlan: [
+        "Download and install Wireshark - capture and analyze packets",
+        "Set up pfSense in a VM and configure basic firewall rules",
+        "Start studying for Network+ or CCNA certification",
+        "Practice subnetting and CIDR notation",
+        "Learn to read firewall logs and understand rule ordering",
+        "Join the Palo Alto Beacon or Fortinet NSE free training",
+      ],
+    },
   },
 ];
 
 // Specialized tracks beyond the main six
-const specializedTracks = [
+interface SpecializedLearningPath {
+  beginner: { course: string; provider: string; duration: string }[];
+  intermediate: { course: string; provider: string; duration: string }[];
+  advanced: { course: string; provider: string; duration: string }[];
+}
+
+interface SpecializedCareerAdvice {
+  gettingStarted: string[];
+  dayOneActions: string[];
+  successTips: string[];
+}
+
+interface SpecializedTrack {
+  title: string;
+  icon: React.ReactNode;
+  color: string;
+  description: string;
+  skills: string[];
+  certs: string[];
+  salary: string;
+  growth: string;
+  certPathType: string; // Maps to CyberSecurityCertificationsPage CareerPathType for deep linking
+  learningPath?: SpecializedLearningPath;
+  careerAdvice?: SpecializedCareerAdvice;
+}
+
+const specializedTracks: SpecializedTrack[] = [
   {
     title: "Application Security (AppSec)",
     icon: <CodeIcon />,
@@ -303,6 +730,54 @@ const specializedTracks = [
     certs: ["CSSLP", "GWEB", "OSWE", "CASE", "GWAPT"],
     salary: "$100K - $250K+",
     growth: "Very High",
+    certPathType: "appsec",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "PortSwigger Web Security Academy", provider: "PortSwigger (Free)", duration: "2-3 months" },
+        { course: "OWASP Top 10 Training", provider: "OWASP/Various", duration: "2-4 weeks" },
+        { course: "TryHackMe Web Fundamentals", provider: "TryHackMe", duration: "1-2 months" },
+        { course: "JavaScript/Python Basics", provider: "Various", duration: "2-3 months" },
+      ],
+      intermediate: [
+        { course: "GWEB (GIAC Web Application Penetration Tester)", provider: "SANS SEC542", duration: "3-4 months" },
+        { course: "GWAPT (GIAC Web App Penetration Tester)", provider: "SANS SEC542", duration: "3-4 months" },
+        { course: "CSSLP (Certified Secure Software Lifecycle Professional)", provider: "ISC2", duration: "3-4 months" },
+        { course: "Burp Suite Certified Practitioner (BSCP)", provider: "PortSwigger", duration: "2-3 months" },
+        { course: "eWPT (Web Penetration Tester)", provider: "INE", duration: "2-3 months" },
+        { course: "Threat Modeling Training", provider: "Various/STRIDE", duration: "1-2 months" },
+      ],
+      advanced: [
+        { course: "OSWE (Web Expert)", provider: "Offensive Security", duration: "4-6 months" },
+        { course: "eWPTX (Advanced Web Tester)", provider: "INE", duration: "3-4 months" },
+        { course: "GXPN (GIAC Exploit Researcher)", provider: "SANS SEC660", duration: "3-4 months" },
+        { course: "CASE (.NET/Java)", provider: "EC-Council", duration: "2-3 months" },
+        { course: "Advanced API Security", provider: "Various", duration: "1-2 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Complete PortSwigger Web Security Academy (free, 200+ labs)",
+        "Learn to read and understand code in multiple languages",
+        "Practice with OWASP WebGoat and Juice Shop",
+        "Study the OWASP Testing Guide and ASVS",
+        "Set up Burp Suite and learn to intercept traffic",
+      ],
+      dayOneActions: [
+        "Sign up for PortSwigger Academy and complete first 10 labs",
+        "Install Burp Suite Community and set up browser proxy",
+        "Download and run OWASP Juice Shop locally",
+        "Start learning JavaScript or Python fundamentals",
+        "Join the OWASP Slack and local chapter",
+      ],
+      successTips: [
+        "Build relationships with developers - be an enabler, not a blocker",
+        "Learn to communicate findings in developer-friendly terms",
+        "Automate repetitive security checks in CI/CD pipelines",
+        "Stay current with new web frameworks and their security features",
+        "Create reusable secure coding guidelines for your organization",
+      ],
+    },
   },
   {
     title: "Cloud Security",
@@ -313,6 +788,54 @@ const specializedTracks = [
     certs: ["AWS Security Specialty", "AZ-500", "GCP Security", "CCSP", "CKS"],
     salary: "$110K - $280K+",
     growth: "Very High",
+    certPathType: "cloud-security",
+    learningPath: {
+      beginner: [
+        { course: "AWS Cloud Practitioner", provider: "AWS", duration: "1-2 months" },
+        { course: "AZ-900 Azure Fundamentals", provider: "Microsoft", duration: "1-2 months" },
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "CompTIA Cloud+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "Docker Fundamentals", provider: "Docker", duration: "1 month" },
+      ],
+      intermediate: [
+        { course: "AWS Security Specialty", provider: "AWS", duration: "3-4 months" },
+        { course: "AZ-500 Azure Security Engineer", provider: "Microsoft", duration: "3-4 months" },
+        { course: "GCP Professional Cloud Security Engineer", provider: "Google", duration: "3-4 months" },
+        { course: "CKS (Certified Kubernetes Security)", provider: "CNCF", duration: "2-3 months" },
+        { course: "Terraform Associate", provider: "HashiCorp", duration: "1-2 months" },
+        { course: "SC-300 Identity Administrator", provider: "Microsoft", duration: "2-3 months" },
+      ],
+      advanced: [
+        { course: "CCSP (Certified Cloud Security Professional)", provider: "ISC2", duration: "4-6 months" },
+        { course: "AWS Solutions Architect Professional", provider: "AWS", duration: "3-4 months" },
+        { course: "GCSA (Cloud Security Automation)", provider: "SANS SEC540", duration: "3-4 months" },
+        { course: "SC-100 Cybersecurity Architect", provider: "Microsoft", duration: "3-4 months" },
+        { course: "Multi-Cloud Security Architecture", provider: "Various", duration: "2-3 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Set up AWS Free Tier and Azure Free accounts for hands-on practice",
+        "Learn Infrastructure as Code (Terraform or CloudFormation)",
+        "Understand IAM policies and least privilege principles",
+        "Practice with vulnerable cloud labs (CloudGoat, flAWS)",
+        "Study the shared responsibility model deeply",
+      ],
+      dayOneActions: [
+        "Create an AWS Free Tier account and enable CloudTrail",
+        "Deploy a simple EC2 instance with security groups",
+        "Set up an IAM user with least privilege policies",
+        "Install Terraform and deploy a basic resource",
+        "Review AWS Well-Architected Security Pillar documentation",
+      ],
+      successTips: [
+        "Understand cloud-native security tools before third-party solutions",
+        "Automate security guardrails and compliance checks",
+        "Learn multiple cloud platforms - don't be single-vendor focused",
+        "Build relationships with cloud architecture and DevOps teams",
+        "Stay current with new cloud services and their security implications",
+      ],
+    },
   },
   {
     title: "Threat Intelligence",
@@ -323,6 +846,53 @@ const specializedTracks = [
     certs: ["GCTI", "CTIA", "FOR578", "GOSI", "GREM"],
     salary: "$85K - $200K+",
     growth: "High",
+    certPathType: "threat-intel",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "MITRE ATT&CK Defender Training", provider: "AttackIQ (Free)", duration: "1-2 months" },
+        { course: "OSINT Fundamentals", provider: "Various/SANS SEC487", duration: "2-3 months" },
+        { course: "TryHackMe Cyber Threat Intel Path", provider: "TryHackMe", duration: "1-2 months" },
+        { course: "SOC Analyst Training", provider: "LetsDefend", duration: "2-3 months" },
+      ],
+      intermediate: [
+        { course: "GCTI (GIAC Cyber Threat Intelligence)", provider: "SANS FOR578", duration: "3-4 months" },
+        { course: "GOSI (GIAC Open Source Intelligence)", provider: "SANS SEC487", duration: "3-4 months" },
+        { course: "CTIA (Certified Threat Intelligence Analyst)", provider: "EC-Council", duration: "2-3 months" },
+        { course: "Malware Analysis Fundamentals", provider: "Various", duration: "2-3 months" },
+        { course: "Recorded Future/ThreatConnect Training", provider: "Vendor", duration: "1-2 months" },
+      ],
+      advanced: [
+        { course: "GREM (Reverse Engineering Malware)", provider: "SANS FOR610", duration: "4-6 months" },
+        { course: "FOR589 Cybercrime Intel", provider: "SANS", duration: "3-4 months" },
+        { course: "Advanced Attribution Techniques", provider: "Various", duration: "2-3 months" },
+        { course: "Strategic Intelligence Analysis", provider: "Various", duration: "2-3 months" },
+        { course: "Intelligence Program Management", provider: "Various", duration: "1-2 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Master the MITRE ATT&CK framework thoroughly",
+        "Practice OSINT techniques with safe, legal targets",
+        "Follow threat researchers and intel teams on Twitter",
+        "Read threat reports from major security vendors",
+        "Learn to write clear, actionable intelligence reports",
+      ],
+      dayOneActions: [
+        "Sign up for AttackIQ Academy (free ATT&CK training)",
+        "Start following major threat intel accounts on Twitter",
+        "Read 5 recent threat reports from CrowdStrike, Mandiant, etc.",
+        "Set up a threat intel RSS feed aggregator",
+        "Practice using Maltego Community Edition for OSINT",
+      ],
+      successTips: [
+        "Focus on producing actionable intelligence, not just data",
+        "Build relationships with SOC and IR teams to understand their needs",
+        "Learn to communicate findings to both technical and executive audiences",
+        "Specialize in specific threat actors or regions for deeper expertise",
+        "Contribute to the community with responsible intel sharing",
+      ],
+    },
   },
   {
     title: "Digital Forensics",
@@ -333,6 +903,53 @@ const specializedTracks = [
     certs: ["GCFE", "GCFA", "EnCE", "CCE", "CHFI", "GNFA"],
     salary: "$75K - $180K+",
     growth: "Moderate",
+    certPathType: "forensics",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "CompTIA CySA+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "Autopsy Basics", provider: "Basis Technology (Free)", duration: "1 month" },
+        { course: "TryHackMe Forensics Path", provider: "TryHackMe", duration: "2-3 months" },
+        { course: "CyberDefenders Forensic Challenges", provider: "CyberDefenders (Free)", duration: "2-3 months" },
+      ],
+      intermediate: [
+        { course: "GCFE (GIAC Certified Forensic Examiner)", provider: "SANS FOR500", duration: "3-4 months" },
+        { course: "GCFA (GIAC Certified Forensic Analyst)", provider: "SANS FOR508", duration: "3-4 months" },
+        { course: "EnCE (EnCase Certified Examiner)", provider: "OpenText", duration: "2-3 months" },
+        { course: "CHFI (Computer Hacking Forensic Investigator)", provider: "EC-Council", duration: "2-3 months" },
+        { course: "X-Ways Forensics Training", provider: "X-Ways", duration: "1-2 months" },
+      ],
+      advanced: [
+        { course: "GNFA (GIAC Network Forensic Analyst)", provider: "SANS FOR572", duration: "3-4 months" },
+        { course: "FOR610 Reverse Engineering Malware", provider: "SANS", duration: "4-6 months" },
+        { course: "GASF (Advanced Smartphone Forensics)", provider: "SANS FOR585", duration: "3-4 months" },
+        { course: "CCE (Certified Computer Examiner)", provider: "ISFCE", duration: "3-4 months" },
+        { course: "Expert Witness Training", provider: "Various", duration: "1-2 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Set up a forensics lab with free tools (Autopsy, Volatility, FTK Imager)",
+        "Practice with CyberDefenders and DFIR challenges",
+        "Learn Windows and Linux artifacts inside and out",
+        "Understand chain of custody and evidence handling procedures",
+        "Practice writing detailed forensic reports",
+      ],
+      dayOneActions: [
+        "Download and install Autopsy forensics platform",
+        "Download FTK Imager for disk imaging practice",
+        "Set up a Windows VM and learn registry artifacts",
+        "Start the CyberDefenders free forensics challenges",
+        "Read 'The Art of Memory Forensics' introduction",
+      ],
+      successTips: [
+        "Documentation is everything - develop meticulous note-taking habits",
+        "Learn to explain technical findings in plain language for legal proceedings",
+        "Build relationships with legal teams to understand case requirements",
+        "Stay current with new forensic artifacts and tools",
+        "Practice testifying and presenting findings professionally",
+      ],
+    },
   },
   {
     title: "Malware Analysis",
@@ -343,6 +960,53 @@ const specializedTracks = [
     certs: ["GREM", "GCTI", "FOR610", "eCMAP", "OSED"],
     salary: "$90K - $220K+",
     growth: "High",
+    certPathType: "malware-analysis",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "x86 Assembly Basics", provider: "OpenSecurityTraining2", duration: "2-3 months" },
+        { course: "Malware Analysis Basics", provider: "Malware Unicorn (Free)", duration: "1-2 months" },
+        { course: "Any.Run Sandbox Training", provider: "Any.Run (Free)", duration: "1 month" },
+        { course: "TryHackMe Malware Analysis", provider: "TryHackMe", duration: "2-3 months" },
+      ],
+      intermediate: [
+        { course: "GREM (Reverse Engineering Malware)", provider: "SANS FOR610", duration: "4-6 months" },
+        { course: "eCMAP (Certified Malware Analysis Professional)", provider: "INE", duration: "3-4 months" },
+        { course: "Practical Malware Analysis (book)", provider: "Self-study", duration: "3-4 months" },
+        { course: "YARA Rule Development", provider: "Various", duration: "1-2 months" },
+        { course: "IDA Pro/Ghidra Mastery", provider: "Various", duration: "2-3 months" },
+      ],
+      advanced: [
+        { course: "FOR710 Reverse Engineering", provider: "SANS", duration: "4-6 months" },
+        { course: "OSED (Exploit Developer)", provider: "Offensive Security", duration: "4-6 months" },
+        { course: "Advanced Malware Traffic Analysis", provider: "Various", duration: "2-3 months" },
+        { course: "Threat Hunting with Malware Analysis", provider: "Various", duration: "2-3 months" },
+        { course: "C2 Framework Analysis", provider: "Self-study", duration: "2-3 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Set up an isolated malware analysis VM environment",
+        "Learn x86/x64 assembly language fundamentals",
+        "Practice with safe malware samples from MalwareBazaar",
+        "Master Ghidra (free) before investing in IDA Pro",
+        "Learn to write YARA rules for malware detection",
+      ],
+      dayOneActions: [
+        "Set up a Windows analysis VM with FlareVM",
+        "Install Ghidra and complete the intro tutorials",
+        "Download samples from MalwareBazaar for practice",
+        "Complete Malware Unicorn's free RE101 course",
+        "Set up Any.Run free account for dynamic analysis",
+      ],
+      successTips: [
+        "Build a personal malware sample library (safely stored)",
+        "Share your YARA rules and analysis with the community",
+        "Develop expertise in specific malware families or regions",
+        "Build relationships with threat intel teams for collaboration",
+        "Stay current with new obfuscation and evasion techniques",
+      ],
+    },
   },
   {
     title: "Identity & Access Management",
@@ -353,6 +1017,53 @@ const specializedTracks = [
     certs: ["SC-300", "Okta Certified", "CyberArk Defender", "CISSP", "CIAM"],
     salary: "$95K - $220K+",
     growth: "Very High",
+    certPathType: "iam",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "SC-900 Security Fundamentals", provider: "Microsoft", duration: "1 month" },
+        { course: "Active Directory Basics", provider: "TryHackMe/Various", duration: "1-2 months" },
+        { course: "Azure AD Fundamentals", provider: "Microsoft Learn (Free)", duration: "1-2 months" },
+        { course: "Identity Fundamentals", provider: "Various", duration: "1-2 months" },
+      ],
+      intermediate: [
+        { course: "SC-300 Identity & Access Administrator", provider: "Microsoft", duration: "2-3 months" },
+        { course: "Okta Certified Professional", provider: "Okta", duration: "2-3 months" },
+        { course: "CyberArk Defender", provider: "CyberArk", duration: "2-3 months" },
+        { course: "SailPoint IdentityNow Training", provider: "SailPoint", duration: "2-3 months" },
+        { course: "SAML/OIDC/OAuth Deep Dive", provider: "Various", duration: "1-2 months" },
+      ],
+      advanced: [
+        { course: "CISSP (Identity Domain Focus)", provider: "ISC2", duration: "4-6 months" },
+        { course: "CIAM (Certified Identity & Access Manager)", provider: "Identity Management Institute", duration: "3-4 months" },
+        { course: "Zero Trust Architecture Design", provider: "Various", duration: "2-3 months" },
+        { course: "Identity Governance & Administration", provider: "Vendor-specific", duration: "2-3 months" },
+        { course: "PAM Architecture", provider: "Vendor-specific", duration: "2-3 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Set up a home lab with Active Directory and Azure AD",
+        "Learn SAML, OIDC, and OAuth protocols deeply",
+        "Understand privileged access management concepts",
+        "Study Zero Trust identity principles",
+        "Practice with identity attack scenarios (AD attacks)",
+      ],
+      dayOneActions: [
+        "Set up an Azure Free account and create an Entra ID tenant",
+        "Deploy Windows Server and configure Active Directory",
+        "Complete Microsoft Learn SC-300 learning paths",
+        "Set up conditional access policies in Azure AD",
+        "Learn to read SAML tokens and OIDC flows",
+      ],
+      successTips: [
+        "Understand both the security and user experience sides of IAM",
+        "Build relationships with HR and IT to understand identity lifecycle",
+        "Stay current with identity threats and attack techniques",
+        "Learn vendor-specific platforms deeply (Okta, Azure AD, CyberArk)",
+        "Focus on automation and self-service to scale IAM operations",
+      ],
+    },
   },
   {
     title: "Security Research",
@@ -363,6 +1074,53 @@ const specializedTracks = [
     certs: ["OSCP", "OSED", "OSEE", "GXPN", "Advanced degrees"],
     salary: "$120K - $350K+",
     growth: "Moderate",
+    certPathType: "vuln-research",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "OSCP (Penetration Testing)", provider: "Offensive Security", duration: "4-6 months" },
+        { course: "C/C++ Programming Fundamentals", provider: "Various", duration: "3-4 months" },
+        { course: "x86/x64 Assembly", provider: "OpenSecurityTraining2", duration: "2-3 months" },
+        { course: "Reverse Engineering Fundamentals", provider: "Various", duration: "2-3 months" },
+      ],
+      intermediate: [
+        { course: "OSED (Exploit Developer)", provider: "Offensive Security", duration: "4-6 months" },
+        { course: "GXPN (Exploit Researcher)", provider: "SANS SEC660", duration: "3-4 months" },
+        { course: "Fuzzing Fundamentals", provider: "Various", duration: "2-3 months" },
+        { course: "Binary Exploitation", provider: "pwn.college/Various", duration: "3-4 months" },
+        { course: "Protocol Analysis & Reversing", provider: "Various", duration: "2-3 months" },
+      ],
+      advanced: [
+        { course: "OSEE (Exploitation Expert)", provider: "Offensive Security", duration: "6-12 months" },
+        { course: "Advanced Windows Exploitation", provider: "SANS/OffSec", duration: "4-6 months" },
+        { course: "Kernel Exploitation", provider: "Various", duration: "4-6 months" },
+        { course: "Browser/Hypervisor Exploitation", provider: "Self-study/Conferences", duration: "6-12 months" },
+        { course: "Graduate Research Program", provider: "University", duration: "2-4 years" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Master programming in C/C++ and understand memory management",
+        "Learn assembly language and binary analysis deeply",
+        "Start with CTF competitions to build practical skills",
+        "Read published CVEs and understand how vulnerabilities were found",
+        "Follow security researchers on Twitter and read their blog posts",
+      ],
+      dayOneActions: [
+        "Sign up for pwn.college and start the binary exploitation modules",
+        "Set up a fuzzing environment with AFL or libFuzzer",
+        "Pick an open source project and start reading its code",
+        "Join the 0x00sec or OpenSecurityTraining2 Discord communities",
+        "Start a research blog to document your learning journey",
+      ],
+      successTips: [
+        "Specialize in a specific area (browser, kernel, mobile, IoT)",
+        "Build relationships with vendors for responsible disclosure",
+        "Publish your research at conferences (start with local ones)",
+        "Contribute to open source security tools",
+        "Consider a Master's or PhD for advanced research roles",
+      ],
+    },
   },
   {
     title: "OT/ICS Security",
@@ -373,6 +1131,53 @@ const specializedTracks = [
     certs: ["GICSP", "GRID", "CSSA", "ISA/IEC 62443"],
     salary: "$100K - $250K+",
     growth: "Very High",
+    certPathType: "ot-ics",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "ICS/SCADA Fundamentals", provider: "CISA (Free)", duration: "1-2 months" },
+        { course: "CompTIA Network+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "PLC Basics", provider: "Various/Udemy", duration: "1-2 months" },
+        { course: "SANS ICS Concepts", provider: "SANS (Free resources)", duration: "1 month" },
+      ],
+      intermediate: [
+        { course: "GICSP (Global ICS Professional)", provider: "SANS ICS410", duration: "3-4 months" },
+        { course: "ISA/IEC 62443 Cybersecurity Fundamentals", provider: "ISA", duration: "2-3 months" },
+        { course: "GRID (Response & Defense)", provider: "SANS ICS515", duration: "3-4 months" },
+        { course: "OT Network Monitoring", provider: "Dragos/Claroty Training", duration: "1-2 months" },
+        { course: "Purdue Model & Segmentation", provider: "Various", duration: "1-2 months" },
+      ],
+      advanced: [
+        { course: "SANS ICS515 Visibility & Detection", provider: "SANS", duration: "3-4 months" },
+        { course: "SANS ICS456 Critical Infrastructure", provider: "SANS", duration: "3-4 months" },
+        { course: "ICS Red Team Training", provider: "SANS ICS613", duration: "3-4 months" },
+        { course: "ISA/IEC 62443 Expert", provider: "ISA", duration: "3-4 months" },
+        { course: "CSSA (Certified SCADA Security Architect)", provider: "IACRB", duration: "3-4 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Learn networking fundamentals - OT is heavily network-dependent",
+        "Understand the difference between IT and OT security priorities (safety first)",
+        "Study the Purdue Model and ICS architecture",
+        "Complete CISA's free ICS training resources",
+        "Learn about common OT protocols (Modbus, DNP3, EtherNet/IP)",
+      ],
+      dayOneActions: [
+        "Complete CISA's free ICS cybersecurity training",
+        "Set up a virtual PLC environment (OpenPLC, GRFICSv2)",
+        "Read NIST SP 800-82 Guide to ICS Security",
+        "Join the ICS-CERT mailing list for vulnerability alerts",
+        "Study recent ICS incidents (Triton, Colonial Pipeline)",
+      ],
+      successTips: [
+        "Understand that availability and safety trump confidentiality in OT",
+        "Build relationships with plant engineers and operators",
+        "Learn to communicate in operational terms, not just security terms",
+        "Gain hands-on experience with actual industrial equipment",
+        "Consider industry specialization (energy, manufacturing, water)",
+      ],
+    },
   },
   {
     title: "Privacy Engineering",
@@ -383,6 +1188,53 @@ const specializedTracks = [
     certs: ["CIPM", "CIPT", "CIPP", "CDPSE", "FIP"],
     salary: "$100K - $240K+",
     growth: "Very High",
+    certPathType: "privacy",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "Privacy Law Fundamentals", provider: "IAPP (Free)", duration: "1-2 months" },
+        { course: "GDPR Basics", provider: "Various", duration: "1-2 months" },
+        { course: "Data Protection Fundamentals", provider: "Various", duration: "1-2 months" },
+        { course: "Software Development Basics", provider: "Various", duration: "2-3 months" },
+      ],
+      intermediate: [
+        { course: "CIPP (Certified Information Privacy Professional)", provider: "IAPP", duration: "2-3 months" },
+        { course: "CIPM (Privacy Manager)", provider: "IAPP", duration: "2-3 months" },
+        { course: "CIPT (Privacy Technologist)", provider: "IAPP", duration: "2-3 months" },
+        { course: "Data Mapping & Classification", provider: "Various", duration: "1-2 months" },
+        { course: "Privacy Impact Assessments", provider: "IAPP/Various", duration: "1-2 months" },
+      ],
+      advanced: [
+        { course: "FIP (Fellow of Information Privacy)", provider: "IAPP", duration: "Ongoing" },
+        { course: "CDPSE (Data Privacy Solutions Engineer)", provider: "ISACA", duration: "3-4 months" },
+        { course: "Privacy-Enhancing Technologies (PETs)", provider: "Various", duration: "2-3 months" },
+        { course: "Differential Privacy Implementation", provider: "Academic/Various", duration: "2-3 months" },
+        { course: "International Privacy Laws (multi-jurisdiction)", provider: "IAPP", duration: "3-4 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Learn the major privacy regulations (GDPR, CCPA, HIPAA)",
+        "Understand the technical implementation of privacy principles",
+        "Study Privacy by Design framework",
+        "Learn data classification and mapping techniques",
+        "Join IAPP and attend local KnowledgeNet meetings",
+      ],
+      dayOneActions: [
+        "Create a free IAPP account and access their learning resources",
+        "Read the full text of GDPR Articles 1-50",
+        "Study the seven Privacy by Design principles",
+        "Map out data flows in a sample application",
+        "Review NIST Privacy Framework",
+      ],
+      successTips: [
+        "Bridge the gap between legal and engineering teams",
+        "Learn to translate legal requirements into technical specifications",
+        "Stay current with evolving privacy regulations globally",
+        "Build relationships with DPOs and legal counsel",
+        "Focus on automation and scalable privacy solutions",
+      ],
+    },
   },
   {
     title: "Bug Bounty Hunter",
@@ -393,6 +1245,53 @@ const specializedTracks = [
     certs: ["OSCP", "OSWE", "BSCP", "eWPT"],
     salary: "$50K - $500K+ (variable)",
     growth: "High",
+    certPathType: "bug-bounty",
+    learningPath: {
+      beginner: [
+        { course: "PortSwigger Web Security Academy", provider: "PortSwigger (Free)", duration: "2-3 months" },
+        { course: "TryHackMe Bug Bounty Path", provider: "TryHackMe", duration: "2-3 months" },
+        { course: "Hacker101 CTF", provider: "HackerOne (Free)", duration: "1-2 months" },
+        { course: "Nahamsec's Beginner Bug Bounty Course", provider: "YouTube (Free)", duration: "1-2 months" },
+        { course: "OWASP Top 10 Deep Dive", provider: "Various", duration: "1-2 months" },
+      ],
+      intermediate: [
+        { course: "BSCP (Burp Suite Certified Practitioner)", provider: "PortSwigger", duration: "2-3 months" },
+        { course: "eWPT (Web Penetration Tester)", provider: "INE", duration: "2-3 months" },
+        { course: "Recon Automation with Tools", provider: "Bug Bounty Bootcamp/Various", duration: "1-2 months" },
+        { course: "API Security Testing", provider: "APIsec University", duration: "1-2 months" },
+        { course: "Bug Bounty Bootcamp (Book)", provider: "Self-study", duration: "2-3 months" },
+      ],
+      advanced: [
+        { course: "OSWE (Web Expert)", provider: "Offensive Security", duration: "4-6 months" },
+        { course: "Advanced Bug Bounty Techniques", provider: "PentesterLab", duration: "Ongoing" },
+        { course: "Mobile Bug Bounty (iOS/Android)", provider: "Various", duration: "2-3 months" },
+        { course: "Source Code Review for Bugs", provider: "Various", duration: "2-3 months" },
+        { course: "Exploit Chain Development", provider: "Self-study", duration: "Ongoing" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Complete PortSwigger Academy (all free labs)",
+        "Start on HackerOne or Bugcrowd with VDP programs",
+        "Build a solid recon methodology and document it",
+        "Focus on one vulnerability class until you master it",
+        "Read disclosed reports on HackerOne Hacktivity",
+      ],
+      dayOneActions: [
+        "Create accounts on HackerOne and Bugcrowd",
+        "Sign up for PortSwigger Web Security Academy",
+        "Watch Nahamsec's 'Beginner Bug Bounty' playlist",
+        "Pick one program and start with recon",
+        "Install and learn Burp Suite basics",
+      ],
+      successTips: [
+        "Be patient - first bounties often take months of learning",
+        "Build a unique methodology for finding bugs others miss",
+        "Network with other hunters (Twitter, Discord, live hacking events)",
+        "Write high-quality reports - good reports get better bounties",
+        "Consider live hacking events for networking and learning",
+      ],
+    },
   },
   {
     title: "Security Data Scientist",
@@ -403,6 +1302,53 @@ const specializedTracks = [
     certs: ["AWS ML Specialty", "Google ML Engineer", "Data Science certs", "Security background"],
     salary: "$110K - $280K+",
     growth: "Explosive",
+    certPathType: "data-science",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "Python for Data Science", provider: "DataCamp/Coursera", duration: "2-3 months" },
+        { course: "Statistics & Probability", provider: "Khan Academy (Free)", duration: "2-3 months" },
+        { course: "Machine Learning Fundamentals", provider: "Coursera/Andrew Ng", duration: "3-4 months" },
+        { course: "SQL for Data Analysis", provider: "Various", duration: "1-2 months" },
+      ],
+      intermediate: [
+        { course: "AWS ML Specialty", provider: "AWS", duration: "3-4 months" },
+        { course: "Google Professional ML Engineer", provider: "Google", duration: "3-4 months" },
+        { course: "Deep Learning Specialization", provider: "Coursera/deeplearning.ai", duration: "3-4 months" },
+        { course: "Security Log Analysis with ML", provider: "Various", duration: "2-3 months" },
+        { course: "Feature Engineering for Security", provider: "Self-study", duration: "2-3 months" },
+      ],
+      advanced: [
+        { course: "NLP for Security Applications", provider: "Various", duration: "2-3 months" },
+        { course: "Adversarial Machine Learning", provider: "Academic/Various", duration: "2-3 months" },
+        { course: "MLOps for Security Models", provider: "Various", duration: "2-3 months" },
+        { course: "Graph Neural Networks for Threat Detection", provider: "Academic/Self-study", duration: "3-4 months" },
+        { course: "Security Research with ML (conferences)", provider: "Academic/Industry", duration: "Ongoing" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Build strong foundations in both security and data science",
+        "Learn Python deeply - it's the lingua franca of ML",
+        "Study how security logs and data are structured",
+        "Practice with public security datasets (CICIDS, CTU-13)",
+        "Understand the security domain before applying ML",
+      ],
+      dayOneActions: [
+        "Start Andrew Ng's ML course on Coursera",
+        "Set up a Python data science environment (Anaconda, Jupyter)",
+        "Download the CICIDS2017 dataset and explore it",
+        "Join Kaggle and explore security-related competitions",
+        "Start learning pandas and scikit-learn libraries",
+      ],
+      successTips: [
+        "Domain knowledge is more important than ML expertise alone",
+        "Focus on explainable models - security teams need to understand decisions",
+        "Build relationships with SOC teams to understand real problems",
+        "Learn to deploy models in production, not just notebooks",
+        "Stay current with adversarial ML and model attacks",
+      ],
+    },
   },
   {
     title: "Security Tool Developer",
@@ -413,6 +1359,53 @@ const specializedTracks = [
     certs: ["Software development certs", "Cloud certs", "Security+/OSCP"],
     salary: "$100K - $230K+",
     growth: "Very High",
+    certPathType: "tool-dev",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "Python Programming", provider: "Various", duration: "2-3 months" },
+        { course: "Git & Version Control", provider: "Various", duration: "1 month" },
+        { course: "REST API Fundamentals", provider: "Various", duration: "1-2 months" },
+        { course: "SQL & Database Basics", provider: "Various", duration: "1-2 months" },
+      ],
+      intermediate: [
+        { course: "Go Programming for Security Tools", provider: "Various", duration: "2-3 months" },
+        { course: "Docker & Containerization", provider: "Docker", duration: "1-2 months" },
+        { course: "OSCP (for domain knowledge)", provider: "Offensive Security", duration: "4-6 months" },
+        { course: "FastAPI/Flask Web Development", provider: "Various", duration: "2-3 months" },
+        { course: "Security Automation with Python", provider: "Various", duration: "2-3 months" },
+      ],
+      advanced: [
+        { course: "Rust for Security Tools", provider: "Various", duration: "3-4 months" },
+        { course: "Kubernetes & Orchestration", provider: "CNCF", duration: "2-3 months" },
+        { course: "Security Tool Architecture", provider: "Self-study", duration: "Ongoing" },
+        { course: "Open Source Project Management", provider: "Various", duration: "1-2 months" },
+        { course: "Performance Optimization", provider: "Various", duration: "2-3 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Learn Python deeply - most security tools start here",
+        "Study existing open source security tools (Nmap, Burp extensions, etc.)",
+        "Understand the problems SOC/pentest teams face daily",
+        "Build small automation scripts that solve real problems",
+        "Learn to write clean, documented, testable code",
+      ],
+      dayOneActions: [
+        "Set up a Python development environment with pytest",
+        "Clone and study the code of tools like httpx, nuclei, or subfinder",
+        "Build a simple port scanner or subdomain enumerator",
+        "Create a GitHub repo and start contributing to open source",
+        "Learn the basics of API design and documentation",
+      ],
+      successTips: [
+        "Build tools that solve real problems you've experienced",
+        "Open source your tools to build reputation and get feedback",
+        "Learn Go or Rust - many modern security tools use these",
+        "Work closely with security teams to understand their workflows",
+        "Focus on UX - good tools are intuitive to use",
+      ],
+    },
   },
   {
     title: "Cryptographic Engineer",
@@ -423,6 +1416,53 @@ const specializedTracks = [
     certs: ["Cryptography courses", "CISSP", "Vendor-specific (Thales, etc.)"],
     salary: "$120K - $280K+",
     growth: "High",
+    certPathType: "crypto",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "Cryptography I", provider: "Stanford/Coursera", duration: "2-3 months" },
+        { course: "Mathematics for Cryptography", provider: "Various", duration: "2-3 months" },
+        { course: "PKI Fundamentals", provider: "Various", duration: "1-2 months" },
+        { course: "TLS/SSL Deep Dive", provider: "Various", duration: "1-2 months" },
+      ],
+      intermediate: [
+        { course: "Cryptography II", provider: "Stanford/Coursera", duration: "2-3 months" },
+        { course: "Applied Cryptography (Schneier book)", provider: "Self-study", duration: "3-4 months" },
+        { course: "PKI Implementation", provider: "Vendor-specific", duration: "2-3 months" },
+        { course: "HSM Management & Configuration", provider: "Thales/Various", duration: "2-3 months" },
+        { course: "CISSP (Cryptography Domain)", provider: "ISC2", duration: "4-6 months" },
+      ],
+      advanced: [
+        { course: "Post-Quantum Cryptography", provider: "Academic/NIST", duration: "3-4 months" },
+        { course: "Cryptographic Protocol Analysis", provider: "Academic", duration: "3-4 months" },
+        { course: "Secure Multi-Party Computation", provider: "Academic", duration: "2-3 months" },
+        { course: "Hardware Security Modules Advanced", provider: "Vendor", duration: "2-3 months" },
+        { course: "Zero-Knowledge Proofs", provider: "Academic/Self-study", duration: "3-4 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Build strong math foundations (number theory, algebra)",
+        "Take Stanford's free Cryptography course on Coursera",
+        "Learn to implement basic cryptographic primitives",
+        "Understand why 'don't roll your own crypto' is important",
+        "Study TLS handshakes and certificate chains deeply",
+      ],
+      dayOneActions: [
+        "Sign up for Stanford's Cryptography I on Coursera",
+        "Set up OpenSSL and create your own CA and certificates",
+        "Read about the TLS 1.3 handshake process",
+        "Implement simple encryption/decryption in Python (using libraries)",
+        "Study NIST's post-quantum cryptography candidates",
+      ],
+      successTips: [
+        "Always use established, audited cryptographic libraries",
+        "Understand compliance requirements (FIPS, PCI-DSS, etc.)",
+        "Stay current with cryptographic vulnerabilities and deprecations",
+        "Build relationships with compliance and audit teams",
+        "Follow the post-quantum migration roadmap closely",
+      ],
+    },
   },
   {
     title: "DevSecOps Engineer",
@@ -433,6 +1473,53 @@ const specializedTracks = [
     certs: ["AWS DevOps", "AZ-400", "CKS", "Terraform Associate", "GitLab Security"],
     salary: "$110K - $250K+",
     growth: "Explosive",
+    certPathType: "devsecops",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "Linux Fundamentals", provider: "Various", duration: "1-2 months" },
+        { course: "Git & GitHub Actions", provider: "Various", duration: "1-2 months" },
+        { course: "Docker Fundamentals", provider: "Docker", duration: "1-2 months" },
+        { course: "CI/CD Concepts", provider: "Various", duration: "1-2 months" },
+      ],
+      intermediate: [
+        { course: "Terraform Associate", provider: "HashiCorp", duration: "2-3 months" },
+        { course: "CKS (Kubernetes Security)", provider: "CNCF", duration: "2-3 months" },
+        { course: "AWS DevOps Professional", provider: "AWS", duration: "3-4 months" },
+        { course: "SAST/DAST Tool Integration", provider: "Various", duration: "1-2 months" },
+        { course: "Secret Management (Vault)", provider: "HashiCorp", duration: "1-2 months" },
+      ],
+      advanced: [
+        { course: "AZ-400 Azure DevOps Expert", provider: "Microsoft", duration: "3-4 months" },
+        { course: "GitOps with ArgoCD/Flux", provider: "Various", duration: "2-3 months" },
+        { course: "Policy as Code (OPA/Rego)", provider: "Various", duration: "2-3 months" },
+        { course: "Supply Chain Security (SLSA, Sigstore)", provider: "Various", duration: "2-3 months" },
+        { course: "Security Champion Program Development", provider: "Various", duration: "1-2 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Learn DevOps fundamentals first, then add security",
+        "Understand CI/CD pipelines deeply (GitHub Actions, GitLab CI, Jenkins)",
+        "Practice with Infrastructure as Code (Terraform, Pulumi)",
+        "Learn container security (Docker, Kubernetes)",
+        "Understand the SDLC and where security fits in",
+      ],
+      dayOneActions: [
+        "Set up a GitHub repo with Actions for a simple app",
+        "Integrate a SAST tool (Semgrep, CodeQL) into your pipeline",
+        "Learn Terraform basics and deploy something to AWS/Azure",
+        "Set up container scanning with Trivy or Grype",
+        "Create a simple secret management workflow",
+      ],
+      successTips: [
+        "Be a partner to developers, not a blocker",
+        "Automate everything - manual security doesn't scale",
+        "Build security guardrails that are easy to follow",
+        "Measure and report on security metrics in pipelines",
+        "Stay current with supply chain security developments",
+      ],
+    },
   },
   {
     title: "Mobile Security Engineer",
@@ -443,6 +1530,53 @@ const specializedTracks = [
     certs: ["GMOB", "eMAPT", "OWASP MSTG", "Mobile app pentesting courses"],
     salary: "$100K - $230K+",
     growth: "High",
+    certPathType: "appsec",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "OWASP Mobile Top 10", provider: "OWASP (Free)", duration: "1 month" },
+        { course: "Android Development Basics", provider: "Google/Various", duration: "2-3 months" },
+        { course: "iOS Development Basics", provider: "Apple/Various", duration: "2-3 months" },
+        { course: "Mobile App Architecture", provider: "Various", duration: "1-2 months" },
+      ],
+      intermediate: [
+        { course: "GMOB (GIAC Mobile Device Security)", provider: "SANS SEC575", duration: "3-4 months" },
+        { course: "eMAPT (Mobile Application Penetration Tester)", provider: "INE", duration: "3-4 months" },
+        { course: "OWASP MSTG Study", provider: "OWASP (Free)", duration: "2-3 months" },
+        { course: "Frida & Objection Training", provider: "Various", duration: "1-2 months" },
+        { course: "APK/IPA Reverse Engineering", provider: "Various", duration: "2-3 months" },
+      ],
+      advanced: [
+        { course: "Advanced iOS Security", provider: "Various", duration: "3-4 months" },
+        { course: "Android Internals Deep Dive", provider: "Various", duration: "3-4 months" },
+        { course: "Mobile Malware Analysis", provider: "Various", duration: "2-3 months" },
+        { course: "MDM/EMM Security Architecture", provider: "Vendor-specific", duration: "2-3 months" },
+        { course: "Mobile Threat Defense Implementation", provider: "Various", duration: "2-3 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Learn either Android or iOS development basics first",
+        "Study the OWASP Mobile Security Testing Guide thoroughly",
+        "Set up a mobile testing lab (rooted Android, jailbroken iOS)",
+        "Practice with intentionally vulnerable apps (DIVA, iGoat)",
+        "Learn to use Frida, Objection, and MobSF",
+      ],
+      dayOneActions: [
+        "Download and read the OWASP Mobile Top 10",
+        "Set up Android Studio and create a simple app",
+        "Install DIVA (Damn Insecure and Vulnerable App) on an emulator",
+        "Learn to decompile an APK with jadx or apktool",
+        "Set up Frida and hook your first function",
+      ],
+      successTips: [
+        "Maintain both Android and iOS testing capabilities",
+        "Stay current with OS security updates and new protections",
+        "Build relationships with mobile development teams",
+        "Understand both offensive testing and defensive controls",
+        "Follow mobile security researchers on Twitter",
+      ],
+    },
   },
   {
     title: "Automotive Security",
@@ -453,6 +1587,53 @@ const specializedTracks = [
     certs: ["Automotive cybersecurity training", "Hardware hacking courses", "Embedded security certs"],
     salary: "$110K - $260K+",
     growth: "Very High",
+    certPathType: "ot-ics",
+    learningPath: {
+      beginner: [
+        { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
+        { course: "Embedded Systems Basics", provider: "Various", duration: "2-3 months" },
+        { course: "CAN Bus Fundamentals", provider: "Various", duration: "1-2 months" },
+        { course: "Automotive Architecture Overview", provider: "SAE/Various", duration: "1-2 months" },
+        { course: "C Programming for Embedded", provider: "Various", duration: "2-3 months" },
+      ],
+      intermediate: [
+        { course: "Car Hacking (book by Craig Smith)", provider: "Self-study", duration: "2-3 months" },
+        { course: "ISO 21434 Cybersecurity Engineering", provider: "SAE/Various", duration: "2-3 months" },
+        { course: "Hardware Hacking Fundamentals", provider: "Various", duration: "2-3 months" },
+        { course: "Firmware Analysis & Extraction", provider: "Various", duration: "2-3 months" },
+        { course: "Automotive Ethernet & Protocols", provider: "Vector/Various", duration: "1-2 months" },
+      ],
+      advanced: [
+        { course: "UNECE R155/R156 Compliance", provider: "Industry/Various", duration: "2-3 months" },
+        { course: "ECU Penetration Testing", provider: "Specialized training", duration: "3-4 months" },
+        { course: "V2X Security (Vehicle-to-Everything)", provider: "Industry/Academic", duration: "2-3 months" },
+        { course: "Automotive TARA (Threat Analysis)", provider: "Industry", duration: "2-3 months" },
+        { course: "Advanced Embedded Exploitation", provider: "Various", duration: "3-4 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Learn embedded systems and C programming",
+        "Study CAN bus protocol and automotive architecture",
+        "Read 'The Car Hacker's Handbook' by Craig Smith",
+        "Get hands-on with hardware (Arduino, Raspberry Pi, logic analyzers)",
+        "Understand ISO 21434 and automotive security standards",
+      ],
+      dayOneActions: [
+        "Order a CAN bus adapter (CANtact, Macchina M2, etc.)",
+        "Set up a virtual CAN environment on Linux",
+        "Read the first chapters of Car Hacker's Handbook",
+        "Study the CAN bus protocol specification",
+        "Follow automotive security researchers (@0xCharlie, etc.)",
+      ],
+      successTips: [
+        "Build relationships with automotive OEMs and suppliers",
+        "Understand both IT and OT aspects of vehicle security",
+        "Stay current with EV and connected vehicle developments",
+        "Learn the regulatory landscape (UNECE, ISO standards)",
+        "Consider specializing in specific domains (telematics, infotainment, powertrain)",
+      ],
+    },
   },
 ];
 
@@ -778,6 +1959,152 @@ const commonMistakes = [
   { mistake: "Ignoring business context", fix: "Understand how security enables business, speak the language of risk" },
 ];
 
+// Individual Career Guidance Data
+const careerAssessmentQuestions = [
+  {
+    id: "preference",
+    question: "What type of work excites you most?",
+    options: [
+      { value: "offensive", label: "Breaking things, finding vulnerabilities, simulating attacks", tracks: ["Red Team", "Vulnerability Research", "Bug Bounty Hunter", "Security Research"] },
+      { value: "defensive", label: "Protecting systems, detecting threats, incident response", tracks: ["Blue Team", "Digital Forensics", "Threat Intelligence", "Security Engineering"] },
+      { value: "building", label: "Building secure systems, automation, tooling", tracks: ["Security Engineering", "DevSecOps Engineer", "Security Tool Developer", "Cloud Security"] },
+      { value: "compliance", label: "Policy, risk management, compliance frameworks", tracks: ["GRC", "Privacy Engineering", "Identity & Access Management"] },
+    ],
+  },
+  {
+    id: "background",
+    question: "What's your current technical background?",
+    options: [
+      { value: "developer", label: "Software development / programming", tracks: ["AppSec", "DevSecOps Engineer", "Security Tool Developer", "Vulnerability Research"] },
+      { value: "sysadmin", label: "System administration / IT operations", tracks: ["Security Engineering", "Cloud Security", "Blue Team", "Identity & Access Management"] },
+      { value: "network", label: "Network engineering / administration", tracks: ["Network Security", "OT/ICS Security", "Cloud Security", "Blue Team"] },
+      { value: "none", label: "Non-technical / career changer", tracks: ["GRC", "Blue Team", "Threat Intelligence", "Privacy Engineering"] },
+    ],
+  },
+  {
+    id: "workstyle",
+    question: "How do you prefer to work?",
+    options: [
+      { value: "solo", label: "Deep, focused solo work on complex problems", tracks: ["Vulnerability Research", "Malware Analysis", "Security Research", "Cryptographic Engineer"] },
+      { value: "team", label: "Collaborative team environments", tracks: ["Blue Team", "Security Engineering", "DevSecOps Engineer", "Cloud Security"] },
+      { value: "client", label: "Client-facing, varied projects", tracks: ["Red Team", "GRC", "Privacy Engineering", "Digital Forensics"] },
+      { value: "independent", label: "Independent work with flexible schedule", tracks: ["Bug Bounty Hunter", "Security Research", "Security Tool Developer"] },
+    ],
+  },
+  {
+    id: "learning",
+    question: "What's your approach to learning?",
+    options: [
+      { value: "hands-on", label: "Hands-on labs, CTFs, breaking things", tracks: ["Red Team", "Vulnerability Research", "Bug Bounty Hunter", "AppSec"] },
+      { value: "structured", label: "Structured courses and certifications", tracks: ["GRC", "Cloud Security", "Identity & Access Management", "Blue Team"] },
+      { value: "research", label: "Reading papers, deep technical dives", tracks: ["Security Research", "Malware Analysis", "Cryptographic Engineer", "Threat Intelligence"] },
+      { value: "building", label: "Learning by building projects", tracks: ["Security Tool Developer", "DevSecOps Engineer", "Security Engineering"] },
+    ],
+  },
+];
+
+const careerMilestones = {
+  "0-6months": [
+    "Complete CompTIA Security+ or equivalent foundational certification",
+    "Set up a home lab with virtualization (VirtualBox/VMware)",
+    "Complete TryHackMe or HackTheBox beginner paths",
+    "Build a portfolio website or GitHub showcasing your learning",
+    "Join local security meetups (BSides, OWASP, ISSA)",
+    "Start documenting your learning journey (blog/notes)",
+    "Apply for internships or entry-level positions",
+  ],
+  "6-12months": [
+    "Land your first security role (even if not 'perfect')",
+    "Earn a role-specific certification (CySA+, CEH, or track-specific)",
+    "Complete 50+ CTF challenges or vulnerable machines",
+    "Contribute to an open-source security project",
+    "Attend your first security conference",
+    "Build at least one security tool or automation script",
+    "Establish a study group or find a mentor",
+  ],
+  "1-2years": [
+    "Achieve intermediate certification (OSCP, CKS, GCIH, etc.)",
+    "Specialize in a specific track or domain",
+    "Present at a local meetup or conference",
+    "Build a reputation in the community (blog, Twitter, Discord)",
+    "Earn a promotion or move to a more advanced role",
+    "Mentor someone new to the field",
+  ],
+  "3-5years": [
+    "Achieve advanced certifications (OSWE, GXPN, CISSP, etc.)",
+    "Lead projects or small teams",
+    "Speak at major conferences (BSides, DEF CON villages)",
+    "Consider management vs. technical leadership path",
+    "Develop deep expertise in chosen specialization",
+    "Build industry recognition (CVEs, tools, research)",
+  ],
+};
+
+const careerMistakesDetailed = [
+  {
+    mistake: "Chasing every certification",
+    solution: "Focus on quality over quantity. Pick certifications that align with your target role. OSCP for pentesting, CKS for Kubernetes, GCIH for IR. One respected cert > five generic ones.",
+  },
+  {
+    mistake: "Neglecting fundamentals",
+    solution: "Master networking, Linux, and programming basics. Advanced skills build on fundamentals. If you don't understand TCP/IP, you can't effectively hunt threats or pentest.",
+  },
+  {
+    mistake: "Tutorial hell - only watching courses",
+    solution: "Balance learning with doing. For every hour of videos, spend two hours practicing. Build projects, solve CTFs, contribute to open source.",
+  },
+  {
+    mistake: "Applying only to 'junior' roles",
+    solution: "Job titles are inconsistent. A 'Security Analyst I' at one company may require more than a 'Senior Analyst' elsewhere. Apply broadly and let them decide.",
+  },
+  {
+    mistake: "Not documenting your learning",
+    solution: "Write about what you learn, even if it's 'basic'. Your blog shows thinking and communication skills. Future employers want to see how you approach problems.",
+  },
+  {
+    mistake: "Waiting until you're 'ready'",
+    solution: "You'll never feel 100% ready. Start applying when you meet ~60% of requirements. Worst case: you get interview practice. Best case: you get the job.",
+  },
+  {
+    mistake: "Ignoring soft skills",
+    solution: "Communication, writing, and collaboration skills separate good analysts from great ones. Practice explaining technical concepts simply. Join Toastmasters if needed.",
+  },
+  {
+    mistake: "Being too passive in your search",
+    solution: "Don't just apply online. Network at events, reach out on LinkedIn, contribute to communities. Most jobs are filled through referrals before public posting.",
+  },
+];
+
+const weeklyStudyPlan = {
+  beginner: [
+    { day: "Monday", activity: "TryHackMe/HackTheBox - 1-2 rooms/boxes", hours: "2-3" },
+    { day: "Tuesday", activity: "Certification study (Security+/CySA+)", hours: "2" },
+    { day: "Wednesday", activity: "Programming practice (Python)", hours: "1-2" },
+    { day: "Thursday", activity: "Home lab work / documentation", hours: "2" },
+    { day: "Friday", activity: "Read security news, blogs, writeups", hours: "1" },
+    { day: "Weekend", activity: "Project work, CTF competitions, or rest", hours: "3-4" },
+  ],
+  intermediate: [
+    { day: "Monday", activity: "HackTheBox/Proving Grounds - medium boxes", hours: "3" },
+    { day: "Tuesday", activity: "Advanced certification study (OSCP/GCIH)", hours: "2-3" },
+    { day: "Wednesday", activity: "Tool development or automation project", hours: "2" },
+    { day: "Thursday", activity: "Reading research papers, threat reports", hours: "1-2" },
+    { day: "Friday", activity: "Community engagement (write blog, Discord)", hours: "1" },
+    { day: "Weekend", activity: "Deep dive project or CTF competition", hours: "4-6" },
+  ],
+};
+
+const burnoutPrevention = [
+  "Set boundaries - security doesn't require 24/7 engagement",
+  "Take breaks from screens - physical activity helps retention",
+  "Celebrate small wins - completing a room, solving a challenge",
+  "Find study buddies - accountability and shared frustration help",
+  "Remember why you started - passion makes the journey sustainable",
+  "Quality > quantity - focused 2 hours beats distracted 6 hours",
+  "Take days completely off - rest is part of the process",
+  "Don't compare your progress to others - everyone's path is different",
+];
+
 const entryTips = [
   "Start with foundational certs: Security+, Network+, or equivalent",
   "Build a home lab: VMs, vulnerable machines, detection tools",
@@ -794,6 +2121,405 @@ const entryTips = [
   "Learn a programming language deeply (Python for automation, C for vuln research)",
   "Understand the business context - security serves business objectives",
   "Document everything - your notes become your knowledge base",
+];
+
+// Home Lab Setup Guide Data
+interface HomeLabSetup {
+  track: string;
+  icon: string;
+  color: string;
+  description: string;
+  minBudget: string;
+  recommendedBudget: string;
+  hardware: { item: string; purpose: string; cost: string }[];
+  software: { name: string; purpose: string; cost: string }[];
+  vms: { name: string; purpose: string; link: string }[];
+  cloudAlternatives: { service: string; purpose: string; cost: string }[];
+  practiceTargets: { name: string; description: string; link: string }[];
+  firstWeekSetup: string[];
+  tips: string[];
+}
+
+const homeLabSetups: HomeLabSetup[] = [
+  {
+    track: "Offensive Security / Red Team",
+    icon: "🔴",
+    color: "#ef4444",
+    description: "Attack simulation, vulnerability exploitation, and penetration testing practice environment.",
+    minBudget: "$0 (cloud-only)",
+    recommendedBudget: "$300-500",
+    hardware: [
+      { item: "Laptop/Desktop (16GB+ RAM, SSD)", purpose: "Run multiple VMs simultaneously", cost: "$400-800 used" },
+      { item: "External SSD (500GB+)", purpose: "Store VM images and tools", cost: "$50-80" },
+      { item: "Alfa AWUS036ACH WiFi Adapter", purpose: "WiFi pentesting (monitor mode)", cost: "$50-70" },
+      { item: "USB Rubber Ducky / Bash Bunny", purpose: "Physical attack simulations", cost: "$50-100" },
+      { item: "Raspberry Pi 4 (4GB+)", purpose: "Portable attack platform, network tap", cost: "$55-75" },
+    ],
+    software: [
+      { name: "Kali Linux", purpose: "Primary attack OS with pre-installed tools", cost: "Free" },
+      { name: "Parrot OS", purpose: "Alternative to Kali, lighter weight", cost: "Free" },
+      { name: "VMware Workstation Pro / VirtualBox", purpose: "Hypervisor for running VMs", cost: "Free / $199" },
+      { name: "Burp Suite Community/Pro", purpose: "Web application testing", cost: "Free / $449/yr" },
+      { name: "Cobalt Strike (eval/cracked for lab)", purpose: "C2 framework practice", cost: "$$$" },
+      { name: "Metasploit Framework", purpose: "Exploitation framework", cost: "Free" },
+      { name: "BloodHound", purpose: "Active Directory attack path mapping", cost: "Free" },
+    ],
+    vms: [
+      { name: "Metasploitable 2/3", purpose: "Intentionally vulnerable Linux", link: "https://sourceforge.net/projects/metasploitable/" },
+      { name: "DVWA", purpose: "Web app vulnerabilities practice", link: "https://github.com/digininja/DVWA" },
+      { name: "VulnHub Machines", purpose: "Hundreds of vulnerable VMs", link: "https://vulnhub.com" },
+      { name: "Windows Server Eval", purpose: "AD lab (180-day trial)", link: "https://microsoft.com/evalcenter" },
+      { name: "YOURCOMPANY's YOURNETWORK AD Lab", purpose: "Realistic corporate environment", link: "https://github.com/Orange-Cyberdefense/GOAD" },
+    ],
+    cloudAlternatives: [
+      { service: "HackTheBox", purpose: "Ready-made vulnerable machines", cost: "$14-50/mo" },
+      { service: "TryHackMe", purpose: "Guided hacking rooms", cost: "Free-$14/mo" },
+      { service: "PentesterLab", purpose: "Web app pentesting", cost: "$20/mo" },
+      { service: "AWS Free Tier", purpose: "Cloud pentesting lab", cost: "Free (limited)" },
+      { service: "Proving Grounds", purpose: "OSCP-style practice boxes", cost: "$19/mo" },
+    ],
+    practiceTargets: [
+      { name: "DVWA (Damn Vulnerable Web App)", description: "PHP web app with OWASP Top 10 vulns", link: "https://github.com/digininja/DVWA" },
+      { name: "OWASP Juice Shop", description: "Modern insecure web app (Node.js)", link: "https://owasp.org/www-project-juice-shop/" },
+      { name: "Hack The Box", description: "Live machines of varying difficulty", link: "https://hackthebox.com" },
+      { name: "VulnHub", description: "Downloadable vulnerable VMs", link: "https://vulnhub.com" },
+      { name: "GOAD (Game of Active Directory)", description: "Full AD lab with multiple domains", link: "https://github.com/Orange-Cyberdefense/GOAD" },
+      { name: "WebGoat", description: "OWASP learning platform", link: "https://owasp.org/www-project-webgoat/" },
+    ],
+    firstWeekSetup: [
+      "Day 1: Install VMware/VirtualBox, download Kali Linux ISO",
+      "Day 2: Set up Kali VM (4GB RAM, 80GB disk), update and snapshot",
+      "Day 3: Download and run DVWA in Docker or VM",
+      "Day 4: Install Metasploitable 2, practice basic Metasploit",
+      "Day 5: Set up Burp Suite, configure browser proxy",
+      "Day 6: Complete TryHackMe 'Tutorial' and 'Starting Out' rooms",
+      "Day 7: Download first VulnHub machine, attempt without walkthrough",
+    ],
+    tips: [
+      "Take snapshots before major changes - you WILL break things",
+      "Document every command and its purpose in your notes",
+      "Use NAT networking for attack VMs, isolated networks for targets",
+      "Never attack machines outside your lab without authorization",
+      "Create a 'tools' folder with your favorite scripts and configs",
+      "Use tmux or screen for persistent terminal sessions",
+    ],
+  },
+  {
+    track: "Defensive Security / Blue Team",
+    icon: "🔵",
+    color: "#3b82f6",
+    description: "Detection, monitoring, and incident response practice environment with SIEM and log analysis.",
+    minBudget: "$0 (cloud-based)",
+    recommendedBudget: "$200-400",
+    hardware: [
+      { item: "Laptop/Desktop (16GB+ RAM)", purpose: "Run SIEM stack and target VMs", cost: "$400-800 used" },
+      { item: "32GB+ RAM recommended", purpose: "ELK stack is memory hungry", cost: "+$50-100 upgrade" },
+      { item: "External SSD (1TB)", purpose: "Store logs, pcaps, and VM images", cost: "$80-120" },
+      { item: "Network TAP / Managed Switch", purpose: "Capture network traffic", cost: "$30-100" },
+      { item: "Raspberry Pi 4", purpose: "Honeypot or network sensor", cost: "$55-75" },
+    ],
+    software: [
+      { name: "Security Onion", purpose: "Full defensive stack (SIEM, IDS, etc)", cost: "Free" },
+      { name: "Elastic Stack (ELK)", purpose: "Log aggregation and SIEM", cost: "Free" },
+      { name: "Splunk Free", purpose: "Industry SIEM (500MB/day limit)", cost: "Free" },
+      { name: "Wazuh", purpose: "Open-source SIEM/XDR", cost: "Free" },
+      { name: "Velociraptor", purpose: "Endpoint visibility and DFIR", cost: "Free" },
+      { name: "Zeek (formerly Bro)", purpose: "Network analysis framework", cost: "Free" },
+      { name: "Suricata", purpose: "IDS/IPS engine", cost: "Free" },
+      { name: "YARA", purpose: "Malware pattern matching", cost: "Free" },
+    ],
+    vms: [
+      { name: "Security Onion ISO", purpose: "All-in-one defensive platform", link: "https://securityonionsolutions.com" },
+      { name: "DetectionLab", purpose: "Pre-built AD with logging", link: "https://github.com/clong/DetectionLab" },
+      { name: "Windows 10 Eval", purpose: "Endpoint to monitor", link: "https://microsoft.com/evalcenter" },
+      { name: "Ubuntu Server", purpose: "Syslog, web server to monitor", link: "https://ubuntu.com/download/server" },
+      { name: "Malware Traffic Analysis VMs", purpose: "Pre-infected pcap analysis", link: "https://malware-traffic-analysis.net" },
+    ],
+    cloudAlternatives: [
+      { service: "LetsDefend", purpose: "SOC analyst simulator", cost: "Free-$25/mo" },
+      { service: "CyberDefenders", purpose: "Blue team challenges", cost: "Free" },
+      { service: "Blue Team Labs Online", purpose: "IR & forensics challenges", cost: "Free/Paid" },
+      { service: "Elastic Cloud", purpose: "Managed ELK stack", cost: "$95/mo+" },
+      { service: "Splunk Cloud Trial", purpose: "15-day cloud SIEM", cost: "Free trial" },
+    ],
+    practiceTargets: [
+      { name: "Boss of the SOC (BOTS)", description: "Splunk-based CTF datasets", link: "https://github.com/splunk/botsv1" },
+      { name: "Malware Traffic Analysis", description: "Pcap analysis exercises", link: "https://malware-traffic-analysis.net" },
+      { name: "LetsDefend Alerts", description: "Realistic SOC alert triage", link: "https://letsdefend.io" },
+      { name: "CyberDefenders Labs", description: "DFIR and malware challenges", link: "https://cyberdefenders.org" },
+      { name: "SANS Holiday Hack", description: "Annual blue team CTF", link: "https://holidayhackchallenge.com" },
+    ],
+    firstWeekSetup: [
+      "Day 1: Download Security Onion ISO, prepare VM (16GB RAM, 200GB disk)",
+      "Day 2: Install Security Onion in standalone mode, complete setup wizard",
+      "Day 3: Set up Windows 10 VM with Sysmon, forward logs to Security Onion",
+      "Day 4: Generate test traffic, verify logs appear in Kibana",
+      "Day 5: Download Boss of the SOC dataset, import into Splunk Free",
+      "Day 6: Complete first LetsDefend alert investigation",
+      "Day 7: Set up Velociraptor server, deploy agent to Windows VM",
+    ],
+    tips: [
+      "Start with Security Onion - it bundles everything you need",
+      "Learn to write Sigma rules for detection engineering",
+      "Keep a 'detection playbook' of alerts and response steps",
+      "Practice with real malware pcaps from Malware Traffic Analysis",
+      "Set up Windows logging properly (Sysmon config is critical)",
+      "Create dashboards for key metrics you want to track",
+    ],
+  },
+  {
+    track: "Cloud Security",
+    icon: "☁️",
+    color: "#06b6d4",
+    description: "Cloud-native security practice across AWS, Azure, and GCP with IaC and container security.",
+    minBudget: "$0 (free tiers)",
+    recommendedBudget: "$50-100/mo",
+    hardware: [
+      { item: "Any computer with internet", purpose: "Cloud is remote by nature", cost: "Existing" },
+      { item: "Second monitor (optional)", purpose: "Console + terminal side by side", cost: "$100-200" },
+    ],
+    software: [
+      { name: "AWS CLI", purpose: "Interact with AWS services", cost: "Free" },
+      { name: "Azure CLI", purpose: "Interact with Azure services", cost: "Free" },
+      { name: "gcloud CLI", purpose: "Interact with GCP services", cost: "Free" },
+      { name: "Terraform", purpose: "Infrastructure as Code", cost: "Free" },
+      { name: "kubectl", purpose: "Kubernetes management", cost: "Free" },
+      { name: "Docker Desktop", purpose: "Container development", cost: "Free" },
+      { name: "ScoutSuite", purpose: "Multi-cloud security auditing", cost: "Free" },
+      { name: "Prowler", purpose: "AWS security assessment", cost: "Free" },
+      { name: "Checkov", purpose: "IaC security scanning", cost: "Free" },
+    ],
+    vms: [
+      { name: "CloudGoat", purpose: "Vulnerable AWS scenarios", link: "https://github.com/RhinoSecurityLabs/cloudgoat" },
+      { name: "Terragoat", purpose: "Vulnerable Terraform examples", link: "https://github.com/bridgecrewio/terragoat" },
+      { name: "AWSGoat", purpose: "AWS security learning", link: "https://github.com/ine-labs/AWSGoat" },
+      { name: "AzureGoat", purpose: "Azure security learning", link: "https://github.com/ine-labs/AzureGoat" },
+      { name: "GCPGoat", purpose: "GCP security learning", link: "https://github.com/ine-labs/GCPGoat" },
+      { name: "Kubernetes Goat", purpose: "K8s security playground", link: "https://github.com/madhuakula/kubernetes-goat" },
+    ],
+    cloudAlternatives: [
+      { service: "AWS Free Tier", purpose: "12 months free resources", cost: "Free" },
+      { service: "Azure Free Account", purpose: "$200 credit + free services", cost: "Free" },
+      { service: "GCP Free Tier", purpose: "$300 credit + always-free", cost: "Free" },
+      { service: "Civo (K8s)", purpose: "Cheap Kubernetes clusters", cost: "$5/mo" },
+      { service: "DigitalOcean", purpose: "Simple cloud VMs", cost: "$4/mo" },
+    ],
+    practiceTargets: [
+      { name: "CloudGoat Scenarios", description: "AWS privilege escalation, data exfil", link: "https://github.com/RhinoSecurityLabs/cloudgoat" },
+      { name: "flAWS.cloud", description: "AWS CTF with increasing difficulty", link: "http://flaws.cloud" },
+      { name: "flAWS2.cloud", description: "Attacker & defender perspectives", link: "http://flaws2.cloud" },
+      { name: "YOURCLOUDCTF", description: "Community cloud challenges", link: "https://yourcloudctf.com" },
+      { name: "Kubernetes Goat", description: "K8s misconfigurations to exploit", link: "https://madhuakula.com/kubernetes-goat/" },
+      { name: "Sadcloud", description: "Terraform for deploying insecure AWS", link: "https://github.com/nccgroup/sadcloud" },
+    ],
+    firstWeekSetup: [
+      "Day 1: Create AWS free tier account, enable MFA, set billing alerts",
+      "Day 2: Install AWS CLI, configure credentials, test basic commands",
+      "Day 3: Complete flAWS.cloud Level 1-3 challenges",
+      "Day 4: Install Terraform, deploy a simple EC2 instance with code",
+      "Day 5: Run Prowler scan against your AWS account",
+      "Day 6: Set up CloudGoat, complete first scenario",
+      "Day 7: Create Azure/GCP accounts, explore their consoles",
+    ],
+    tips: [
+      "Set up billing alerts IMMEDIATELY - cloud costs can spiral",
+      "Use separate accounts for learning vs production",
+      "Enable CloudTrail/Activity logging from day one",
+      "Learn IAM deeply - it's the foundation of cloud security",
+      "Practice destroying everything with 'terraform destroy'",
+      "Use aws-vault or similar for credential management",
+    ],
+  },
+  {
+    track: "Malware Analysis & Reverse Engineering",
+    icon: "🦠",
+    color: "#dc2626",
+    description: "Safe environment for analyzing malware samples, reverse engineering, and understanding attacker tools.",
+    minBudget: "$0 (VM-only)",
+    recommendedBudget: "$300-600",
+    hardware: [
+      { item: "Dedicated analysis machine", purpose: "Isolated from main network", cost: "$300-500 used" },
+      { item: "32GB+ RAM", purpose: "Run analysis VMs smoothly", cost: "+$100" },
+      { item: "Air-gapped option", purpose: "Physical isolation for real malware", cost: "Old laptop" },
+      { item: "External HDD (cold storage)", purpose: "Malware sample archive", cost: "$50-80" },
+    ],
+    software: [
+      { name: "REMnux", purpose: "Malware analysis Linux distro", cost: "Free" },
+      { name: "FlareVM", purpose: "Windows malware analysis distro", cost: "Free" },
+      { name: "Ghidra", purpose: "NSA's reverse engineering tool", cost: "Free" },
+      { name: "IDA Free", purpose: "Industry standard disassembler", cost: "Free" },
+      { name: "x64dbg/x32dbg", purpose: "Windows debugger", cost: "Free" },
+      { name: "Process Monitor/Explorer", purpose: "Dynamic analysis", cost: "Free" },
+      { name: "Detect It Easy (DIE)", purpose: "Packer/compiler detection", cost: "Free" },
+      { name: "PE-bear/CFF Explorer", purpose: "PE file analysis", cost: "Free" },
+      { name: "YARA", purpose: "Pattern matching rules", cost: "Free" },
+      { name: "Cutter", purpose: "Radare2 GUI (open source)", cost: "Free" },
+    ],
+    vms: [
+      { name: "REMnux", purpose: "Analysis Linux distro", link: "https://remnux.org" },
+      { name: "FlareVM", purpose: "Windows analysis environment", link: "https://github.com/mandiant/flare-vm" },
+      { name: "Windows Sandbox", purpose: "Disposable Windows instances", link: "Built into Win 10/11 Pro" },
+      { name: "YOURMALBOX Toolkit", purpose: "Automated analysis sandbox", link: "https://any.run" },
+    ],
+    cloudAlternatives: [
+      { service: "Any.Run", purpose: "Interactive cloud sandbox", cost: "Free (limited)" },
+      { service: "Hybrid Analysis", purpose: "Free malware sandbox", cost: "Free" },
+      { service: "Joe Sandbox", purpose: "Detailed automated analysis", cost: "Free (limited)" },
+      { service: "VirusTotal", purpose: "Multi-AV scanning", cost: "Free" },
+      { service: "Tria.ge", purpose: "Sandbox analysis", cost: "Free" },
+    ],
+    practiceTargets: [
+      { name: "MalwareBazaar", description: "Free malware sample repository", link: "https://bazaar.abuse.ch" },
+      { name: "theZoo", description: "Live malware samples (careful!)", link: "https://github.com/ytisf/theZoo" },
+      { name: "Malware Unicorn Workshops", description: "RE tutorials and crackmes", link: "https://malwareunicorn.org" },
+      { name: "CrackMe challenges", description: "Reverse engineering practice", link: "https://crackmes.one" },
+      { name: "YOURCTF RE Challenges", description: "CTF reverse engineering", link: "Various CTF archives" },
+      { name: "Practical Malware Analysis Labs", description: "Book companion exercises", link: "Book purchase" },
+    ],
+    firstWeekSetup: [
+      "Day 1: Download REMnux and FlareVM, set up isolated VMs",
+      "Day 2: Configure isolated network (no internet for analysis VMs)",
+      "Day 3: Install Ghidra, work through official tutorial",
+      "Day 4: Analyze a simple crackme from crackmes.one",
+      "Day 5: Set up Any.Run account, submit safe sample for analysis",
+      "Day 6: Complete Malware Unicorn's RE101 workshop",
+      "Day 7: Download sample from MalwareBazaar, do static analysis only",
+    ],
+    tips: [
+      "NEVER run malware on your main machine or connected network",
+      "Use snapshots extensively - revert after each sample",
+      "Start with static analysis before dynamic (safer)",
+      "Keep detailed notes with hashes, IOCs, and behaviors",
+      "Learn x86/x64 assembly basics before diving deep",
+      "Join malware analysis discords for sample sharing and help",
+      "Password-protect all malware samples (standard: 'infected')",
+    ],
+  },
+  {
+    track: "Digital Forensics & Incident Response",
+    icon: "🔍",
+    color: "#14b8a6",
+    description: "Evidence acquisition, analysis, and incident investigation practice environment.",
+    minBudget: "$0 (software-only)",
+    recommendedBudget: "$200-400",
+    hardware: [
+      { item: "Write-blocker", purpose: "Forensic disk acquisition", cost: "$200-300" },
+      { item: "USB drive collection", purpose: "Boot forensic OS", cost: "$30-50" },
+      { item: "External dock/cables", purpose: "Connect various drive types", cost: "$50-100" },
+      { item: "Extra RAM (32GB+)", purpose: "Memory analysis needs RAM", cost: "+$100" },
+      { item: "Large storage (4TB+)", purpose: "Evidence and image storage", cost: "$80-120" },
+    ],
+    software: [
+      { name: "Autopsy", purpose: "Open source forensic suite", cost: "Free" },
+      { name: "FTK Imager", purpose: "Forensic imaging (free)", cost: "Free" },
+      { name: "Volatility 3", purpose: "Memory forensics", cost: "Free" },
+      { name: "KAPE", purpose: "Rapid triage and collection", cost: "Free" },
+      { name: "Eric Zimmerman Tools", purpose: "Windows artifact parsers", cost: "Free" },
+      { name: "Plaso/log2timeline", purpose: "Timeline creation", cost: "Free" },
+      { name: "Velociraptor", purpose: "Endpoint investigation", cost: "Free" },
+      { name: "SIFT Workstation", purpose: "SANS forensics distro", cost: "Free" },
+      { name: "Sleuth Kit", purpose: "Command-line forensics", cost: "Free" },
+    ],
+    vms: [
+      { name: "SIFT Workstation", purpose: "SANS forensic analysis VM", link: "https://www.sans.org/tools/sift-workstation/" },
+      { name: "REMnux", purpose: "Malware/memory analysis", link: "https://remnux.org" },
+      { name: "Tsurugi Linux", purpose: "DFIR-focused distro", link: "https://tsurugi-linux.org" },
+      { name: "Windows Eval", purpose: "Create your own artifacts", link: "https://microsoft.com/evalcenter" },
+    ],
+    cloudAlternatives: [
+      { service: "CyberDefenders", purpose: "DFIR challenges with evidence", cost: "Free" },
+      { service: "Blue Team Labs Online", purpose: "IR investigations", cost: "Free/Paid" },
+      { service: "13Cubed challenges", purpose: "Memory forensics practice", cost: "Free" },
+      { service: "DFIR.Training", purpose: "Curated forensics resources", cost: "Free" },
+    ],
+    practiceTargets: [
+      { name: "CyberDefenders Labs", description: "Real forensic evidence challenges", link: "https://cyberdefenders.org" },
+      { name: "DFIR CTF Images", description: "Community forensic images", link: "https://aboutdfir.com" },
+      { name: "Ali Hadi's Challenges", description: "Memory & disk forensics", link: "https://www.yourvolatility.com/challenges" },
+      { name: "Magnet CTFs", description: "Annual forensics competition", link: "https://magnetforensics.com" },
+      { name: "SANS DFIR Posters", description: "Reference materials & exercises", link: "https://www.sans.org/posters" },
+    ],
+    firstWeekSetup: [
+      "Day 1: Download SIFT Workstation or Tsurugi, set up VM",
+      "Day 2: Install Autopsy, work through tutorial with sample image",
+      "Day 3: Download Eric Zimmerman tools, practice on your own Windows",
+      "Day 4: Install Volatility 3, analyze sample memory dump",
+      "Day 5: Complete first CyberDefenders forensics challenge",
+      "Day 6: Learn KAPE - set up collection and analysis targets",
+      "Day 7: Create your own disk image using FTK Imager, analyze it",
+    ],
+    tips: [
+      "Always document chain of custody, even for practice",
+      "Hash everything before and after analysis",
+      "Learn Windows artifacts deeply - Registry, Event Logs, MFT",
+      "Build a timeline early in any investigation",
+      "Keep a 'known good' baseline of normal system artifacts",
+      "Practice writing reports explaining technical findings simply",
+    ],
+  },
+  {
+    track: "Network Security",
+    icon: "🌐",
+    color: "#0891b2",
+    description: "Network monitoring, firewall configuration, and traffic analysis practice environment.",
+    minBudget: "$50-100",
+    recommendedBudget: "$300-500",
+    hardware: [
+      { item: "Managed switch (8+ ports)", purpose: "VLAN configuration practice", cost: "$50-100 used" },
+      { item: "Old PC for pfSense/OPNsense", purpose: "Firewall/router lab", cost: "$50-100 used" },
+      { item: "Mini PC (2+ NICs)", purpose: "Dedicated firewall appliance", cost: "$150-250" },
+      { item: "Access points (for WiFi lab)", purpose: "Wireless security practice", cost: "$30-50 used" },
+      { item: "Network TAP", purpose: "Passive traffic capture", cost: "$30-100" },
+      { item: "Raspberry Pi", purpose: "Network sensor/Pi-hole", cost: "$55-75" },
+    ],
+    software: [
+      { name: "pfSense/OPNsense", purpose: "Open source firewall", cost: "Free" },
+      { name: "Wireshark", purpose: "Packet analysis", cost: "Free" },
+      { name: "Zeek", purpose: "Network security monitoring", cost: "Free" },
+      { name: "Snort/Suricata", purpose: "IDS/IPS", cost: "Free" },
+      { name: "NetworkMiner", purpose: "Network forensics", cost: "Free" },
+      { name: "GNS3/EVE-NG", purpose: "Network emulation", cost: "Free" },
+      { name: "Pi-hole", purpose: "DNS filtering/monitoring", cost: "Free" },
+      { name: "Nmap", purpose: "Network scanning", cost: "Free" },
+    ],
+    vms: [
+      { name: "pfSense VM", purpose: "Virtual firewall", link: "https://pfsense.org" },
+      { name: "Security Onion", purpose: "Network monitoring stack", link: "https://securityonionsolutions.com" },
+      { name: "GNS3 VM", purpose: "Network emulation", link: "https://gns3.com" },
+      { name: "EVE-NG", purpose: "Network simulation", link: "https://eve-ng.net" },
+      { name: "VyOS", purpose: "Open source router", link: "https://vyos.io" },
+    ],
+    cloudAlternatives: [
+      { service: "AWS VPC", purpose: "Cloud networking practice", cost: "Free tier" },
+      { service: "Azure Virtual Network", purpose: "Cloud network security", cost: "Free tier" },
+      { service: "Packet Tracer", purpose: "Cisco simulation (free)", cost: "Free" },
+      { service: "Network Chuck Labs", purpose: "Guided networking practice", cost: "Course price" },
+    ],
+    practiceTargets: [
+      { name: "Malware Traffic Analysis", description: "Pcap analysis exercises", link: "https://malware-traffic-analysis.net" },
+      { name: "Wireshark Sample Captures", description: "Official sample pcaps", link: "https://wiki.wireshark.org/SampleCaptures" },
+      { name: "PacketTotal", description: "Pcap sharing/analysis", link: "https://packettotal.com" },
+      { name: "PicoCTF Networking", description: "Network challenges", link: "https://picoctf.org" },
+      { name: "Security Onion docs", description: "NSM deployment guide", link: "https://docs.securityonion.net" },
+    ],
+    firstWeekSetup: [
+      "Day 1: Install Wireshark, capture traffic on your network",
+      "Day 2: Download and analyze pcaps from Malware Traffic Analysis",
+      "Day 3: Set up pfSense/OPNsense VM with WAN+LAN interfaces",
+      "Day 4: Configure firewall rules, test traffic blocking",
+      "Day 5: Install Suricata on pfSense, enable IDS rules",
+      "Day 6: Set up GNS3, build simple network topology",
+      "Day 7: Set up Pi-hole for DNS filtering and monitoring",
+    ],
+    tips: [
+      "Understand TCP/IP deeply - it's fundamental to everything",
+      "Learn to read Wireshark captures efficiently (display filters)",
+      "Practice firewall rules on paper before implementing",
+      "Segment your home network for realistic practice",
+      "Keep your lab isolated from production home network",
+      "Document your network topology - you'll forget configurations",
+    ],
+  },
 ];
 
 // Resume tips
@@ -1074,6 +2800,127 @@ export default function CareerPathsPage() {
           </Button>
         </Paper>
 
+        {/* Quick Navigation - Career Path Certification Links */}
+        <Paper sx={{ p: 3, borderRadius: 3, mb: 3, bgcolor: alpha(theme.palette.info.main, 0.03), border: `1px solid ${alpha(theme.palette.info.main, 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <WorkspacePremiumIcon sx={{ color: theme.palette.info.main }} />
+            Quick Navigation: Find Certifications by Career Path
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Click any career path below to jump directly to relevant certifications filtered by specialty area.
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            <Chip
+              label="🔴 Red Team / Pentesting"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=red-team")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#ef4444", 0.1), color: "#ef4444", "&:hover": { bgcolor: alpha("#ef4444", 0.2) } }}
+            />
+            <Chip
+              label="🔵 Blue Team / SOC"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=blue-team")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#3b82f6", 0.1), color: "#3b82f6", "&:hover": { bgcolor: alpha("#3b82f6", 0.2) } }}
+            />
+            <Chip
+              label="☁️ Cloud Security"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=cloud-security")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#06b6d4", 0.1), color: "#06b6d4", "&:hover": { bgcolor: alpha("#06b6d4", 0.2) } }}
+            />
+            <Chip
+              label="📱 Application Security"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=appsec")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#ec4899", 0.1), color: "#ec4899", "&:hover": { bgcolor: alpha("#ec4899", 0.2) } }}
+            />
+            <Chip
+              label="🔒 GRC & Compliance"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=grc")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#f59e0b", 0.1), color: "#f59e0b", "&:hover": { bgcolor: alpha("#f59e0b", 0.2) } }}
+            />
+            <Chip
+              label="🔬 Vulnerability Research"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=vuln-research")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#7c3aed", 0.1), color: "#7c3aed", "&:hover": { bgcolor: alpha("#7c3aed", 0.2) } }}
+            />
+            <Chip
+              label="🕵️ Threat Intelligence"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=threat-intel")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#f97316", 0.1), color: "#f97316", "&:hover": { bgcolor: alpha("#f97316", 0.2) } }}
+            />
+            <Chip
+              label="🔍 Digital Forensics"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=forensics")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#14b8a6", 0.1), color: "#14b8a6", "&:hover": { bgcolor: alpha("#14b8a6", 0.2) } }}
+            />
+            <Chip
+              label="🦠 Malware Analysis"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=malware-analysis")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#dc2626", 0.1), color: "#dc2626", "&:hover": { bgcolor: alpha("#dc2626", 0.2) } }}
+            />
+            <Chip
+              label="🔑 Identity & IAM"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=iam")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6", "&:hover": { bgcolor: alpha("#8b5cf6", 0.2) } }}
+            />
+            <Chip
+              label="🏭 OT/ICS Security"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=ot-ics")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#059669", 0.1), color: "#059669", "&:hover": { bgcolor: alpha("#059669", 0.2) } }}
+            />
+            <Chip
+              label="🛡️ DevSecOps"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=devsecops")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#6366f1", 0.1), color: "#6366f1", "&:hover": { bgcolor: alpha("#6366f1", 0.2) } }}
+            />
+            <Chip
+              label="🏆 Bug Bounty"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=bug-bounty")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#eab308", 0.1), color: "#eab308", "&:hover": { bgcolor: alpha("#eab308", 0.2) } }}
+            />
+            <Chip
+              label="🔐 Cryptography"
+              clickable
+              onClick={() => navigate("/learn/certifications?path=crypto")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6", "&:hover": { bgcolor: alpha("#8b5cf6", 0.2) } }}
+            />
+          </Box>
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            <strong>Filter by skill level:</strong>
+          </Typography>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip
+              label="🟢 Beginner Certifications"
+              clickable
+              onClick={() => navigate("/learn/certifications?level=Beginner")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#22c55e", 0.1), color: "#22c55e", "&:hover": { bgcolor: alpha("#22c55e", 0.2) } }}
+            />
+            <Chip
+              label="🟡 Intermediate Certifications"
+              clickable
+              onClick={() => navigate("/learn/certifications?level=Intermediate")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#f59e0b", 0.1), color: "#f59e0b", "&:hover": { bgcolor: alpha("#f59e0b", 0.2) } }}
+            />
+            <Chip
+              label="🔴 Advanced Certifications"
+              clickable
+              onClick={() => navigate("/learn/certifications?level=Advanced")}
+              sx={{ fontWeight: 600, bgcolor: alpha("#ef4444", 0.1), color: "#ef4444", "&:hover": { bgcolor: alpha("#ef4444", 0.2) } }}
+            />
+          </Box>
+        </Paper>
+
         {/* Tabs */}
         <Paper sx={{ borderRadius: 3, mb: 3 }}>
           <Tabs
@@ -1093,6 +2940,8 @@ export default function CareerPathsPage() {
             <Tab label="Networking & Mentorship" icon={<HandshakeIcon />} iconPosition="start" />
             <Tab label="Remote Work" icon={<HomeIcon />} iconPosition="start" />
             <Tab label="Getting Started" icon={<SchoolIcon />} iconPosition="start" />
+            <Tab label="Personal Guidance" icon={<PersonIcon />} iconPosition="start" />
+            <Tab label="Home Lab" icon={<ComputerIcon />} iconPosition="start" />
           </Tabs>
 
           {/* Tab 0: Main Career Tracks */}
@@ -1203,6 +3052,127 @@ export default function CareerPathsPage() {
                         </AccordionDetails>
                       </Accordion>
 
+                      {/* Structured Learning Path - NEW */}
+                      <Accordion sx={{ bgcolor: "transparent", boxShadow: "none", "&:before": { display: "none" } }}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#22c55e", display: "flex", alignItems: "center", gap: 1 }}>
+                            <SchoolIcon sx={{ fontSize: 16 }} /> Learning Path (Beginner → Advanced)
+                          </Typography>
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ px: 0 }}>
+                          {/* Beginner */}
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#22c55e", display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+                              🟢 BEGINNER COURSES
+                            </Typography>
+                            {path.learningPath.beginner.map((course, idx) => (
+                              <Box key={idx} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 0.75, pl: 1, borderLeft: `2px solid ${alpha("#22c55e", 0.3)}` }}>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>{course.course}</Typography>
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>{course.provider} • {course.duration}</Typography>
+                                </Box>
+                              </Box>
+                            ))}
+                          </Box>
+                          {/* Intermediate */}
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#f59e0b", display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+                              🟡 INTERMEDIATE COURSES
+                            </Typography>
+                            {path.learningPath.intermediate.map((course, idx) => (
+                              <Box key={idx} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 0.75, pl: 1, borderLeft: `2px solid ${alpha("#f59e0b", 0.3)}` }}>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>{course.course}</Typography>
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>{course.provider} • {course.duration}</Typography>
+                                </Box>
+                              </Box>
+                            ))}
+                          </Box>
+                          {/* Advanced */}
+                          <Box>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#ef4444", display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+                              🔴 ADVANCED COURSES
+                            </Typography>
+                            {path.learningPath.advanced.map((course, idx) => (
+                              <Box key={idx} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 0.75, pl: 1, borderLeft: `2px solid ${alpha("#ef4444", 0.3)}` }}>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>{course.course}</Typography>
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>{course.provider} • {course.duration}</Typography>
+                                </Box>
+                              </Box>
+                            ))}
+                          </Box>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() => navigate("/learn/certifications")}
+                            endIcon={<ArrowForwardIcon />}
+                            sx={{ mt: 1.5, fontSize: "0.7rem", bgcolor: path.color }}
+                          >
+                            Browse All Certifications
+                          </Button>
+                        </AccordionDetails>
+                      </Accordion>
+
+                      {/* Career Advice - NEW */}
+                      <Accordion sx={{ bgcolor: "transparent", boxShadow: "none", "&:before": { display: "none" } }}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#ec4899", display: "flex", alignItems: "center", gap: 1 }}>
+                            <LightbulbIcon sx={{ fontSize: 16 }} /> Career Advice & Tips
+                          </Typography>
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ px: 0 }}>
+                          {/* Day One Action Plan */}
+                          <Box sx={{ mb: 2, p: 1.5, bgcolor: alpha(path.color, 0.05), borderRadius: 1, border: `1px solid ${alpha(path.color, 0.2)}` }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: path.color, display: "block", mb: 1 }}>
+                              🚀 DAY ONE ACTION PLAN
+                            </Typography>
+                            {path.careerAdvice.dayOneActionPlan.map((action, idx) => (
+                              <Box key={idx} sx={{ display: "flex", gap: 0.5, mb: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: path.color }}>{idx + 1}.</Typography>
+                                <Typography variant="caption">{action}</Typography>
+                              </Box>
+                            ))}
+                          </Box>
+                          {/* Getting Started */}
+                          <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 0.5 }}>Getting Started:</Typography>
+                          <List dense disablePadding sx={{ mb: 1.5 }}>
+                            {path.careerAdvice.gettingStarted.map((tip, idx) => (
+                              <ListItem key={idx} sx={{ py: 0, px: 0 }}>
+                                <ListItemIcon sx={{ minWidth: 20 }}>
+                                  <CheckCircleIcon sx={{ fontSize: 12, color: "#22c55e" }} />
+                                </ListItemIcon>
+                                <ListItemText primary={tip} primaryTypographyProps={{ variant: "caption" }} />
+                              </ListItem>
+                            ))}
+                          </List>
+                          {/* Common Mistakes */}
+                          <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 0.5, color: "#ef4444" }}>⚠️ Common Mistakes to Avoid:</Typography>
+                          <List dense disablePadding sx={{ mb: 1.5 }}>
+                            {path.careerAdvice.commonMistakes.map((mistake, idx) => (
+                              <ListItem key={idx} sx={{ py: 0, px: 0 }}>
+                                <ListItemIcon sx={{ minWidth: 20 }}>
+                                  <WarningIcon sx={{ fontSize: 12, color: "#ef4444" }} />
+                                </ListItemIcon>
+                                <ListItemText primary={mistake} primaryTypographyProps={{ variant: "caption" }} />
+                              </ListItem>
+                            ))}
+                          </List>
+                          {/* Success Tips */}
+                          <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 0.5, color: "#22c55e" }}>✨ Success Tips:</Typography>
+                          <List dense disablePadding>
+                            {path.careerAdvice.successTips.map((tip, idx) => (
+                              <ListItem key={idx} sx={{ py: 0, px: 0 }}>
+                                <ListItemIcon sx={{ minWidth: 20 }}>
+                                  <StarIcon sx={{ fontSize: 12, color: "#f59e0b" }} />
+                                </ListItemIcon>
+                                <ListItemText primary={tip} primaryTypographyProps={{ variant: "caption" }} />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </AccordionDetails>
+                      </Accordion>
+
                       <Divider sx={{ my: 1.5 }} />
 
                       {/* Key Skills */}
@@ -1254,40 +3224,149 @@ export default function CareerPathsPage() {
 
               <Grid container spacing={2}>
                 {specializedTracks.map((track) => (
-                  <Grid item xs={12} md={6} lg={4} key={track.title}>
-                    <Card sx={{ height: "100%", borderRadius: 2, border: `1px solid ${alpha(track.color, 0.2)}`, transition: "all 0.3s", "&:hover": { borderColor: track.color, transform: "translateY(-2px)" } }}>
-                      <CardContent>
+                  <Grid item xs={12} md={6} key={track.title}>
+                    <Card sx={{ height: "100%", borderRadius: 2, border: `1px solid ${alpha(track.color, 0.2)}`, transition: "all 0.3s", "&:hover": { borderColor: track.color } }}>
+                      <CardContent sx={{ p: 2 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
                           <Box sx={{ color: track.color }}>{track.icon}</Box>
                           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{track.title}</Typography>
                         </Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, minHeight: 60 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                           {track.description}
                         </Typography>
                         <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap" }}>
                           <Chip label={track.salary} size="small" sx={{ bgcolor: alpha("#22c55e", 0.1), color: "#22c55e", fontWeight: 600 }} />
                           <Chip label={`Growth: ${track.growth}`} size="small" sx={{ bgcolor: alpha("#3b82f6", 0.1), color: "#3b82f6", fontWeight: 600 }} />
                         </Box>
-                        <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>Key Skills:</Typography>
                         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 1.5 }}>
-                          {track.skills.slice(0, 5).map((skill) => (
+                          <Typography variant="caption" sx={{ fontWeight: 600, width: "100%", mb: 0.5 }}>Key Skills:</Typography>
+                          {track.skills.slice(0, 6).map((skill) => (
                             <Chip key={skill} label={skill} size="small" variant="outlined" sx={{ fontSize: "0.6rem", height: 20 }} />
                           ))}
                         </Box>
-                        <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>Certifications:</Typography>
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 1.5 }}>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 2 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 600, width: "100%", mb: 0.5 }}>Certifications:</Typography>
                           {track.certs.map((cert) => (
                             <Chip key={cert} label={cert} size="small" sx={{ fontSize: "0.6rem", height: 20, bgcolor: alpha(track.color, 0.1), color: track.color }} />
                           ))}
                         </Box>
+
+                        {/* Learning Path Accordion - Only show if track has learningPath */}
+                        {track.learningPath && (
+                          <Accordion sx={{ mb: 1, bgcolor: alpha(track.color, 0.03), "&:before": { display: "none" }, borderRadius: 1, border: `1px solid ${alpha(track.color, 0.1)}` }}>
+                            <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: track.color }} />}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <SchoolIcon sx={{ fontSize: 16, color: track.color }} />
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>Learning Path (Beginner → Advanced)</Typography>
+                              </Box>
+                            </AccordionSummary>
+                            <AccordionDetails sx={{ pt: 0 }}>
+                              {/* Beginner Level */}
+                              <Box sx={{ mb: 2 }}>
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                                  <Chip label="Beginner" size="small" sx={{ bgcolor: "#22c55e", color: "white", fontWeight: 600, fontSize: "0.65rem" }} />
+                                </Box>
+                                {track.learningPath.beginner.map((item, idx) => (
+                                  <Box key={idx} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.5, borderBottom: idx < track.learningPath!.beginner.length - 1 ? "1px solid" : "none", borderColor: "divider" }}>
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontWeight: 500, fontSize: "0.75rem" }}>{item.course}</Typography>
+                                      <Typography variant="caption" color="text.secondary">{item.provider}</Typography>
+                                    </Box>
+                                    <Typography variant="caption" sx={{ color: track.color, fontWeight: 500 }}>{item.duration}</Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+
+                              {/* Intermediate Level */}
+                              <Box sx={{ mb: 2 }}>
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                                  <Chip label="Intermediate" size="small" sx={{ bgcolor: "#f59e0b", color: "white", fontWeight: 600, fontSize: "0.65rem" }} />
+                                </Box>
+                                {track.learningPath.intermediate.map((item, idx) => (
+                                  <Box key={idx} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.5, borderBottom: idx < track.learningPath!.intermediate.length - 1 ? "1px solid" : "none", borderColor: "divider" }}>
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontWeight: 500, fontSize: "0.75rem" }}>{item.course}</Typography>
+                                      <Typography variant="caption" color="text.secondary">{item.provider}</Typography>
+                                    </Box>
+                                    <Typography variant="caption" sx={{ color: track.color, fontWeight: 500 }}>{item.duration}</Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+
+                              {/* Advanced Level */}
+                              <Box>
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                                  <Chip label="Advanced" size="small" sx={{ bgcolor: "#ef4444", color: "white", fontWeight: 600, fontSize: "0.65rem" }} />
+                                </Box>
+                                {track.learningPath.advanced.map((item, idx) => (
+                                  <Box key={idx} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.5, borderBottom: idx < track.learningPath!.advanced.length - 1 ? "1px solid" : "none", borderColor: "divider" }}>
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontWeight: 500, fontSize: "0.75rem" }}>{item.course}</Typography>
+                                      <Typography variant="caption" color="text.secondary">{item.provider}</Typography>
+                                    </Box>
+                                    <Typography variant="caption" sx={{ color: track.color, fontWeight: 500 }}>{item.duration}</Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+                            </AccordionDetails>
+                          </Accordion>
+                        )}
+
+                        {/* Career Advice Accordion - Only show if track has careerAdvice */}
+                        {track.careerAdvice && (
+                          <Accordion sx={{ mb: 1, bgcolor: alpha(track.color, 0.03), "&:before": { display: "none" }, borderRadius: 1, border: `1px solid ${alpha(track.color, 0.1)}` }}>
+                            <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: track.color }} />}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <TipsAndUpdatesIcon sx={{ fontSize: 16, color: track.color }} />
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>Career Advice & Tips</Typography>
+                              </Box>
+                            </AccordionSummary>
+                            <AccordionDetails sx={{ pt: 0 }}>
+                              <Box sx={{ mb: 2 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: track.color, display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+                                  <PlayArrowIcon sx={{ fontSize: 14 }} /> Getting Started
+                                </Typography>
+                                {track.careerAdvice.gettingStarted.map((tip, idx) => (
+                                  <Typography key={idx} variant="body2" sx={{ fontSize: "0.75rem", mb: 0.5, display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+                                    <Box component="span" sx={{ color: track.color }}>•</Box> {tip}
+                                  </Typography>
+                                ))}
+                              </Box>
+
+                              <Box sx={{ mb: 2 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: "#22c55e", display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+                                  <CheckCircleIcon sx={{ fontSize: 14 }} /> Day One Actions
+                                </Typography>
+                                {track.careerAdvice.dayOneActions.map((action, idx) => (
+                                  <Typography key={idx} variant="body2" sx={{ fontSize: "0.75rem", mb: 0.5, display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+                                    <Box component="span" sx={{ color: "#22c55e" }}>{idx + 1}.</Box> {action}
+                                  </Typography>
+                                ))}
+                              </Box>
+
+                              <Box>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: "#f59e0b", display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+                                  <StarIcon sx={{ fontSize: 14 }} /> Success Tips
+                                </Typography>
+                                {track.careerAdvice.successTips.map((tip, idx) => (
+                                  <Typography key={idx} variant="body2" sx={{ fontSize: "0.75rem", mb: 0.5, display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+                                    <Box component="span" sx={{ color: "#f59e0b" }}>★</Box> {tip}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            </AccordionDetails>
+                          </Accordion>
+                        )}
+
                         <Button
                           size="small"
-                          variant="text"
-                          onClick={() => navigate("/learn/certifications")}
+                          variant="contained"
+                          onClick={() => navigate(`/learn/certifications?path=${track.certPathType}`)}
                           endIcon={<ArrowForwardIcon />}
-                          sx={{ fontSize: "0.65rem", p: 0, color: track.color }}
+                          sx={{ fontSize: "0.7rem", mt: 1, bgcolor: track.color, "&:hover": { bgcolor: alpha(track.color, 0.8) } }}
+                          fullWidth
                         >
-                          Find Courses
+                          Find {track.title} Courses
                         </Button>
                       </CardContent>
                     </Card>
@@ -2413,39 +4492,715 @@ export default function CareerPathsPage() {
               </Paper>
             </Box>
           </TabPanel>
+
+          {/* Tab 10: Personal Guidance */}
+          <TabPanel value={tabValue} index={10}>
+            <Box sx={{ p: 2 }}>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <strong>Personalized Career Development</strong> - Use these tools to create a customized learning plan, avoid common pitfalls, and track your progress toward your cybersecurity career goals.
+              </Alert>
+
+              {/* Career Path Finder */}
+              <Paper
+                sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.05)}, ${alpha("#6366f1", 0.05)})`,
+                  border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+                  mb: 3,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <PsychologyIcon sx={{ color: "#8b5cf6" }} /> Career Path Finder
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  Answer these questions to discover which cybersecurity tracks align best with your interests and background.
+                </Typography>
+                
+                {careerAssessmentQuestions.map((q) => (
+                  <Box key={q.id} sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+                      {q.question}
+                    </Typography>
+                    <Grid container spacing={1}>
+                      {q.options.map((option) => (
+                        <Grid item xs={12} md={6} key={option.value}>
+                          <Paper
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 2,
+                              border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+                              cursor: "pointer",
+                              transition: "all 0.2s",
+                              "&:hover": { 
+                                bgcolor: alpha("#8b5cf6", 0.05), 
+                                borderColor: "#8b5cf6",
+                                transform: "translateX(4px)"
+                              },
+                            }}
+                          >
+                            <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
+                              {option.label}
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                              {option.tracks.map((track) => (
+                                <Chip
+                                  key={track}
+                                  label={track}
+                                  size="small"
+                                  sx={{ fontSize: "0.6rem", height: 18, bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6" }}
+                                />
+                              ))}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Box>
+                ))}
+              </Paper>
+
+              {/* Career Milestones Timeline */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <TimelineIcon sx={{ color: "#22c55e" }} /> Career Milestones by Phase
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {Object.entries(careerMilestones).map(([phase, milestones]) => (
+                  <Grid item xs={12} md={6} lg={3} key={phase}>
+                    <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+                      <Chip
+                        label={phase === "0-6months" ? "0-6 Months" : phase === "6-12months" ? "6-12 Months" : phase === "1-2years" ? "1-2 Years" : "3-5 Years"}
+                        size="small"
+                        sx={{
+                          mb: 1.5,
+                          fontWeight: 700,
+                          bgcolor: phase === "0-6months" ? "#22c55e" : phase === "6-12months" ? "#3b82f6" : phase === "1-2years" ? "#f59e0b" : "#8b5cf6",
+                          color: "white",
+                        }}
+                      />
+                      <List dense disablePadding>
+                        {milestones.map((milestone, i) => (
+                          <ListItem key={i} sx={{ py: 0.5, px: 0, alignItems: "flex-start" }}>
+                            <ListItemIcon sx={{ minWidth: 20, mt: 0.5 }}>
+                              <Box
+                                sx={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: "50%",
+                                  bgcolor: phase === "0-6months" ? "#22c55e" : phase === "6-12months" ? "#3b82f6" : phase === "1-2years" ? "#f59e0b" : "#8b5cf6",
+                                }}
+                              />
+                            </ListItemIcon>
+                            <ListItemText primary={milestone} primaryTypographyProps={{ variant: "caption" }} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* Common Mistakes */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <WarningIcon sx={{ color: "#ef4444" }} /> Common Mistakes to Avoid
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {careerMistakesDetailed.map((item, i) => (
+                  <Grid item xs={12} md={6} key={i}>
+                    <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#ef4444", 0.2)}`, height: "100%" }}>
+                      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1 }}>
+                        <ErrorOutlineIcon sx={{ fontSize: 18, color: "#ef4444", mt: 0.25 }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444" }}>
+                          {item.mistake}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ ml: 3.5 }}>
+                        <Box component="span" sx={{ color: "#22c55e", fontWeight: 600 }}>→ </Box>
+                        {item.solution}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* Weekly Study Plan */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <CalendarMonthIcon sx={{ color: "#3b82f6" }} /> Sample Weekly Study Plans
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {Object.entries(weeklyStudyPlan).map(([level, schedule]) => (
+                  <Grid item xs={12} md={6} key={level}>
+                    <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha(level === "beginner" ? "#22c55e" : "#f59e0b", 0.3)}` }}>
+                      <Chip
+                        label={level === "beginner" ? "Beginner (10-15 hrs/week)" : "Intermediate (15-20 hrs/week)"}
+                        size="small"
+                        sx={{ mb: 2, fontWeight: 700, bgcolor: level === "beginner" ? "#22c55e" : "#f59e0b", color: "white" }}
+                      />
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 700, py: 0.5 }}>Day</TableCell>
+                              <TableCell sx={{ fontWeight: 700, py: 0.5 }}>Activity</TableCell>
+                              <TableCell sx={{ fontWeight: 700, py: 0.5 }}>Hours</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {schedule.map((day, i) => (
+                              <TableRow key={i}>
+                                <TableCell sx={{ py: 0.5, fontWeight: 600 }}>{day.day}</TableCell>
+                                <TableCell sx={{ py: 0.5, fontSize: "0.75rem" }}>{day.activity}</TableCell>
+                                <TableCell sx={{ py: 0.5 }}>{day.hours}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* Burnout Prevention */}
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.05), border: `1px solid ${alpha("#f59e0b", 0.2)}`, mb: 3 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <LocalFireDepartmentIcon sx={{ color: "#f59e0b" }} /> Burnout Prevention & Mental Health
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Learning security is a marathon, not a sprint. Sustainable progress beats burnout every time.
+                </Typography>
+                <Grid container spacing={2}>
+                  {burnoutPrevention.map((tip, i) => (
+                    <Grid item xs={12} md={6} key={i}>
+                      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                        <FavoriteIcon sx={{ fontSize: 16, color: "#f59e0b", mt: 0.25 }} />
+                        <Typography variant="body2">{tip}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              {/* Success Stories Framework */}
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.05), border: `1px solid ${alpha("#22c55e", 0.2)}`, mb: 3 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <EmojiEventsIcon sx={{ color: "#22c55e" }} /> Keys to Career Success
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { icon: "🎯", title: "Define Clear Goals", desc: "Know what role you want in 1, 3, and 5 years. Work backwards to create actionable steps." },
+                    { icon: "📝", title: "Document Everything", desc: "Your notes, writeups, and projects become your portfolio. Future you will thank present you." },
+                    { icon: "🤝", title: "Build Relationships", desc: "The security community is small. Help others, share knowledge, and your reputation will grow." },
+                    { icon: "🔄", title: "Embrace Failure", desc: "Failed challenges, rejected applications, and bugs you couldn't find are all learning opportunities." },
+                    { icon: "⏰", title: "Be Patient", desc: "Most successful security professionals took 2-5 years to reach intermediate level. Trust the process." },
+                    { icon: "🧠", title: "Stay Curious", desc: "The best in this field never stop learning. Embrace the constantly evolving landscape." },
+                  ].map((item, i) => (
+                    <Grid item xs={12} md={6} lg={4} key={i}>
+                      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
+                        <Typography sx={{ fontSize: 24 }}>{item.icon}</Typography>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.title}</Typography>
+                          <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                        </Box>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              {/* Quick Action Checklist */}
+              <Paper
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background: `linear-gradient(135deg, ${alpha("#3b82f6", 0.05)}, ${alpha("#8b5cf6", 0.05)})`,
+                  border: `1px solid ${alpha("#3b82f6", 0.2)}`,
+                }}
+              >
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <ChecklistIcon sx={{ color: "#3b82f6" }} /> Your First Week Action Checklist
+                </Typography>
+                <Grid container spacing={1}>
+                  {[
+                    "Create accounts on TryHackMe and HackTheBox",
+                    "Set up a learning blog (GitHub Pages, Notion, or Medium)",
+                    "Join a security Discord (TryHackMe, HackTheBox, InfoSec Prep)",
+                    "Download and install VirtualBox + Kali Linux",
+                    "Complete your first TryHackMe room",
+                    "Subscribe to 2-3 security newsletters",
+                    "Follow 10 security professionals on Twitter/X",
+                    "Sign up for your local BSides or OWASP chapter",
+                    "Create a study schedule and stick to it for one week",
+                    "Find one person to be your accountability partner",
+                  ].map((action, i) => (
+                    <Grid item xs={12} md={6} key={i}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box
+                          sx={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 1,
+                            border: `2px solid ${alpha("#3b82f6", 0.5)}`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "0.7rem",
+                            color: "#3b82f6",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {i + 1}
+                        </Box>
+                        <Typography variant="body2">{action}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              <Alert severity="success" sx={{ mt: 3 }}>
+                <strong>Remember:</strong> Every expert was once a beginner. The security community is welcoming to newcomers who show genuine interest and effort. Start today, stay consistent, and you'll be amazed at your progress in 6-12 months.
+              </Alert>
+            </Box>
+          </TabPanel>
+
+          {/* Tab 11: Home Lab Setup Guide */}
+          <TabPanel value={tabValue} index={11}>
+            <Box sx={{ p: 2 }}>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <strong>🏠 Build Your Security Lab!</strong> A home lab is essential for hands-on practice. Whether you have $0 or $500 to spend, there's a setup that works for you. Start small and expand as you learn.
+              </Alert>
+
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <ComputerIcon sx={{ color: theme.palette.primary.main }} />
+                Home Lab Setup Guide by Career Track
+              </Typography>
+
+              {homeLabSetups.map((lab, index) => (
+                <Accordion 
+                  key={lab.track} 
+                  defaultExpanded={index === 0}
+                  sx={{ 
+                    mb: 2, 
+                    borderRadius: 2, 
+                    overflow: "hidden",
+                    "&:before": { display: "none" },
+                    boxShadow: 2
+                  }}
+                >
+                  <AccordionSummary 
+                    expandIcon={<ExpandMoreIcon />}
+                    sx={{ 
+                      bgcolor: alpha(lab.color, 0.1),
+                      "&:hover": { bgcolor: alpha(lab.color, 0.15) }
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                      <Typography variant="h5">{lab.icon}</Typography>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                          {lab.track}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {lab.description}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Chip 
+                          label={`Min: ${lab.minBudget}`} 
+                          size="small" 
+                          sx={{ bgcolor: alpha("#22c55e", 0.2), fontWeight: 600 }}
+                        />
+                        <Chip 
+                          label={`Rec: ${lab.recommendedBudget}`} 
+                          size="small" 
+                          sx={{ bgcolor: alpha("#3b82f6", 0.2), fontWeight: 600 }}
+                        />
+                      </Box>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ p: 3 }}>
+                    <Grid container spacing={3}>
+                      {/* Hardware Requirements */}
+                      <Grid item xs={12} md={6}>
+                        <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.8), height: "100%" }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                            <MemoryIcon color="primary" /> Hardware
+                          </Typography>
+                          <List dense>
+                            {lab.hardware.map((item, idx) => (
+                              <ListItem key={idx} sx={{ px: 0 }}>
+                                <ListItemText
+                                  primary={
+                                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.item}</Typography>
+                                      <Chip label={item.cost} size="small" sx={{ fontSize: "0.7rem" }} />
+                                    </Box>
+                                  }
+                                  secondary={item.purpose}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Paper>
+                      </Grid>
+
+                      {/* Software Tools */}
+                      <Grid item xs={12} md={6}>
+                        <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.8), height: "100%" }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                            <SettingsIcon color="secondary" /> Software & Tools
+                          </Typography>
+                          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                            {lab.software.map((sw, idx) => (
+                              <Tooltip key={idx} title={`${sw.purpose} (${sw.cost})`} arrow>
+                                <Chip 
+                                  label={sw.name} 
+                                  size="small"
+                                  sx={{ 
+                                    fontWeight: 500,
+                                    bgcolor: sw.cost === "Free" ? alpha("#22c55e", 0.15) : alpha("#f59e0b", 0.15)
+                                  }}
+                                />
+                              </Tooltip>
+                            ))}
+                          </Box>
+                        </Paper>
+                      </Grid>
+
+                      {/* Virtual Machines */}
+                      <Grid item xs={12} md={6}>
+                        <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.8), height: "100%" }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                            <DownloadIcon color="info" /> VMs & ISOs
+                          </Typography>
+                          <List dense>
+                            {lab.vms.map((vm, idx) => (
+                              <ListItem 
+                                key={idx} 
+                                sx={{ px: 0 }}
+                                secondaryAction={
+                                  <Button 
+                                    size="small" 
+                                    href={vm.link} 
+                                    target="_blank"
+                                    endIcon={<OpenInNewIcon fontSize="small" />}
+                                  >
+                                    Get
+                                  </Button>
+                                }
+                              >
+                                <ListItemText
+                                  primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>{vm.name}</Typography>}
+                                  secondary={vm.purpose}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Paper>
+                      </Grid>
+
+                      {/* Cloud Alternatives */}
+                      <Grid item xs={12} md={6}>
+                        <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.8), height: "100%" }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                            <CloudIcon color="info" /> Cloud Alternatives
+                          </Typography>
+                          <List dense>
+                            {lab.cloudAlternatives.map((cloud, idx) => (
+                              <ListItem key={idx} sx={{ px: 0 }}>
+                                <ListItemText
+                                  primary={
+                                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{cloud.service}</Typography>
+                                      <Chip 
+                                        label={cloud.cost} 
+                                        size="small" 
+                                        sx={{ 
+                                          fontSize: "0.7rem",
+                                          bgcolor: cloud.cost.includes("Free") ? alpha("#22c55e", 0.2) : alpha("#f59e0b", 0.2)
+                                        }} 
+                                      />
+                                    </Box>
+                                  }
+                                  secondary={cloud.purpose}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Paper>
+                      </Grid>
+
+                      {/* Practice Targets */}
+                      <Grid item xs={12}>
+                        <Paper sx={{ p: 2, bgcolor: alpha(lab.color, 0.05), border: `1px solid ${alpha(lab.color, 0.2)}` }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                            🎯 Practice Targets
+                          </Typography>
+                          <Grid container spacing={1}>
+                            {lab.practiceTargets.map((target, idx) => (
+                              <Grid item xs={12} sm={6} md={4} key={idx}>
+                                <Button
+                                  variant="outlined"
+                                  fullWidth
+                                  href={target.link}
+                                  target="_blank"
+                                  sx={{ 
+                                    textTransform: "none", 
+                                    justifyContent: "flex-start",
+                                    borderColor: alpha(lab.color, 0.3),
+                                    "&:hover": { borderColor: lab.color, bgcolor: alpha(lab.color, 0.05) }
+                                  }}
+                                >
+                                  <Box sx={{ textAlign: "left" }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{target.name}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{target.description}</Typography>
+                                  </Box>
+                                </Button>
+                              </Grid>
+                            ))}
+                          </Grid>
+                        </Paper>
+                      </Grid>
+
+                      {/* First Week Setup */}
+                      <Grid item xs={12} md={6}>
+                        <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                            📅 Your First Week Setup Plan
+                          </Typography>
+                          <List dense>
+                            {lab.firstWeekSetup.map((step, idx) => (
+                              <ListItem key={idx} sx={{ px: 0 }}>
+                                <ListItemIcon sx={{ minWidth: 32 }}>
+                                  <Box
+                                    sx={{
+                                      width: 22,
+                                      height: 22,
+                                      borderRadius: "50%",
+                                      bgcolor: alpha("#22c55e", 0.2),
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 700,
+                                      color: "#22c55e",
+                                    }}
+                                  >
+                                    {idx + 1}
+                                  </Box>
+                                </ListItemIcon>
+                                <ListItemText primary={<Typography variant="body2">{step}</Typography>} />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Paper>
+                      </Grid>
+
+                      {/* Pro Tips */}
+                      <Grid item xs={12} md={6}>
+                        <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                            💡 Pro Tips
+                          </Typography>
+                          <List dense>
+                            {lab.tips.map((tip, idx) => (
+                              <ListItem key={idx} sx={{ px: 0 }}>
+                                <ListItemIcon sx={{ minWidth: 28 }}>
+                                  <LightbulbIcon sx={{ fontSize: 18, color: "#f59e0b" }} />
+                                </ListItemIcon>
+                                <ListItemText primary={<Typography variant="body2">{tip}</Typography>} />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Paper>
+                      </Grid>
+                    </Grid>
+                  </AccordionDetails>
+                </Accordion>
+              ))}
+
+              {/* General Lab Tips */}
+              <Paper sx={{ p: 3, mt: 3, bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  🛠️ Universal Lab Best Practices
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: theme.palette.primary.main }}>
+                        💾 Virtualization Setup
+                      </Typography>
+                      <List dense>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="VMware Workstation Pro/Player or VirtualBox" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Allocate 4-8GB RAM per VM minimum" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Use SSD for VM storage (huge speed boost)" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Take snapshots before major changes" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Use NAT or Host-Only networks for isolation" /></ListItem>
+                      </List>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: theme.palette.secondary.main }}>
+                        🔐 Safety First
+                      </Typography>
+                      <List dense>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="NEVER connect vulnerable VMs to the internet" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Isolate lab network from home network" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Password-protect malware samples ('infected')" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Never attack systems without authorization" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Keep host machine patched and secure" /></ListItem>
+                      </List>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: theme.palette.warning.main }}>
+                        📝 Documentation
+                      </Typography>
+                      <List dense>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Keep a lab notebook (Notion, Obsidian, wiki)" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Document every command and its purpose" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Screenshot important configurations" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Save network diagrams of your setup" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Your notes become your knowledge base" /></ListItem>
+                      </List>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* Budget Guides */}
+              <Paper sx={{ p: 3, mt: 3, borderRadius: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                  💰 Budget-Based Setup Guides
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.1), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>
+                        🆓 $0 Budget (Cloud-Only)
+                      </Typography>
+                      <List dense>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="VirtualBox (free hypervisor)" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="TryHackMe free rooms" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="HackTheBox free tier" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="LetsDefend free alerts" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="AWS/Azure/GCP free tiers" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="VulnHub downloadable VMs" /></ListItem>
+                      </List>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.1), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>
+                        💵 $100-300 Budget
+                      </Typography>
+                      <List dense>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Used laptop/PC (16GB RAM)" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="External SSD for VMs" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Raspberry Pi for projects" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Managed switch (used)" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="HackTheBox/TryHackMe subscription" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Basic WiFi adapter (Alfa)" /></ListItem>
+                      </List>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#a855f7", 0.1), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#a855f7", mb: 1 }}>
+                        🚀 $500+ Budget (Serious Lab)
+                      </Typography>
+                      <List dense>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Dedicated lab machine (32GB+ RAM)" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Mini PC for pfSense/OPNsense" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Managed switch + access point" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Multiple Raspberry Pis" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="Hardware write-blocker (forensics)" /></ListItem>
+                        <ListItem sx={{ px: 0 }}><ListItemText primary="All premium platform subscriptions" /></ListItem>
+                      </List>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              <Alert severity="success" sx={{ mt: 3 }}>
+                <strong>Start Today!</strong> You don't need a perfect setup to begin learning. Start with free tools and platforms, then expand your lab as your skills grow. The best lab is the one you actually use!
+              </Alert>
+            </Box>
+          </TabPanel>
         </Paper>
 
         {/* Related Pages */}
         <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-            📚 Related Learning
+            📚 Related Learning Resources
           </Typography>
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Chip
-              label="Security Certifications →"
-              clickable
-              onClick={() => navigate("/learn/certifications")}
-              sx={{ fontWeight: 600 }}
-            />
-            <Chip
-              label="Build Your Portfolio →"
-              clickable
-              onClick={() => navigate("/learn/portfolio")}
-              sx={{ fontWeight: 600 }}
-            />
-            <Chip
-              label="SOC Workflow →"
-              clickable
-              onClick={() => navigate("/learn/soc-workflow")}
-              sx={{ fontWeight: 600 }}
-            />
-            <Chip
-              label="Incident Response →"
-              clickable
-              onClick={() => navigate("/learn/incident-response")}
-              sx={{ fontWeight: 600 }}
-            />
-          </Box>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: theme.palette.primary.main }}>
+                Learning Paths
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Chip
+                  label="🎓 Security Certifications"
+                  clickable
+                  onClick={() => navigate("/learn/certifications")}
+                  sx={{ fontWeight: 600 }}
+                />
+                <Chip
+                  label="🟢 Beginner Certs"
+                  clickable
+                  onClick={() => navigate("/learn/certifications?level=Beginner")}
+                  sx={{ fontWeight: 600, bgcolor: alpha("#22c55e", 0.1) }}
+                />
+                <Chip
+                  label="🔴 Advanced Certs"
+                  clickable
+                  onClick={() => navigate("/learn/certifications?level=Advanced")}
+                  sx={{ fontWeight: 600, bgcolor: alpha("#ef4444", 0.1) }}
+                />
+                <Chip
+                  label="💼 Build Your Portfolio"
+                  clickable
+                  onClick={() => navigate("/learn/portfolio")}
+                  sx={{ fontWeight: 600 }}
+                />
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: theme.palette.secondary.main }}>
+                Hands-On Skills
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Chip
+                  label="🔵 SOC Workflow"
+                  clickable
+                  onClick={() => navigate("/learn/soc-workflow")}
+                  sx={{ fontWeight: 600 }}
+                />
+                <Chip
+                  label="🚨 Incident Response"
+                  clickable
+                  onClick={() => navigate("/learn/incident-response")}
+                  sx={{ fontWeight: 600 }}
+                />
+                <Chip
+                  label="🔴 Red Team Certs"
+                  clickable
+                  onClick={() => navigate("/learn/certifications?path=red-team")}
+                  sx={{ fontWeight: 600, bgcolor: alpha("#ef4444", 0.1) }}
+                />
+                <Chip
+                  label="☁️ Cloud Security Certs"
+                  clickable
+                  onClick={() => navigate("/learn/certifications?path=cloud-security")}
+                  sx={{ fontWeight: 600, bgcolor: alpha("#06b6d4", 0.1) }}
+                />
+              </Box>
+            </Grid>
+          </Grid>
         </Paper>
       </Container>
     </LearnPageLayout>

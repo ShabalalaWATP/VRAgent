@@ -335,7 +335,7 @@ class VulnHuntrService:
     
     def __init__(self):
         self.client = genai_client
-        self.model_name = "gemini-2.0-flash"
+        self.model_name = settings.gemini_model_id
         if self.client:
             logger.info("VulnHuntr: Gemini client available")
         else:

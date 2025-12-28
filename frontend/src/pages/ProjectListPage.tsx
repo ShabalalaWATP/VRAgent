@@ -27,6 +27,8 @@ import { api } from "../api/client";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
 import BuildIcon from "@mui/icons-material/Build";
+import PeopleIcon from "@mui/icons-material/People";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 
 // Animations
 const float = keyframes`
@@ -91,7 +93,8 @@ const WarningIcon = () => (
 export default function ProjectListPage() {
   const [open, setOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<{ id: number; name: string } | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<{ id: number; name: string; is_shared?: boolean; collaborator_count?: number } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const theme = useTheme();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -107,20 +110,22 @@ export default function ProjectListPage() {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       setDeleteDialogOpen(false);
       setProjectToDelete(null);
+      setDeleteError(null);
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Delete project failed:", error);
-      // Still close the dialog
-      setDeleteDialogOpen(false);
-      setProjectToDelete(null);
+      // Show error to user instead of silently closing
+      const errorMessage = error?.response?.data?.detail || error?.message || "Failed to delete project. Please try again.";
+      setDeleteError(errorMessage);
     },
   });
 
-  const handleDeleteClick = (project: { id: number; name: string }, e: React.MouseEvent) => {
+  const handleDeleteClick = (project: { id: number; name: string; is_shared?: boolean; collaborator_count?: number }, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     console.log("Delete clicked for project:", project);
     setProjectToDelete(project);
+    setDeleteError(null);
     setDeleteDialogOpen(true);
   };
 
@@ -436,10 +441,17 @@ export default function ProjectListPage() {
                       <span>
                         <IconButton
                           size="small"
-                          onClick={(e) => handleDeleteClick({ id: project.id, name: project.name }, e)}
+                          onClick={(e) => handleDeleteClick({ 
+                            id: project.id, 
+                            name: project.name,
+                            is_shared: project.is_shared,
+                            collaborator_count: project.collaborator_count,
+                          }, e)}
+                          disabled={project.user_role !== "owner"}
                           sx={{
                             color: alpha(theme.palette.error.main, 0.6),
                             transition: "all 0.2s ease",
+                            visibility: project.user_role === "owner" ? "visible" : "hidden",
                             "&:hover": {
                               color: theme.palette.error.main,
                               background: alpha(theme.palette.error.main, 0.1),
@@ -491,6 +503,31 @@ export default function ProjectListPage() {
                           fontSize: "0.75rem",
                           background: alpha(theme.palette.secondary.main, 0.15),
                           color: theme.palette.secondary.main,
+                          fontWeight: 600,
+                        }}
+                      />
+                    )}
+                    {project.is_shared && (
+                      <Chip
+                        icon={<PeopleIcon sx={{ fontSize: "14px !important" }} />}
+                        label={`Shared${project.collaborator_count > 0 ? ` (${project.collaborator_count})` : ""}`}
+                        size="small"
+                        sx={{ 
+                          fontSize: "0.75rem",
+                          background: alpha(theme.palette.info.main, 0.15),
+                          color: theme.palette.info.main,
+                          fontWeight: 600,
+                        }}
+                      />
+                    )}
+                    {project.user_role && project.user_role !== "owner" && (
+                      <Chip
+                        label={project.user_role.charAt(0).toUpperCase() + project.user_role.slice(1)}
+                        size="small"
+                        sx={{ 
+                          fontSize: "0.75rem",
+                          background: alpha(theme.palette.warning.main, 0.15),
+                          color: theme.palette.warning.main,
                           fontWeight: 600,
                         }}
                       />
@@ -571,7 +608,7 @@ export default function ProjectListPage() {
               mb: 0.5,
             }}
           >
-            Network Analysis
+            Network Analysis Hub
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Analyze Wireshark PCAP captures and Nmap scan results with AI-powered security insights
@@ -630,7 +667,7 @@ export default function ProjectListPage() {
               mb: 0.5,
             }}
           >
-            Reverse Engineering
+            Reverse Engineering Hub
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Analyze APKs, binaries (PE/ELF), and Docker images with AI-powered security insights
@@ -696,6 +733,65 @@ export default function ProjectListPage() {
           </Typography>
         </Box>
         <Box sx={{ color: "#a78bfa" }}>
+          <ArrowRightIcon />
+        </Box>
+      </Card>
+
+      {/* Social Hub Link */}
+      <Card
+        component={Link}
+        to="/social"
+        sx={{
+          mt: 3,
+          textDecoration: "none",
+          display: "flex",
+          alignItems: "center",
+          p: 3,
+          background: `linear-gradient(135deg, ${alpha("#ec4899", 0.08)} 0%, ${alpha("#db2777", 0.05)} 100%)`,
+          border: `1px solid ${alpha("#ec4899", 0.2)}`,
+          borderRadius: 3,
+          transition: "all 0.3s ease",
+          "&:hover": {
+            transform: "translateY(-4px)",
+            boxShadow: `0 10px 30px ${alpha("#ec4899", 0.2)}`,
+            border: `1px solid ${alpha("#ec4899", 0.4)}`,
+          },
+        }}
+      >
+        <Box
+          sx={{
+            width: 56,
+            height: 56,
+            borderRadius: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: `linear-gradient(135deg, #ec4899 0%, #db2777 100%)`,
+            color: "#fff",
+            mr: 3,
+          }}
+        >
+          <PeopleIcon sx={{ fontSize: 32 }} />
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <Typography
+            variant="h6"
+            fontWeight={700}
+            sx={{
+              background: `linear-gradient(135deg, #f472b6 0%, #ec4899 100%)`,
+              backgroundClip: "text",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              mb: 0.5,
+            }}
+          >
+            Social Hub
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Connect with other security researchers. Find friends, share findings, and chat in real-time.
+          </Typography>
+        </Box>
+        <Box sx={{ color: "#f472b6" }}>
           <ArrowRightIcon />
         </Box>
       </Card>
@@ -791,13 +887,65 @@ export default function ProjectListPage() {
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ textAlign: "center", pb: 2 }}>
-          <Typography color="text.secondary">
+          <Typography color="text.secondary" sx={{ mb: 2 }}>
             Are you sure you want to delete{" "}
             <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>
               {projectToDelete?.name}
             </Box>
             ? This will permanently remove the project and all associated scans, reports, and findings.
           </Typography>
+          
+          {/* Shared project warning */}
+          {projectToDelete?.is_shared && (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                bgcolor: alpha(theme.palette.warning.main, 0.1),
+                border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`,
+                borderRadius: 2,
+                mt: 2,
+              }}
+            >
+              <Typography 
+                variant="body2" 
+                color="warning.dark"
+                sx={{ fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}
+              >
+                <WarningAmberIcon fontSize="small" />
+                This is a shared project!
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Deleting this project will remove it for{" "}
+                <Box component="span" sx={{ fontWeight: 700 }}>
+                  {projectToDelete.collaborator_count || 0} collaborator{(projectToDelete.collaborator_count || 0) !== 1 ? "s" : ""}
+                </Box>
+                {" "}and delete all team chat messages.
+              </Typography>
+            </Paper>
+          )}
+          
+          {/* Error message */}
+          {deleteError && (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                bgcolor: alpha(theme.palette.error.main, 0.1),
+                border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`,
+                borderRadius: 2,
+                mt: 2,
+              }}
+            >
+              <Typography 
+                variant="body2" 
+                color="error.main"
+                sx={{ fontWeight: 600 }}
+              >
+                Error: {deleteError}
+              </Typography>
+            </Paper>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 2, justifyContent: "center" }}>
           <Button

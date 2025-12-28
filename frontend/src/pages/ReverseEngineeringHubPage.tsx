@@ -62,6 +62,7 @@ import {
   DialogContent,
   DialogActions,
   InputLabel,
+  Collapse,
 } from "@mui/material";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -70,6 +71,7 @@ import {
   Android as ApkIcon,
   Storage as DockerIcon,
   ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
   Security as SecurityIcon,
   Warning as WarningIcon,
   Error as ErrorIcon,
@@ -81,6 +83,7 @@ import {
   SmartToy as AiIcon,
   Refresh as RefreshIcon,
   Home as HomeIcon,
+  Hub as HubIcon,
   BugReport as BugIcon,
   BugReport as BugReportIcon,
   Lock as LockIcon,
@@ -102,12 +105,24 @@ import {
   DataObject as HexIcon,
   InsertLink as LinkIcon,
   Folder as StorageIcon,
+  Folder as FolderIcon,
+  InsertDriveFile as InsertDriveFileIcon,
   ContentCopy as CopyIcon,
   Download as DownloadIcon,
+  TrackChanges as TargetIcon,
   Description as DocIcon,
   PictureAsPdf as PdfIcon,
   Article as ArticleIcon,
   TextSnippet as WordIcon,
+  Person as PersonIcon,
+  Email as EmailIcon,
+  Phone as PhoneIcon,
+  Key as KeyIcon,
+  AutoAwesome as AutoAwesomeIcon,
+  Map as MapIcon,
+  Terminal as TerminalIcon,
+  Memory as MemoryIcon,
+  AccessTime as AccessTimeIcon,
 } from "@mui/icons-material";
 import {
   reverseEngineeringClient,
@@ -130,6 +145,8 @@ import {
   type UnifiedBinaryScanProgress,
   type AttackSurfaceMapResult,
   type EnhancedSecurityResult,
+  type VulnerabilityHuntResult,
+  type VulnerabilityFinding,
 } from "../api/client";
 import { MermaidDiagram } from "../components/MermaidDiagram";
 
@@ -138,7 +155,7 @@ import { JadxDecompiler, ManifestVisualizer, AttackSurfaceMap, ObfuscationAnalyz
 
 // Advanced Binary Analysis Components
 import { EntropyVisualizer } from "../components/BinaryAdvancedAnalysis";
-import { VulnerabilityHunter } from "../components/VulnerabilityHunter";
+import { UnifiedBinaryResults } from "../components/UnifiedBinaryResults";
 
 // AI Chat Panel and Guided Walkthrough
 import ApkChatPanel from "../components/ApkChatPanel";
@@ -169,6 +186,21 @@ const getSeverityColor = (severity: string): string => {
       return "#16a34a";
     default:
       return "#6b7280";
+  }
+};
+
+// Format seconds to human-readable time
+const formatTimeSeconds = (seconds: number): string => {
+  if (seconds < 60) {
+    return `${Math.round(seconds)}s`;
+  } else if (seconds < 3600) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  } else {
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   }
 };
 
@@ -296,18 +328,28 @@ const SCAN_PHASE_ICONS: Record<string, React.ReactNode> = {
   manifest: <ApkIcon />,
   secrets: <SecretIcon />,
   jadx: <CodeIcon />,
-  ai_functionality: <ReportIcon />,
-  ai_security: <SecurityIcon />,
-  ai_diagram: <ArchitectureIcon />,
+  code_scan: <SecurityIcon />,
+  sensitive_data: <PersonIcon />,
+  cve_lookup: <WarningIcon />,
+  vuln_hunt: <BugReportIcon />,
+  verification: <CheckIcon />,
+  ai_analysis: <AiIcon />,
+  advanced_analysis: <ArchitectureIcon />,
+  ai_reports: <ReportIcon />,
 };
 
 const SCAN_PHASE_LABELS: Record<string, string> = {
   manifest: "📋 Manifest Analysis",
   secrets: "🔑 Secret Detection",
   jadx: "☕ JADX Decompilation",
-  ai_functionality: "📝 AI Functionality Report",
-  ai_security: "🔒 AI Security Report",
-  ai_diagram: "🕸️ Architecture Diagram",
+  code_scan: "🔍 Code Security Scan",
+  sensitive_data: "🔐 Sensitive Data Discovery",
+  cve_lookup: "🛡️ CVE Database Lookup",
+  vuln_hunt: "🐛 AI Vulnerability Hunt",
+  verification: "✅ AI Finding Verification",
+  ai_analysis: "🧠 AI Deep Analysis",
+  advanced_analysis: "🏗️ Advanced Analysis",
+  ai_reports: "📝 AI Report Generation",
 };
 
 const BINARY_SCAN_PHASE_ICONS: Record<string, React.ReactNode> = {
@@ -315,13 +357,33 @@ const BINARY_SCAN_PHASE_ICONS: Record<string, React.ReactNode> = {
   ghidra: <CodeIcon />,
   ghidra_ai: <AiIcon />,
   ai_summary: <SecurityIcon />,
+  pattern_scan: <SearchIcon />,
+  cve_lookup: <WarningIcon />,
+  sensitive_scan: <SecretIcon />,
+  vuln_hunt: <BugReportIcon />,
+  ai_verification: <CheckIcon />,
+  advanced_analysis: <ArchitectureIcon />,
+  attack_surface: <MapIcon />,
+  dynamic_scripts: <TerminalIcon />,
+  emulation: <MemoryIcon />,
+  ai_reports: <ReportIcon />,
 };
 
 const BINARY_SCAN_PHASE_LABELS: Record<string, string> = {
-  static: "Static Analysis",
-  ghidra: "Ghidra Decompilation",
-  ghidra_ai: "Ghidra AI Summaries",
-  ai_summary: "AI Security Summary",
+  static: "📊 Static Analysis",
+  ghidra: "🔬 Ghidra Decompilation",
+  ghidra_ai: "🧠 Ghidra AI Summaries",
+  ai_summary: "✨ AI Security Summary",
+  pattern_scan: "🔍 Pattern Vulnerability Scan",
+  cve_lookup: "🛡️ CVE Database Lookup",
+  sensitive_scan: "🔑 Sensitive Data Discovery",
+  vuln_hunt: "🐛 AI Vulnerability Hunt",
+  ai_verification: "✅ AI Findings Verification",
+  advanced_analysis: "🏗️ Advanced Analysis",
+  attack_surface: "🗺️ Attack Surface Mapping",
+  dynamic_scripts: "⚡ Dynamic Analysis Scripts",
+  emulation: "🎮 Emulation Analysis",
+  ai_reports: "📝 AI Report Generation",
 };
 
 interface UnifiedApkScannerProps {
@@ -342,6 +404,12 @@ function UnifiedApkScanner({
   const [progress, setProgress] = useState<UnifiedApkScanProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<{ abort: () => void } | null>(null);
+  
+  // Vuln Hunt Options - enabled by default with increased limits
+  const [includeVulnHunt, setIncludeVulnHunt] = useState(true);
+  const [vulnHuntMaxPasses, setVulnHuntMaxPasses] = useState(5);
+  const [vulnHuntMaxTargets, setVulnHuntMaxTargets] = useState(50);
+  const [vulnHuntExpanded, setVulnHuntExpanded] = useState(false);
   
   const startScan = useCallback(() => {
     if (!apkFile) return;
@@ -372,11 +440,17 @@ function UnifiedApkScanner({
       // onDone
       () => {
         setIsScanning(false);
+      },
+      // Options
+      {
+        includeVulnHunt,
+        vulnHuntMaxPasses,
+        vulnHuntMaxTargets,
       }
     );
     
     abortRef.current = controller;
-  }, [apkFile, onScanComplete, onJadxSessionReady]);
+  }, [apkFile, onScanComplete, onJadxSessionReady, includeVulnHunt, vulnHuntMaxPasses, vulnHuntMaxTargets]);
   
   const cancelScan = useCallback(() => {
     abortRef.current?.abort();
@@ -443,9 +517,79 @@ function UnifiedApkScanner({
                   </ListItem>
                 </List>
                 
+                {/* AI Vulnerability Hunt Option */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1, border: '1px solid', borderColor: alpha(theme.palette.error.main, 0.2) }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={includeVulnHunt}
+                        onChange={(e) => setIncludeVulnHunt(e.target.checked)}
+                        color="error"
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <BugReportIcon fontSize="small" color="error" />
+                        <Typography variant="body2" fontWeight="medium">AI Vulnerability Hunt</Typography>
+                        <Chip label="Multi-Pass" size="small" color="error" variant="outlined" sx={{ fontSize: '0.6rem', height: 18, ml: 0.5 }} />
+                      </Box>
+                    }
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 5.5 }}>
+                    Deep AI-guided vulnerability hunting with iterative analysis passes
+                  </Typography>
+                  
+                  {includeVulnHunt && (
+                    <Box sx={{ mt: 1, ml: 2 }}>
+                      <Typography 
+                        variant="caption" 
+                        color="text.secondary" 
+                        sx={{ 
+                          cursor: 'pointer', 
+                          display: 'flex', 
+                          alignItems: 'center',
+                          '&:hover': { color: 'primary.main' }
+                        }}
+                        onClick={() => setVulnHuntExpanded(!vulnHuntExpanded)}
+                      >
+                        {vulnHuntExpanded ? '▼' : '▶'} Advanced settings
+                      </Typography>
+                      {vulnHuntExpanded && (
+                        <Box sx={{ mt: 1, pl: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Max passes: {vulnHuntMaxPasses}
+                          </Typography>
+                          <Slider
+                            value={vulnHuntMaxPasses}
+                            onChange={(_, value) => setVulnHuntMaxPasses(value as number)}
+                            min={2}
+                            max={8}
+                            step={1}
+                            marks
+                            size="small"
+                            sx={{ mt: 0.5 }}
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            Targets per pass: {vulnHuntMaxTargets}
+                          </Typography>
+                          <Slider
+                            value={vulnHuntMaxTargets}
+                            onChange={(_, value) => setVulnHuntMaxTargets(value as number)}
+                            min={10}
+                            max={100}
+                            step={10}
+                            size="small"
+                            sx={{ mt: 0.5 }}
+                          />
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                </Box>
+                
                 <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
                   <Typography variant="body2">
-                    ⏱️ This comprehensive scan may take <strong>2-5 minutes</strong> depending on APK size.
+                    ⏱️ This comprehensive scan may take <strong>{includeVulnHunt ? '5-10' : '2-5'} minutes</strong> depending on APK size.
                   </Typography>
                 </Alert>
                 
@@ -572,8 +716,10 @@ function UnifiedApkScanner({
                         <CircularProgress size={20} color="inherit" />
                       ) : phase.status === "error" ? (
                         <ErrorIcon sx={{ fontSize: 20 }} />
-                      ) : (
+                      ) : SCAN_PHASE_ICONS[phase.id] ? (
                         React.cloneElement(SCAN_PHASE_ICONS[phase.id] as React.ReactElement, { sx: { fontSize: 18 } })
+                      ) : (
+                        <SecurityIcon sx={{ fontSize: 18 }} />
                       )}
                     </Box>
                   )}
@@ -587,15 +733,38 @@ function UnifiedApkScanner({
                     {phase.description}
                   </Typography>
                   {phase.status === "in_progress" && (
-                    <LinearProgress 
-                      sx={{ 
-                        mt: 1.5,
-                        borderRadius: 1,
-                        "& .MuiLinearProgress-bar": {
-                          background: `linear-gradient(90deg, ${theme.palette.primary.light}, ${theme.palette.primary.main})`,
-                        }
-                      }} 
-                    />
+                    <>
+                      <LinearProgress 
+                        variant={phase.progress > 0 ? "determinate" : "indeterminate"}
+                        value={phase.progress || 0}
+                        sx={{ 
+                          mt: 1.5,
+                          borderRadius: 1,
+                          height: 6,
+                          "& .MuiLinearProgress-bar": {
+                            background: `linear-gradient(90deg, ${theme.palette.primary.light}, ${theme.palette.primary.main})`,
+                          }
+                        }} 
+                      />
+                      {phase.details && (
+                        <Typography 
+                          variant="caption" 
+                          color="info.main" 
+                          sx={{ 
+                            mt: 0.5, 
+                            display: "block",
+                            fontStyle: "italic",
+                            animation: "pulse 2s infinite",
+                            "@keyframes pulse": {
+                              "0%, 100%": { opacity: 1 },
+                              "50%": { opacity: 0.6 },
+                            }
+                          }}
+                        >
+                          ⏳ {phase.details}
+                        </Typography>
+                      )}
+                    </>
                   )}
                   {phase.status === "completed" && phase.details && (
                     <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: "block" }}>
@@ -680,6 +849,355 @@ interface DecompiledCodeFindingsAccordionProps {
     files_scanned: number;
   };
   jadxSessionId?: string;
+}
+
+// ===== SENSITIVE DATA FINDINGS SECTION COMPONENT =====
+// Dedicated section for AI-verified passwords, API keys, emails, phone numbers, PII
+function SensitiveDataFindingsSection({ result }: { result: ApkAnalysisResult | UnifiedApkScanResult }) {
+  const theme = useTheme();
+  const [expanded, setExpanded] = useState(true);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [riskFilter, setRiskFilter] = useState<string>("all");
+  const [showFiltered, setShowFiltered] = useState(false);
+  
+  const sensitiveData = (result as any).sensitive_data_findings;
+  
+  // Don't render if no sensitive data findings
+  if (!sensitiveData?.findings || sensitiveData.findings.length === 0) {
+    return null;
+  }
+  
+  const findings = sensitiveData.findings;
+  const filteredOut = sensitiveData.filtered_out || [];
+  const summary = sensitiveData.summary || {};
+  const stats = sensitiveData.scan_stats || {};
+  
+  const categoryIcons: Record<string, React.ReactNode> = {
+    password: <LockIcon fontSize="small" />,
+    api_key: <SecretIcon fontSize="small" />,
+    username: <PersonIcon fontSize="small" />,
+    email: <EmailIcon fontSize="small" />,
+    phone: <PhoneIcon fontSize="small" />,
+    personal_name: <PersonIcon fontSize="small" />,
+    private_key: <KeyIcon fontSize="small" />,
+    database_url: <StorageIcon fontSize="small" />,
+  };
+  
+  const categoryLabels: Record<string, string> = {
+    password: "Passwords",
+    api_key: "API Keys",
+    username: "Usernames",
+    email: "Email Addresses",
+    phone: "Phone Numbers",
+    personal_name: "Personal Names",
+    private_key: "Private Keys",
+    database_url: "Database URLs",
+  };
+  
+  const riskColors: Record<string, "error" | "warning" | "info" | "success"> = {
+    critical: "error",
+    high: "error",
+    medium: "warning",
+    low: "info",
+    none: "success",
+  };
+  
+  const categories = [...new Set(findings.map((f: any) => f.category))];
+  
+  const filteredFindings = findings.filter((f: any) => {
+    if (categoryFilter !== "all" && f.category !== categoryFilter) return false;
+    if (riskFilter !== "all" && f.ai_verification?.risk_level !== riskFilter) return false;
+    return true;
+  });
+  
+  // Sort by risk level
+  const riskOrder = ["critical", "high", "medium", "low", "none"];
+  const sortedFindings = [...filteredFindings].sort((a: any, b: any) => {
+    const aRisk = a.ai_verification?.risk_level || "medium";
+    const bRisk = b.ai_verification?.risk_level || "medium";
+    return riskOrder.indexOf(aRisk) - riskOrder.indexOf(bRisk);
+  });
+  
+  const criticalCount = summary.by_risk?.critical || 0;
+  const highCount = summary.by_risk?.high || 0;
+  
+  return (
+    <Paper 
+      sx={{ 
+        p: 0, 
+        mb: 3, 
+        border: `2px solid ${alpha(theme.palette.error.main, 0.3)}`,
+        overflow: "hidden"
+      }}
+    >
+      {/* Header */}
+      <Box 
+        sx={{ 
+          p: 2, 
+          bgcolor: alpha(theme.palette.error.main, 0.08),
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <PersonIcon color="error" />
+            <Typography variant="h6" fontWeight={600}>
+              🔐 Sensitive Data Discovery
+            </Typography>
+          </Box>
+          <Chip 
+            label={`${findings.length} findings`} 
+            size="small" 
+            color="error" 
+          />
+          {criticalCount > 0 && (
+            <Chip 
+              label={`${criticalCount} Critical`} 
+              size="small" 
+              color="error" 
+              variant="filled"
+            />
+          )}
+          {highCount > 0 && (
+            <Chip 
+              label={`${highCount} High Risk`} 
+              size="small" 
+              color="warning" 
+            />
+          )}
+          <Chip 
+            label="AI Verified" 
+            size="small" 
+            icon={<AutoAwesomeIcon />}
+            sx={{ bgcolor: alpha(theme.palette.info.main, 0.1) }}
+          />
+        </Box>
+        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+      </Box>
+      
+      <Collapse in={expanded}>
+        {/* Summary Stats */}
+        <Box sx={{ p: 2, bgcolor: alpha(theme.palette.background.default, 0.5), borderBottom: `1px solid ${theme.palette.divider}` }}>
+          <Grid container spacing={2}>
+            <Grid item xs={6} sm={3}>
+              <Typography variant="caption" color="text.secondary">Files Scanned</Typography>
+              <Typography variant="h6">{stats.files_scanned?.toLocaleString() || 0}</Typography>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Typography variant="caption" color="text.secondary">Raw Matches</Typography>
+              <Typography variant="h6">{stats.raw_matches?.toLocaleString() || 0}</Typography>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Typography variant="caption" color="text.secondary">AI Verified</Typography>
+              <Typography variant="h6" color="success.main">{stats.verified || 0}</Typography>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Typography variant="caption" color="text.secondary">False Positives Filtered</Typography>
+              <Typography variant="h6" color="text.secondary">{stats.filtered || 0}</Typography>
+            </Grid>
+          </Grid>
+          
+          {/* Category breakdown */}
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="caption" color="text.secondary" gutterBottom display="block">By Category:</Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {Object.entries(summary.by_category || {}).map(([cat, count]: [string, any]) => (
+                <Chip
+                  key={cat}
+                  icon={categoryIcons[cat] as any}
+                  label={`${categoryLabels[cat] || cat}: ${count}`}
+                  size="small"
+                  variant={categoryFilter === cat ? "filled" : "outlined"}
+                  color={categoryFilter === cat ? "primary" : "default"}
+                  onClick={() => setCategoryFilter(categoryFilter === cat ? "all" : cat)}
+                />
+              ))}
+            </Box>
+          </Box>
+        </Box>
+        
+        {/* Filters */}
+        <Box sx={{ p: 2, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap", borderBottom: `1px solid ${theme.palette.divider}` }}>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Risk Level</InputLabel>
+            <Select
+              value={riskFilter}
+              label="Risk Level"
+              onChange={(e) => setRiskFilter(e.target.value)}
+            >
+              <MenuItem value="all">All Risks</MenuItem>
+              <MenuItem value="critical">🔴 Critical</MenuItem>
+              <MenuItem value="high">🟠 High</MenuItem>
+              <MenuItem value="medium">🟡 Medium</MenuItem>
+              <MenuItem value="low">🟢 Low</MenuItem>
+            </Select>
+          </FormControl>
+          
+          <Typography variant="body2" color="text.secondary">
+            Showing {sortedFindings.length} of {findings.length} findings
+          </Typography>
+        </Box>
+        
+        {/* Findings Table */}
+        <TableContainer sx={{ maxHeight: 500 }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell>Category</TableCell>
+                <TableCell>Value</TableCell>
+                <TableCell>Location</TableCell>
+                <TableCell>Risk</TableCell>
+                <TableCell>AI Confidence</TableCell>
+                <TableCell>Details</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {sortedFindings.map((finding: any, idx: number) => (
+                <TableRow 
+                  key={idx}
+                  sx={{ 
+                    bgcolor: finding.ai_verification?.risk_level === 'critical' 
+                      ? alpha(theme.palette.error.main, 0.08) 
+                      : finding.ai_verification?.risk_level === 'high'
+                      ? alpha(theme.palette.warning.main, 0.05)
+                      : undefined
+                  }}
+                >
+                  <TableCell>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      {categoryIcons[finding.category]}
+                      <Typography variant="body2" fontWeight={500}>
+                        {categoryLabels[finding.category] || finding.category}
+                      </Typography>
+                    </Box>
+                    {finding.ai_verification?.specific_type && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {finding.ai_verification.specific_type}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Tooltip title={`Full value (masked): ${finding.masked_value}`}>
+                      <Typography 
+                        variant="body2" 
+                        fontFamily="monospace"
+                        sx={{ 
+                          maxWidth: 200, 
+                          overflow: "hidden", 
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          cursor: "pointer"
+                        }}
+                      >
+                        {finding.masked_value}
+                      </Typography>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" fontFamily="monospace" display="block">
+                      {finding.file_path?.split('/').pop() || 'Unknown'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Line {finding.line}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={finding.ai_verification?.risk_level || 'unverified'} 
+                      size="small"
+                      color={riskColors[finding.ai_verification?.risk_level] || "default"}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {finding.ai_verification?.confidence ? (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <LinearProgress 
+                          variant="determinate" 
+                          value={finding.ai_verification.confidence * 100}
+                          sx={{ width: 60, height: 6, borderRadius: 3 }}
+                          color={finding.ai_verification.confidence > 0.8 ? "success" : finding.ai_verification.confidence > 0.5 ? "warning" : "error"}
+                        />
+                        <Typography variant="caption">
+                          {(finding.ai_verification.confidence * 100).toFixed(0)}%
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">N/A</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Tooltip 
+                      title={
+                        <Box>
+                          <Typography variant="caption" fontWeight={600}>AI Reasoning:</Typography>
+                          <Typography variant="caption" display="block">
+                            {finding.ai_verification?.reasoning || 'No AI analysis available'}
+                          </Typography>
+                          {finding.code_context && (
+                            <>
+                              <Typography variant="caption" fontWeight={600} sx={{ mt: 1 }} display="block">Code Context:</Typography>
+                              <Typography variant="caption" fontFamily="monospace" display="block" sx={{ whiteSpace: "pre-wrap" }}>
+                                {finding.code_context}
+                              </Typography>
+                            </>
+                          )}
+                        </Box>
+                      }
+                      arrow
+                      placement="left"
+                    >
+                      <IconButton size="small">
+                        <InfoIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        
+        {/* Filtered Out Section */}
+        {filteredOut.length > 0 && (
+          <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+            <Button
+              size="small"
+              onClick={() => setShowFiltered(!showFiltered)}
+              startIcon={showFiltered ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            >
+              {showFiltered ? "Hide" : "Show"} {filteredOut.length} Filtered False Positives
+            </Button>
+            <Collapse in={showFiltered}>
+              <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.background.default, 0.5), borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+                  These matches were filtered out by AI as false positives:
+                </Typography>
+                {filteredOut.slice(0, 20).map((item: any, idx: number) => (
+                  <Box key={idx} sx={{ py: 0.5, borderBottom: `1px dashed ${theme.palette.divider}` }}>
+                    <Typography variant="caption" fontFamily="monospace">
+                      [{item.category}] {item.value?.substring(0, 50)}...
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Filtered: {item.filter_reason}
+                    </Typography>
+                  </Box>
+                ))}
+                {filteredOut.length > 20 && (
+                  <Typography variant="caption" color="text.secondary">
+                    ... and {filteredOut.length - 20} more
+                  </Typography>
+                )}
+              </Box>
+            </Collapse>
+          </Box>
+        )}
+      </Collapse>
+    </Paper>
+  );
 }
 
 function DecompiledCodeFindingsAccordion({ findings, summary, jadxSessionId }: DecompiledCodeFindingsAccordionProps) {
@@ -954,6 +1472,871 @@ function DecompiledCodeFindingsAccordion({ findings, summary, jadxSessionId }: D
 }
 
 // ============================================================================
+// Saved Source Code Viewer Component - For viewing saved decompiled source
+// ============================================================================
+
+interface SavedSourceCodeViewerProps {
+  samples: Array<{
+    class_name: string;
+    package_name: string;
+    file_path: string;
+    source_code: string;
+    is_activity: boolean;
+    is_service: boolean;
+    line_count: number;
+  }>;
+}
+
+function SavedSourceCodeViewer({ samples }: SavedSourceCodeViewerProps) {
+  const theme = useTheme();
+  const [selectedClass, setSelectedClass] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const filteredSamples = samples.filter(s => 
+    s.class_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.package_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
+  const selectedSample = samples.find(s => s.class_name === selectedClass);
+  
+  return (
+    <Paper sx={{ p: 2, mt: 3 }}>
+      <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <CodeIcon color="primary" /> Saved Decompiled Source Code ({samples.length} classes)
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Source code for Activities, Services, and security-sensitive classes saved with this report
+      </Typography>
+      
+      <Grid container spacing={2}>
+        {/* Class List */}
+        <Grid item xs={12} md={4}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Search classes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{ mb: 1 }}
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ color: "text.secondary", mr: 1, fontSize: 20 }} />
+            }}
+          />
+          <Paper variant="outlined" sx={{ maxHeight: 400, overflow: "auto" }}>
+            <List dense disablePadding>
+              {filteredSamples.map((sample) => (
+                <ListItem 
+                  key={sample.class_name}
+                  button
+                  selected={selectedClass === sample.class_name}
+                  onClick={() => setSelectedClass(sample.class_name)}
+                  sx={{
+                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                    "&.Mui-selected": { bgcolor: alpha(theme.palette.primary.main, 0.1) }
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    {sample.is_activity ? (
+                      <Chip label="A" size="small" color="primary" sx={{ width: 24, height: 24, fontSize: "0.7rem" }} />
+                    ) : sample.is_service ? (
+                      <Chip label="S" size="small" color="secondary" sx={{ width: 24, height: 24, fontSize: "0.7rem" }} />
+                    ) : (
+                      <CodeIcon fontSize="small" color="action" />
+                    )}
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={<Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{sample.class_name}</Typography>}
+                    secondary={<Typography variant="caption" color="text.secondary">{sample.line_count} lines</Typography>}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+        </Grid>
+        
+        {/* Source Code Viewer */}
+        <Grid item xs={12} md={8}>
+          {selectedSample ? (
+            <Paper 
+              variant="outlined" 
+              sx={{ 
+                height: 500, 
+                overflow: "auto", 
+                bgcolor: "#1e1e1e",
+                borderRadius: 1
+              }}
+            >
+              <Box sx={{ 
+                position: "sticky", 
+                top: 0, 
+                bgcolor: "#252526", 
+                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                p: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                zIndex: 1
+              }}>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", color: "#cccccc" }}>
+                  {selectedSample.file_path}
+                </Typography>
+                {selectedSample.is_activity && <Chip label="Activity" size="small" color="primary" sx={{ height: 20 }} />}
+                {selectedSample.is_service && <Chip label="Service" size="small" color="secondary" sx={{ height: 20 }} />}
+              </Box>
+              <Box sx={{ p: 1 }}>
+                <pre style={{ 
+                  margin: 0, 
+                  fontFamily: "'Fira Code', 'Consolas', monospace",
+                  fontSize: "0.8rem",
+                  lineHeight: 1.5,
+                  color: "#d4d4d4",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word"
+                }}>
+                  {selectedSample.source_code}
+                </pre>
+              </Box>
+            </Paper>
+          ) : (
+            <Paper 
+              variant="outlined" 
+              sx={{ 
+                height: 500, 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center",
+                bgcolor: alpha(theme.palette.background.default, 0.5)
+              }}
+            >
+              <Box sx={{ textAlign: "center", color: "text.secondary" }}>
+                <CodeIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5 }} />
+                <Typography>Select a class from the list to view its source code</Typography>
+              </Box>
+            </Paper>
+          )}
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+}
+
+// ============================================================================
+// Unified Frida Scripts Accordion - Standard bypass scripts (SSL, Root, Crypto, etc.)
+// ============================================================================
+
+interface UnifiedFridaScriptsAccordionProps {
+  dynamicAnalysis: import("../api/client").DynamicAnalysis;
+}
+
+function UnifiedFridaScriptsAccordion({ dynamicAnalysis }: UnifiedFridaScriptsAccordionProps) {
+  const theme = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const [selectedScript, setSelectedScript] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopyScript = async (scriptCode: string) => {
+    try {
+      await navigator.clipboard.writeText(scriptCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+  
+  const handleDownloadScript = (script: import("../api/client").FridaScript) => {
+    const blob = new Blob([script.script_code], { type: "text/javascript" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${script.category}_${dynamicAnalysis.package_name.replace(/\./g, "_")}.js`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  
+  const currentScript = selectedScript 
+    ? dynamicAnalysis.frida_scripts.find(s => s.name === selectedScript)
+    : null;
+  
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case "ssl_bypass": return "🔓";
+      case "root_bypass": return "🌱";
+      case "crypto_hook": return "🔐";
+      case "auth_hook": return "🔑";
+      case "network_hook": return "🌐";
+      case "emulator_bypass": return "📱";
+      case "debugger_bypass": return "🐛";
+      case "tampering_bypass": return "🛡️";
+      default: return "📜";
+    }
+  };
+  
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "ssl_bypass": return theme.palette.warning.main;
+      case "root_bypass": return theme.palette.success.main;
+      case "crypto_hook": return theme.palette.info.main;
+      case "auth_hook": return theme.palette.secondary.main;
+      default: return theme.palette.grey[500];
+    }
+  };
+
+  const protectionsDetected = [
+    dynamicAnalysis.ssl_pinning_detected && "SSL Pinning",
+    dynamicAnalysis.root_detection_detected && "Root Detection",
+    dynamicAnalysis.emulator_detection_detected && "Emulator Detection",
+    dynamicAnalysis.debugger_detection_detected && "Debugger Detection",
+    dynamicAnalysis.anti_tampering_detected && "Anti-Tampering"
+  ].filter(Boolean);
+
+  return (
+    <Accordion expanded={expanded} onChange={(_, exp) => setExpanded(exp)}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          <CodeIcon color="secondary" />
+          <strong>Frida Scripts ({dynamicAnalysis.total_scripts})</strong>
+          {protectionsDetected.length > 0 && (
+            <Chip 
+              label={`${protectionsDetected.length} protections detected`} 
+              size="small" 
+              color="warning" 
+              variant="outlined" 
+            />
+          )}
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+            Dynamic analysis tools for runtime testing
+          </Typography>
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        {/* Protection Detection Summary */}
+        <Paper sx={{ p: 2, mb: 2, bgcolor: alpha(theme.palette.background.paper, 0.5) }}>
+          <Typography variant="subtitle2" gutterBottom>Detection Summary</Typography>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip
+              icon={<span>{dynamicAnalysis.ssl_pinning_detected ? "✅" : "❌"}</span>}
+              label="SSL Pinning"
+              color={dynamicAnalysis.ssl_pinning_detected ? "warning" : "default"}
+              variant={dynamicAnalysis.ssl_pinning_detected ? "filled" : "outlined"}
+              size="small"
+            />
+            <Chip
+              icon={<span>{dynamicAnalysis.root_detection_detected ? "✅" : "❌"}</span>}
+              label="Root Detection"
+              color={dynamicAnalysis.root_detection_detected ? "warning" : "default"}
+              variant={dynamicAnalysis.root_detection_detected ? "filled" : "outlined"}
+              size="small"
+            />
+            <Chip
+              icon={<span>{dynamicAnalysis.emulator_detection_detected ? "✅" : "❌"}</span>}
+              label="Emulator Check"
+              color={dynamicAnalysis.emulator_detection_detected ? "warning" : "default"}
+              variant={dynamicAnalysis.emulator_detection_detected ? "filled" : "outlined"}
+              size="small"
+            />
+            <Chip
+              icon={<span>{dynamicAnalysis.debugger_detection_detected ? "✅" : "❌"}</span>}
+              label="Debugger Check"
+              color={dynamicAnalysis.debugger_detection_detected ? "warning" : "default"}
+              variant={dynamicAnalysis.debugger_detection_detected ? "filled" : "outlined"}
+              size="small"
+            />
+            <Chip
+              icon={<span>{dynamicAnalysis.anti_tampering_detected ? "✅" : "❌"}</span>}
+              label="Anti-Tamper"
+              color={dynamicAnalysis.anti_tampering_detected ? "warning" : "default"}
+              variant={dynamicAnalysis.anti_tampering_detected ? "filled" : "outlined"}
+              size="small"
+            />
+          </Box>
+          
+          {/* Frida Commands */}
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="caption" color="text.secondary">Frida Commands:</Typography>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 0.5 }}>
+              <Chip
+                label={dynamicAnalysis.frida_spawn_command}
+                size="small"
+                sx={{ fontFamily: "monospace", fontSize: 10, cursor: "pointer" }}
+                onClick={() => handleCopyScript(dynamicAnalysis.frida_spawn_command)}
+              />
+              <Chip
+                label={dynamicAnalysis.frida_attach_command}
+                size="small"
+                sx={{ fontFamily: "monospace", fontSize: 10, cursor: "pointer" }}
+                onClick={() => handleCopyScript(dynamicAnalysis.frida_attach_command)}
+              />
+            </Box>
+          </Box>
+        </Paper>
+
+        {/* Getting Started Guide for Beginners */}
+        <Accordion sx={{ mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <span>📚</span> Getting Started with Frida (Beginner Guide)
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              {/* What is Frida */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.info.main, 0.05), border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>🔧</span> What is Frida?
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Frida is a dynamic instrumentation toolkit that lets you inject JavaScript into running apps to monitor and modify their behavior.
+                    These auto-generated scripts hook into specific methods detected during static analysis to help you bypass security controls and inspect runtime data.
+                  </Typography>
+                </Paper>
+              </Grid>
+
+              {/* Prerequisites */}
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>✅</span> Prerequisites
+                  </Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2.5, "& li": { mb: 0.5 } }}>
+                    <Typography component="li" variant="body2">Python 3.7+ installed on your computer</Typography>
+                    <Typography component="li" variant="body2">Android device (rooted) or emulator with root</Typography>
+                    <Typography component="li" variant="body2">USB debugging enabled on the device</Typography>
+                    <Typography component="li" variant="body2">ADB (Android Debug Bridge) installed</Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+
+              {/* Installation Steps */}
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>📦</span> Installation
+                  </Typography>
+                  <Box sx={{ fontFamily: "monospace", fontSize: 12, bgcolor: "#1e1e1e", p: 1.5, borderRadius: 1 }}>
+                    <Typography variant="body2" sx={{ color: "#6a9955", mb: 0.5 }}># Install Frida tools</Typography>
+                    <Typography variant="body2" sx={{ color: "#d4d4d4", mb: 1 }}>pip install frida-tools</Typography>
+                    <Typography variant="body2" sx={{ color: "#6a9955", mb: 0.5 }}># Check installation</Typography>
+                    <Typography variant="body2" sx={{ color: "#d4d4d4" }}>frida --version</Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+
+              {/* Device Setup */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>📱</span> Device Setup (One-Time)
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>1. Download frida-server:</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Visit <code style={{ background: "#1e1e1e", padding: "2px 6px", borderRadius: 4 }}>github.com/frida/frida/releases</code> and download the frida-server matching your device architecture (arm64 for most modern phones).
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>2. Push to device & run:</Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: 11, bgcolor: "#1e1e1e", p: 1, borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>adb push frida-server /data/local/tmp/</Typography>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>adb shell "chmod 755 /data/local/tmp/frida-server"</Typography>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>adb shell "su -c /data/local/tmp/frida-server &"</Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* How to Run */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.success.main, 0.05), border: `1px solid ${alpha(theme.palette.success.main, 0.2)}` }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>▶️</span> Running the Scripts
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>Option A: Spawn Mode (Recommended)</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Starts the app fresh with hooks attached from the beginning.
+                      </Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: 11, bgcolor: "#1e1e1e", p: 1, borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>
+                          frida -U -f {dynamicAnalysis.package_name} -l script.js
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>Option B: Attach Mode</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Attaches to an already running app.
+                      </Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: 11, bgcolor: "#1e1e1e", p: 1, borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>
+                          frida -U {dynamicAnalysis.package_name} -l script.js
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* Troubleshooting */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>🔍</span> Common Issues & Solutions
+                  </Typography>
+                  <Grid container spacing={1}>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">Failed to spawn</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Ensure frida-server is running on device
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">Unable to find device</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Check USB debugging & run: adb devices
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">Version mismatch</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Match frida-tools and frida-server versions
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">App crashes immediately</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Try --no-pause flag or use attach mode
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">Class not found</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Class may load later; try setTimeout wrapper
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.warning.main, 0.1), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="warning.main">Need more help?</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Visit frida.re/docs for full documentation
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* Tips */}
+              <Grid item xs={12}>
+                <Alert severity="info" sx={{ "& .MuiAlert-message": { width: "100%" } }}>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>💡 Pro Tips</Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2, "& li": { mb: 0.25 } }}>
+                    <Typography component="li" variant="body2">Start with SSL Bypass if you need to intercept HTTPS traffic with Burp Suite</Typography>
+                    <Typography component="li" variant="body2">Use Root/Emulator Bypass if the app refuses to run on your test device</Typography>
+                    <Typography component="li" variant="body2">The Combined script includes all bypasses - use it for comprehensive testing</Typography>
+                    <Typography component="li" variant="body2">Watch the terminal output for hooked method calls and intercepted data</Typography>
+                  </Box>
+                </Alert>
+              </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+        
+        <Grid container spacing={2}>
+          {/* Script List */}
+          <Grid item xs={12} md={4}>
+            <Paper variant="outlined" sx={{ p: 1, maxHeight: 400, overflow: "auto" }}>
+              <Typography variant="subtitle2" sx={{ px: 1, py: 0.5 }}>
+                Available Scripts
+              </Typography>
+              <List dense disablePadding>
+                {dynamicAnalysis.frida_scripts.map((script) => (
+                  <ListItem
+                    key={script.name}
+                    button
+                    selected={selectedScript === script.name}
+                    onClick={() => setSelectedScript(script.name)}
+                    sx={{
+                      borderLeft: selectedScript === script.name 
+                        ? `3px solid ${getCategoryColor(script.category)}`
+                        : "3px solid transparent",
+                      mb: 0.5,
+                    }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <span>{getCategoryIcon(script.category)}</span>
+                          <Typography variant="body2">{script.name}</Typography>
+                          {script.is_dangerous && (
+                            <Chip label="Modifies Behavior" size="small" color="error" sx={{ height: 16, fontSize: 9 }} />
+                          )}
+                        </Box>
+                      }
+                      secondary={
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {script.description.substring(0, 50)}...
+                        </Typography>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+          
+          {/* Script Viewer */}
+          <Grid item xs={12} md={8}>
+            {currentScript ? (
+              <Paper variant="outlined" sx={{ height: 400, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                {/* Header */}
+                <Box sx={{ 
+                  p: 1.5, 
+                  bgcolor: alpha(getCategoryColor(currentScript.category), 0.1),
+                  borderBottom: `1px solid ${theme.palette.divider}`,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <Box>
+                    <Typography variant="subtitle2">{currentScript.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">{currentScript.description}</Typography>
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Tooltip title={copied ? "Copied!" : "Copy Script"}>
+                      <IconButton size="small" onClick={() => handleCopyScript(currentScript.script_code)}>
+                        {copied ? <CheckIcon color="success" /> : <CopyIcon />}
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Download Script">
+                      <IconButton size="small" onClick={() => handleDownloadScript(currentScript)}>
+                        <DownloadIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Box>
+                {/* Code */}
+                <Box sx={{ 
+                  flex: 1, 
+                  overflow: "auto", 
+                  bgcolor: "#1e1e1e",
+                  p: 2
+                }}>
+                  <pre style={{ 
+                    margin: 0,
+                    fontFamily: "'Fira Code', monospace",
+                    fontSize: "0.75rem",
+                    lineHeight: 1.5,
+                    color: "#d4d4d4",
+                    whiteSpace: "pre-wrap"
+                  }}>
+                    {currentScript.script_code}
+                  </pre>
+                </Box>
+                {/* Footer with usage */}
+                <Box sx={{ p: 1, bgcolor: alpha(theme.palette.background.default, 0.5), borderTop: `1px solid ${theme.palette.divider}` }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Usage: <code style={{ fontSize: "0.75rem" }}>{currentScript.usage_instructions}</code>
+                  </Typography>
+                </Box>
+              </Paper>
+            ) : (
+              <Paper 
+                variant="outlined" 
+                sx={{ 
+                  height: 400, 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center",
+                  bgcolor: alpha(theme.palette.background.default, 0.3)
+                }}
+              >
+                <Box sx={{ textAlign: "center", color: "text.secondary" }}>
+                  <CodeIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5 }} />
+                  <Typography>Select a script from the list to view its code</Typography>
+                </Box>
+              </Paper>
+            )}
+          </Grid>
+        </Grid>
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
+// ============================================================================
+// Vulnerability-Specific Frida Hooks Accordion - Auto-generated from findings
+// ============================================================================
+
+interface VulnerabilityFridaHooksAccordionProps {
+  hooks: import("../api/client").VulnerabilityFridaHooks;
+}
+
+function VulnerabilityFridaHooksAccordion({ hooks }: VulnerabilityFridaHooksAccordionProps) {
+  const theme = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const [selectedScript, setSelectedScript] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopyScript = async (scriptCode: string) => {
+    try {
+      await navigator.clipboard.writeText(scriptCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+  
+  const handleDownloadScript = (script: import("../api/client").VulnerabilityFridaScript) => {
+    const blob = new Blob([script.script_code], { type: "text/javascript" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${script.category}_${hooks.package_name.replace(/\./g, "_")}.js`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  
+  const currentScript = selectedScript 
+    ? hooks.vulnerability_scripts.find(s => s.name === selectedScript)
+    : null;
+  
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case "deep_link_exploit": return "🔗";
+      case "crypto_exploit": return "🔐";
+      case "provider_exploit": return "📂";
+      case "webview_exploit": return "🌐";
+      case "auth_bypass": return "🔑";
+      case "kotlin_monitor": return "🅺";
+      default: return "🎯";
+    }
+  };
+  
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "deep_link_exploit": return theme.palette.error.main;
+      case "crypto_exploit": return theme.palette.warning.main;
+      case "provider_exploit": return theme.palette.info.main;
+      case "webview_exploit": return "#e91e63";
+      case "auth_bypass": return theme.palette.secondary.main;
+      case "kotlin_monitor": return "#7c4dff";
+      default: return theme.palette.grey[500];
+    }
+  };
+
+  return (
+    <Accordion expanded={expanded} onChange={(_, exp) => setExpanded(exp)}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          <TargetIcon sx={{ color: theme.palette.error.main }} />
+          <strong>Vulnerability-Specific Frida Hooks ({hooks.vulnerability_scripts.length})</strong>
+          <Chip 
+            label="Auto-Generated" 
+            size="small" 
+            color="error" 
+            variant="outlined" 
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+            Targeted exploitation scripts based on {hooks.findings_analyzed} findings
+          </Typography>
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        {/* Info Banner */}
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            <strong>⚠️ These scripts are auto-generated based on discovered vulnerabilities.</strong> They are designed to help 
+            test and exploit specific weaknesses found during static analysis. Use responsibly and only on authorized targets.
+          </Typography>
+        </Alert>
+        
+        {/* Category Summary */}
+        <Box sx={{ mb: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
+          {hooks.vulnerability_scripts.map((script) => (
+            <Chip
+              key={script.name}
+              icon={<span>{getCategoryIcon(script.category)}</span>}
+              label={`${script.name} (${script.findings_count})`}
+              size="small"
+              sx={{ 
+                borderColor: getCategoryColor(script.category),
+                cursor: "pointer"
+              }}
+              variant={selectedScript === script.name ? "filled" : "outlined"}
+              onClick={() => setSelectedScript(script.name)}
+            />
+          ))}
+        </Box>
+        
+        <Grid container spacing={2}>
+          {/* Script List */}
+          <Grid item xs={12} md={4}>
+            <Paper variant="outlined" sx={{ p: 1, maxHeight: 400, overflow: "auto" }}>
+              <Typography variant="subtitle2" sx={{ px: 1, py: 0.5, color: "error.main" }}>
+                🎯 Targeted Scripts
+              </Typography>
+              <List dense disablePadding>
+                {hooks.vulnerability_scripts.map((script) => (
+                  <ListItem
+                    key={script.name}
+                    button
+                    selected={selectedScript === script.name}
+                    onClick={() => setSelectedScript(script.name)}
+                    sx={{
+                      borderLeft: selectedScript === script.name 
+                        ? `3px solid ${getCategoryColor(script.category)}`
+                        : "3px solid transparent",
+                      mb: 0.5,
+                      bgcolor: selectedScript === script.name 
+                        ? alpha(getCategoryColor(script.category), 0.1)
+                        : "transparent"
+                    }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <span>{getCategoryIcon(script.category)}</span>
+                          <Typography variant="body2" fontWeight={selectedScript === script.name ? 600 : 400}>
+                            {script.name}
+                          </Typography>
+                        </Box>
+                      }
+                      secondary={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                          <Chip 
+                            label={`${script.findings_count} vulns`} 
+                            size="small" 
+                            color="error" 
+                            sx={{ height: 16, fontSize: 9 }} 
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            {script.target_classes.length} classes
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+          
+          {/* Script Viewer */}
+          <Grid item xs={12} md={8}>
+            {currentScript ? (
+              <Paper variant="outlined" sx={{ height: 400, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                {/* Header */}
+                <Box sx={{ 
+                  p: 1.5, 
+                  bgcolor: alpha(getCategoryColor(currentScript.category), 0.15),
+                  borderBottom: `1px solid ${theme.palette.divider}`,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      {getCategoryIcon(currentScript.category)} {currentScript.name}
+                      <Chip label={`${currentScript.findings_count} vulnerabilities`} size="small" color="error" sx={{ height: 18 }} />
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">{currentScript.description}</Typography>
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Tooltip title={copied ? "Copied!" : "Copy Script"}>
+                      <IconButton size="small" onClick={() => handleCopyScript(currentScript.script_code)}>
+                        {copied ? <CheckIcon color="success" /> : <CopyIcon />}
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Download Script">
+                      <IconButton size="small" onClick={() => handleDownloadScript(currentScript)}>
+                        <DownloadIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Box>
+                
+                {/* Target Classes */}
+                {currentScript.target_classes.length > 0 && (
+                  <Box sx={{ px: 1.5, py: 0.5, bgcolor: alpha(theme.palette.background.default, 0.5), borderBottom: `1px solid ${theme.palette.divider}` }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Targets: {currentScript.target_classes.slice(0, 3).join(", ")}
+                      {currentScript.target_classes.length > 3 && ` +${currentScript.target_classes.length - 3} more`}
+                    </Typography>
+                  </Box>
+                )}
+                
+                {/* Code */}
+                <Box sx={{ 
+                  flex: 1, 
+                  overflow: "auto", 
+                  bgcolor: "#1e1e1e",
+                  p: 2
+                }}>
+                  <pre style={{ 
+                    margin: 0,
+                    fontFamily: "'Fira Code', monospace",
+                    fontSize: "0.75rem",
+                    lineHeight: 1.5,
+                    color: "#d4d4d4",
+                    whiteSpace: "pre-wrap"
+                  }}>
+                    {currentScript.script_code}
+                  </pre>
+                </Box>
+                
+                {/* Footer with usage */}
+                <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderTop: `1px solid ${theme.palette.divider}` }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Usage: <code style={{ fontSize: "0.75rem", color: theme.palette.error.main }}>{currentScript.usage_instructions}</code>
+                  </Typography>
+                </Box>
+              </Paper>
+            ) : (
+              <Paper 
+                variant="outlined" 
+                sx={{ 
+                  height: 400, 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center",
+                  bgcolor: alpha(theme.palette.error.main, 0.03)
+                }}
+              >
+                <Box sx={{ textAlign: "center", color: "text.secondary" }}>
+                  <TargetIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5, color: theme.palette.error.main }} />
+                  <Typography>Select a vulnerability-specific script to view</Typography>
+                  <Typography variant="caption">These are auto-generated based on discovered vulnerabilities</Typography>
+                </Box>
+              </Paper>
+            )}
+          </Grid>
+        </Grid>
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
+// ============================================================================
 // Unified APK Results Component - Single Source of Truth
 // ============================================================================
 
@@ -969,8 +2352,14 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
   
+  // Whether we're viewing a saved report (no live JADX session)
+  const isViewingOnly = !jadxSessionId && result.scan_id.startsWith('saved-');
+  
   // Enhanced Security Scan State
-  const [enhancedSecurityResult, setEnhancedSecurityResult] = useState<EnhancedSecurityResult | null>(null);
+  const [enhancedSecurityResult, setEnhancedSecurityResult] = useState<EnhancedSecurityResult | null>(
+    // Initialize from saved data if available
+    result.saved_enhanced_security || null
+  );
   const [enhancedSecurityLoading, setEnhancedSecurityLoading] = useState(false);
   const [enhancedSecurityOptions, setEnhancedSecurityOptions] = useState({
     includeAiScan: true,
@@ -979,12 +2368,85 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
   });
   const [securityExportAnchor, setSecurityExportAnchor] = useState<HTMLElement | null>(null);
   const [securityExporting, setSecurityExporting] = useState<string | null>(null);
+  
+  // Progress tracker for Full Security Scan
+  const [scanProgress, setScanProgress] = useState<{
+    phase: number;
+    phaseName: string;
+    progress: number;
+    startTime: number;
+    estimatedTotal: number;
+  } | null>(null);
+  
+  // Update enhanced security result when result changes (e.g., switching between saved reports)
+  useEffect(() => {
+    if (result.saved_enhanced_security) {
+      setEnhancedSecurityResult(result.saved_enhanced_security);
+    }
+  }, [result.scan_id, result.saved_enhanced_security]);
+
+  // Progress simulation for security scan phases
+  useEffect(() => {
+    if (!enhancedSecurityLoading || !scanProgress) return;
+    
+    const phases = [
+      { name: "Pattern-based Security Scan", duration: 15 },
+      { name: "AI False Positive Filtering", duration: 10 },
+      { name: "AI Cross-Class Analysis", duration: 45 },
+      { name: "CVE Lookup (Libraries)", duration: 15 },
+      { name: "Combining Findings", duration: 5 },
+      { name: "Generating Risk Assessment", duration: 10 },
+      { name: "Creating Offensive Plan", duration: 20 },
+    ];
+    
+    const totalDuration = phases.reduce((sum, p) => sum + p.duration, 0);
+    let elapsed = 0;
+    
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const elapsedSecs = (now - scanProgress.startTime) / 1000;
+      
+      // Find current phase
+      let accumulatedTime = 0;
+      let currentPhase = 0;
+      for (let i = 0; i < phases.length; i++) {
+        if (elapsedSecs < accumulatedTime + phases[i].duration) {
+          currentPhase = i;
+          break;
+        }
+        accumulatedTime += phases[i].duration;
+        if (i === phases.length - 1) currentPhase = i;
+      }
+      
+      // Calculate progress within phase
+      const phaseElapsed = elapsedSecs - accumulatedTime;
+      const phaseProgress = Math.min(95, (phaseElapsed / phases[currentPhase].duration) * 100);
+      const overallProgress = Math.min(95, (elapsedSecs / totalDuration) * 100);
+      
+      setScanProgress(prev => prev ? {
+        ...prev,
+        phase: currentPhase + 1,
+        phaseName: phases[currentPhase].name,
+        progress: overallProgress,
+      } : null);
+      
+    }, 500);
+    
+    return () => clearInterval(interval);
+  }, [enhancedSecurityLoading, scanProgress?.startTime]);
 
   // Enhanced Security Scan Handler
   const handleEnhancedSecurityScan = async () => {
     if (!jadxSessionId) return;
     
     setEnhancedSecurityLoading(true);
+    setScanProgress({
+      phase: 1,
+      phaseName: "Pattern-based Security Scan",
+      progress: 0,
+      startTime: Date.now(),
+      estimatedTotal: 120, // 2 minutes estimate
+    });
     try {
       const res = await reverseEngineeringClient.enhancedSecurityScan(
         jadxSessionId,
@@ -995,14 +2457,18 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
         }
       );
       setEnhancedSecurityResult(res);
+      setScanProgress(prev => prev ? { ...prev, progress: 100, phaseName: "Complete!" } : null);
       // Notify parent component so save report can include this data
       if (onEnhancedSecurityComplete) {
         onEnhancedSecurityComplete(res);
       }
     } catch (err) {
       console.error("Enhanced security scan failed:", err);
+      setScanProgress(null);
     } finally {
       setEnhancedSecurityLoading(false);
+      // Clear progress after a short delay to show completion
+      setTimeout(() => setScanProgress(null), 1500);
     }
   };
 
@@ -1079,6 +2545,36 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
     },
   };
   
+  // Recursive source tree renderer for saved reports
+  const renderSourceTree = (tree: Record<string, unknown>, depth: number): React.ReactNode => {
+    const entries = Object.entries(tree);
+    if (entries.length === 0) return null;
+    
+    return entries.map(([name, value]) => {
+      const isFolder = value && typeof value === 'object' && !Array.isArray(value);
+      const indent = depth * 16;
+      
+      if (isFolder) {
+        return (
+          <Box key={name} sx={{ pl: `${indent}px` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, py: 0.25, color: "primary.main" }}>
+              <FolderIcon sx={{ fontSize: 16 }} />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>{name}/</Typography>
+            </Box>
+            {renderSourceTree(value as Record<string, unknown>, depth + 1)}
+          </Box>
+        );
+      }
+      
+      return (
+        <Box key={name} sx={{ pl: `${indent}px`, display: "flex", alignItems: "center", gap: 0.5, py: 0.25 }}>
+          <InsertDriveFileIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+          <Typography variant="body2" color="text.secondary">{name}</Typography>
+        </Box>
+      );
+    });
+  };
+  
   return (
     <Box>
       {/* Summary Header */}
@@ -1146,12 +2642,15 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
         <Tabs
           value={activeTab}
           onChange={(_, v) => setActiveTab(v)}
-          variant="fullWidth"
+          variant="scrollable"
+          scrollButtons="auto"
           sx={{ borderBottom: 1, borderColor: "divider" }}
         >
           <Tab icon={<InfoIcon />} label="What Does This APK Do?" iconPosition="start" />
           <Tab icon={<SecurityIcon />} label="Security Findings" iconPosition="start" />
           <Tab icon={<ArchitectureIcon />} label="Architecture Diagram" iconPosition="start" />
+          <Tab icon={<ShieldIcon />} label="Attack Surface Map" iconPosition="start" />
+          <Tab icon={<CodeIcon />} label="Decompiled Classes" iconPosition="start" />
         </Tabs>
         
         <Box sx={{ p: 3 }}>
@@ -1169,87 +2668,182 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
           {/* Tab 1: Security Findings */}
           {activeTab === 1 && (
             <Box>
-              {/* Full Security Scan Controls */}
-              <Paper sx={{ mb: 3, p: 2, bgcolor: alpha(theme.palette.error.main, 0.05), border: `1px solid ${alpha(theme.palette.error.main, 0.2)}` }}>
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <RadarIcon color="error" />
-                    <Typography variant="subtitle1" color="error.main" fontWeight={600}>Full Security Scan</Typography>
-                    <Chip label="Pattern + AI + CVE" size="small" variant="outlined" color="error" sx={{ height: 20, fontSize: "0.6rem" }} />
-                  </Box>
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                    <FormControl size="small" sx={{ minWidth: 100 }}>
-                      <Select
-                        value={enhancedSecurityOptions.aiScanType}
-                        onChange={(e) => setEnhancedSecurityOptions(prev => ({ ...prev, aiScanType: e.target.value as "quick" | "deep" | "focused" }))}
-                        sx={{ height: 32 }}
+              {/* Full Security Scan Controls - Only show when no AI report and not viewing saved report */}
+              {!isViewingOnly && !result.ai_security_report && (
+                <Paper sx={{ mb: 3, p: 2, bgcolor: alpha(theme.palette.error.main, 0.05), border: `1px solid ${alpha(theme.palette.error.main, 0.2)}` }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <RadarIcon color="error" />
+                      <Typography variant="subtitle1" color="error.main" fontWeight={600}>Full Security Scan</Typography>
+                      <Chip label="Pattern + AI + CVE" size="small" variant="outlined" color="error" sx={{ height: 20, fontSize: "0.6rem" }} />
+                    </Box>
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                      <FormControl size="small" sx={{ minWidth: 100 }}>
+                        <Select
+                          value={enhancedSecurityOptions.aiScanType}
+                          onChange={(e) => setEnhancedSecurityOptions(prev => ({ ...prev, aiScanType: e.target.value as "quick" | "deep" | "focused" }))}
+                          sx={{ height: 32 }}
+                        >
+                          <MenuItem value="quick">Quick</MenuItem>
+                          <MenuItem value="deep">Deep</MenuItem>
+                          <MenuItem value="focused">Focused</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <Button 
+                        variant="contained" 
+                        color="error"
+                        size="small"
+                        onClick={handleEnhancedSecurityScan}
+                        disabled={enhancedSecurityLoading || !jadxSessionId}
+                        startIcon={enhancedSecurityLoading ? <CircularProgress size={16} /> : <RadarIcon />}
                       >
-                        <MenuItem value="quick">Quick</MenuItem>
-                        <MenuItem value="deep">Deep</MenuItem>
-                        <MenuItem value="focused">Focused</MenuItem>
-                      </Select>
-                    </FormControl>
-                    <Button 
-                      variant="contained" 
-                      color="error"
-                      size="small"
-                      onClick={handleEnhancedSecurityScan}
-                      disabled={enhancedSecurityLoading || !jadxSessionId}
-                      startIcon={enhancedSecurityLoading ? <CircularProgress size={16} /> : <RadarIcon />}
-                    >
-                      Run Full Scan
-                    </Button>
+                        Run Full Scan
+                      </Button>
+                    </Box>
                   </Box>
-                </Box>
 
-                {/* Scan Options */}
-                <Box sx={{ display: "flex", gap: 2, mb: 1 }}>
-                  <FormControl size="small">
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                      <input
-                        type="checkbox"
-                        checked={enhancedSecurityOptions.includeAiScan}
-                        onChange={(e) => setEnhancedSecurityOptions(prev => ({ ...prev, includeAiScan: e.target.checked }))}
-                        id="unifiedAiScanOption"
-                      />
-                      <label htmlFor="unifiedAiScanOption">
-                        <Typography variant="caption">AI Cross-Class Analysis</Typography>
-                      </label>
-                    </Box>
-                  </FormControl>
-                  <FormControl size="small">
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                      <input
-                        type="checkbox"
-                        checked={enhancedSecurityOptions.includeCveLookup}
-                        onChange={(e) => setEnhancedSecurityOptions(prev => ({ ...prev, includeCveLookup: e.target.checked }))}
-                        id="unifiedCveOption"
-                      />
-                      <label htmlFor="unifiedCveOption">
-                        <Typography variant="caption">CVE Lookup (Libraries)</Typography>
-                      </label>
-                    </Box>
-                  </FormControl>
-                </Box>
+                  {/* Scan Options */}
+                  <Box sx={{ display: "flex", gap: 2, mb: 1 }}>
+                    <FormControl size="small">
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <input
+                          type="checkbox"
+                          checked={enhancedSecurityOptions.includeAiScan}
+                          onChange={(e) => setEnhancedSecurityOptions(prev => ({ ...prev, includeAiScan: e.target.checked }))}
+                          id="unifiedAiScanOption"
+                        />
+                        <label htmlFor="unifiedAiScanOption">
+                          <Typography variant="caption">AI Cross-Class Analysis</Typography>
+                        </label>
+                      </Box>
+                    </FormControl>
+                    <FormControl size="small">
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <input
+                          type="checkbox"
+                          checked={enhancedSecurityOptions.includeCveLookup}
+                          onChange={(e) => setEnhancedSecurityOptions(prev => ({ ...prev, includeCveLookup: e.target.checked }))}
+                          id="unifiedCveOption"
+                        />
+                        <label htmlFor="unifiedCveOption">
+                          <Typography variant="caption">CVE Lookup (Libraries)</Typography>
+                        </label>
+                      </Box>
+                    </FormControl>
+                  </Box>
 
-                {!jadxSessionId && (
-                  <Alert severity="info" sx={{ mt: 1 }}>
-                    Full scan requires decompiled sources. The scan will run after JADX decompilation completes.
-                  </Alert>
-                )}
-              </Paper>
-
-              {/* Loading State */}
-              {enhancedSecurityLoading && (
-                <Box sx={{ textAlign: "center", py: 4 }}>
-                  <CircularProgress color="error" size={48} />
-                  <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
-                    Running comprehensive security analysis...
+                  {!jadxSessionId && (
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                      Full scan requires decompiled sources. The scan will run after JADX decompilation completes.
+                    </Alert>
+                  )}
+                </Paper>
+              )}
+              
+              {/* Viewing Saved Report Banner - Show when viewing */}
+              {isViewingOnly && !enhancedSecurityResult && (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  <Typography variant="body2">
+                    <strong>Viewing saved report.</strong> No full security scan data was saved with this report.
+                    To run a new full security scan, analyze a new APK file.
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                    Pattern scan + AI analysis + CVE lookup (3-5 minutes)
+                </Alert>
+              )}
+              
+              {isViewingOnly && enhancedSecurityResult && (
+                <Alert severity="success" sx={{ mb: 3 }}>
+                  <Typography variant="body2">
+                    <strong>Viewing saved security scan results.</strong> This report includes full security analysis data.
                   </Typography>
-                </Box>
+                </Alert>
+              )}
+
+              {/* Loading State with Progress Tracker */}
+              {enhancedSecurityLoading && scanProgress && (
+                <Paper sx={{ p: 3, mb: 3, bgcolor: alpha(theme.palette.error.main, 0.03), border: `1px solid ${alpha(theme.palette.error.main, 0.15)}` }}>
+                  <Box sx={{ textAlign: "center", mb: 3 }}>
+                    <Typography variant="h6" color="error.main" fontWeight={600} gutterBottom>
+                      Full Security Scan in Progress
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Analyzing {result.package_name || "APK"} with 80+ classes
+                    </Typography>
+                  </Box>
+                  
+                  {/* Overall Progress Bar */}
+                  <Box sx={{ mb: 3 }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+                      <Typography variant="body2" fontWeight={500}>
+                        Phase {scanProgress.phase}/7: {scanProgress.phaseName}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {Math.round(scanProgress.progress)}%
+                      </Typography>
+                    </Box>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={scanProgress.progress} 
+                      color="error"
+                      sx={{ height: 8, borderRadius: 4 }}
+                    />
+                  </Box>
+                  
+                  {/* Phase List */}
+                  <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 1 }}>
+                    {[
+                      { num: 1, name: "Pattern Scan", icon: "🔍" },
+                      { num: 2, name: "AI Filtering", icon: "🧹" },
+                      { num: 3, name: "AI Analysis", icon: "🤖" },
+                      { num: 4, name: "CVE Lookup", icon: "📚" },
+                      { num: 5, name: "Combine Findings", icon: "📊" },
+                      { num: 6, name: "Risk Assessment", icon: "⚠️" },
+                      { num: 7, name: "Offensive Plan", icon: "🎯" },
+                    ].map((phase) => {
+                      const isActive = scanProgress.phase === phase.num;
+                      const isComplete = scanProgress.phase > phase.num;
+                      return (
+                        <Box 
+                          key={phase.num}
+                          sx={{ 
+                            display: "flex", 
+                            alignItems: "center", 
+                            gap: 1,
+                            p: 1,
+                            borderRadius: 1,
+                            bgcolor: isActive ? alpha(theme.palette.error.main, 0.1) : isComplete ? alpha(theme.palette.success.main, 0.1) : "transparent",
+                            border: isActive ? `1px solid ${theme.palette.error.main}` : "1px solid transparent",
+                          }}
+                        >
+                          {isComplete ? (
+                            <CheckIcon sx={{ fontSize: 18, color: "success.main" }} />
+                          ) : isActive ? (
+                            <CircularProgress size={16} color="error" />
+                          ) : (
+                            <Box sx={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid", borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <Typography variant="caption" sx={{ fontSize: 9 }}>{phase.num}</Typography>
+                            </Box>
+                          )}
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              fontWeight: isActive ? 600 : 400,
+                              color: isComplete ? "success.main" : isActive ? "error.main" : "text.secondary"
+                            }}
+                          >
+                            {phase.icon} {phase.name}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                  
+                  {/* Time Elapsed */}
+                  <Box sx={{ mt: 2, textAlign: "center" }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Elapsed: {Math.floor((Date.now() - scanProgress.startTime) / 1000)}s • Estimated: 2-4 minutes
+                    </Typography>
+                  </Box>
+                </Paper>
               )}
 
               {/* Enhanced Security Results */}
@@ -1672,12 +3266,9 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
                 </Box>
               )}
 
-              {/* Quick AI Security Report (if available and no full scan yet) */}
+              {/* AI Security Report (if available and no full scan yet) */}
               {!enhancedSecurityResult && !enhancedSecurityLoading && result.ai_security_report && (
                 <Box sx={{ mt: 2 }}>
-                  <Divider sx={{ mb: 2 }}>
-                    <Chip label="Quick AI Security Analysis" size="small" />
-                  </Divider>
                   <Box sx={htmlContentStyles} dangerouslySetInnerHTML={{ __html: result.ai_security_report }} />
                 </Box>
               )}
@@ -1731,6 +3322,186 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
                 Architecture diagram not available. This may happen if AI analysis encountered an error.
               </Alert>
             )
+          )}
+          
+          {/* Tab 3: Attack Surface Map */}
+          {activeTab === 3 && (
+            result.ai_attack_surface_map ? (
+              <MermaidDiagram 
+                code={result.ai_attack_surface_map}
+                title="Attack Surface Map"
+                maxHeight={600}
+                showControls={true}
+                showCodeToggle={true}
+              />
+            ) : (
+              <Alert severity="info">
+                Attack surface map not available. Run a Full Security Scan to generate an attack surface visualization.
+              </Alert>
+            )
+          )}
+          
+          {/* Tab 4: Decompiled Classes */}
+          {activeTab === 4 && (
+            <Box>
+              {/* Stats Header */}
+              <Box sx={{ mb: 3, display: "flex", gap: 2, flexWrap: "wrap" }}>
+                <Chip 
+                  icon={<CodeIcon />} 
+                  label={`${result.total_classes.toLocaleString()} Classes`} 
+                  color="primary" 
+                />
+                <Chip 
+                  icon={<FolderIcon />} 
+                  label={`${result.total_files.toLocaleString()} Files`} 
+                  variant="outlined" 
+                />
+                {result.jadx_security_issues.length > 0 && (
+                  <Chip 
+                    icon={<SecurityIcon />} 
+                    label={`${result.jadx_security_issues.length} Security Issues`} 
+                    color="error" 
+                  />
+                )}
+              </Box>
+              
+              {/* Source Tree Viewer (if available) */}
+              {result.source_tree && Object.keys(result.source_tree).length > 0 ? (
+                <Paper sx={{ p: 2, mb: 3, maxHeight: 400, overflow: "auto" }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <FolderIcon color="primary" /> Source Tree Structure
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {isViewingOnly ? "Read-only view from saved report. Upload APK to browse live source code." : "Decompiled source structure"}
+                  </Typography>
+                  <Box sx={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
+                    {renderSourceTree(result.source_tree, 0)}
+                  </Box>
+                </Paper>
+              ) : (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  Source tree structure not available. Run a new APK scan to see the decompiled file structure.
+                </Alert>
+              )}
+              
+              {/* Classes Summary Table */}
+              {result.classes_summary && result.classes_summary.length > 0 ? (
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <LayersIcon color="secondary" /> Decompiled Classes ({result.classes_summary.length} of {result.total_classes})
+                  </Typography>
+                  <TableContainer sx={{ maxHeight: 400 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Class Name</TableCell>
+                          <TableCell>Package</TableCell>
+                          <TableCell>Type</TableCell>
+                          <TableCell align="right">Security Issues</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {result.classes_summary.map((cls, idx) => (
+                          <TableRow key={idx} hover>
+                            <TableCell>
+                              <code style={{ fontSize: "0.8em" }}>{cls.class_name}</code>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="caption" color="text.secondary">
+                                {cls.package_name}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              {cls.is_activity && <Chip label="Activity" size="small" color="primary" sx={{ mr: 0.5 }} />}
+                              {cls.is_service && <Chip label="Service" size="small" color="secondary" sx={{ mr: 0.5 }} />}
+                              {!cls.is_activity && !cls.is_service && <Chip label="Class" size="small" variant="outlined" />}
+                            </TableCell>
+                            <TableCell align="right">
+                              {cls.security_issues_count > 0 ? (
+                                <Chip label={cls.security_issues_count} size="small" color="error" />
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">—</Typography>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  {result.classes_summary.length < result.total_classes && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: "center" }}>
+                      Showing {result.classes_summary.length} of {result.total_classes.toLocaleString()} classes
+                    </Typography>
+                  )}
+                </Paper>
+              ) : (
+                <Alert severity="info">
+                  Class details not available. Run a new APK scan to see decompiled class information.
+                </Alert>
+              )}
+              
+              {/* JADX Security Issues */}
+              {result.jadx_security_issues.length > 0 && (
+                <Paper sx={{ p: 2, mt: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, color: "error.main" }}>
+                    <SecurityIcon /> Security Issues Found in Decompiled Code
+                  </Typography>
+                  <TableContainer sx={{ maxHeight: 300 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Severity</TableCell>
+                          <TableCell>Issue Type</TableCell>
+                          <TableCell>Class</TableCell>
+                          <TableCell>Description</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {result.jadx_security_issues.slice(0, 50).map((issue, idx) => {
+                          const severity = (issue as any).severity as string || "medium";
+                          const issueType = (issue as any).type as string || (issue as any).issue_type as string || "Unknown";
+                          const className = (issue as any).class_name as string || "N/A";
+                          const description = (issue as any).description as string || (issue as any).message as string || "No description";
+                          return (
+                          <TableRow key={idx} hover>
+                            <TableCell>
+                              <Chip 
+                                label={severity} 
+                                size="small" 
+                                color={
+                                  severity === "critical" ? "error" :
+                                  severity === "high" ? "error" :
+                                  severity === "medium" ? "warning" : "default"
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>{issueType}</TableCell>
+                            <TableCell>
+                              <code style={{ fontSize: "0.75em" }}>{className}</code>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {description}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )})}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  {result.jadx_security_issues.length > 50 && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: "center" }}>
+                      Showing 50 of {result.jadx_security_issues.length} security issues
+                    </Typography>
+                  )}
+                </Paper>
+              )}
+              
+              {/* Saved Source Code Viewer */}
+              {result.saved_source_code_samples && result.saved_source_code_samples.length > 0 && (
+                <SavedSourceCodeViewer samples={result.saved_source_code_samples} />
+              )}
+            </Box>
           )}
         </Box>
       </Paper>
@@ -1886,11 +3657,26 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
             jadxSessionId={result.jadx_session_id}
           />
         )}
+
+        {/* Standard Frida Scripts (SSL Bypass, Root Detection, etc.) */}
+        {result.dynamic_analysis && (
+          <UnifiedFridaScriptsAccordion dynamicAnalysis={result.dynamic_analysis} />
+        )}
+
+        {/* Vulnerability-Specific Frida Hooks (Auto-generated from findings) */}
+        {result.vulnerability_frida_hooks && result.vulnerability_frida_hooks.vulnerability_scripts && result.vulnerability_frida_hooks.vulnerability_scripts.length > 0 && (
+          <VulnerabilityFridaHooksAccordion hooks={result.vulnerability_frida_hooks} />
+        )}
       </Box>
       
-      {/* Advanced Analysis Tools - Manifest Visualization, Attack Surface, Obfuscation */}
+      {/* Advanced Analysis Tools - Manifest Visualization, Obfuscation */}
       {apkFile && (
-        <AdvancedAnalysisToolsTabs apkFile={apkFile} autoStart={false} />
+        <AdvancedAnalysisToolsTabs 
+          apkFile={apkFile} 
+          autoStart={false}
+          precomputedManifestViz={result.manifest_visualization}
+          precomputedObfuscation={result.obfuscation_analysis}
+        />
       )}
     </Box>
   );
@@ -3549,6 +5335,9 @@ function ApkResults({
         </Paper>
       )}
 
+      {/* AI-Verified Sensitive Data Discovery Section */}
+      <SensitiveDataFindingsSection result={result} />
+
       {/* URLs */}
       {result.urls.length > 0 && (
         <Accordion>
@@ -4155,9 +5944,12 @@ interface AdvancedAnalysisToolsTabsProps {
   apkFile: File;
   autoStart: boolean;
   onAttackSurfaceResult?: (result: AttackSurfaceMapResult) => void;
+  // Pre-computed results from unified scan (no need to re-run if available)
+  precomputedManifestViz?: UnifiedApkScanResult['manifest_visualization'];
+  precomputedObfuscation?: UnifiedApkScanResult['obfuscation_analysis'];
 }
 
-function AdvancedAnalysisToolsTabs({ apkFile, autoStart, onAttackSurfaceResult }: AdvancedAnalysisToolsTabsProps) {
+function AdvancedAnalysisToolsTabs({ apkFile, autoStart, onAttackSurfaceResult, precomputedManifestViz, precomputedObfuscation }: AdvancedAnalysisToolsTabsProps) {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
 
@@ -4212,14 +6004,6 @@ function AdvancedAnalysisToolsTabs({ apkFile, autoStart, onAttackSurfaceResult }
         <Tab 
           label={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <span>🎯</span>
-              <span>Attack Surface Map</span>
-            </Box>
-          }
-        />
-        <Tab 
-          label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <span>🔐</span>
               <span>Obfuscation Analysis</span>
             </Box>
@@ -4227,19 +6011,302 @@ function AdvancedAnalysisToolsTabs({ apkFile, autoStart, onAttackSurfaceResult }
         />
       </Tabs>
 
-      {/* Tab Panels - All components mounted for parallel autoStart, visibility controlled */}
+      {/* Tab Panels - Use precomputed data if available, otherwise fallback to on-demand components */}
       <Box sx={{ p: 0 }}>
         <Box sx={{ p: 2, display: activeTab === 0 ? 'block' : 'none' }}>
-          <ManifestVisualizer apkFile={apkFile} autoStart={autoStart} />
+          {precomputedManifestViz ? (
+            <PrecomputedManifestVisualization data={precomputedManifestViz} />
+          ) : (
+            <ManifestVisualizer apkFile={apkFile} autoStart={autoStart} />
+          )}
         </Box>
         <Box sx={{ p: 2, display: activeTab === 1 ? 'block' : 'none' }}>
-          <AttackSurfaceMap apkFile={apkFile} autoStart={autoStart} onResult={onAttackSurfaceResult} />
-        </Box>
-        <Box sx={{ p: 2, display: activeTab === 2 ? 'block' : 'none' }}>
-          <ObfuscationAnalyzer apkFile={apkFile} autoStart={autoStart} />
+          {precomputedObfuscation ? (
+            <PrecomputedObfuscationAnalysis data={precomputedObfuscation} />
+          ) : (
+            <ObfuscationAnalyzer apkFile={apkFile} autoStart={autoStart} />
+          )}
         </Box>
       </Box>
     </Paper>
+  );
+}
+
+// ============================================================================
+// Precomputed Manifest Visualization Display (from unified scan)
+// ============================================================================
+function PrecomputedManifestVisualization({ data }: { data: NonNullable<UnifiedApkScanResult['manifest_visualization']> }) {
+  const theme = useTheme();
+  const [showMermaid, setShowMermaid] = useState(true);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  return (
+    <Box>
+      <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        📋 Manifest Visualization
+        <Chip label="Pre-computed" size="small" color="success" />
+      </Typography>
+
+      {/* Summary Stats */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={6} sm={3}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
+            <Typography variant="h4">{data.component_counts?.activities || 0}</Typography>
+            <Typography variant="caption">Activities</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.secondary.main, 0.1) }}>
+            <Typography variant="h4">{data.component_counts?.services || 0}</Typography>
+            <Typography variant="caption">Services</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
+            <Typography variant="h4">{data.exported_count || 0}</Typography>
+            <Typography variant="caption">Exported</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.error.main, 0.1) }}>
+            <Typography variant="h4">{data.permission_summary?.dangerous || 0}</Typography>
+            <Typography variant="caption">Dangerous Perms</Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Deep Link Schemes */}
+      {data.deep_link_schemes && data.deep_link_schemes.length > 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2">Deep Link Schemes</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+            {data.deep_link_schemes.map((scheme, idx) => (
+              <Chip key={idx} label={scheme} size="small" variant="outlined" />
+            ))}
+          </Box>
+        </Alert>
+      )}
+
+      {/* AI Analysis */}
+      {data.ai_analysis && (
+        <Accordion defaultExpanded sx={{ mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              🤖 AI Analysis
+              <Chip label="AI" size="small" color="secondary" />
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+              {data.ai_analysis}
+            </Typography>
+          </AccordionDetails>
+        </Accordion>
+      )}
+
+      {/* Security Assessment */}
+      {data.security_assessment && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2">Security Assessment</Typography>
+          <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
+            {data.security_assessment}
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Mermaid Diagram */}
+      {data.mermaid_diagram && (
+        <Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="subtitle2">Component Graph</Typography>
+            <Box>
+              <Button size="small" onClick={() => setShowMermaid(!showMermaid)}>
+                {showMermaid ? 'Hide' : 'Show'} Diagram
+              </Button>
+              <Button size="small" onClick={() => copyToClipboard(data.mermaid_diagram)}>
+                Copy Mermaid
+              </Button>
+            </Box>
+          </Box>
+          {showMermaid && (
+            <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.default, 0.5), overflowX: 'auto' }}>
+              <pre style={{ margin: 0, fontSize: '0.75rem', whiteSpace: 'pre-wrap' }}>
+                {data.mermaid_diagram}
+              </pre>
+            </Paper>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// ============================================================================
+// Precomputed Obfuscation Analysis Display (from unified scan)
+// ============================================================================
+function PrecomputedObfuscationAnalysis({ data }: { data: NonNullable<UnifiedApkScanResult['obfuscation_analysis']> }) {
+  const theme = useTheme();
+
+  const getLevelColor = (level: string) => {
+    switch (level) {
+      case 'none': return theme.palette.success.main;
+      case 'light': return theme.palette.info.main;
+      case 'moderate': return theme.palette.warning.main;
+      case 'heavy': return theme.palette.error.main;
+      case 'extreme': return theme.palette.error.dark;
+      default: return theme.palette.grey[500];
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  return (
+    <Box>
+      <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        🔐 Obfuscation Analysis
+        <Chip label="Pre-computed" size="small" color="success" />
+      </Typography>
+
+      {/* Overall Score */}
+      <Paper sx={{ p: 3, mb: 3, textAlign: 'center', bgcolor: alpha(getLevelColor(data.overall_obfuscation_level), 0.1) }}>
+        <Typography variant="h2" sx={{ color: getLevelColor(data.overall_obfuscation_level), fontWeight: 700 }}>
+          {data.obfuscation_score}/100
+        </Typography>
+        <Typography variant="h5" sx={{ textTransform: 'capitalize', color: getLevelColor(data.overall_obfuscation_level) }}>
+          {data.overall_obfuscation_level} Obfuscation
+        </Typography>
+        {data.reverse_engineering_difficulty && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            RE Difficulty: {data.reverse_engineering_difficulty}
+          </Typography>
+        )}
+      </Paper>
+
+      {/* Class Naming Analysis */}
+      {data.class_naming && (
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h5">{data.class_naming.total_classes}</Typography>
+              <Typography variant="caption">Total Classes</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
+              <Typography variant="h5">{data.class_naming.obfuscated_count}</Typography>
+              <Typography variant="caption">Obfuscated</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.success.main, 0.1) }}>
+              <Typography variant="h5">{data.class_naming.readable_count}</Typography>
+              <Typography variant="caption">Readable</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h5">{(data.class_naming.obfuscation_ratio * 100).toFixed(0)}%</Typography>
+              <Typography variant="caption">Obfuscation Ratio</Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
+
+      {/* Detected Tools */}
+      {data.detected_tools && data.detected_tools.length > 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2">Detected Obfuscation Tools</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+            {data.detected_tools.map((tool, idx) => (
+              <Chip key={idx} label={tool} size="small" color="secondary" />
+            ))}
+          </Box>
+        </Alert>
+      )}
+
+      {/* AI Summary */}
+      {data.ai_analysis_summary && (
+        <Accordion defaultExpanded sx={{ mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              🤖 AI Analysis Summary
+              <Chip label="AI" size="small" color="secondary" />
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+              {data.ai_analysis_summary}
+            </Typography>
+          </AccordionDetails>
+        </Accordion>
+      )}
+
+      {/* Deobfuscation Strategies */}
+      {data.deobfuscation_strategies && data.deobfuscation_strategies.length > 0 && (
+        <Accordion sx={{ mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>🛠️ Deobfuscation Strategies ({data.deobfuscation_strategies.length})</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <List dense>
+              {data.deobfuscation_strategies.map((strategy, idx) => (
+                <ListItem key={idx}>
+                  <ListItemText primary={strategy} />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+      )}
+
+      {/* Recommended Tools */}
+      {data.recommended_tools && data.recommended_tools.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>Recommended Tools</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {data.recommended_tools.map((tool, idx) => (
+              <Chip key={idx} label={tool} size="small" variant="outlined" />
+            ))}
+          </Box>
+        </Box>
+      )}
+
+      {/* Frida Hooks */}
+      {data.frida_hooks && data.frida_hooks.length > 0 && (
+        <Accordion>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>🔧 Frida Hooks ({data.frida_hooks.length})</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {data.frida_hooks.map((hook, idx) => (
+              <Paper key={idx} sx={{ p: 2, mb: 1, bgcolor: alpha(theme.palette.background.default, 0.5) }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+                  <Button size="small" onClick={() => copyToClipboard(hook)}>Copy</Button>
+                </Box>
+                <pre style={{ margin: 0, fontSize: '0.75rem', overflowX: 'auto' }}>{hook}</pre>
+              </Paper>
+            ))}
+          </AccordionDetails>
+        </Accordion>
+      )}
+
+      {/* Warnings */}
+      {data.warnings && data.warnings.length > 0 && (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          <Typography variant="subtitle2">Warnings</Typography>
+          <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+            {data.warnings.map((warning, idx) => (
+              <li key={idx}><Typography variant="body2">{warning}</Typography></li>
+            ))}
+          </ul>
+        </Alert>
+      )}
+    </Box>
   );
 }
 
@@ -5570,7 +7637,7 @@ import SkipNextIcon from "@mui/icons-material/SkipNext";
 import SkipPreviousIcon from "@mui/icons-material/SkipPrevious";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import AssessmentIcon from "@mui/icons-material/Assessment";
-import TargetIcon from "@mui/icons-material/TrackChanges";
+// TargetIcon is imported at the top of the file as TrackChanges
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import SaveAltIcon from "@mui/icons-material/SaveAlt";
 import RadarIcon from "@mui/icons-material/Radar";
@@ -7931,6 +9998,191 @@ function FridaScriptsViewer({ dynamicAnalysis }: { dynamicAnalysis: import("../a
             </Box>
           </Box>
         </Paper>
+
+        {/* Getting Started Guide for Beginners */}
+        <Accordion sx={{ mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <span>📚</span> Getting Started with Frida (Beginner Guide)
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              {/* What is Frida */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.info.main, 0.05), border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>🔧</span> What is Frida?
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Frida is a dynamic instrumentation toolkit that lets you inject JavaScript into running apps to monitor and modify their behavior. 
+                    These auto-generated scripts hook into specific methods detected during static analysis to help you bypass security controls and inspect runtime data.
+                  </Typography>
+                </Paper>
+              </Grid>
+
+              {/* Prerequisites */}
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>✅</span> Prerequisites
+                  </Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2.5, "& li": { mb: 0.5 } }}>
+                    <Typography component="li" variant="body2">Python 3.7+ installed on your computer</Typography>
+                    <Typography component="li" variant="body2">Android device (rooted) or emulator with root</Typography>
+                    <Typography component="li" variant="body2">USB debugging enabled on the device</Typography>
+                    <Typography component="li" variant="body2">ADB (Android Debug Bridge) installed</Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+
+              {/* Installation Steps */}
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>📦</span> Installation
+                  </Typography>
+                  <Box sx={{ fontFamily: "monospace", fontSize: 12, bgcolor: "#1e1e1e", p: 1.5, borderRadius: 1 }}>
+                    <Typography variant="body2" sx={{ color: "#6a9955", mb: 0.5 }}># Install Frida tools</Typography>
+                    <Typography variant="body2" sx={{ color: "#d4d4d4", mb: 1 }}>pip install frida-tools</Typography>
+                    <Typography variant="body2" sx={{ color: "#6a9955", mb: 0.5 }}># Check installation</Typography>
+                    <Typography variant="body2" sx={{ color: "#d4d4d4" }}>frida --version</Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+
+              {/* Device Setup */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>📱</span> Device Setup (One-Time)
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>1. Download frida-server:</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Visit <code style={{ background: "#1e1e1e", padding: "2px 6px", borderRadius: 4 }}>github.com/frida/frida/releases</code> and download the frida-server matching your device architecture (arm64 for most modern phones).
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>2. Push to device & run:</Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: 11, bgcolor: "#1e1e1e", p: 1, borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>adb push frida-server /data/local/tmp/</Typography>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>adb shell "chmod 755 /data/local/tmp/frida-server"</Typography>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>adb shell "su -c /data/local/tmp/frida-server &"</Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* How to Run */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.success.main, 0.05), border: `1px solid ${alpha(theme.palette.success.main, 0.2)}` }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>▶️</span> Running the Scripts
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>Option A: Spawn Mode (Recommended)</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Starts the app fresh with hooks attached from the beginning.
+                      </Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: 11, bgcolor: "#1e1e1e", p: 1, borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>
+                          frida -U -f {dynamicAnalysis.package_name} -l script.js
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>Option B: Attach Mode</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Attaches to an already running app.
+                      </Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: 11, bgcolor: "#1e1e1e", p: 1, borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ color: "#d4d4d4", fontSize: 11 }}>
+                          frida -U {dynamicAnalysis.package_name} -l script.js
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* Troubleshooting */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span>🔍</span> Common Issues & Solutions
+                  </Typography>
+                  <Grid container spacing={1}>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">Failed to spawn</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Ensure frida-server is running on device
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">Unable to find device</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Check USB debugging & run: adb devices
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">Version mismatch</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Match frida-tools and frida-server versions
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">App crashes immediately</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Try --no-pause flag or use attach mode
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.error.main, 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="error.main">Class not found</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Class may load later; try setTimeout wrapper
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ p: 1, bgcolor: alpha(theme.palette.warning.main, 0.1), borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="warning.main">Need more help?</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          → Visit frida.re/docs for full documentation
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* Tips */}
+              <Grid item xs={12}>
+                <Alert severity="info" sx={{ "& .MuiAlert-message": { width: "100%" } }}>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>💡 Pro Tips</Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2, "& li": { mb: 0.25 } }}>
+                    <Typography component="li" variant="body2">Start with SSL Bypass if you need to intercept HTTPS traffic with Burp Suite</Typography>
+                    <Typography component="li" variant="body2">Use Root/Emulator Bypass if the app refuses to run on your test device</Typography>
+                    <Typography component="li" variant="body2">The Combined script includes all bypasses - use it for comprehensive testing</Typography>
+                    <Typography component="li" variant="body2">Watch the terminal output for hooked method calls and intercepted data</Typography>
+                  </Box>
+                </Alert>
+              </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
         
         <Grid container spacing={2}>
           {/* Script List */}
@@ -9769,10 +12021,12 @@ export default function ReverseEngineeringHub() {
   const [binaryIncludeAi, setBinaryIncludeAi] = useState(true);
   const [includeGhidra, setIncludeGhidra] = useState(true);
   const [includeGhidraAi, setIncludeGhidraAi] = useState(true);
-  const [ghidraMaxFunctions, setGhidraMaxFunctions] = useState(200);
-  const [ghidraDecompLimit, setGhidraDecompLimit] = useState(4000);
+  const [extendedGhidra, setExtendedGhidra] = useState(false);
+  const [ghidraMaxFunctions, setGhidraMaxFunctions] = useState(500);
+  const [ghidraDecompLimit, setGhidraDecompLimit] = useState(10000);
   const [ghidraAiMaxFunctions, setGhidraAiMaxFunctions] = useState(20);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [binaryAutoSaved, setBinaryAutoSaved] = useState(false);
 
   // Binary state
   const [binaryFile, setBinaryFile] = useState<File | null>(null);
@@ -9782,6 +12036,13 @@ export default function ReverseEngineeringHub() {
   const binaryAbortRef = useRef<{ abort: () => void } | null>(null);
   const [binaryExportAnchor, setBinaryExportAnchor] = useState<null | HTMLElement>(null);
   const [exportingBinary, setExportingBinary] = useState(false);
+
+  // Deep Vulnerability Hunt state (integrated into main scan)
+  const [includeVulnHunt, setIncludeVulnHunt] = useState(true);
+  const [vulnHuntResult, setVulnHuntResult] = useState<VulnerabilityHuntResult | null>(null);
+  const [vulnHuntMaxPasses, setVulnHuntMaxPasses] = useState(4);
+  const [vulnHuntMaxTargets, setVulnHuntMaxTargets] = useState(50);
+  const [vulnHuntExpanded, setVulnHuntExpanded] = useState(false);
 
   // APK state
   const [apkFile, setApkFile] = useState<File | null>(null);
@@ -9908,6 +12169,57 @@ export default function ReverseEngineeringHub() {
     }
   };
 
+  // Auto-save binary scan when complete
+  const autoSaveBinaryResult = async (result: BinaryAnalysisResult, filename: string) => {
+    try {
+      const report: SaveREReportRequest = {
+        analysis_type: 'binary',
+        title: `Binary Analysis: ${result.filename}`,
+        filename: result.filename,
+        project_id: projectId,
+        file_type: result.metadata.file_type,
+        architecture: result.metadata.architecture,
+        file_size: result.metadata.file_size,
+        is_packed: result.metadata.is_packed,
+        packer_name: result.metadata.packer_name || undefined,
+        strings_count: result.strings_count,
+        imports_count: (result.imports || []).length,
+        exports_count: (result.exports || []).length,
+        secrets_count: (result.secrets || []).length,
+        suspicious_indicators: result.suspicious_indicators as any,
+        ai_analysis_raw: result.ai_analysis || undefined,
+        // AI-Generated Reports
+        ai_functionality_report: result.ai_functionality_report || undefined,
+        ai_security_report: result.ai_security_report || undefined,
+        ai_architecture_diagram: result.ai_architecture_diagram || undefined,
+        ai_attack_surface_map: result.ai_attack_surface_map || undefined,
+        full_analysis_data: {
+          metadata: result.metadata,
+          strings_sample: result.strings_sample,
+          imports: result.imports,
+          exports: result.exports,
+          secrets: result.secrets,
+          ghidra_analysis: result.ghidra_analysis,
+          ghidra_ai_summaries: result.ghidra_ai_summaries,
+          vuln_hunt_result: result.vuln_hunt_result,
+          obfuscation_analysis: result.obfuscation_analysis,
+          attack_surface: result.attack_surface,
+          pattern_scan_result: result.pattern_scan_result,
+          cve_lookup_result: result.cve_lookup_result,
+          verification_result: result.verification_result,
+          is_legitimate_software: result.is_legitimate_software,
+          legitimacy_indicators: result.legitimacy_indicators,
+        },
+      };
+      await reverseEngineeringClient.saveReport(report);
+      setBinaryAutoSaved(true);
+      loadSavedReports();
+    } catch (e: any) {
+      console.error("Auto-save failed:", e);
+      // Don't show error to user for auto-save, just log it
+    }
+  };
+
   const exportBinaryResult = async (format: "markdown" | "pdf" | "docx") => {
     if (!binaryResult) return;
     try {
@@ -9937,6 +12249,50 @@ export default function ReverseEngineeringHub() {
     if (!apkResult || !apkFile) return;
     try {
       setSavingReport(true);
+      
+      // Fetch source code for key classes if we have a JADX session
+      let sourceCodeSamples: Array<{
+        class_name: string;
+        package_name: string;
+        file_path: string;
+        source_code: string;
+        is_activity: boolean;
+        is_service: boolean;
+        line_count: number;
+      }> = [];
+      
+      const sessionId = unifiedJadxSessionId || jadxResult?.output_directory;
+      if (sessionId && jadxResult?.classes) {
+        // Get source code for activities, services, and classes with security issues (up to 50 classes)
+        const priorityClasses = jadxResult.classes
+          .filter(c => c.is_activity || c.is_service || c.is_receiver || c.is_provider || c.security_issues_count > 0)
+          .slice(0, 50);
+        
+        // Fetch source code in parallel (batches of 10)
+        for (let i = 0; i < priorityClasses.length; i += 10) {
+          const batch = priorityClasses.slice(i, i + 10);
+          const results = await Promise.allSettled(
+            batch.map(cls => 
+              reverseEngineeringClient.getDecompiledSource(sessionId, cls.file_path)
+            )
+          );
+          
+          results.forEach((result, idx) => {
+            if (result.status === 'fulfilled' && result.value.source_code) {
+              const cls = batch[idx];
+              sourceCodeSamples.push({
+                class_name: cls.class_name,
+                package_name: cls.package_name,
+                file_path: cls.file_path,
+                source_code: result.value.source_code,
+                is_activity: cls.is_activity,
+                is_service: cls.is_service,
+                line_count: result.value.line_count || result.value.source_code.split('\n').length,
+              });
+            }
+          });
+        }
+      }
       
       // Merge security issues from APK result with enhanced security findings
       let mergedSecurityIssues = [...(apkResult.security_issues || [])];
@@ -10005,10 +12361,14 @@ export default function ReverseEngineeringHub() {
           security_issues_count: c.security_issues_count,
         })) as any,
         jadx_security_issues: jadxResult?.security_issues?.slice(0, 200) as any,
+        jadx_source_tree: jadxResult?.source_tree as Record<string, unknown> || unifiedApkResult?.source_tree,
+        jadx_source_code_samples: sourceCodeSamples.length > 0 ? sourceCodeSamples : undefined,
         // AI-Generated Reports (Deep Analysis)
-        ai_functionality_report: aiFunctionalityReport || undefined,
-        ai_security_report: aiSecurityReport || undefined,
+        ai_functionality_report: aiFunctionalityReport || unifiedApkResult?.ai_functionality_report || undefined,
+        ai_security_report: aiSecurityReport || unifiedApkResult?.ai_security_report || undefined,
         ai_privacy_report: aiPrivacyReport || undefined,
+        ai_architecture_diagram: unifiedApkResult?.ai_architecture_diagram || undefined,
+        ai_attack_surface_map: unifiedApkResult?.ai_attack_surface_map || undefined,
         ai_threat_model: aiThreatModel as any,
         ai_vuln_scan_result: enhancedSecurityResult ? {
           ...aiVulnScanResult,
@@ -10025,6 +12385,17 @@ export default function ReverseEngineeringHub() {
           }
         } : aiVulnScanResult as any,
         ai_chat_history: aiChatHistory as any,
+        // Dynamic Analysis / Frida Scripts
+        dynamic_analysis: unifiedApkResult?.dynamic_analysis as any,
+        // Decompiled Code Analysis Results
+        decompiled_code_findings: unifiedApkResult?.decompiled_code_findings as any,
+        decompiled_code_summary: unifiedApkResult?.decompiled_code_summary as any,
+        // CVE Scan Results
+        cve_scan_results: unifiedApkResult?.cve_scan_results as any,
+        // Vulnerability-specific Frida Hooks
+        vulnerability_frida_hooks: unifiedApkResult?.vulnerability_frida_hooks as any,
+        // Sensitive Data Discovery
+        sensitive_data_findings: unifiedApkResult?.sensitive_data_findings as any,
       } as any;
       await reverseEngineeringClient.saveReport(report);
       setSuccessMessage("APK analysis report saved successfully (including Full Scan data)!");
@@ -10102,6 +12473,15 @@ export default function ReverseEngineeringHub() {
         ai_security_report: result.ai_security_report || undefined,
         ai_architecture_diagram: result.ai_architecture_diagram || undefined,
         ai_attack_surface_map: result.ai_attack_surface_map || undefined,
+        // Dynamic Analysis / Frida Scripts
+        dynamic_analysis: result.dynamic_analysis as any,
+        // Decompiled Code Analysis Results
+        decompiled_code_findings: result.decompiled_code_findings as any,
+        decompiled_code_summary: result.decompiled_code_summary as any,
+        // CVE Scan Results
+        cve_scan_results: result.cve_scan_results as any,
+        // Vulnerability-specific Frida Hooks
+        vulnerability_frida_hooks: result.vulnerability_frida_hooks as any,
       };
       await reverseEngineeringClient.saveReport(report);
       setAutoSavedReport(true);
@@ -10228,7 +12608,28 @@ export default function ReverseEngineeringHub() {
       } else if (detail.analysis_type === 'apk') {
         // Reconstruct unified APK result from saved data
         const fullData = detail.full_analysis_data || {};
-        const jadxData = detail.jadx_data || {};
+        const jadxData = (detail.jadx_data || {}) as Record<string, unknown>;
+        
+        // Reconstruct enhanced security result if it was saved
+        let savedEnhancedSecurity: EnhancedSecurityResult | undefined;
+        const aiVulnData = (detail as any).ai_vuln_scan_result;
+        const enhancedSecurityData = aiVulnData?.enhanced_security || fullData.enhanced_security_summary;
+        
+        if (enhancedSecurityData) {
+          savedEnhancedSecurity = {
+            overall_risk: enhancedSecurityData.overall_risk || 'none',
+            executive_summary: enhancedSecurityData.executive_summary || '',
+            risk_summary: enhancedSecurityData.risk_summary || { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+            pattern_findings: aiVulnData?.pattern_findings || [],
+            ai_findings: aiVulnData?.ai_findings || [],
+            cve_findings: aiVulnData?.cve_findings || [],
+            combined_findings: enhancedSecurityData.combined_findings || [],
+            attack_chains: enhancedSecurityData.attack_chains || [],
+            recommendations: enhancedSecurityData.recommendations || [],
+            analysis_metadata: enhancedSecurityData.analysis_metadata || { scan_duration: 0, patterns_scanned: 0, ai_enabled: false, cve_enabled: false },
+            offensive_plan_summary: enhancedSecurityData.offensive_plan_summary || null,
+          } as EnhancedSecurityResult;
+        }
         
         // Build the unified result structure matching UnifiedApkScanResult interface
         const unifiedResult: UnifiedApkScanResult = {
@@ -10251,13 +12652,29 @@ export default function ReverseEngineeringHub() {
           total_classes: detail.jadx_total_classes || 0,
           total_files: detail.jadx_total_files || 0,
           classes_summary: (jadxData.classes_sample || []) as any[],
-          source_tree: (fullData.source_tree as Record<string, unknown>) || undefined,
+          source_tree: (jadxData.source_tree as Record<string, unknown>) || (fullData.source_tree as Record<string, unknown>) || undefined,
           jadx_security_issues: (jadxData.security_issues || []) as any[],
           decompilation_time: (fullData.decompilation_time as number) || 0,
           // AI Analysis Results
           ai_functionality_report: detail.ai_functionality_report,
           ai_security_report: detail.ai_security_report,
           ai_architecture_diagram: detail.ai_architecture_diagram,
+          ai_attack_surface_map: detail.ai_attack_surface_map,
+          // Pre-loaded enhanced security data from saved report
+          saved_enhanced_security: savedEnhancedSecurity,
+          // Saved source code samples for browsing
+          saved_source_code_samples: jadxData.source_code_samples as any[] || undefined,
+          // Dynamic Analysis / Frida Scripts
+          dynamic_analysis: (detail as any).dynamic_analysis || undefined,
+          // Decompiled Code Analysis Results
+          decompiled_code_findings: (detail as any).decompiled_code_findings || undefined,
+          decompiled_code_summary: (detail as any).decompiled_code_summary || undefined,
+          // CVE Scan Results
+          cve_scan_results: (detail as any).cve_scan_results || undefined,
+          // Vulnerability-specific Frida Hooks
+          vulnerability_frida_hooks: (detail as any).vulnerability_frida_hooks || undefined,
+          // Sensitive Data Discovery
+          sensitive_data_findings: (detail as any).sensitive_data_findings || undefined,
           // Metadata
           scan_time: (fullData.scan_time as number) || 0,
           file_size: (fullData.file_size as number) || 0,
@@ -10321,6 +12738,8 @@ export default function ReverseEngineeringHub() {
     setBinaryLoading(true);
     setBinaryResult(null);
     setBinaryScanProgress(null);
+    setVulnHuntResult(null); // Clear any standalone vuln hunt results
+    setBinaryAutoSaved(false); // Reset auto-save flag for new scan
     setError(null);
 
     const controller = reverseEngineeringClient.runUnifiedBinaryScan(
@@ -10332,13 +12751,23 @@ export default function ReverseEngineeringHub() {
         ghidraMaxFunctions,
         ghidraDecompLimit,
         ghidraAiMaxFunctions,
+        extendedGhidra,
+        includeVulnHunt: includeVulnHunt && includeGhidra, // Requires Ghidra
+        vulnHuntMaxPasses,
+        vulnHuntMaxTargets,
       },
       (progress) => {
         setBinaryScanProgress(progress);
       },
       (result) => {
         setBinaryResult(result);
+        // Extract vuln hunt result from the main result
+        if (result.vuln_hunt_result) {
+          setVulnHuntResult(result.vuln_hunt_result);
+        }
         setBinaryLoading(false);
+        // Auto-save the result
+        autoSaveBinaryResult(result, binaryFile.name);
       },
       (err) => {
         setError(err);
@@ -10358,6 +12787,10 @@ export default function ReverseEngineeringHub() {
     ghidraMaxFunctions,
     ghidraDecompLimit,
     ghidraAiMaxFunctions,
+    extendedGhidra,
+    includeVulnHunt,
+    vulnHuntMaxPasses,
+    vulnHuntMaxTargets,
   ]);
 
   const cancelBinaryScan = useCallback(() => {
@@ -10398,6 +12831,16 @@ export default function ReverseEngineeringHub() {
     <LearnPageLayout pageTitle="Reverse Engineering Hub" pageContext={pageContext}>
     <>
     <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* Back to Projects Button */}
+      <Button
+        component={Link}
+        to="/"
+        startIcon={<HubIcon />}
+        sx={{ mb: 2 }}
+      >
+        Back to Projects
+      </Button>
+
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 3 }}>
         <MuiLink
@@ -10521,11 +12964,6 @@ export default function ReverseEngineeringHub() {
           <Tab
             icon={<BinaryIcon />}
             label="Binary Analyzer"
-            iconPosition="start"
-          />
-          <Tab
-            icon={<SecurityIcon />}
-            label="Vulnerability Hunter"
             iconPosition="start"
           />
           <Tab
@@ -10673,6 +13111,26 @@ export default function ReverseEngineeringHub() {
                     }
                     label="Gemini function summaries"
                   />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={includeVulnHunt}
+                        onChange={(e) => {
+                          setIncludeVulnHunt(e.target.checked);
+                          if (e.target.checked) {
+                            setVulnHuntExpanded(true);
+                          }
+                        }}
+                        disabled={binaryLoading || !includeGhidra || !status?.ghidra_available}
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        AI Vulnerability Hunt
+                        <Chip label="Multi-Pass" size="small" color="error" variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }} />
+                      </Box>
+                    }
+                  />
                 </FormGroup>
 
                 <Divider sx={{ my: 2 }} />
@@ -10680,25 +13138,48 @@ export default function ReverseEngineeringHub() {
                 <Typography variant="caption" color="text.secondary">
                   Ghidra export limits
                 </Typography>
+                <FormControlLabel
+                  sx={{ mt: 1 }}
+                  control={
+                    <Switch
+                      checked={extendedGhidra}
+                      onChange={(e) => setExtendedGhidra(e.target.checked)}
+                      disabled={binaryLoading || !includeGhidra}
+                      color="secondary"
+                    />
+                  }
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Typography variant="body2">Extended scan (2x coverage)</Typography>
+                      <Chip label="Deep" size="small" color="secondary" variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }} />
+                    </Box>
+                  }
+                />
                 <Box sx={{ mt: 1 }}>
-                  <Typography variant="body2">Max functions: {ghidraMaxFunctions}</Typography>
+                  <Typography variant="body2">
+                    Max functions: {extendedGhidra ? ghidraMaxFunctions * 2 : ghidraMaxFunctions}
+                    {extendedGhidra && <Chip label="2x" size="small" color="secondary" sx={{ ml: 1, height: 16, fontSize: '0.6rem' }} />}
+                  </Typography>
                   <Slider
                     value={ghidraMaxFunctions}
                     onChange={(_, value) => setGhidraMaxFunctions(value as number)}
-                    min={50}
+                    min={100}
                     max={1000}
                     step={50}
                     disabled={binaryLoading || !includeGhidra}
                   />
                 </Box>
                 <Box sx={{ mt: 1 }}>
-                  <Typography variant="body2">Decompile limit: {ghidraDecompLimit} chars</Typography>
+                  <Typography variant="body2">
+                    Decompile limit: {extendedGhidra ? ghidraDecompLimit * 2 : ghidraDecompLimit} chars
+                    {extendedGhidra && <Chip label="2x" size="small" color="secondary" sx={{ ml: 1, height: 16, fontSize: '0.6rem' }} />}
+                  </Typography>
                   <Slider
                     value={ghidraDecompLimit}
                     onChange={(_, value) => setGhidraDecompLimit(value as number)}
-                    min={1000}
-                    max={10000}
-                    step={500}
+                    min={2000}
+                    max={20000}
+                    step={1000}
                     disabled={binaryLoading || !includeGhidra}
                   />
                 </Box>
@@ -10714,6 +13195,68 @@ export default function ReverseEngineeringHub() {
                   />
                 </Box>
               </Paper>
+
+              {/* Deep Vulnerability Hunt Settings - Integrated into main scan */}
+              {includeVulnHunt && (
+                <Accordion 
+                  expanded={vulnHuntExpanded} 
+                  onChange={(_, expanded) => setVulnHuntExpanded(expanded)}
+                  sx={{ mt: 2, border: '1px solid', borderColor: 'error.main' }}
+                >
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <BugReportIcon color="error" />
+                      <Typography variant="subtitle2">Vulnerability Hunt Settings</Typography>
+                      <Chip 
+                        label="Enabled" 
+                        size="small" 
+                        color="error"
+                        sx={{ fontSize: '0.65rem' }} 
+                      />
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Multi-pass AI vulnerability hunting will run automatically as part of the scan after Ghidra decompilation.
+                    </Alert>
+                    
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Hunting Passes: {vulnHuntMaxPasses}
+                      </Typography>
+                      <Slider
+                        value={vulnHuntMaxPasses}
+                        onChange={(_, value) => setVulnHuntMaxPasses(value as number)}
+                        min={1}
+                        max={5}
+                        step={1}
+                        disabled={binaryLoading}
+                        marks
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        More passes = deeper analysis but longer scan time
+                      </Typography>
+                    </Box>
+                    
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Targets per Pass: {vulnHuntMaxTargets}
+                      </Typography>
+                      <Slider
+                        value={vulnHuntMaxTargets}
+                        onChange={(_, value) => setVulnHuntMaxTargets(value as number)}
+                        min={5}
+                        max={30}
+                        step={5}
+                        disabled={binaryLoading}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        More targets = broader coverage but longer scan time
+                      </Typography>
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              )}
             </Grid>
             <Grid item xs={12} md={8}>
               {binaryLoading && binaryScanProgress && (
@@ -10782,8 +13325,10 @@ export default function ReverseEngineeringHub() {
                                 <CircularProgress size={20} color="inherit" />
                               ) : phase.status === "error" ? (
                                 <ErrorIcon sx={{ fontSize: 20 }} />
-                              ) : (
+                              ) : BINARY_SCAN_PHASE_ICONS[phase.id] ? (
                                 React.cloneElement(BINARY_SCAN_PHASE_ICONS[phase.id] as React.ReactElement, { sx: { fontSize: 18 } })
+                              ) : (
+                                <SecurityIcon sx={{ fontSize: 18 }} />
                               )}
                             </Box>
                           )}
@@ -10797,22 +13342,88 @@ export default function ReverseEngineeringHub() {
                             {phase.description}
                           </Typography>
                           {phase.status === "in_progress" && (
-                            <LinearProgress sx={{ mt: 1.5, borderRadius: 1 }} />
+                            <>
+                              <LinearProgress 
+                                variant={phase.progress > 0 ? "determinate" : "indeterminate"}
+                                value={phase.progress || 0}
+                                sx={{ mt: 1.5, borderRadius: 1, height: 6 }} 
+                              />
+                              {phase.details && (
+                                <Typography 
+                                  variant="caption" 
+                                  color="info.main" 
+                                  sx={{ 
+                                    mt: 0.5, 
+                                    display: "block",
+                                    fontStyle: "italic",
+                                    animation: "pulse 2s infinite",
+                                    "@keyframes pulse": {
+                                      "0%, 100%": { opacity: 1 },
+                                      "50%": { opacity: 0.6 },
+                                    }
+                                  }}
+                                >
+                                  ⏳ {phase.details}
+                                </Typography>
+                              )}
+                            </>
                           )}
                           {phase.status === "completed" && phase.details && (
                             <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: "block" }}>
-                              {phase.details}
+                              ✓ {phase.details}
                             </Typography>
                           )}
                           {phase.status === "error" && phase.details && (
                             <Typography variant="caption" color="error" sx={{ mt: 0.5, display: "block" }}>
-                              {phase.details}
+                              ✗ {phase.details}
                             </Typography>
                           )}
                         </StepContent>
                       </Step>
                     ))}
                   </Stepper>
+                  
+                  {/* Time Estimates */}
+                  <Box sx={{ mt: 3, p: 2, bgcolor: alpha(theme.palette.primary.main, 0.1), borderRadius: 1 }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <AccessTimeIcon sx={{ fontSize: 18, color: "text.secondary" }} />
+                        <Typography variant="body2" color="text.secondary">
+                          {binaryScanProgress.elapsed_seconds !== undefined ? (
+                            <>Elapsed: <strong>{formatTimeSeconds(binaryScanProgress.elapsed_seconds)}</strong></>
+                          ) : (
+                            <>Elapsed: calculating...</>
+                          )}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {binaryScanProgress.estimated_remaining_seconds !== undefined ? (
+                            <>Remaining: <strong>{formatTimeSeconds(binaryScanProgress.estimated_remaining_seconds)}</strong></>
+                          ) : (
+                            <>Remaining: estimating...</>
+                          )}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {binaryScanProgress.estimated_total_seconds !== undefined ? (
+                            <>Total: ~{formatTimeSeconds(binaryScanProgress.estimated_total_seconds)}</>
+                          ) : (
+                            <>Total: ~2-4 minutes</>
+                          )}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    {/* Parallel scan indicator */}
+                    {(binaryScanProgress.current_phase === "pattern_scan" || 
+                      binaryScanProgress.current_phase === "cve_lookup" ||
+                      binaryScanProgress.current_phase === "sensitive_scan") && (
+                      <Typography variant="caption" color="info.main" sx={{ mt: 1, display: "block" }}>
+                        ⚡ Running parallel scans (pattern + CVE + sensitive) for faster results
+                      </Typography>
+                    )}
+                  </Box>
                 </Paper>
               )}
               {binaryLoading && !binaryScanProgress && (
@@ -10872,19 +13483,246 @@ export default function ReverseEngineeringHub() {
                     >
                       {savingReport ? "Saving..." : "Save Report"}
                     </Button>
+                    {binaryAutoSaved && (
+                      <Chip 
+                        icon={<CheckIcon />} 
+                        label="Auto-saved" 
+                        color="success" 
+                        size="small" 
+                        variant="outlined"
+                      />
+                    )}
                   </Box>
-                  <BinaryResults result={binaryResult} />
                   
-                  {/* Entropy Visualization */}
-                  <Box sx={{ mt: 4 }}>
-                    <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      📊 Entropy Analysis
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Analyze entropy distribution to detect packing, encryption, and obfuscation
-                    </Typography>
-                    <EntropyVisualizer file={binaryFile} />
-                  </Box>
+                  {/* NEW: Unified Binary Results with APK-like tabs */}
+                  <UnifiedBinaryResults result={binaryResult} onSaveReport={saveBinaryReport} />
+                  
+                  {/* Entropy Visualization - Compact Version */}
+                  <Accordion sx={{ mt: 3 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        📊 Entropy Analysis
+                        <Chip label="Advanced" size="small" variant="outlined" />
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        <strong>What is entropy?</strong> A measure of randomness in data (0-8 scale). 
+                        High entropy (&gt;7) suggests encrypted or compressed content.
+                        Packed malware often shows high entropy. Normal code typically shows 4-6 entropy.
+                      </Alert>
+                      <Box sx={{ maxHeight: 400, overflow: "auto" }}>
+                        <EntropyVisualizer file={binaryFile} />
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+
+                  {/* Deep Vulnerability Hunt Results - from integrated scan */}
+                  {/* Hide or warn about false positives for legitimate software */}
+                  {vulnHuntResult && !binaryResult?.is_legitimate_software && (
+                    <Paper sx={{ p: 3, mt: 4, border: '2px solid', borderColor: 'error.main' }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <BugReportIcon color="error" />
+                          <Typography variant="h6">Vulnerability Hunt Results</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", gap: 1 }}>
+                          <Chip 
+                            label={`Risk Score: ${vulnHuntResult.risk_score}/100`}
+                            color={vulnHuntResult.risk_score >= 70 ? "error" : vulnHuntResult.risk_score >= 40 ? "warning" : "success"}
+                            size="small"
+                          />
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setVulnHuntResult(null)}
+                          >
+                            Clear
+                          </Button>
+                        </Box>
+                      </Box>
+
+                      {/* Executive Summary */}
+                      <Alert severity={vulnHuntResult.risk_score >= 70 ? "error" : vulnHuntResult.risk_score >= 40 ? "warning" : "info"} sx={{ mb: 3 }}>
+                        <Typography variant="body2">{vulnHuntResult.executive_summary}</Typography>
+                      </Alert>
+
+                      {/* Stats Grid */}
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={6} sm={3}>
+                          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.error.main, 0.1) }}>
+                            <Typography variant="h4" color="error.main">{vulnHuntResult.vulnerabilities.length}</Typography>
+                            <Typography variant="caption">Vulnerabilities</Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={6} sm={3}>
+                          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
+                            <Typography variant="h4" color="primary">{vulnHuntResult.passes_completed}</Typography>
+                            <Typography variant="caption">Passes</Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={6} sm={3}>
+                          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
+                            <Typography variant="h4" color="warning.main">{vulnHuntResult.targets_identified}</Typography>
+                            <Typography variant="caption">Targets</Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={6} sm={3}>
+                          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.info.main, 0.1) }}>
+                            <Typography variant="h4" color="info.main">{vulnHuntResult.total_functions_analyzed}</Typography>
+                            <Typography variant="caption">Functions</Typography>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+
+                      {/* Vulnerabilities List */}
+                      {vulnHuntResult.vulnerabilities.length > 0 && (
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <SecurityIcon color="error" /> Found Vulnerabilities
+                          </Typography>
+                          {vulnHuntResult.vulnerabilities.map((vuln: VulnerabilityFinding, idx: number) => (
+                            <Accordion key={vuln.id || idx} sx={{ mb: 1 }}>
+                              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                                  <Chip 
+                                    label={vuln.severity.toUpperCase()} 
+                                    size="small"
+                                    sx={{ 
+                                      bgcolor: getSeverityColor(vuln.severity),
+                                      color: 'white',
+                                      fontWeight: 600,
+                                      minWidth: 70,
+                                    }}
+                                  />
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography variant="body2" fontWeight={600}>{vuln.title}</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {vuln.function_name} @ {vuln.entry_address} | {vuln.category}
+                                      {vuln.cwe_id && ` | ${vuln.cwe_id}`}
+                                    </Typography>
+                                  </Box>
+                                  <Chip 
+                                    label={`CVSS ~${vuln.cvss_estimate}`}
+                                    size="small"
+                                    variant="outlined"
+                                    color={vuln.cvss_estimate >= 7 ? "error" : vuln.cvss_estimate >= 4 ? "warning" : "success"}
+                                  />
+                                </Box>
+                              </AccordionSummary>
+                              <AccordionDetails>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12}>
+                                    <Typography variant="body2" sx={{ mb: 2 }}>{vuln.description}</Typography>
+                                  </Grid>
+                                  
+                                  {vuln.technical_details && (
+                                    <Grid item xs={12}>
+                                      <Typography variant="subtitle2" color="primary" gutterBottom>Technical Details</Typography>
+                                      <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                                        <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                                          {vuln.technical_details}
+                                        </Typography>
+                                      </Paper>
+                                    </Grid>
+                                  )}
+                                  
+                                  {vuln.code_snippet && (
+                                    <Grid item xs={12}>
+                                      <Typography variant="subtitle2" color="warning.main" gutterBottom>Vulnerable Code</Typography>
+                                      <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.error.main, 0.05) }}>
+                                        <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                          {vuln.code_snippet}
+                                        </Typography>
+                                      </Paper>
+                                    </Grid>
+                                  )}
+                                  
+                                  {vuln.proof_of_concept && (
+                                    <Grid item xs={12}>
+                                      <Typography variant="subtitle2" color="error" gutterBottom>Proof of Concept</Typography>
+                                      <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.error.main, 0.1) }}>
+                                        <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                          {vuln.proof_of_concept}
+                                        </Typography>
+                                      </Paper>
+                                    </Grid>
+                                  )}
+                                  
+                                  {vuln.exploitation_steps && vuln.exploitation_steps.length > 0 && (
+                                    <Grid item xs={12} md={6}>
+                                      <Typography variant="subtitle2" color="error" gutterBottom>Exploitation Steps</Typography>
+                                      <List dense>
+                                        {vuln.exploitation_steps.map((step, i) => (
+                                          <ListItem key={i}>
+                                            <ListItemIcon sx={{ minWidth: 32 }}>
+                                              <Typography variant="caption" color="error">{i + 1}.</Typography>
+                                            </ListItemIcon>
+                                            <ListItemText primary={step} primaryTypographyProps={{ variant: 'body2' }} />
+                                          </ListItem>
+                                        ))}
+                                      </List>
+                                    </Grid>
+                                  )}
+                                  
+                                  {vuln.remediation && (
+                                    <Grid item xs={12} md={6}>
+                                      <Typography variant="subtitle2" color="success.main" gutterBottom>Remediation</Typography>
+                                      <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.success.main, 0.1) }}>
+                                        <Typography variant="body2">{vuln.remediation}</Typography>
+                                      </Paper>
+                                    </Grid>
+                                  )}
+                                  
+                                  {vuln.ai_reasoning && (
+                                    <Grid item xs={12}>
+                                      <Typography variant="subtitle2" color="info.main" gutterBottom>AI Analysis Reasoning</Typography>
+                                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                        {vuln.ai_reasoning}
+                                      </Typography>
+                                    </Grid>
+                                  )}
+                                </Grid>
+                              </AccordionDetails>
+                            </Accordion>
+                          ))}
+                        </Box>
+                      )}
+
+                      {/* Recommended Focus Areas */}
+                      {vulnHuntResult.recommended_focus_areas && vulnHuntResult.recommended_focus_areas.length > 0 && (
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <InfoIcon color="info" /> Recommended Focus Areas
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                            {vulnHuntResult.recommended_focus_areas.map((area, idx) => (
+                              <Chip key={idx} label={area} size="small" variant="outlined" />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                    </Paper>
+                  )}
+                  
+                  {/* Show notice for legitimate software with vuln hunt results */}
+                  {vulnHuntResult && binaryResult?.is_legitimate_software && (
+                    <Alert 
+                      severity="info" 
+                      sx={{ mt: 4 }}
+                      action={
+                        <Button size="small" onClick={() => setVulnHuntResult(null)}>
+                          Dismiss
+                        </Button>
+                      }
+                    >
+                      <Typography variant="body2">
+                        <strong>VulnHuntr Results Hidden:</strong> This binary was identified as legitimate software from a known publisher.
+                        Automated vulnerability scanners often report false positives for legitimate software features like process creation,
+                        registry access, and network communication. The {vulnHuntResult.vulnerabilities.length} findings were likely false positives.
+                      </Typography>
+                    </Alert>
+                  )}
                 </>
               )}
               {!binaryFile && !binaryResult && (
@@ -10902,13 +13740,8 @@ export default function ReverseEngineeringHub() {
           </Grid>
         </TabPanel>
 
-        {/* Vulnerability Hunter Tab */}
-        <TabPanel value={activeTab} index={1}>
-          <VulnerabilityHunter />
-        </TabPanel>
-
         {/* APK Tab - Unified Scanner */}
-        <TabPanel value={activeTab} index={2}>
+        <TabPanel value={activeTab} index={1}>
           <Alert 
             severity="info" 
             sx={{ mb: 3, bgcolor: alpha("#22c55e", 0.1) }}
@@ -11079,7 +13912,7 @@ export default function ReverseEngineeringHub() {
         </TabPanel>
 
         {/* Docker Tab */}
-        <TabPanel value={activeTab} index={3}>
+        <TabPanel value={activeTab} index={2}>
           {!status?.docker_available ? (
             <Alert severity="warning">
               Docker is not available. Please install Docker to use this feature.
@@ -11189,12 +14022,12 @@ export default function ReverseEngineeringHub() {
         </TabPanel>
 
         {/* Hex Viewer Tab */}
-        <TabPanel value={activeTab} index={4}>
+        <TabPanel value={activeTab} index={3}>
           <HexViewer />
         </TabPanel>
 
         {/* Saved Reports Tab */}
-        <TabPanel value={activeTab} index={5}>
+        <TabPanel value={activeTab} index={4}>
           <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Typography variant="h6">
               Saved Analysis Reports

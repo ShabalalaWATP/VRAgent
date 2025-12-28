@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -16,6 +16,16 @@ import {
   IconButton,
   InputAdornment,
   CircularProgress,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  ListItemSecondaryAction,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Collapse,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -30,10 +40,16 @@ import {
   Schedule as PendingIcon,
   Block as SuspendedIcon,
   Save as SaveIcon,
+  Note as NoteIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { socialApi, UserNote } from '../api/client';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export default function ProfilePage() {
   const { user, getAccessToken } = useAuth();
@@ -45,6 +61,30 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+
+  // Notes state
+  const [notes, setNotes] = useState<UserNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(true);
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const [editingNote, setEditingNote] = useState<UserNote | null>(null);
+  const [editNoteContent, setEditNoteContent] = useState('');
+  const [noteError, setNoteError] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  // Load notes
+  useEffect(() => {
+    const loadNotes = async () => {
+      try {
+        const result = await socialApi.getAllNotes();
+        setNotes(result.notes);
+      } catch (err) {
+        console.error('Failed to load notes:', err);
+      } finally {
+        setNotesLoading(false);
+      }
+    };
+    loadNotes();
+  }, []);
 
   if (!user) {
     return (
@@ -136,6 +176,44 @@ export default function ProfilePage() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const handleEditNote = (note: UserNote) => {
+    setEditingNote(note);
+    setEditNoteContent(note.content);
+    setNoteError('');
+  };
+
+  const handleSaveNote = async () => {
+    if (!editingNote || !editNoteContent.trim()) return;
+    
+    setNoteSaving(true);
+    setNoteError('');
+    try {
+      await socialApi.createOrUpdateNote(editingNote.subject_id, editNoteContent.trim());
+      // Update local state
+      setNotes(notes.map(n => 
+        n.subject_id === editingNote.subject_id 
+          ? { ...n, content: editNoteContent.trim(), updated_at: new Date().toISOString() }
+          : n
+      ));
+      setEditingNote(null);
+    } catch (err) {
+      setNoteError(err instanceof Error ? err.message : 'Failed to save note');
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  const handleDeleteNote = async (subjectId: number) => {
+    if (!confirm('Are you sure you want to delete this note?')) return;
+    
+    try {
+      await socialApi.deleteNote(subjectId);
+      setNotes(notes.filter(n => n.subject_id !== subjectId));
+    } catch (err) {
+      console.error('Failed to delete note:', err);
+    }
   };
 
   return (
@@ -345,7 +423,158 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* User Notes Card */}
+        <Grid item xs={12}>
+          <Card
+            elevation={0}
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setNotesExpanded(!notesExpanded)}
+              >
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <NoteIcon /> My Notes About Others
+                  <Chip 
+                    label={notes.length} 
+                    size="small" 
+                    color="primary" 
+                    sx={{ ml: 1 }}
+                  />
+                </Typography>
+                <IconButton size="small">
+                  {notesExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+              </Box>
+              
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Private notes you've written about other users. Only you can see these.
+              </Typography>
+
+              <Collapse in={notesExpanded}>
+                <Box sx={{ mt: 2 }}>
+                  {notesLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : notes.length === 0 ? (
+                    <Box sx={{ textAlign: 'center', py: 3 }}>
+                      <NoteIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                      <Typography color="text.secondary">
+                        No notes yet. You can add notes about users from their profile or the social page.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <List>
+                      {notes.map((note) => (
+                        <ListItem
+                          key={note.subject_id}
+                          sx={{
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderRadius: 1,
+                            mb: 1,
+                          }}
+                        >
+                          <ListItemAvatar>
+                            <Avatar sx={{ bgcolor: 'primary.main' }}>
+                              {note.subject_username?.charAt(0).toUpperCase() || '?'}
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={
+                              <Typography variant="subtitle2" fontWeight={500}>
+                                {note.subject_username}
+                              </Typography>
+                            }
+                            secondary={
+                              <Box>
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    mt: 0.5,
+                                    whiteSpace: 'pre-wrap',
+                                    color: 'text.primary',
+                                  }}
+                                >
+                                  {note.content}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                                  Updated: {new Date(note.updated_at).toLocaleDateString()}
+                                </Typography>
+                              </Box>
+                            }
+                          />
+                          <ListItemSecondaryAction>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleEditNote(note)}
+                              sx={{ mr: 0.5 }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton 
+                              size="small" 
+                              color="error"
+                              onClick={() => handleDeleteNote(note.subject_id)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </ListItemSecondaryAction>
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </Box>
+              </Collapse>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
+
+      {/* Edit Note Dialog */}
+      <Dialog open={!!editingNote} onClose={() => setEditingNote(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Edit Note about {editingNote?.subject_username}
+        </DialogTitle>
+        <DialogContent>
+          {noteError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setNoteError('')}>
+              {noteError}
+            </Alert>
+          )}
+          <TextField
+            fullWidth
+            multiline
+            rows={4}
+            placeholder="Write your private note here..."
+            value={editNoteContent}
+            onChange={(e) => setEditNoteContent(e.target.value)}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingNote(null)}>Cancel</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleSaveNote}
+            disabled={noteSaving || !editNoteContent.trim()}
+            startIcon={noteSaving ? <CircularProgress size={16} /> : <SaveIcon />}
+          >
+            Save Note
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

@@ -19,6 +19,7 @@ import PersonIcon from "@mui/icons-material/Person";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LoginIcon from "@mui/icons-material/Login";
+import GroupIcon from "@mui/icons-material/Group";
 
 export default function UserMenu() {
   const theme = useTheme();
@@ -160,6 +161,14 @@ export default function UserMenu() {
             <PersonIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>My Profile</ListItemText>
+        </MenuItem>
+
+        {/* Social / Friends */}
+        <MenuItem component={RouterLink} to="/social">
+          <ListItemIcon>
+            <GroupIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Friends & Messages</ListItemText>
         </MenuItem>
 
         <Divider />
