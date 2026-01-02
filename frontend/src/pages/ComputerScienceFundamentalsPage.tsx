@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
+import { Link } from "react-router-dom";
 import {
   Box,
   Container,
@@ -26,6 +28,12 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  Drawer,
+  Fab,
+  IconButton,
+  Tooltip,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import InfoIcon from "@mui/icons-material/Info";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
@@ -48,6 +56,10 @@ import CategoryIcon from "@mui/icons-material/Category";
 import FunctionsIcon from "@mui/icons-material/Functions";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import HubIcon from "@mui/icons-material/Hub";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import QuizIcon from "@mui/icons-material/Quiz";
 import { useNavigate } from "react-router-dom";
 
 // ========== DATA STRUCTURES ==========
@@ -233,23 +245,962 @@ const stringAlgorithms = [
   { name: "Z-Algorithm", complexity: "O(n+m)", description: "Z-array for pattern matching", useCase: "Pattern matching, string analysis" },
 ];
 
+const ACCENT_COLOR = "#8b5cf6";
+const QUIZ_QUESTION_COUNT = 10;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Data Structures",
+    question: "What is the typical time complexity of array index access?",
+    options: ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
+    correctAnswer: 0,
+    explanation: "Arrays provide constant-time access by index.",
+  },
+  {
+    id: 2,
+    topic: "Data Structures",
+    question: "What is the time complexity of inserting at the head of a linked list?",
+    options: ["O(1)", "O(log n)", "O(n)", "O(n^2)"],
+    correctAnswer: 0,
+    explanation: "Inserting at the head updates a few pointers, so it is O(1).",
+  },
+  {
+    id: 3,
+    topic: "Data Structures",
+    question: "A stack follows which access pattern?",
+    options: ["LIFO", "FIFO", "Random access", "Priority-based"],
+    correctAnswer: 0,
+    explanation: "Stacks are Last In, First Out (LIFO).",
+  },
+  {
+    id: 4,
+    topic: "Data Structures",
+    question: "A queue follows which access pattern?",
+    options: ["FIFO", "LIFO", "Random access", "Priority-based"],
+    correctAnswer: 0,
+    explanation: "Queues are First In, First Out (FIFO).",
+  },
+  {
+    id: 5,
+    topic: "Data Structures",
+    question: "Average-case lookup in a hash table is typically:",
+    options: ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
+    correctAnswer: 0,
+    explanation: "With a good hash function, lookup is O(1) on average.",
+  },
+  {
+    id: 6,
+    topic: "Data Structures",
+    question: "How many children can a binary tree node have at most?",
+    options: ["2", "3", "4", "Unlimited"],
+    correctAnswer: 0,
+    explanation: "Binary trees allow up to two children per node.",
+  },
+  {
+    id: 7,
+    topic: "Data Structures",
+    question: "What property defines a Binary Search Tree (BST)?",
+    options: ["Left < Node < Right", "All nodes equal", "Left > Node > Right", "Random order"],
+    correctAnswer: 0,
+    explanation: "BSTs keep smaller values on the left and larger values on the right.",
+  },
+  {
+    id: 8,
+    topic: "Data Structures",
+    question: "In a max-heap, the root node contains:",
+    options: ["The largest value", "The smallest value", "A random value", "The median value"],
+    correctAnswer: 0,
+    explanation: "Max-heaps keep the largest value at the root.",
+  },
+  {
+    id: 9,
+    topic: "Data Structures",
+    question: "Which representation is typically best for sparse graphs?",
+    options: ["Adjacency list", "Adjacency matrix", "Incidence matrix", "Edge list only"],
+    correctAnswer: 0,
+    explanation: "Adjacency lists are memory-efficient for sparse graphs.",
+  },
+  {
+    id: 10,
+    topic: "Data Structures",
+    question: "Tries are commonly used for:",
+    options: ["Prefix search/autocomplete", "Sorting arrays", "Matrix multiplication", "Scheduling"],
+    correctAnswer: 0,
+    explanation: "Tries efficiently support prefix lookups.",
+  },
+  {
+    id: 11,
+    topic: "Big O",
+    question: "O(1) describes:",
+    options: ["Constant time", "Linear time", "Quadratic time", "Logarithmic time"],
+    correctAnswer: 0,
+    explanation: "O(1) means runtime does not depend on input size.",
+  },
+  {
+    id: 12,
+    topic: "Big O",
+    question: "Binary search runs in:",
+    options: ["O(log n)", "O(n)", "O(n log n)", "O(1)"],
+    correctAnswer: 0,
+    explanation: "Binary search halves the search space each step.",
+  },
+  {
+    id: 13,
+    topic: "Big O",
+    question: "Linear search runs in:",
+    options: ["O(n)", "O(log n)", "O(1)", "O(n log n)"],
+    correctAnswer: 0,
+    explanation: "Linear search checks each element in the worst case.",
+  },
+  {
+    id: 14,
+    topic: "Big O",
+    question: "Which is typical for merge sort?",
+    options: ["O(n log n)", "O(n^2)", "O(log n)", "O(1)"],
+    correctAnswer: 0,
+    explanation: "Merge sort runs in O(n log n) for all cases.",
+  },
+  {
+    id: 15,
+    topic: "Big O",
+    question: "Nested loops over n items are typically:",
+    options: ["O(n^2)", "O(n)", "O(log n)", "O(1)"],
+    correctAnswer: 0,
+    explanation: "Two nested loops usually yield O(n^2).",
+  },
+  {
+    id: 16,
+    topic: "Big O",
+    question: "Generating all subsets of a set of size n is:",
+    options: ["O(2^n)", "O(n^2)", "O(n log n)", "O(log n)"],
+    correctAnswer: 0,
+    explanation: "There are 2^n possible subsets.",
+  },
+  {
+    id: 17,
+    topic: "Big O",
+    question: "Generating all permutations of n items is:",
+    options: ["O(n!)", "O(2^n)", "O(n log n)", "O(n)"],
+    correctAnswer: 0,
+    explanation: "There are n! permutations of n items.",
+  },
+  {
+    id: 18,
+    topic: "Big O",
+    question: "Big-O notation ignores:",
+    options: ["Constants and lower-order terms", "Input size", "All runtime", "Worst-case only"],
+    correctAnswer: 0,
+    explanation: "Big-O focuses on growth rate, ignoring constants.",
+  },
+  {
+    id: 19,
+    topic: "Big O",
+    question: "Worst-case complexity describes:",
+    options: ["The maximum time for any input of size n", "The average time", "The minimum time", "The median time"],
+    correctAnswer: 0,
+    explanation: "Worst-case gives an upper bound for runtime.",
+  },
+  {
+    id: 20,
+    topic: "Big O",
+    question: "A space-time tradeoff means:",
+    options: ["Using more memory to reduce time", "Always using less memory", "Always faster code", "Always fewer lines"],
+    correctAnswer: 0,
+    explanation: "Often you can speed up at the cost of extra memory.",
+  },
+  {
+    id: 21,
+    topic: "Sorting",
+    question: "Worst-case time complexity of bubble sort is:",
+    options: ["O(n^2)", "O(n log n)", "O(n)", "O(log n)"],
+    correctAnswer: 0,
+    explanation: "Bubble sort compares and swaps across the array, O(n^2).",
+  },
+  {
+    id: 22,
+    topic: "Sorting",
+    question: "Is merge sort stable?",
+    options: ["Yes", "No", "Only on small arrays", "Only on large arrays"],
+    correctAnswer: 0,
+    explanation: "Merge sort can preserve the order of equal elements.",
+  },
+  {
+    id: 23,
+    topic: "Sorting",
+    question: "Average time complexity of quick sort is:",
+    options: ["O(n log n)", "O(n^2)", "O(n)", "O(log n)"],
+    correctAnswer: 0,
+    explanation: "Quick sort averages O(n log n) with good pivots.",
+  },
+  {
+    id: 24,
+    topic: "Sorting",
+    question: "Worst-case time complexity of quick sort is:",
+    options: ["O(n^2)", "O(n log n)", "O(n)", "O(log n)"],
+    correctAnswer: 0,
+    explanation: "Bad pivot choices can degrade quick sort to O(n^2).",
+  },
+  {
+    id: 25,
+    topic: "Sorting",
+    question: "Which sort is often best for nearly sorted data?",
+    options: ["Insertion sort", "Heap sort", "Quick sort", "Selection sort"],
+    correctAnswer: 0,
+    explanation: "Insertion sort performs well on nearly sorted inputs.",
+  },
+  {
+    id: 26,
+    topic: "Sorting",
+    question: "Counting sort is best when:",
+    options: ["Keys are small integers", "Data is already sorted", "Data is huge and random", "Memory is extremely limited"],
+    correctAnswer: 0,
+    explanation: "Counting sort depends on a small key range.",
+  },
+  {
+    id: 27,
+    topic: "Sorting",
+    question: "Heap sort is based on which data structure?",
+    options: ["Heap", "Stack", "Queue", "Trie"],
+    correctAnswer: 0,
+    explanation: "Heap sort uses a binary heap.",
+  },
+  {
+    id: 28,
+    topic: "Sorting",
+    question: "Selection sort is generally:",
+    options: ["Not stable", "Always stable", "O(n log n)", "Faster than quick sort"],
+    correctAnswer: 0,
+    explanation: "Selection sort can change the order of equal elements.",
+  },
+  {
+    id: 29,
+    topic: "Sorting",
+    question: "Radix sort processes data by:",
+    options: ["Digits or positions", "Comparing pairs", "Swapping randomly", "Hashing"],
+    correctAnswer: 0,
+    explanation: "Radix sort groups values by digit/position.",
+  },
+  {
+    id: 30,
+    topic: "Sorting",
+    question: "A stable sort guarantees:",
+    options: ["Equal elements keep original order", "Always O(n log n)", "Always O(1) space", "Fewer comparisons"],
+    correctAnswer: 0,
+    explanation: "Stability preserves ordering of equal keys.",
+  },
+  {
+    id: 31,
+    topic: "Searching",
+    question: "Binary search requires the data to be:",
+    options: ["Sorted", "Random", "Hashed", "Encrypted"],
+    correctAnswer: 0,
+    explanation: "Binary search only works on sorted data.",
+  },
+  {
+    id: 32,
+    topic: "Searching",
+    question: "Which data structure is used by BFS?",
+    options: ["Queue", "Stack", "Heap", "Trie"],
+    correctAnswer: 0,
+    explanation: "BFS explores level by level using a queue.",
+  },
+  {
+    id: 33,
+    topic: "Searching",
+    question: "Which data structure is used by DFS?",
+    options: ["Stack (or recursion)", "Queue", "Heap", "Hash table"],
+    correctAnswer: 0,
+    explanation: "DFS uses a stack or recursion.",
+  },
+  {
+    id: 34,
+    topic: "Searching",
+    question: "BFS finds the shortest path in:",
+    options: ["Unweighted graphs", "Weighted graphs with negatives", "Trees only", "All graphs"],
+    correctAnswer: 0,
+    explanation: "BFS finds shortest paths in unweighted graphs.",
+  },
+  {
+    id: 35,
+    topic: "Searching",
+    question: "Which algorithm finds shortest paths with non-negative weights?",
+    options: ["Dijkstra's algorithm", "BFS", "DFS", "Bellman-Ford only"],
+    correctAnswer: 0,
+    explanation: "Dijkstra's works for non-negative edge weights.",
+  },
+  {
+    id: 36,
+    topic: "Searching",
+    question: "BFS time complexity on a graph is:",
+    options: ["O(V+E)", "O(V^2)", "O(E log V)", "O(log V)"],
+    correctAnswer: 0,
+    explanation: "BFS visits each vertex and edge once.",
+  },
+  {
+    id: 37,
+    topic: "Searching",
+    question: "A hash collision happens when:",
+    options: ["Two keys map to the same slot", "The table is empty", "Keys are sorted", "A lookup is O(1)"],
+    correctAnswer: 0,
+    explanation: "Different keys can hash to the same index.",
+  },
+  {
+    id: 38,
+    topic: "Searching",
+    question: "Adjacency matrices are most efficient for:",
+    options: ["Dense graphs", "Sparse graphs", "Trees only", "Unweighted graphs only"],
+    correctAnswer: 0,
+    explanation: "Matrices use O(V^2) space, best for dense graphs.",
+  },
+  {
+    id: 39,
+    topic: "Searching",
+    question: "DAG stands for:",
+    options: ["Directed Acyclic Graph", "Directed Array Graph", "Dynamic Adjacency Graph", "Data Access Graph"],
+    correctAnswer: 0,
+    explanation: "A DAG is a Directed Acyclic Graph.",
+  },
+  {
+    id: 40,
+    topic: "Searching",
+    question: "Topological sort applies to:",
+    options: ["DAGs", "Cyclic graphs", "All trees", "Hash tables"],
+    correctAnswer: 0,
+    explanation: "Topological ordering is defined for DAGs.",
+  },
+  {
+    id: 41,
+    topic: "Paradigms",
+    question: "Imperative programming focuses on:",
+    options: ["Changing program state with statements", "Pure functions only", "Declarative rules only", "Event streams only"],
+    correctAnswer: 0,
+    explanation: "Imperative code uses statements that update state.",
+  },
+  {
+    id: 42,
+    topic: "Paradigms",
+    question: "Functional programming emphasizes:",
+    options: ["Pure functions and immutability", "Shared mutable state", "Global variables", "Side effects"],
+    correctAnswer: 0,
+    explanation: "Functional programming prefers pure functions and immutable data.",
+  },
+  {
+    id: 43,
+    topic: "Paradigms",
+    question: "Declarative programming focuses on:",
+    options: ["What to do, not how", "Step-by-step execution", "Manual memory management", "Thread scheduling"],
+    correctAnswer: 0,
+    explanation: "Declarative code describes the desired result.",
+  },
+  {
+    id: 44,
+    topic: "OOP",
+    question: "Encapsulation means:",
+    options: ["Bundling data and methods, hiding internals", "Copying code", "Using global variables", "Only inheritance"],
+    correctAnswer: 0,
+    explanation: "Encapsulation hides internal state behind an interface.",
+  },
+  {
+    id: 45,
+    topic: "OOP",
+    question: "Polymorphism allows:",
+    options: ["One interface, multiple implementations", "Only one implementation", "No inheritance", "Only static methods"],
+    correctAnswer: 0,
+    explanation: "Polymorphism enables different behaviors behind a common interface.",
+  },
+  {
+    id: 46,
+    topic: "OOP",
+    question: "Inheritance primarily provides:",
+    options: ["Code reuse via parent classes", "Faster algorithms", "Stronger encryption", "Lower memory usage always"],
+    correctAnswer: 0,
+    explanation: "Inheritance reuses behavior from a base class.",
+  },
+  {
+    id: 47,
+    topic: "OOP",
+    question: "Abstraction means:",
+    options: ["Hiding complexity behind simpler interfaces", "Duplicating code", "Avoiding functions", "Using global state"],
+    correctAnswer: 0,
+    explanation: "Abstraction shows essentials and hides details.",
+  },
+  {
+    id: 48,
+    topic: "Paradigms",
+    question: "Event-driven programming reacts to:",
+    options: ["Events and callbacks", "Only loops", "Only recursion", "Only compile-time rules"],
+    correctAnswer: 0,
+    explanation: "Event-driven systems respond to events like clicks or messages.",
+  },
+  {
+    id: 49,
+    topic: "Design",
+    question: "Composition over inheritance suggests:",
+    options: ["Build behavior by combining objects", "Always use inheritance", "Avoid interfaces", "Use globals instead"],
+    correctAnswer: 0,
+    explanation: "Composition provides flexibility by assembling behaviors.",
+  },
+  {
+    id: 50,
+    topic: "Algorithms",
+    question: "Recursion requires a:",
+    options: ["Base case", "Global variable", "Shared pointer", "Mutex"],
+    correctAnswer: 0,
+    explanation: "A base case prevents infinite recursion.",
+  },
+  {
+    id: 51,
+    topic: "SOLID",
+    question: "Single Responsibility Principle means:",
+    options: ["One reason to change", "One class per file", "One method per class", "One variable per function"],
+    correctAnswer: 0,
+    explanation: "SRP: a class should have a single responsibility.",
+  },
+  {
+    id: 52,
+    topic: "SOLID",
+    question: "Open/Closed Principle means:",
+    options: ["Open for extension, closed for modification", "Closed source only", "Open classes only", "No inheritance"],
+    correctAnswer: 0,
+    explanation: "You should extend behavior without changing existing code.",
+  },
+  {
+    id: 53,
+    topic: "SOLID",
+    question: "Liskov Substitution Principle means:",
+    options: ["Subtypes must be substitutable for base types", "No inheritance allowed", "Only interfaces", "Only static methods"],
+    correctAnswer: 0,
+    explanation: "Derived classes should be usable anywhere their base class is expected.",
+  },
+  {
+    id: 54,
+    topic: "SOLID",
+    question: "Interface Segregation Principle suggests:",
+    options: ["Many small interfaces", "One huge interface", "No interfaces", "Only abstract classes"],
+    correctAnswer: 0,
+    explanation: "Clients should not depend on methods they do not use.",
+  },
+  {
+    id: 55,
+    topic: "SOLID",
+    question: "Dependency Inversion Principle suggests:",
+    options: ["Depend on abstractions, not concretions", "Depend on concrete classes", "Avoid interfaces", "Use globals"],
+    correctAnswer: 0,
+    explanation: "High-level modules should depend on abstractions.",
+  },
+  {
+    id: 56,
+    topic: "Design",
+    question: "High cohesion means:",
+    options: ["Related responsibilities grouped together", "Unrelated responsibilities mixed", "No responsibilities", "Only static data"],
+    correctAnswer: 0,
+    explanation: "High cohesion keeps related functionality together.",
+  },
+  {
+    id: 57,
+    topic: "Design",
+    question: "Low coupling is desirable because it:",
+    options: ["Reduces ripple effects of changes", "Increases dependencies", "Forces tight integration", "Slows development"],
+    correctAnswer: 0,
+    explanation: "Low coupling makes modules easier to change independently.",
+  },
+  {
+    id: 58,
+    topic: "Design",
+    question: "DRY stands for:",
+    options: ["Don't Repeat Yourself", "Do Repeat Yourself", "Dynamic Runtime Yield", "Data Run Yield"],
+    correctAnswer: 0,
+    explanation: "DRY encourages avoiding duplicated logic.",
+  },
+  {
+    id: 59,
+    topic: "Design",
+    question: "YAGNI stands for:",
+    options: ["You Aren't Gonna Need It", "You Always Get New Ideas", "Your API Grows Naturally", "Yield And Go Next Iteration"],
+    correctAnswer: 0,
+    explanation: "YAGNI encourages avoiding unnecessary features.",
+  },
+  {
+    id: 60,
+    topic: "Design",
+    question: "KISS stands for:",
+    options: ["Keep It Simple, Stupid", "Keep It Secure, Stable", "Kernel Is Super Simple", "Known Interface System Standard"],
+    correctAnswer: 0,
+    explanation: "KISS encourages simplicity in design.",
+  },
+  {
+    id: 61,
+    topic: "Algorithms",
+    question: "Merge sort is an example of:",
+    options: ["Divide and conquer", "Greedy", "Dynamic programming", "Backtracking"],
+    correctAnswer: 0,
+    explanation: "Merge sort splits and merges subproblems.",
+  },
+  {
+    id: 62,
+    topic: "Algorithms",
+    question: "Dynamic programming is best for problems with:",
+    options: ["Overlapping subproblems", "No subproblems", "Only randomness", "Only sorting"],
+    correctAnswer: 0,
+    explanation: "DP reuses results from overlapping subproblems.",
+  },
+  {
+    id: 63,
+    topic: "Algorithms",
+    question: "A greedy algorithm chooses:",
+    options: ["The locally optimal choice each step", "The worst choice each step", "Only random choices", "All choices at once"],
+    correctAnswer: 0,
+    explanation: "Greedy algorithms pick locally optimal options.",
+  },
+  {
+    id: 64,
+    topic: "Algorithms",
+    question: "Memoization is:",
+    options: ["Caching results of function calls", "Sorting data", "Encrypting data", "Removing recursion"],
+    correctAnswer: 0,
+    explanation: "Memoization stores results to avoid duplicate work.",
+  },
+  {
+    id: 65,
+    topic: "Algorithms",
+    question: "Backtracking is commonly used for:",
+    options: ["Constraint satisfaction problems", "Sorting arrays", "Hashing data", "Streaming video"],
+    correctAnswer: 0,
+    explanation: "Backtracking explores and undoes choices to satisfy constraints.",
+  },
+  {
+    id: 66,
+    topic: "Systems",
+    question: "RAM is:",
+    options: ["Volatile memory", "Non-volatile storage", "Permanent storage", "A CPU register"],
+    correctAnswer: 0,
+    explanation: "RAM loses its contents when power is removed.",
+  },
+  {
+    id: 67,
+    topic: "Systems",
+    question: "CPU cache is typically:",
+    options: ["Faster than RAM", "Slower than RAM", "On disk", "A replacement for SSD"],
+    correctAnswer: 0,
+    explanation: "Cache is small and very fast to reduce memory latency.",
+  },
+  {
+    id: 68,
+    topic: "Systems",
+    question: "The call stack is used for:",
+    options: ["Function call frames", "Long-term storage", "Network packets", "File permissions"],
+    correctAnswer: 0,
+    explanation: "The stack stores function call data and local variables.",
+  },
+  {
+    id: 69,
+    topic: "Systems",
+    question: "The heap is used for:",
+    options: ["Dynamic memory allocation", "CPU scheduling", "Instruction decoding", "Networking"],
+    correctAnswer: 0,
+    explanation: "The heap holds dynamically allocated memory.",
+  },
+  {
+    id: 70,
+    topic: "Systems",
+    question: "CPU registers are:",
+    options: ["Small, fast storage inside the CPU", "Large disk-based storage", "Network buffers", "Swap space"],
+    correctAnswer: 0,
+    explanation: "Registers are the fastest storage close to execution units.",
+  },
+  {
+    id: 71,
+    topic: "Systems",
+    question: "A context switch is:",
+    options: ["Switching CPU from one process/thread to another", "Allocating more RAM", "Compiling code", "Resolving DNS"],
+    correctAnswer: 0,
+    explanation: "Context switching swaps CPU execution between tasks.",
+  },
+  {
+    id: 72,
+    topic: "Systems",
+    question: "Concurrency differs from parallelism because concurrency:",
+    options: ["Manages multiple tasks at once, not necessarily simultaneously", "Always uses multiple CPUs", "Is always faster", "Requires GPU"],
+    correctAnswer: 0,
+    explanation: "Concurrency is about structuring tasks; parallelism is simultaneous execution.",
+  },
+  {
+    id: 73,
+    topic: "Systems",
+    question: "Which is required for a deadlock?",
+    options: ["Circular wait", "Stateless functions", "Immutable data", "Binary search"],
+    correctAnswer: 0,
+    explanation: "Deadlock requires circular wait among other conditions.",
+  },
+  {
+    id: 74,
+    topic: "Systems",
+    question: "How many bits are in a byte?",
+    options: ["8", "4", "16", "32"],
+    correctAnswer: 0,
+    explanation: "A byte contains 8 bits.",
+  },
+  {
+    id: 75,
+    topic: "Systems",
+    question: "A compiler generally:",
+    options: ["Translates source code to machine code before execution", "Runs code line by line without output", "Only checks syntax", "Only debugs programs"],
+    correctAnswer: 0,
+    explanation: "Compilers produce executable code ahead of time.",
+  },
+];
+
 const ComputerScienceFundamentalsPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const accent = "#8b5cf6";
+  const [quizPool] = useState<QuizQuestion[]>(() =>
+    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
+  );
+
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <InfoIcon /> },
+    { id: "big-o", label: "Big O Notation", icon: <SpeedIcon /> },
+    { id: "data-structures", label: "Data Structures", icon: <DataArrayIcon /> },
+    { id: "sorting", label: "Sorting Algorithms", icon: <TimelineIcon /> },
+    { id: "searching", label: "Searching Algorithms", icon: <AccountTreeIcon /> },
+    { id: "paradigms", label: "Programming Paradigms", icon: <CodeIcon /> },
+    { id: "oop", label: "OOP Principles", icon: <CategoryIcon /> },
+    { id: "solid", label: "SOLID Principles", icon: <LayersIcon /> },
+    { id: "patterns", label: "Design Patterns", icon: <BuildIcon /> },
+    { id: "memory", label: "Memory Management", icon: <MemoryIcon /> },
+    { id: "recursion", label: "Recursion", icon: <FunctionsIcon /> },
+    { id: "trees", label: "Trees & Traversal", icon: <AccountTreeIcon /> },
+    { id: "graphs", label: "Graph Algorithms", icon: <HubIcon /> },
+    { id: "bits", label: "Bit Operations", icon: <ComputerIcon /> },
+    { id: "strings", label: "String Algorithms", icon: <StorageIcon /> },
+    { id: "complexity", label: "P vs NP", icon: <PsychologyIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   const pageContext = `Computer Science Fundamentals learning page - Essential CS concepts for developers and security professionals. Covers data structures (arrays, linked lists, trees, graphs, hash tables), algorithms (sorting, searching, Big O notation), programming paradigms (OOP, functional, procedural), SOLID principles, design patterns, memory management, and number systems. Foundation knowledge for software development, coding interviews, and understanding system internals.`;
 
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Computer Science Fundamentals" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Back Button */}
-        <Chip
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3, fontWeight: 600, cursor: "pointer" }}
-          clickable
-        />
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#7c3aed" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Back Button */}
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
 
         {/* Hero Banner */}
         <Paper
@@ -1165,6 +2116,17 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
           </Grid>
         </Paper>
 
+        {/* Quiz Section */}
+        <Box id="quiz" sx={{ mt: 5 }}>
+          <QuizSection
+            questions={quizPool}
+            accentColor={ACCENT_COLOR}
+            title="Computer Science Fundamentals Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Box>
+
         {/* Footer - Back to Learning Hub */}
         <Paper
           sx={{
@@ -1206,7 +2168,8 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
             Return to Learning Hub
           </Button>
         </Paper>
-      </Container>
+        </Box>
+      </Box>
     </LearnPageLayout>
   );
 };

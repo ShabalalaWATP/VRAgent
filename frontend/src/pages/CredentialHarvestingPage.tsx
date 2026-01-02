@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -25,6 +26,7 @@ import {
   TableRow,
   IconButton,
   Tooltip,
+  alpha,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -36,7 +38,8 @@ import WarningIcon from "@mui/icons-material/Warning";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ShieldIcon from "@mui/icons-material/Shield";
 import BuildIcon from "@mui/icons-material/Build";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -100,6 +103,987 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
     </Paper>
   );
 };
+
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#a855f7";
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Basics",
+    question: "What is credential harvesting?",
+    options: [
+      "Collecting authentication secrets such as passwords or tokens",
+      "Encrypting files for backup",
+      "Patching operating systems",
+      "Scanning for open ports only",
+    ],
+    correctAnswer: 0,
+    explanation: "Credential harvesting focuses on obtaining passwords, hashes, or tokens.",
+  },
+  {
+    id: 2,
+    topic: "Basics",
+    question: "Why are credentials a high-value target?",
+    options: [
+      "They provide access without needing new exploits",
+      "They automatically grant physical access",
+      "They disable all logging",
+      "They are always encrypted and unusable",
+    ],
+    correctAnswer: 0,
+    explanation: "Valid credentials enable access to systems and data.",
+  },
+  {
+    id: 3,
+    topic: "Phishing",
+    question: "Phishing typically attempts to:",
+    options: [
+      "Trick users into revealing credentials",
+      "Patch software remotely",
+      "Disable multi-factor authentication",
+      "Delete system logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Phishing uses social engineering to capture credentials.",
+  },
+  {
+    id: 4,
+    topic: "Phishing",
+    question: "A common defense against phishing is:",
+    options: [
+      "User awareness training and MFA",
+      "Disabling all email",
+      "Allowing shared passwords",
+      "Removing antivirus",
+    ],
+    correctAnswer: 0,
+    explanation: "Training and MFA reduce the impact of stolen passwords.",
+  },
+  {
+    id: 5,
+    topic: "Dumping",
+    question: "Credential dumping refers to:",
+    options: [
+      "Extracting stored or in-memory credentials from a system",
+      "Resetting a user's password",
+      "Rotating API keys",
+      "Encrypting local files",
+    ],
+    correctAnswer: 0,
+    explanation: "Credential dumping extracts secrets from local storage or memory.",
+  },
+  {
+    id: 6,
+    topic: "Windows",
+    question: "Which Windows process commonly stores credentials in memory?",
+    options: [
+      "LSASS",
+      "explorer.exe",
+      "svchost.exe",
+      "spoolsv.exe",
+    ],
+    correctAnswer: 0,
+    explanation: "LSASS holds authentication data in memory.",
+  },
+  {
+    id: 7,
+    topic: "Windows",
+    question: "Why is LSASS access restricted?",
+    options: [
+      "It contains sensitive credential material",
+      "It controls DNS resolution",
+      "It manages disk encryption",
+      "It updates system drivers",
+    ],
+    correctAnswer: 0,
+    explanation: "LSASS contains secrets that can be abused for movement.",
+  },
+  {
+    id: 8,
+    topic: "Windows",
+    question: "What is the SAM database used for?",
+    options: [
+      "Storing local account password hashes",
+      "Storing browser history",
+      "Storing network routes",
+      "Storing printer configs",
+    ],
+    correctAnswer: 0,
+    explanation: "SAM stores local account credentials.",
+  },
+  {
+    id: 9,
+    topic: "Linux",
+    question: "Where are password hashes typically stored on Linux?",
+    options: [
+      "/etc/shadow",
+      "/etc/passwd only",
+      "/var/log/messages",
+      "/tmp/credentials",
+    ],
+    correctAnswer: 0,
+    explanation: "/etc/shadow stores password hashes on Linux.",
+  },
+  {
+    id: 10,
+    topic: "Browsers",
+    question: "Why are browsers a common credential source?",
+    options: [
+      "They store saved passwords and session cookies",
+      "They always store data in plain text",
+      "They disable encryption by default",
+      "They cannot be audited",
+    ],
+    correctAnswer: 0,
+    explanation: "Saved passwords and cookies can be reused if stolen.",
+  },
+  {
+    id: 11,
+    topic: "Tokens",
+    question: "Session tokens are valuable because they:",
+    options: [
+      "Can allow access without a password",
+      "Always expire immediately",
+      "Require physical access to use",
+      "Cannot be reused",
+    ],
+    correctAnswer: 0,
+    explanation: "Session tokens can bypass password entry if valid.",
+  },
+  {
+    id: 12,
+    topic: "Tokens",
+    question: "Token theft is especially risky when:",
+    options: [
+      "Sessions are long-lived and not tied to devices",
+      "Tokens expire every minute",
+      "Tokens are hardware-bound",
+      "Tokens are never used",
+    ],
+    correctAnswer: 0,
+    explanation: "Long-lived tokens increase the impact of theft.",
+  },
+  {
+    id: 13,
+    topic: "Techniques",
+    question: "Credential stuffing is:",
+    options: [
+      "Reusing leaked credentials across multiple services",
+      "Trying many passwords for one account",
+      "Resetting passwords through email",
+      "Creating new accounts with strong passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Stuffing uses known credentials across many systems.",
+  },
+  {
+    id: 14,
+    topic: "Techniques",
+    question: "Password spraying is:",
+    options: [
+      "Trying a few passwords across many accounts",
+      "Trying many passwords against one account",
+      "Changing passwords for all users",
+      "Resetting passwords via SMS",
+    ],
+    correctAnswer: 0,
+    explanation: "Spraying avoids lockouts by limiting attempts per account.",
+  },
+  {
+    id: 15,
+    topic: "Techniques",
+    question: "Keylogging is used to:",
+    options: [
+      "Capture keystrokes to steal credentials",
+      "Block all keyboard input",
+      "Encrypt files at rest",
+      "Reset user passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Keyloggers capture typed credentials.",
+  },
+  {
+    id: 16,
+    topic: "Storage",
+    question: "Why are configuration files risky?",
+    options: [
+      "They may contain plaintext secrets",
+      "They always delete logs",
+      "They cannot be read by admins",
+      "They are encrypted by default",
+    ],
+    correctAnswer: 0,
+    explanation: "Config files often hold API keys or passwords.",
+  },
+  {
+    id: 17,
+    topic: "Storage",
+    question: "Why are SSH private keys sensitive?",
+    options: [
+      "They can authenticate without a password",
+      "They always expire instantly",
+      "They are public data",
+      "They cannot be used remotely",
+    ],
+    correctAnswer: 0,
+    explanation: "Private keys enable access if stolen.",
+  },
+  {
+    id: 18,
+    topic: "Cloud",
+    question: "Cloud access keys are valuable because they:",
+    options: [
+      "Provide programmatic access to cloud resources",
+      "Disable network logging",
+      "Force MFA on all users",
+      "Only work on local systems",
+    ],
+    correctAnswer: 0,
+    explanation: "Cloud keys can enable access to storage and compute.",
+  },
+  {
+    id: 19,
+    topic: "Detection",
+    question: "Which signal can indicate credential stuffing?",
+    options: [
+      "Many failed logins across many accounts",
+      "Single login from a known device",
+      "System reboot events",
+      "DNS cache flushes",
+    ],
+    correctAnswer: 0,
+    explanation: "Stuffing produces widespread failed logins.",
+  },
+  {
+    id: 20,
+    topic: "Detection",
+    question: "What is an impossible travel alert?",
+    options: [
+      "Logins from distant locations in an unrealistic time window",
+      "A system update outside business hours",
+      "A workstation reboot",
+      "A password change event",
+    ],
+    correctAnswer: 0,
+    explanation: "Impossible travel indicates potential credential misuse.",
+  },
+  {
+    id: 21,
+    topic: "Detection",
+    question: "What does MFA help prevent?",
+    options: [
+      "Unauthorized access using stolen passwords",
+      "System crashes",
+      "Disk failures",
+      "Network congestion",
+    ],
+    correctAnswer: 0,
+    explanation: "MFA adds a second factor beyond passwords.",
+  },
+  {
+    id: 22,
+    topic: "Detection",
+    question: "Why monitor for access to credential stores?",
+    options: [
+      "Access can indicate credential harvesting activity",
+      "It is required for normal browsing",
+      "It happens only during updates",
+      "It never occurs on endpoints",
+    ],
+    correctAnswer: 0,
+    explanation: "Unexpected access to credential stores is suspicious.",
+  },
+  {
+    id: 23,
+    topic: "Windows",
+    question: "Credential Guard helps by:",
+    options: [
+      "Isolating secrets from user-mode processes",
+      "Disabling all Windows logons",
+      "Encrypting the hard drive only",
+      "Removing all event logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Credential Guard protects secrets from many attacks.",
+  },
+  {
+    id: 24,
+    topic: "Windows",
+    question: "Why disable WDigest?",
+    options: [
+      "It can store plaintext credentials in memory",
+      "It is required for Kerberos",
+      "It enables MFA",
+      "It patches the OS",
+    ],
+    correctAnswer: 0,
+    explanation: "WDigest may keep plaintext credentials if enabled.",
+  },
+  {
+    id: 25,
+    topic: "Windows",
+    question: "Why is LAPS helpful for credential security?",
+    options: [
+      "It rotates local admin passwords uniquely per host",
+      "It disables all local admin accounts",
+      "It removes the need for patching",
+      "It blocks all network access",
+    ],
+    correctAnswer: 0,
+    explanation: "Unique local passwords reduce reuse across machines.",
+  },
+  {
+    id: 26,
+    topic: "Linux",
+    question: "Why restrict read access to /etc/shadow?",
+    options: [
+      "It prevents unauthorized hash access",
+      "It speeds up boot time",
+      "It disables SSH",
+      "It removes user accounts",
+    ],
+    correctAnswer: 0,
+    explanation: "Protecting /etc/shadow limits offline cracking.",
+  },
+  {
+    id: 27,
+    topic: "Storage",
+    question: "Secrets in code repositories are dangerous because:",
+    options: [
+      "They can be copied and reused by anyone with access",
+      "They expire instantly",
+      "They never work outside development",
+      "They are always encrypted",
+    ],
+    correctAnswer: 0,
+    explanation: "Hard-coded secrets can be reused across environments.",
+  },
+  {
+    id: 28,
+    topic: "Storage",
+    question: "Why is secret rotation important after exposure?",
+    options: [
+      "It invalidates stolen credentials",
+      "It reduces log volume",
+      "It stops all logins",
+      "It disables MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Rotation invalidates leaked secrets.",
+  },
+  {
+    id: 29,
+    topic: "Detection",
+    question: "Which log source is key for login anomaly detection?",
+    options: [
+      "Authentication logs",
+      "Printer logs",
+      "BIOS logs",
+      "Display logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Auth logs capture login attempts and failures.",
+  },
+  {
+    id: 30,
+    topic: "Techniques",
+    question: "Credential reuse across systems increases risk because:",
+    options: [
+      "A single compromise can grant access to many systems",
+      "It improves security",
+      "It prevents password sprays",
+      "It disables logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Reuse enables rapid movement using the same credentials.",
+  },
+  {
+    id: 31,
+    topic: "Tokens",
+    question: "Why are refresh tokens sensitive?",
+    options: [
+      "They can be used to obtain new access tokens",
+      "They only work once",
+      "They are public by default",
+      "They cannot be revoked",
+    ],
+    correctAnswer: 0,
+    explanation: "Refresh tokens extend session life if stolen.",
+  },
+  {
+    id: 32,
+    topic: "Phishing",
+    question: "Spearphishing differs from phishing because it is:",
+    options: [
+      "Targeted to a specific individual or group",
+      "Always sent from internal addresses",
+      "Limited to SMS only",
+      "Guaranteed to bypass MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Spearphishing is targeted and personalized.",
+  },
+  {
+    id: 33,
+    topic: "Detection",
+    question: "Why monitor for new MFA bypasses?",
+    options: [
+      "They can allow use of stolen passwords",
+      "They increase password length",
+      "They reduce log volume",
+      "They disable VPNs",
+    ],
+    correctAnswer: 0,
+    explanation: "MFA bypasses increase risk from harvested credentials.",
+  },
+  {
+    id: 34,
+    topic: "Windows",
+    question: "What is a sign of possible credential dumping?",
+    options: [
+      "Unexpected access to LSASS memory",
+      "Normal login activity",
+      "Routine system updates",
+      "Patch installation events",
+    ],
+    correctAnswer: 0,
+    explanation: "Access to LSASS often indicates dumping attempts.",
+  },
+  {
+    id: 35,
+    topic: "Detection",
+    question: "Why is credential access to browser stores suspicious?",
+    options: [
+      "It can indicate theft of saved credentials",
+      "It is required for OS updates",
+      "It is used only by the kernel",
+      "It occurs at system boot only",
+    ],
+    correctAnswer: 0,
+    explanation: "Browser stores hold saved credentials and cookies.",
+  },
+  {
+    id: 36,
+    topic: "Defense",
+    question: "What is a best practice for password policy?",
+    options: [
+      "Use long, unique passwords and ban common ones",
+      "Allow shared passwords",
+      "Disable MFA",
+      "Avoid password rotation after incidents",
+    ],
+    correctAnswer: 0,
+    explanation: "Strong unique passwords reduce guessing and reuse risk.",
+  },
+  {
+    id: 37,
+    topic: "Defense",
+    question: "Why use password managers?",
+    options: [
+      "They help generate and store unique passwords",
+      "They disable logging",
+      "They remove MFA requirements",
+      "They expose all passwords to users",
+    ],
+    correctAnswer: 0,
+    explanation: "Password managers reduce reuse and encourage stronger passwords.",
+  },
+  {
+    id: 38,
+    topic: "Defense",
+    question: "Why limit local admin rights?",
+    options: [
+      "It reduces access to credential stores and dumping tools",
+      "It increases credential reuse",
+      "It disables endpoint monitoring",
+      "It prevents patching",
+    ],
+    correctAnswer: 0,
+    explanation: "Fewer admins reduces access to sensitive stores.",
+  },
+  {
+    id: 39,
+    topic: "Defense",
+    question: "What is a key response step after credential theft?",
+    options: [
+      "Reset and rotate affected credentials",
+      "Ignore the event",
+      "Disable logs",
+      "Remove all user accounts",
+    ],
+    correctAnswer: 0,
+    explanation: "Rotate credentials to invalidate stolen secrets.",
+  },
+  {
+    id: 40,
+    topic: "Defense",
+    question: "Why monitor for logins from new devices?",
+    options: [
+      "New devices can indicate stolen credentials",
+      "New devices always mean patching",
+      "New devices improve trust",
+      "New devices reduce risk",
+    ],
+    correctAnswer: 0,
+    explanation: "Unrecognized devices can signal compromise.",
+  },
+  {
+    id: 41,
+    topic: "Defense",
+    question: "Why is device binding for tokens helpful?",
+    options: [
+      "It limits token reuse on other devices",
+      "It disables encryption",
+      "It removes the need for MFA",
+      "It blocks logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Device binding reduces token theft impact.",
+  },
+  {
+    id: 42,
+    topic: "Detection",
+    question: "Which of the following suggests password spraying?",
+    options: [
+      "Many accounts with one or two failed attempts each",
+      "One account with thousands of attempts",
+      "Only successful logons",
+      "Only local logons",
+    ],
+    correctAnswer: 0,
+    explanation: "Spraying spreads attempts across many accounts.",
+  },
+  {
+    id: 43,
+    topic: "Storage",
+    question: "Why are environment files (like .env) risky?",
+    options: [
+      "They often contain API keys or secrets",
+      "They only store comments",
+      "They cannot be read by users",
+      "They are encrypted by default",
+    ],
+    correctAnswer: 0,
+    explanation: "Environment files can hold sensitive secrets.",
+  },
+  {
+    id: 44,
+    topic: "Detection",
+    question: "Why monitor for credential access tools on endpoints?",
+    options: [
+      "They can indicate harvesting activity",
+      "They improve system stability",
+      "They reduce alert volume",
+      "They are required for normal OS updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Unexpected credential tools are suspicious.",
+  },
+  {
+    id: 45,
+    topic: "Basics",
+    question: "Which is NOT a credential harvesting method?",
+    options: [
+      "Disk defragmentation",
+      "Phishing",
+      "Keylogging",
+      "Credential dumping",
+    ],
+    correctAnswer: 0,
+    explanation: "Disk defragmentation is unrelated to credential harvesting.",
+  },
+  {
+    id: 46,
+    topic: "Detection",
+    question: "Why review access to password manager databases?",
+    options: [
+      "Compromise can expose many credentials at once",
+      "Managers are never attacked",
+      "Managers store only public data",
+      "Managers disable MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Password managers can be high-value targets.",
+  },
+  {
+    id: 47,
+    topic: "Storage",
+    question: "Why is storing passwords in plain text risky?",
+    options: [
+      "They can be read and reused directly",
+      "They are always encrypted",
+      "They cannot be copied",
+      "They are stored only in memory",
+    ],
+    correctAnswer: 0,
+    explanation: "Plain text passwords provide immediate access.",
+  },
+  {
+    id: 48,
+    topic: "Cloud",
+    question: "Why monitor access to cloud metadata endpoints?",
+    options: [
+      "They can yield temporary cloud credentials",
+      "They are only used for backups",
+      "They are always blocked",
+      "They contain OS patches",
+    ],
+    correctAnswer: 0,
+    explanation: "Metadata endpoints can provide credentials for cloud services.",
+  },
+  {
+    id: 49,
+    topic: "Defense",
+    question: "Why enforce MFA on VPN access?",
+    options: [
+      "It reduces risk of stolen password access",
+      "It disables logging",
+      "It removes segmentation",
+      "It prevents updates",
+    ],
+    correctAnswer: 0,
+    explanation: "MFA reduces the impact of stolen VPN credentials.",
+  },
+  {
+    id: 50,
+    topic: "Defense",
+    question: "Which is a safe lab practice for credential security training?",
+    options: [
+      "Use synthetic accounts and fake secrets",
+      "Use production credentials",
+      "Disable logging to avoid alerts",
+      "Store real passwords in files",
+    ],
+    correctAnswer: 0,
+    explanation: "Always use synthetic data in labs.",
+  },
+  {
+    id: 51,
+    topic: "Detection",
+    question: "What indicates possible token theft?",
+    options: [
+      "Session usage from a new device without re-auth",
+      "Normal password changes",
+      "Scheduled reboots",
+      "Routine backups",
+    ],
+    correctAnswer: 0,
+    explanation: "Token reuse from a new device suggests theft.",
+  },
+  {
+    id: 52,
+    topic: "Defense",
+    question: "Why enable conditional access policies?",
+    options: [
+      "They add context checks for logins",
+      "They disable MFA",
+      "They remove all logs",
+      "They force password reuse",
+    ],
+    correctAnswer: 0,
+    explanation: "Conditional access adds device, location, and risk checks.",
+  },
+  {
+    id: 53,
+    topic: "Windows",
+    question: "Why are DPAPI secrets important?",
+    options: [
+      "They protect stored credentials and browser data",
+      "They disable encryption",
+      "They remove user accounts",
+      "They delete logs",
+    ],
+    correctAnswer: 0,
+    explanation: "DPAPI protects local secret storage on Windows.",
+  },
+  {
+    id: 54,
+    topic: "Windows",
+    question: "Why is restricting debug privileges helpful?",
+    options: [
+      "It reduces the ability to access LSASS memory",
+      "It disables all user accounts",
+      "It increases patching",
+      "It removes MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Debug privileges enable access to sensitive processes.",
+  },
+  {
+    id: 55,
+    topic: "Detection",
+    question: "What is a sign of credential spraying in logs?",
+    options: [
+      "Many failed logins across many users from one IP",
+      "One successful login only",
+      "System boot events",
+      "Patch management logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Spraying yields many failures across many users.",
+  },
+  {
+    id: 56,
+    topic: "Defense",
+    question: "Why use account lockout policies?",
+    options: [
+      "They slow brute-force attempts",
+      "They disable MFA",
+      "They prevent logging",
+      "They force password reuse",
+    ],
+    correctAnswer: 0,
+    explanation: "Lockouts limit brute-force success.",
+  },
+  {
+    id: 57,
+    topic: "Defense",
+    question: "Why is least privilege useful for credentials?",
+    options: [
+      "It reduces access to sensitive credential stores",
+      "It disables updates",
+      "It increases reuse",
+      "It removes segmentation",
+    ],
+    correctAnswer: 0,
+    explanation: "Least privilege limits access to credential material.",
+  },
+  {
+    id: 58,
+    topic: "Detection",
+    question: "Which telemetry can help detect keylogging?",
+    options: [
+      "Endpoint behavior analytics and process monitoring",
+      "Only DNS logs",
+      "Only firewall logs",
+      "Only DHCP logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Process monitoring can reveal suspicious keylogging tools.",
+  },
+  {
+    id: 59,
+    topic: "Defense",
+    question: "Why review browser extension inventories?",
+    options: [
+      "Malicious extensions can steal credentials",
+      "Extensions disable logging",
+      "Extensions are always safe",
+      "Extensions only affect updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Extensions can access or steal credentials.",
+  },
+  {
+    id: 60,
+    topic: "Basics",
+    question: "Which technique relies on reused passwords across services?",
+    options: [
+      "Credential stuffing",
+      "Keylogging",
+      "Disk imaging",
+      "Patch management",
+    ],
+    correctAnswer: 0,
+    explanation: "Stuffing uses known credentials across sites.",
+  },
+  {
+    id: 61,
+    topic: "Cloud",
+    question: "Why is access key rotation important in cloud environments?",
+    options: [
+      "It reduces the impact of leaked keys",
+      "It disables cloud logging",
+      "It increases storage capacity",
+      "It removes the need for MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Rotation invalidates compromised keys.",
+  },
+  {
+    id: 62,
+    topic: "Defense",
+    question: "Why use passwordless authentication where possible?",
+    options: [
+      "It reduces reliance on passwords that can be stolen",
+      "It disables MFA",
+      "It prevents logging",
+      "It guarantees admin rights",
+    ],
+    correctAnswer: 0,
+    explanation: "Passwordless options reduce theft risk.",
+  },
+  {
+    id: 63,
+    topic: "Detection",
+    question: "Why is monitoring OAuth consent important?",
+    options: [
+      "Malicious apps can gain access via tokens",
+      "OAuth only controls printers",
+      "OAuth disables MFA",
+      "OAuth is unrelated to credentials",
+    ],
+    correctAnswer: 0,
+    explanation: "OAuth abuse can grant attackers token access.",
+  },
+  {
+    id: 64,
+    topic: "Storage",
+    question: "Why is storing secrets in code comments risky?",
+    options: [
+      "They can be easily discovered and reused",
+      "They are encrypted automatically",
+      "They require admin access to read",
+      "They are deleted on reboot",
+    ],
+    correctAnswer: 0,
+    explanation: "Comments may leak secrets to anyone reading the code.",
+  },
+  {
+    id: 65,
+    topic: "Detection",
+    question: "Why alert on logins from new geolocations?",
+    options: [
+      "They can indicate stolen credentials",
+      "They always indicate normal travel",
+      "They are required for updates",
+      "They indicate printer usage",
+    ],
+    correctAnswer: 0,
+    explanation: "New geolocations can indicate credential misuse.",
+  },
+  {
+    id: 66,
+    topic: "Defense",
+    question: "Why use conditional access with device compliance?",
+    options: [
+      "It blocks logins from unmanaged or risky devices",
+      "It removes all password policies",
+      "It disables logging",
+      "It increases reuse",
+    ],
+    correctAnswer: 0,
+    explanation: "Device compliance reduces the risk of stolen credentials.",
+  },
+  {
+    id: 67,
+    topic: "Windows",
+    question: "Why are NTLM hashes sensitive?",
+    options: [
+      "They can be used for authentication in some scenarios",
+      "They are always random and useless",
+      "They cannot be reused",
+      "They prevent password changes",
+    ],
+    correctAnswer: 0,
+    explanation: "NTLM hashes can be abused for authentication in some contexts.",
+  },
+  {
+    id: 68,
+    topic: "Defense",
+    question: "Why enable alerting on account lockouts?",
+    options: [
+      "Lockouts can indicate brute force or spraying",
+      "Lockouts are always normal",
+      "Lockouts indicate patching",
+      "Lockouts disable MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Lockouts are a strong signal of attack attempts.",
+  },
+  {
+    id: 69,
+    topic: "Basics",
+    question: "Which is a common credential source in CI/CD systems?",
+    options: [
+      "Pipeline secrets and environment variables",
+      "DNS cache files",
+      "Printer spool files",
+      "System restore points",
+    ],
+    correctAnswer: 0,
+    explanation: "CI/CD pipelines store secrets for deployments.",
+  },
+  {
+    id: 70,
+    topic: "Defense",
+    question: "Why scan repositories for secrets?",
+    options: [
+      "To detect accidental leaks of credentials",
+      "To disable version control",
+      "To stop logging",
+      "To remove patching",
+    ],
+    correctAnswer: 0,
+    explanation: "Secret scanning finds accidental credential exposure.",
+  },
+  {
+    id: 71,
+    topic: "Detection",
+    question: "What is a red flag in authentication logs?",
+    options: [
+      "Multiple failed logins followed by a success",
+      "A single successful login",
+      "A logout event",
+      "A password change by the user",
+    ],
+    correctAnswer: 0,
+    explanation: "Failures followed by success can indicate guessing.",
+  },
+  {
+    id: 72,
+    topic: "Defense",
+    question: "Why use short session lifetimes for sensitive apps?",
+    options: [
+      "It reduces the value of stolen tokens",
+      "It disables MFA",
+      "It prevents logging",
+      "It increases password reuse",
+    ],
+    correctAnswer: 0,
+    explanation: "Short sessions limit token replay windows.",
+  },
+  {
+    id: 73,
+    topic: "Defense",
+    question: "Why should admins use separate accounts for daily use?",
+    options: [
+      "To limit exposure of privileged credentials",
+      "To disable auditing",
+      "To remove MFA requirements",
+      "To speed up logins",
+    ],
+    correctAnswer: 0,
+    explanation: "Separate accounts reduce exposure of privileged creds.",
+  },
+  {
+    id: 74,
+    topic: "Detection",
+    question: "What does abnormal token usage often indicate?",
+    options: [
+      "Potential session hijacking",
+      "Routine system maintenance",
+      "Disk cleanup",
+      "OS upgrades",
+    ],
+    correctAnswer: 0,
+    explanation: "Unexpected token use can signal hijacking.",
+  },
+  {
+    id: 75,
+    topic: "Basics",
+    question: "Which statement best summarizes credential harvesting risk?",
+    options: [
+      "Stolen credentials can enable broad access with minimal exploits",
+      "Credentials are never reusable",
+      "Credentials only work locally",
+      "Credentials cannot be detected in logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Credentials enable access across systems when reused.",
+  },
+];
 
 const CredentialHarvestingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -396,9 +1380,15 @@ security list-keychains`;
     <LearnPageLayout pageTitle="Credential Harvesting" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
       <Container maxWidth="lg">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learn Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <VpnKeyIcon sx={{ fontSize: 42, color: "#a855f7" }} />
@@ -1051,6 +2041,28 @@ Remove-Item -Recurse -Force C:\\LabSecrets`}
           </TabPanel>
         </Paper>
 
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Credential Harvesting Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
@@ -1058,7 +2070,7 @@ Remove-Item -Recurse -Force C:\\LabSecrets`}
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#a855f7", color: "#a855f7" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

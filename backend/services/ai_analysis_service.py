@@ -85,6 +85,13 @@ class AIAnalysisSummary:
     analysis_results: Dict[int, AIAnalysisResult]  # finding_id -> result
     agentic_corroborated: int = 0  # Findings confirmed by agentic AI
     filtered_out: int = 0  # Findings filtered as likely false positives
+    uncertain_findings: int = 0  # Findings with FP score 0.5-0.6 (gray zone)
+
+
+# FP Score Thresholds
+FP_THRESHOLD_FILTERED = 0.6  # Score >= this AND not corroborated = filtered_out
+FP_THRESHOLD_UNCERTAIN = 0.5  # Score >= this but < 0.6 = uncertain (needs review)
+FP_THRESHOLD_LIKELY = 0.3  # Score >= this but < 0.5 = possibly FP but included
 
 
 # ============================================================================
@@ -484,7 +491,8 @@ async def _call_llm_batch_analysis(
     code_snippets: Dict[int, str],
     analysis_types: List[str] = None,
     agentic_findings: List[dict] = None,
-    corroboration_map: Dict[int, dict] = None
+    corroboration_map: Dict[int, dict] = None,
+    external_intel: Any = None
 ) -> Dict[int, AIAnalysisResult]:
     """
     Call LLM once for a batch of findings.
@@ -494,6 +502,7 @@ async def _call_llm_batch_analysis(
     
     agentic_findings: List of findings from the Agentic AI scan for context
     corroboration_map: Map of scanner finding IDs to matching agentic findings
+    external_intel: ExternalIntelligence with CVE, dependency, and import context
     """
     if not genai_client or not settings.gemini_api_key:
         logger.info("Gemini API not configured, skipping LLM analysis")
@@ -557,6 +566,45 @@ IMPORTANT:
 - The Agentic AI traces data flows and validates exploitability, so its findings are high-confidence
 """
     
+    # Build external intelligence context section
+    external_context = ""
+    if external_intel:
+        intel_parts = []
+        
+        # CVE/Vulnerability context
+        if hasattr(external_intel, 'cve_findings') and external_intel.cve_findings:
+            cve_summary = []
+            for cve in external_intel.cve_findings[:10]:
+                cve_summary.append(f"  - {cve.get('external_id')}: {cve.get('package')} ({cve.get('severity')}, CVSS: {cve.get('cvss_score')})")
+            intel_parts.append(f"KNOWN CVEs ({len(external_intel.cve_findings)} total):\n" + chr(10).join(cve_summary))
+        
+        # Security findings summary
+        if hasattr(external_intel, 'security_findings_summary') and external_intel.security_findings_summary:
+            intel_parts.append(f"SECURITY SUMMARY: {external_intel.security_findings_summary}")
+        
+        # Files importing vulnerable packages
+        if hasattr(external_intel, 'vulnerable_import_files') and external_intel.vulnerable_import_files:
+            import_summary = []
+            for imp in external_intel.vulnerable_import_files[:8]:
+                import_summary.append(f"  - {imp.get('file')}: imports {imp.get('package')} (CVEs: {', '.join(imp.get('cves', []))})")
+            intel_parts.append(f"FILES WITH VULNERABLE IMPORTS:\n" + chr(10).join(import_summary))
+        
+        # Dependencies context
+        if hasattr(external_intel, 'dependencies') and external_intel.dependencies:
+            dep_count = len(external_intel.dependencies)
+            intel_parts.append(f"DEPENDENCIES: {dep_count} packages analyzed")
+        
+        if intel_parts:
+            external_context = f"""
+EXTERNAL INTELLIGENCE CONTEXT:
+{chr(10).join(intel_parts)}
+
+Use this context to:
+- Prioritize findings in files that import vulnerable packages
+- Consider if code findings relate to known CVEs
+- Be more conservative (lower FP score) for findings related to vulnerable dependencies
+"""
+    
     analysis_instructions = []
     if 'false_positive' in analysis_types:
         analysis_instructions.append("""
@@ -581,6 +629,7 @@ IMPORTANT:
     prompt = f"""Analyze these security findings and provide structured analysis.
 Be concise. Focus on actionable insights.
 {agentic_context}
+{external_context}
 FINDINGS:
 {''.join(findings_text)}
 
@@ -752,6 +801,7 @@ async def analyze_findings(
     code_snippets: Dict[int, str] = None,
     enable_llm: bool = True,
     max_llm_findings: int = 20,
+    external_intel: Any = None,
 ) -> AIAnalysisSummary:
     """
     Main entry point for AI-enhanced analysis.
@@ -774,6 +824,7 @@ async def analyze_findings(
         code_snippets: Optional dict mapping finding_id -> code snippet
         enable_llm: Whether to use LLM (set False for fast mode)
         max_llm_findings: Max findings to send to LLM
+        external_intel: ExternalIntelligence with CVE, dependency, and import context
         
     Returns:
         AIAnalysisSummary with all analysis results
@@ -786,6 +837,7 @@ async def analyze_findings(
     severity_adjustments_count = 0
     agentic_corroborated_count = 0
     filtered_out_count = 0
+    uncertain_count = 0  # Track findings in the uncertain zone (0.5-0.6 FP score)
     
     total_findings = len(findings)
     logger.info(f"Starting AI analysis on {total_findings} findings")
@@ -880,16 +932,21 @@ async def analyze_findings(
             )
             analysis_results[finding_id] = result
             
-            if fp_score >= 0.5:
+            # Categorize by FP score thresholds
+            if fp_score >= FP_THRESHOLD_FILTERED and not is_agentic and not is_corroborated:
+                filtered_out_count += 1
+            elif fp_score >= FP_THRESHOLD_UNCERTAIN:
+                uncertain_count += 1
                 false_positives_count += 1
-                if fp_score >= 0.6 and not is_agentic and not is_corroborated:
-                    filtered_out_count += 1
+            elif fp_score >= FP_THRESHOLD_LIKELY:
+                false_positives_count += 1
+            
             if new_severity:
                 severity_adjustments_count += 1
             if pattern_analysis:
                 pattern_based_results += 1
     
-    logger.info(f"Heuristic analysis complete: {false_positives_count} FPs, {severity_adjustments_count} severity changes, {pattern_based_results} pattern matches")
+    logger.info(f"Heuristic analysis complete: {false_positives_count} FPs ({uncertain_count} uncertain, {filtered_out_count} filtered), {severity_adjustments_count} severity changes, {pattern_based_results} pattern matches")
     
     # Step 3: Attack chain identification (heuristic)
     attack_chains = _identify_attack_chains_heuristic(findings)
@@ -914,7 +971,8 @@ async def analyze_findings(
                 code_snippets,
                 analysis_types=['false_positive', 'severity', 'data_flow', 'remediation'],
                 agentic_findings=agentic_findings,
-                corroboration_map=corroboration_map
+                corroboration_map=corroboration_map,
+                external_intel=external_intel
             )
             
             for finding_id, result in llm_results.items():
@@ -950,7 +1008,7 @@ async def analyze_findings(
             attack_chains = await _call_llm_attack_chains(findings, attack_chains)
     
     logger.info(f"AI analysis complete: {len(analysis_results)} findings analyzed, {len(attack_chains)} attack chains identified")
-    logger.info(f"Agentic corroboration: {agentic_corroborated_count} corroborated, {filtered_out_count} likely filtered")
+    logger.info(f"Agentic corroboration: {agentic_corroborated_count} corroborated, {filtered_out_count} filtered, {uncertain_count} uncertain")
     
     return AIAnalysisSummary(
         findings_analyzed=len(findings),
@@ -960,6 +1018,7 @@ async def analyze_findings(
         analysis_results=analysis_results,
         agentic_corroborated=agentic_corroborated_count,
         filtered_out=filtered_out_count,
+        uncertain_findings=uncertain_count,
     )
 
 

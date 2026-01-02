@@ -479,16 +479,18 @@ def generate_markdown(
     report: models.Report, 
     findings: List[models.Finding],
     db: Session = None,
-    include_ai_summaries: bool = True
+    include_ai_summaries: bool = True,
+    filtered_findings: List[models.Finding] = None
 ) -> str:
     """
     Generate a comprehensive Markdown report with proper structure.
     
     Args:
         report: Report model
-        findings: List of findings for the report
+        findings: List of ACTIVE findings for the report (excludes filtered/duplicates)
         db: Database session (optional, for fetching additional data)
         include_ai_summaries: Whether to generate AI summaries
+        filtered_findings: Optional list of filtered findings for transparency section
         
     Returns:
         Markdown string
@@ -506,7 +508,7 @@ def generate_markdown(
         if include_ai_summaries:
             ai_summaries = generate_ai_summaries(db, report, findings)
     
-    # Calculate severity counts
+    # Calculate severity counts for ACTIVE findings only
     severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     for f in findings:
         sev = (f.severity or "info").lower()
@@ -1058,6 +1060,45 @@ def generate_markdown(
         "",
     ])
     
+    # ==================== FILTERED FINDINGS (TRANSPARENCY) ====================
+    if filtered_findings:
+        lines.extend([
+            "---",
+            "",
+            "## 🔍 Filtered Findings (Transparency)",
+            "",
+            "> **Note:** These findings were filtered out by AI analysis as likely false positives.",
+            "> They are included here for transparency and manual review if needed.",
+            "",
+            f"| Severity | Type | File | FP Score | Reason |",
+            "|----------|------|------|----------|--------|",
+        ])
+        
+        for f in filtered_findings[:20]:  # Limit to 20 for readability
+            ai_analysis = f.details.get("ai_analysis", {}) if f.details else {}
+            fp_score = ai_analysis.get("false_positive_score", 0)
+            fp_reason = ai_analysis.get("false_positive_reason", "Not corroborated by AI")[:50]
+            severity = f.severity or "info"
+            finding_type = f.type or "unknown"
+            file_path = f.file_path or "unknown"
+            
+            # Truncate long values
+            if len(finding_type) > 25:
+                finding_type = finding_type[:22] + "..."
+            if len(file_path) > 30:
+                file_path = "..." + file_path[-27:]
+            
+            lines.append(f"| {severity.upper()} | {finding_type} | {file_path} | {fp_score:.0%} | {fp_reason} |")
+        
+        if len(filtered_findings) > 20:
+            lines.append(f"| ... | *{len(filtered_findings) - 20} more filtered findings* | ... | ... | ... |")
+        
+        lines.extend([
+            "",
+            f"**Total Filtered:** {len(filtered_findings)} findings",
+            "",
+        ])
+    
     # ==================== FOOTER ====================
     lines.extend([
         "---",
@@ -1348,16 +1389,18 @@ def generate_pdf(
     report: models.Report, 
     findings: List[models.Finding],
     db: Session = None,
-    include_ai_summaries: bool = True
+    include_ai_summaries: bool = True,
+    filtered_findings: List[models.Finding] = None
 ) -> bytes:
     """
     Generate a comprehensive PDF report with proper structure and AI findings.
     
     Args:
         report: Report model
-        findings: List of findings for the report
+        findings: List of ACTIVE findings for the report (excludes filtered/duplicates)
         db: Database session (optional, for fetching additional data)
         include_ai_summaries: Whether to generate AI summaries
+        filtered_findings: Optional list of filtered findings for transparency
         
     Returns:
         PDF bytes
@@ -1740,16 +1783,18 @@ def generate_docx(
     report: models.Report, 
     findings: List[models.Finding],
     db: Session = None,
-    include_ai_summaries: bool = True
+    include_ai_summaries: bool = True,
+    filtered_findings: List[models.Finding] = None
 ) -> bytes:
     """
     Generate a comprehensive DOCX report with proper structure and AI findings.
     
     Args:
         report: Report model
-        findings: List of findings for the report
+        findings: List of ACTIVE findings for the report (excludes filtered/duplicates)
         db: Database session (optional, for fetching additional data)
         include_ai_summaries: Whether to generate AI summaries
+        filtered_findings: Optional list of filtered findings for transparency
         
     Returns:
         DOCX bytes
@@ -2115,16 +2160,19 @@ def generate_docx(
     return buffer.getvalue()
 
 
-def get_report_with_findings(db: Session, report_id: int) -> tuple[models.Report, List[models.Finding]]:
+def get_report_with_findings(db: Session, report_id: int, include_filtered: bool = False) -> tuple[models.Report, List[models.Finding], List[models.Finding]]:
     """
     Fetch a report and its associated findings.
     
     Args:
         db: Database session
         report_id: Report ID to fetch
+        include_filtered: If True, returns filtered findings as third element
         
     Returns:
-        Tuple of (report, findings)
+        Tuple of (report, active_findings, filtered_findings)
+        - active_findings: Findings not filtered out by AI analysis and not duplicates
+        - filtered_findings: Findings marked as likely false positives (for transparency)
         
     Raises:
         ValueError: If report not found
@@ -2133,7 +2181,7 @@ def get_report_with_findings(db: Session, report_id: int) -> tuple[models.Report
     if not report:
         raise ValueError(f"Report {report_id} not found")
     
-    findings = (
+    all_findings = (
         db.query(models.Finding)
         .filter(models.Finding.scan_run_id == report.scan_run_id)
         .order_by(
@@ -2144,4 +2192,22 @@ def get_report_with_findings(db: Session, report_id: int) -> tuple[models.Report
         .all()
     )
     
-    return report, findings
+    # Separate active findings from filtered/duplicate findings
+    active_findings = []
+    filtered_findings = []
+    
+    for f in all_findings:
+        # Check if finding is a duplicate (merged into another finding)
+        if f.is_duplicate:
+            continue  # Skip duplicates entirely - they're represented by the primary finding
+        
+        # Check if finding was filtered out by AI analysis as likely false positive
+        ai_analysis = f.details.get("ai_analysis", {}) if f.details else {}
+        is_filtered = ai_analysis.get("filtered_out", False)
+        
+        if is_filtered:
+            filtered_findings.append(f)
+        else:
+            active_findings.append(f)
+    
+    return report, active_findings, filtered_findings

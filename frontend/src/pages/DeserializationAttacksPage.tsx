@@ -42,8 +42,10 @@ import BuildIcon from "@mui/icons-material/Build";
 import LockIcon from "@mui/icons-material/Lock";
 import StorageIcon from "@mui/icons-material/Storage";
 import TuneIcon from "@mui/icons-material/Tune";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -107,6 +109,631 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
     </Paper>
   );
 };
+
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#8b5cf6";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "Serialization means:",
+    options: [
+      "Converting objects into bytes or text",
+      "Encrypting files",
+      "Compressing logs",
+      "Resetting sessions",
+    ],
+    correctAnswer: 0,
+    explanation: "Serialization turns objects into a storable or transportable format.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "Deserialization means:",
+    options: [
+      "Rebuilding objects from serialized data",
+      "Deleting objects",
+      "Hashing passwords",
+      "Blocking network traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Deserialization reconstructs objects from data.",
+  },
+  {
+    id: 3,
+    topic: "Risk",
+    question: "Deserializing untrusted data is dangerous because:",
+    options: [
+      "Object graphs can trigger unexpected code paths",
+      "It always crashes",
+      "It disables encryption",
+      "It forces HTTPS",
+    ],
+    correctAnswer: 0,
+    explanation: "Malicious object graphs can execute dangerous behavior.",
+  },
+  {
+    id: 4,
+    topic: "Risk",
+    question: "A gadget chain is:",
+    options: [
+      "A sequence of classes that leads to code execution",
+      "A firewall rule list",
+      "A database index",
+      "A memory allocator",
+    ],
+    correctAnswer: 0,
+    explanation: "Gadget chains abuse existing classes to execute code.",
+  },
+  {
+    id: 5,
+    topic: "Risk",
+    question: "Base64 encoding makes deserialization:",
+    options: ["No safer by itself", "Always safe", "Impossible", "Encrypted"],
+    correctAnswer: 0,
+    explanation: "Encoding does not remove risk.",
+  },
+  {
+    id: 6,
+    topic: "Risk",
+    question: "Signing serialized data provides:",
+    options: ["Integrity, not safety of logic", "Complete safety", "Automatic validation", "Encryption only"],
+    correctAnswer: 0,
+    explanation: "Signatures ensure integrity but do not prevent gadget abuse.",
+  },
+  {
+    id: 7,
+    topic: "Risk",
+    question: "Encryption alone prevents deserialization attacks by:",
+    options: ["It does not guarantee safety", "Blocking all gadgets", "Removing classes", "Adding canaries"],
+    correctAnswer: 0,
+    explanation: "Encrypted data can still be dangerous if decrypted and trusted.",
+  },
+  {
+    id: 8,
+    topic: "Languages",
+    question: "Which Java API is associated with deserialization risk?",
+    options: ["ObjectInputStream", "PreparedStatement", "HttpClient", "FileChannel"],
+    correctAnswer: 0,
+    explanation: "ObjectInputStream reconstructs objects from untrusted data.",
+  },
+  {
+    id: 9,
+    topic: "Languages",
+    question: "Which .NET API is unsafe for untrusted input?",
+    options: ["BinaryFormatter", "System.Text.Json", "XmlReader", "FileStream"],
+    correctAnswer: 0,
+    explanation: "BinaryFormatter is unsafe and deprecated.",
+  },
+  {
+    id: 10,
+    topic: "Languages",
+    question: "Which Python module is unsafe for untrusted data?",
+    options: ["pickle", "json", "csv", "pathlib"],
+    correctAnswer: 0,
+    explanation: "pickle can execute arbitrary code during load.",
+  },
+  {
+    id: 11,
+    topic: "Languages",
+    question: "Which PHP function is associated with object injection?",
+    options: ["unserialize()", "json_encode()", "intval()", "trim()"],
+    correctAnswer: 0,
+    explanation: "unserialize can instantiate attacker-controlled objects.",
+  },
+  {
+    id: 12,
+    topic: "Languages",
+    question: "Which Ruby feature has similar risk?",
+    options: ["Marshal.load", "YAML.safe_load", "JSON.parse", "OpenSSL::Digest"],
+    correctAnswer: 0,
+    explanation: "Marshal.load can execute dangerous object behavior.",
+  },
+  {
+    id: 13,
+    topic: "Safer Choices",
+    question: "A safer alternative to native deserialization is:",
+    options: ["JSON with schema validation", "BinaryFormatter", "pickle", "Marshal.load"],
+    correctAnswer: 0,
+    explanation: "Data-only formats with schemas reduce risk.",
+  },
+  {
+    id: 14,
+    topic: "Safer Choices",
+    question: "Protocol Buffers are safer because they:",
+    options: ["Enforce a strict schema", "Run code by default", "Ignore validation", "Disable integrity checks"],
+    correctAnswer: 0,
+    explanation: "Schemas prevent arbitrary object creation.",
+  },
+  {
+    id: 15,
+    topic: "Safer Choices",
+    question: "A class allowlist is used to:",
+    options: ["Restrict which classes can be deserialized", "Disable encryption", "Enable debugging", "Increase payload size"],
+    correctAnswer: 0,
+    explanation: "Allowlists reduce gadget availability.",
+  },
+  {
+    id: 16,
+    topic: "Java",
+    question: "Java ObjectInputFilter is used to:",
+    options: ["Restrict deserialization classes and depth", "Enable reflection", "Disable HMAC", "Remove types"],
+    correctAnswer: 0,
+    explanation: "ObjectInputFilter restricts allowed classes and size.",
+  },
+  {
+    id: 17,
+    topic: "Python",
+    question: "A safer YAML loader is:",
+    options: ["safe_load", "load without restrictions", "eval", "pickle.load"],
+    correctAnswer: 0,
+    explanation: "safe_load avoids arbitrary object instantiation.",
+  },
+  {
+    id: 18,
+    topic: "Detection",
+    question: "A common deserialization attack outcome is:",
+    options: ["Remote code execution", "Improved performance", "Lower memory use", "Fewer logs"],
+    correctAnswer: 0,
+    explanation: "Gadget chains often lead to code execution.",
+  },
+  {
+    id: 19,
+    topic: "Detection",
+    question: "A detection clue can be:",
+    options: ["Unexpected child process creation", "Normal request latency", "Standard auth logs", "TLS handshakes"],
+    correctAnswer: 0,
+    explanation: "Unusual process launches can indicate exploitation.",
+  },
+  {
+    id: 20,
+    topic: "Detection",
+    question: "Attackers often test deserialization with:",
+    options: ["Known gadget chains or tools like ysoserial", "Only port scans", "Only password guessing", "Only DNS lookups"],
+    correctAnswer: 0,
+    explanation: "ysoserial generates payloads for Java deserialization.",
+  },
+  {
+    id: 21,
+    topic: "Entry Points",
+    question: "A risky entry point is:",
+    options: ["User-controlled cookies with serialized data", "Static HTML", "Image assets", "CSS files"],
+    correctAnswer: 0,
+    explanation: "Cookies can carry serialized state.",
+  },
+  {
+    id: 22,
+    topic: "Entry Points",
+    question: "Another risky entry point is:",
+    options: ["Message queue payloads", "Read-only docs", "Static icons", "Local log files"],
+    correctAnswer: 0,
+    explanation: "Queues often carry serialized objects across services.",
+  },
+  {
+    id: 23,
+    topic: "Entry Points",
+    question: "Signed tokens can still be risky if:",
+    options: ["They embed object types or gadgets", "They use HTTPS", "They are short", "They expire quickly"],
+    correctAnswer: 0,
+    explanation: "Gadgets can still be present in signed payloads.",
+  },
+  {
+    id: 24,
+    topic: "Entry Points",
+    question: "Cache poisoning is relevant because:",
+    options: ["Serialized objects may be stored and reused", "Caches are always safe", "Caches are read-only", "Caches do not store data"],
+    correctAnswer: 0,
+    explanation: "Poisoned cached objects can be deserialized later.",
+  },
+  {
+    id: 25,
+    topic: "Entry Points",
+    question: "Import/export features are risky because:",
+    options: ["They may accept serialized files", "They always validate types", "They never deserialize", "They use only images"],
+    correctAnswer: 0,
+    explanation: "Imports can contain crafted serialized objects.",
+  },
+  {
+    id: 26,
+    topic: "Controls",
+    question: "The safest approach is to:",
+    options: ["Avoid native deserialization of untrusted data", "Use more gadgets", "Disable validation", "Trust all inputs"],
+    correctAnswer: 0,
+    explanation: "Avoiding native deserialization is the strongest defense.",
+  },
+  {
+    id: 27,
+    topic: "Controls",
+    question: "Schema validation helps by:",
+    options: ["Restricting allowed fields and types", "Adding gadgets", "Increasing payload size", "Disabling logging"],
+    correctAnswer: 0,
+    explanation: "Schemas prevent unexpected object graphs.",
+  },
+  {
+    id: 28,
+    topic: "Controls",
+    question: "Depth limits help prevent:",
+    options: ["Deserialization bombs", "Password reuse", "SQL injection", "XSS"],
+    correctAnswer: 0,
+    explanation: "Limiting depth blocks overly nested payloads.",
+  },
+  {
+    id: 29,
+    topic: "Controls",
+    question: "Resource limits help prevent:",
+    options: ["Memory exhaustion attacks", "Token replay", "MITM attacks", "CSRF"],
+    correctAnswer: 0,
+    explanation: "Limits reduce the impact of large object graphs.",
+  },
+  {
+    id: 30,
+    topic: "Controls",
+    question: "Integrity checks are often implemented with:",
+    options: ["HMAC signatures", "Plain base64", "Only encryption", "Random padding"],
+    correctAnswer: 0,
+    explanation: "HMAC verifies data integrity.",
+  },
+  {
+    id: 31,
+    topic: "Java",
+    question: "Using a custom ObjectInputStream can:",
+    options: ["Restrict allowed classes", "Disable TLS", "Remove auth", "Add gadgets"],
+    correctAnswer: 0,
+    explanation: "Custom streams can block dangerous classes.",
+  },
+  {
+    id: 32,
+    topic: ".NET",
+    question: "Microsoft recommends avoiding:",
+    options: ["BinaryFormatter", "System.Text.Json", "DataContractJsonSerializer", "JsonSerializerOptions"],
+    correctAnswer: 0,
+    explanation: "BinaryFormatter is insecure for untrusted input.",
+  },
+  {
+    id: 33,
+    topic: ".NET",
+    question: "A safer .NET alternative is:",
+    options: ["System.Text.Json", "BinaryFormatter", "SoapFormatter", "NetDataContractSerializer"],
+    correctAnswer: 0,
+    explanation: "System.Text.Json is a data-only serializer.",
+  },
+  {
+    id: 34,
+    topic: "Python",
+    question: "A safer Python approach is:",
+    options: ["json with schema validation", "pickle.load on user data", "eval on strings", "exec on payloads"],
+    correctAnswer: 0,
+    explanation: "JSON parsing avoids arbitrary code execution.",
+  },
+  {
+    id: 35,
+    topic: "PHP",
+    question: "Mitigating PHP object injection includes:",
+    options: ["Avoiding unserialize on user input", "Disabling HTTPS", "Using eval", "Adding more gadgets"],
+    correctAnswer: 0,
+    explanation: "Avoid unserialize on untrusted input.",
+  },
+  {
+    id: 36,
+    topic: "JSON",
+    question: "Json.NET TypeNameHandling can be dangerous because:",
+    options: ["It allows type resolution from data", "It encrypts data", "It removes fields", "It blocks validation"],
+    correctAnswer: 0,
+    explanation: "TypeNameHandling enables attacker-controlled types.",
+  },
+  {
+    id: 37,
+    topic: "YAML",
+    question: "Unsafe YAML loaders can:",
+    options: ["Instantiate arbitrary objects", "Only read strings", "Only parse numbers", "Disable networking"],
+    correctAnswer: 0,
+    explanation: "Unsafe loaders can create objects with side effects.",
+  },
+  {
+    id: 38,
+    topic: "XML",
+    question: "XML deserialization risks include:",
+    options: ["Object injection and XXE if misconfigured", "Only compression issues", "Only logging errors", "Only memory leaks"],
+    correctAnswer: 0,
+    explanation: "XML deserialization can lead to object injection or XXE.",
+  },
+  {
+    id: 39,
+    topic: "Detection",
+    question: "Indicators of gadget chain abuse include:",
+    options: ["Unusual class names in logs", "Normal login failures", "Standard cache hits", "TLS session resumption"],
+    correctAnswer: 0,
+    explanation: "Unexpected class names can signal gadget usage.",
+  },
+  {
+    id: 40,
+    topic: "Detection",
+    question: "Network callbacks to attacker-controlled domains may indicate:",
+    options: ["Successful exploit execution", "Routine health checks", "Backup operations", "License validation"],
+    correctAnswer: 0,
+    explanation: "Out-of-band callbacks can confirm code execution.",
+  },
+  {
+    id: 41,
+    topic: "Threat Modeling",
+    question: "A trust boundary is crossed when:",
+    options: ["Data goes from user control into object creation", "Logs rotate", "Tokens expire", "Cache warms"],
+    correctAnswer: 0,
+    explanation: "Untrusted data crossing into deserialization is risky.",
+  },
+  {
+    id: 42,
+    topic: "Threat Modeling",
+    question: "Least privilege reduces impact because:",
+    options: ["Compromised processes have fewer rights", "It disables logs", "It blocks input validation", "It increases attack surface"],
+    correctAnswer: 0,
+    explanation: "Lower privileges limit damage from exploitation.",
+  },
+  {
+    id: 43,
+    topic: "Risk",
+    question: "A deserialization bomb is:",
+    options: ["A payload that exhausts resources", "A packet capture", "A valid certificate", "A patch update"],
+    correctAnswer: 0,
+    explanation: "Deep or massive objects can cause DoS.",
+  },
+  {
+    id: 44,
+    topic: "Risk",
+    question: "Large nested arrays can cause:",
+    options: ["CPU or memory exhaustion", "Improved performance", "Stronger encryption", "Fewer logs"],
+    correctAnswer: 0,
+    explanation: "Huge object graphs can exhaust resources.",
+  },
+  {
+    id: 45,
+    topic: "Controls",
+    question: "Deserialization should validate:",
+    options: ["Type, size, and structure", "Only timestamps", "Only user IDs", "Only network ports"],
+    correctAnswer: 0,
+    explanation: "Validation should cover structure and size.",
+  },
+  {
+    id: 46,
+    topic: "Controls",
+    question: "A denylist of classes is:",
+    options: ["Weaker than an allowlist", "Always sufficient", "More secure than allowlist", "Not needed"],
+    correctAnswer: 0,
+    explanation: "Allowlists are generally safer than denylists.",
+  },
+  {
+    id: 47,
+    topic: "Controls",
+    question: "Logging should capture:",
+    options: ["Deserialization errors and class names", "Only HTTP status codes", "Only CPU usage", "Only DNS logs"],
+    correctAnswer: 0,
+    explanation: "Logs help identify suspicious class loading.",
+  },
+  {
+    id: 48,
+    topic: "Controls",
+    question: "WAFs can help by:",
+    options: ["Blocking known payload patterns", "Fixing code bugs", "Replacing schema validation", "Disabling encryption"],
+    correctAnswer: 0,
+    explanation: "WAFs are a supplemental control, not a fix.",
+  },
+  {
+    id: 49,
+    topic: "Controls",
+    question: "Code review should look for:",
+    options: ["unserialize/load calls on untrusted data", "Only UI issues", "Only CSS", "Only SQL queries"],
+    correctAnswer: 0,
+    explanation: "Look for deserialization of user-controlled data.",
+  },
+  {
+    id: 50,
+    topic: "Controls",
+    question: "Fuzzing deserializers helps find:",
+    options: ["Crashes and unexpected behavior", "Better compression", "New features", "Network bandwidth"],
+    correctAnswer: 0,
+    explanation: "Fuzzing can expose parsing and logic issues.",
+  },
+  {
+    id: 51,
+    topic: "Architecture",
+    question: "Storing session state server-side helps by:",
+    options: ["Avoiding client-side serialized objects", "Increasing payload size", "Disabling TLS", "Removing auth"],
+    correctAnswer: 0,
+    explanation: "Server-side state reduces exposure to tampering.",
+  },
+  {
+    id: 52,
+    topic: "Architecture",
+    question: "Using data-only DTOs reduces risk by:",
+    options: ["Avoiding executable object graphs", "Adding gadgets", "Removing validation", "Disabling logging"],
+    correctAnswer: 0,
+    explanation: "DTOs keep data separate from behavior.",
+  },
+  {
+    id: 53,
+    topic: "Architecture",
+    question: "Isolating deserialization in a sandbox:",
+    options: ["Limits impact if exploitation occurs", "Increases gadget count", "Disables integrity checks", "Prevents logging"],
+    correctAnswer: 0,
+    explanation: "Sandboxing reduces privilege and access.",
+  },
+  {
+    id: 54,
+    topic: "Tokens",
+    question: "JWTs are safer when they:",
+    options: ["Contain only simple claims, not serialized objects", "Embed full object graphs", "Use no signature", "Are stored in local files"],
+    correctAnswer: 0,
+    explanation: "JWTs should carry simple data claims only.",
+  },
+  {
+    id: 55,
+    topic: "Tokens",
+    question: "If token signing keys leak, attackers can:",
+    options: ["Forge payloads that pass integrity checks", "Fix bugs", "Disable TLS", "Erase logs"],
+    correctAnswer: 0,
+    explanation: "Key leaks let attackers sign malicious payloads.",
+  },
+  {
+    id: 56,
+    topic: "Threat Intel",
+    question: "Gadget chains are usually built from:",
+    options: ["Common libraries in the app", "Only kernel modules", "Only the OS", "Only the database"],
+    correctAnswer: 0,
+    explanation: "Libraries provide reusable gadget classes.",
+  },
+  {
+    id: 57,
+    topic: "Threat Intel",
+    question: "Updating dependencies helps because:",
+    options: ["It removes vulnerable gadgets", "It disables logging", "It adds unsafe serializers", "It weakens schemas"],
+    correctAnswer: 0,
+    explanation: "Updates can remove or change gadget chains.",
+  },
+  {
+    id: 58,
+    topic: "Threat Intel",
+    question: "A common Java payload tool is:",
+    options: ["ysoserial", "curl", "tar", "ps"],
+    correctAnswer: 0,
+    explanation: "ysoserial generates Java deserialization payloads.",
+  },
+  {
+    id: 59,
+    topic: "Threat Intel",
+    question: "A common mitigation in Java is to:",
+    options: ["Avoid ObjectInputStream for untrusted data", "Disable all logging", "Use eval", "Disable signatures"],
+    correctAnswer: 0,
+    explanation: "Avoid native deserialization for untrusted input.",
+  },
+  {
+    id: 60,
+    topic: "Threat Intel",
+    question: "A common mitigation in .NET is to:",
+    options: ["Replace BinaryFormatter with System.Text.Json", "Enable TypeNameHandling", "Allow all types", "Disable validation"],
+    correctAnswer: 0,
+    explanation: "System.Text.Json avoids unsafe type handling.",
+  },
+  {
+    id: 61,
+    topic: "Threat Intel",
+    question: "A common mitigation in PHP is to:",
+    options: ["Avoid unserialize on user data", "Use eval on payloads", "Disable HTTPS", "Store objects in cookies"],
+    correctAnswer: 0,
+    explanation: "Avoid unserialize for untrusted input.",
+  },
+  {
+    id: 62,
+    topic: "Threat Intel",
+    question: "A common mitigation in Python is to:",
+    options: ["Avoid pickle for untrusted data", "Use eval", "Disable validation", "Increase payload size"],
+    correctAnswer: 0,
+    explanation: "pickle executes code and should not be used on untrusted data.",
+  },
+  {
+    id: 63,
+    topic: "Detection",
+    question: "Unexpected DNS lookups from app servers after deserialization may indicate:",
+    options: ["Out-of-band command execution", "Routine health checks", "NTP updates", "Normal caching"],
+    correctAnswer: 0,
+    explanation: "Outbound callbacks can indicate exploitation.",
+  },
+  {
+    id: 64,
+    topic: "Detection",
+    question: "If a deserialization endpoint is exploited, you should:",
+    options: ["Rotate secrets and investigate lateral movement", "Ignore it", "Disable logging", "Skip patching"],
+    correctAnswer: 0,
+    explanation: "Treat it as potential code execution and investigate.",
+  },
+  {
+    id: 65,
+    topic: "Detection",
+    question: "Application telemetry should include:",
+    options: ["Deserializer errors and payload sizes", "Only UI logs", "Only DNS logs", "Only kernel logs"],
+    correctAnswer: 0,
+    explanation: "Error and size metrics help detect abuse.",
+  },
+  {
+    id: 66,
+    topic: "Design",
+    question: "Using a schema-first API helps by:",
+    options: ["Enforcing strict types and fields", "Allowing arbitrary classes", "Ignoring validation", "Disabling logging"],
+    correctAnswer: 0,
+    explanation: "Schema-first APIs constrain input.",
+  },
+  {
+    id: 67,
+    topic: "Design",
+    question: "Separating data and behavior means:",
+    options: ["Avoiding rich object graphs from untrusted data", "Using eval", "Disabling validation", "Increasing payload size"],
+    correctAnswer: 0,
+    explanation: "Keep serialized data simple and behavior out of it.",
+  },
+  {
+    id: 68,
+    topic: "Design",
+    question: "If you must deserialize, you should:",
+    options: ["Use allowlists, limits, and integrity checks", "Trust all inputs", "Disable validation", "Use unsafe loaders"],
+    correctAnswer: 0,
+    explanation: "Defense-in-depth is required when deserializing.",
+  },
+  {
+    id: 69,
+    topic: "Design",
+    question: "Deserialization in a zero-trust model implies:",
+    options: ["All inputs are untrusted by default", "All inputs are safe", "Only admins are risky", "Only external APIs are risky"],
+    correctAnswer: 0,
+    explanation: "Zero-trust treats all inputs as untrusted.",
+  },
+  {
+    id: 70,
+    topic: "Design",
+    question: "A denylist is risky because:",
+    options: ["It is hard to cover all dangerous classes", "It blocks all attacks", "It is more strict", "It avoids updates"],
+    correctAnswer: 0,
+    explanation: "Attackers can use gadgets not on the denylist.",
+  },
+  {
+    id: 71,
+    topic: "Operations",
+    question: "Unit tests for deserialization should include:",
+    options: ["Malformed and oversized payloads", "Only valid payloads", "Only UI tests", "Only performance tests"],
+    correctAnswer: 0,
+    explanation: "Negative tests help catch unsafe parsing.",
+  },
+  {
+    id: 72,
+    topic: "Operations",
+    question: "Security reviews should verify:",
+    options: ["No unsafe deserialization of untrusted inputs", "Only network ACLs", "Only TLS settings", "Only DNS records"],
+    correctAnswer: 0,
+    explanation: "Reviews should identify unsafe deserialization flows.",
+  },
+  {
+    id: 73,
+    topic: "Operations",
+    question: "Safe deserialization should reject:",
+    options: ["Unexpected types or fields", "Valid schemas", "Known safe objects", "Signed payloads"],
+    correctAnswer: 0,
+    explanation: "Unexpected types are a common exploit vector.",
+  },
+  {
+    id: 74,
+    topic: "Operations",
+    question: "A common mistake is to:",
+    options: ["Assume internal data is always trusted", "Validate inputs", "Use allowlists", "Add monitoring"],
+    correctAnswer: 0,
+    explanation: "Internal data can still be tampered with.",
+  },
+  {
+    id: 75,
+    topic: "Operations",
+    question: "The most reliable mitigation is to:",
+    options: ["Avoid deserializing untrusted data", "Rely only on signatures", "Rely only on WAFs", "Disable logging"],
+    correctAnswer: 0,
+    explanation: "Avoid native deserialization of untrusted input when possible.",
+  },
+];
 
 const DeserializationAttacksPage: React.FC = () => {
   const navigate = useNavigate();
@@ -401,9 +1028,15 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
     <LearnPageLayout pageTitle="Deserialization Attacks" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
       <Container maxWidth="lg">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learn Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <AccountTreeIcon sx={{ fontSize: 42, color: "#3b82f6" }} />
@@ -830,6 +1463,40 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
             </Grid>
           </TabPanel>
         </Paper>
+
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${QUIZ_ACCENT_COLOR}33`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Deserialization Attacks Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </Box>
     </LearnPageLayout>

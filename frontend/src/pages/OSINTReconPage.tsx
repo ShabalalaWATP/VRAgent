@@ -25,6 +25,7 @@ import {
   Grid,
   IconButton,
   Tooltip,
+  alpha,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -40,8 +41,10 @@ import WarningIcon from "@mui/icons-material/Warning";
 import ImageIcon from "@mui/icons-material/Image";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import PublicIcon from "@mui/icons-material/Public";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -83,6 +86,987 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, langua
   );
 };
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#f97316";
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Basics",
+    question: "What does OSINT stand for?",
+    options: [
+      "Open Source Intelligence",
+      "Operational Security Intelligence",
+      "Offensive Security Incident Triage",
+      "Online Search Integration",
+    ],
+    correctAnswer: 0,
+    explanation: "OSINT is intelligence gathered from publicly available sources.",
+  },
+  {
+    id: 2,
+    topic: "Basics",
+    question: "Passive reconnaissance means:",
+    options: [
+      "Collecting information without directly interacting with targets",
+      "Sending probes and scans to target systems",
+      "Exploiting vulnerabilities to gather data",
+      "Launching phishing campaigns",
+    ],
+    correctAnswer: 0,
+    explanation: "Passive recon avoids direct contact with the target systems.",
+  },
+  {
+    id: 3,
+    topic: "Basics",
+    question: "Active reconnaissance means:",
+    options: [
+      "Interacting directly with target systems or services",
+      "Only using search engines",
+      "Collecting public records only",
+      "Working offline without internet access",
+    ],
+    correctAnswer: 0,
+    explanation: "Active recon involves direct interaction such as scanning or probing.",
+  },
+  {
+    id: 4,
+    topic: "Basics",
+    question: "Why begin with passive recon?",
+    options: [
+      "It reduces detection risk and provides context",
+      "It guarantees zero false positives",
+      "It replaces the need for validation",
+      "It automatically exploits targets",
+    ],
+    correctAnswer: 0,
+    explanation: "Passive recon is low risk and builds a foundation of context.",
+  },
+  {
+    id: 5,
+    topic: "Domains",
+    question: "What does a WHOIS lookup provide?",
+    options: [
+      "Domain registration and ownership details",
+      "Open ports and services",
+      "HTTP response headers",
+      "File hashes from servers",
+    ],
+    correctAnswer: 0,
+    explanation: "WHOIS returns registrar, ownership, and registration data.",
+  },
+  {
+    id: 6,
+    topic: "Domains",
+    question: "A domain registrar is:",
+    options: [
+      "The company that manages domain registrations",
+      "The DNS server hosting records",
+      "A web hosting provider only",
+      "An SSL certificate authority",
+    ],
+    correctAnswer: 0,
+    explanation: "Registrars sell and manage domain registrations.",
+  },
+  {
+    id: 7,
+    topic: "DNS",
+    question: "An A record maps a name to:",
+    options: [
+      "An IPv4 address",
+      "An IPv6 address",
+      "A mail server",
+      "A text record",
+    ],
+    correctAnswer: 0,
+    explanation: "A records map names to IPv4 addresses.",
+  },
+  {
+    id: 8,
+    topic: "DNS",
+    question: "An AAAA record maps a name to:",
+    options: [
+      "An IPv6 address",
+      "An IPv4 address",
+      "A CNAME alias",
+      "A mail exchange server",
+    ],
+    correctAnswer: 0,
+    explanation: "AAAA records map names to IPv6 addresses.",
+  },
+  {
+    id: 9,
+    topic: "DNS",
+    question: "MX records identify:",
+    options: [
+      "Mail servers for a domain",
+      "Web server software versions",
+      "User account names",
+      "TLS cipher suites",
+    ],
+    correctAnswer: 0,
+    explanation: "MX records specify mail exchangers for a domain.",
+  },
+  {
+    id: 10,
+    topic: "DNS",
+    question: "TXT records often include:",
+    options: [
+      "SPF or DKIM policy data",
+      "Only IP addresses",
+      "Windows event logs",
+      "Operating system versions",
+    ],
+    correctAnswer: 0,
+    explanation: "TXT records commonly carry email security policies like SPF/DKIM.",
+  },
+  {
+    id: 11,
+    topic: "DNS",
+    question: "NS records identify:",
+    options: [
+      "Authoritative name servers",
+      "Mail servers",
+      "Web application frameworks",
+      "Database servers",
+    ],
+    correctAnswer: 0,
+    explanation: "NS records list authoritative DNS servers for a zone.",
+  },
+  {
+    id: 12,
+    topic: "DNS",
+    question: "A CNAME record is used to:",
+    options: [
+      "Alias one name to another",
+      "Store a public key",
+      "Provide an IP address",
+      "Store a mail exchange",
+    ],
+    correctAnswer: 0,
+    explanation: "CNAME records map a name to another canonical name.",
+  },
+  {
+    id: 13,
+    topic: "Subdomains",
+    question: "Subdomain enumeration is the process of:",
+    options: [
+      "Finding hostnames under a domain",
+      "Listing running processes",
+      "Scanning open ports",
+      "Collecting user passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Subdomain enumeration discovers hostnames under a domain.",
+  },
+  {
+    id: 14,
+    topic: "Subdomains",
+    question: "Certificate Transparency logs help by:",
+    options: [
+      "Revealing hostnames in issued certificates",
+      "Listing open ports on servers",
+      "Showing database schemas",
+      "Disabling DNS caching",
+    ],
+    correctAnswer: 0,
+    explanation: "CT logs often expose subdomains in certificates.",
+  },
+  {
+    id: 15,
+    topic: "DNS",
+    question: "Reverse DNS (PTR) lookups map:",
+    options: [
+      "An IP address to a hostname",
+      "A hostname to an IP address",
+      "A domain to a registrar",
+      "A URL to a hash",
+    ],
+    correctAnswer: 0,
+    explanation: "PTR records provide hostname mappings for IPs.",
+  },
+  {
+    id: 16,
+    topic: "Networking",
+    question: "An ASN is used to:",
+    options: [
+      "Identify IP ranges owned by an organization",
+      "Store DNS records for a domain",
+      "Encrypt network traffic",
+      "Host public web content",
+    ],
+    correctAnswer: 0,
+    explanation: "ASNs help map IP ranges and network ownership.",
+  },
+  {
+    id: 17,
+    topic: "Networking",
+    question: "Why gather ASN information?",
+    options: [
+      "To discover related IP ranges and infrastructure",
+      "To bypass authentication",
+      "To disable logging",
+      "To patch vulnerabilities",
+    ],
+    correctAnswer: 0,
+    explanation: "ASN data reveals additional assets and networks.",
+  },
+  {
+    id: 18,
+    topic: "Web",
+    question: "Virtual host discovery finds:",
+    options: [
+      "Multiple sites hosted on the same IP",
+      "Kernel modules on a server",
+      "Local user accounts",
+      "Email inbox contents",
+    ],
+    correctAnswer: 0,
+    explanation: "Virtual hosts allow multiple domains on one IP address.",
+  },
+  {
+    id: 19,
+    topic: "Web",
+    question: "Why probe HTTP/HTTPS hosts after subdomain discovery?",
+    options: [
+      "To identify which hosts are live and serving web content",
+      "To change DNS records",
+      "To reset passwords",
+      "To disable firewalls",
+    ],
+    correctAnswer: 0,
+    explanation: "Probing validates which hosts respond and are worth deeper review.",
+  },
+  {
+    id: 20,
+    topic: "Web",
+    question: "robots.txt typically lists:",
+    options: [
+      "Paths the site asks crawlers to avoid",
+      "Database credentials",
+      "Firewall rules",
+      "Active user sessions",
+    ],
+    correctAnswer: 0,
+    explanation: "robots.txt may hint at hidden or sensitive paths.",
+  },
+  {
+    id: 21,
+    topic: "Web",
+    question: "Why use the Wayback Machine?",
+    options: [
+      "To view historical versions of websites",
+      "To access private networks",
+      "To decrypt HTTPS traffic",
+      "To run malware scans",
+    ],
+    correctAnswer: 0,
+    explanation: "Archived pages can reveal old content and endpoints.",
+  },
+  {
+    id: 22,
+    topic: "Web",
+    question: "A sitemap is useful because it:",
+    options: [
+      "Lists site URLs and structure",
+      "Contains server IP ranges",
+      "Stores encrypted passwords",
+      "Disables indexing",
+    ],
+    correctAnswer: 0,
+    explanation: "Sitemaps expose important URLs and site structure.",
+  },
+  {
+    id: 23,
+    topic: "Search",
+    question: "Google dorking refers to:",
+    options: [
+      "Using advanced search operators to find exposed data",
+      "Running vulnerability scans with Google",
+      "Brute-forcing login pages",
+      "Bypassing HTTPS encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Search operators can reveal exposed files and data.",
+  },
+  {
+    id: 24,
+    topic: "Search",
+    question: "The operator `site:` is used to:",
+    options: [
+      "Restrict results to a specific domain",
+      "Search for file types only",
+      "Filter by language only",
+      "Search for images only",
+    ],
+    correctAnswer: 0,
+    explanation: "`site:` limits results to a domain or host.",
+  },
+  {
+    id: 25,
+    topic: "Search",
+    question: "The operator `filetype:` is used to:",
+    options: [
+      "Find specific file formats",
+      "Find specific IP ranges",
+      "Search only social media",
+      "Search only cached pages",
+    ],
+    correctAnswer: 0,
+    explanation: "`filetype:` finds documents like pdf, docx, or xls.",
+  },
+  {
+    id: 26,
+    topic: "Search",
+    question: "The operator `intitle:` is used to:",
+    options: [
+      "Search for words in page titles",
+      "Search for words in URLs",
+      "Search only PDF files",
+      "Search only image metadata",
+    ],
+    correctAnswer: 0,
+    explanation: "`intitle:` filters results by page title.",
+  },
+  {
+    id: 27,
+    topic: "Search",
+    question: "The operator `inurl:` is used to:",
+    options: [
+      "Search for words in URLs",
+      "Search only site titles",
+      "Search only local files",
+      "Search only social posts",
+    ],
+    correctAnswer: 0,
+    explanation: "`inurl:` filters results by URL contents.",
+  },
+  {
+    id: 28,
+    topic: "Code",
+    question: "Why search GitHub during OSINT?",
+    options: [
+      "Developers may leak secrets or internal URLs",
+      "GitHub provides DNS records",
+      "GitHub hosts email servers",
+      "GitHub blocks all searches",
+    ],
+    correctAnswer: 0,
+    explanation: "Repositories sometimes expose tokens, URLs, or config files.",
+  },
+  {
+    id: 29,
+    topic: "Leaks",
+    question: "Why check paste sites or public gists?",
+    options: [
+      "They can contain leaked credentials or configs",
+      "They show private directory listings",
+      "They host DNS servers",
+      "They always contain malware",
+    ],
+    correctAnswer: 0,
+    explanation: "Paste sites often contain accidental data leaks.",
+  },
+  {
+    id: 30,
+    topic: "Email",
+    question: "TheHarvester is commonly used to:",
+    options: [
+      "Collect emails and related OSINT from public sources",
+      "Run port scans",
+      "Exploit vulnerabilities",
+      "Decrypt traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "TheHarvester aggregates email and domain OSINT.",
+  },
+  {
+    id: 31,
+    topic: "Subdomains",
+    question: "Amass is best known for:",
+    options: [
+      "Subdomain enumeration and asset discovery",
+      "Password cracking",
+      "Packet capture",
+      "Web application scanning",
+    ],
+    correctAnswer: 0,
+    explanation: "Amass focuses on subdomain and infrastructure discovery.",
+  },
+  {
+    id: 32,
+    topic: "Subdomains",
+    question: "Subfinder is used to:",
+    options: [
+      "Discover subdomains from passive sources",
+      "Enumerate local users",
+      "Dump memory",
+      "Generate SSL certificates",
+    ],
+    correctAnswer: 0,
+    explanation: "Subfinder aggregates passive subdomain sources.",
+  },
+  {
+    id: 33,
+    topic: "Subdomains",
+    question: "Assetfinder is used to:",
+    options: [
+      "Find subdomains for a target",
+      "Search web content for XSS",
+      "Dump credentials",
+      "Detect malware on endpoints",
+    ],
+    correctAnswer: 0,
+    explanation: "Assetfinder discovers subdomains for a domain.",
+  },
+  {
+    id: 34,
+    topic: "Internet Search",
+    question: "Shodan is best described as:",
+    options: [
+      "A search engine for internet-exposed devices",
+      "A DNS resolver",
+      "A vulnerability scanner only",
+      "A password manager",
+    ],
+    correctAnswer: 0,
+    explanation: "Shodan indexes exposed devices and services.",
+  },
+  {
+    id: 35,
+    topic: "Internet Search",
+    question: "Censys provides:",
+    options: [
+      "Internet scan data and certificate search",
+      "Only malware samples",
+      "Only OS patching data",
+      "Only social media results",
+    ],
+    correctAnswer: 0,
+    explanation: "Censys indexes hosts, services, and certificates.",
+  },
+  {
+    id: 36,
+    topic: "Internet Search",
+    question: "SecurityTrails is useful for:",
+    options: [
+      "DNS history and domain intelligence",
+      "Memory forensics",
+      "Packet decryption",
+      "Firewall rule editing",
+    ],
+    correctAnswer: 0,
+    explanation: "SecurityTrails focuses on DNS and domain data.",
+  },
+  {
+    id: 37,
+    topic: "Leaks",
+    question: "Have I Been Pwned helps by:",
+    options: [
+      "Checking if emails appear in breach data",
+      "Enumerating DNS records",
+      "Detecting open ports",
+      "Generating phishing emails",
+    ],
+    correctAnswer: 0,
+    explanation: "HIBP identifies emails present in known breaches.",
+  },
+  {
+    id: 38,
+    topic: "Metadata",
+    question: "Metadata is:",
+    options: [
+      "Data about data, such as author or timestamps",
+      "Encrypted log files only",
+      "Only image thumbnails",
+      "Network packet headers",
+    ],
+    correctAnswer: 0,
+    explanation: "Metadata can reveal authoring details or internal paths.",
+  },
+  {
+    id: 39,
+    topic: "Metadata",
+    question: "EXIF data can reveal:",
+    options: [
+      "Camera model, timestamps, and sometimes GPS",
+      "Firewall rules",
+      "Database tables",
+      "User passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "EXIF may include device and location details.",
+  },
+  {
+    id: 40,
+    topic: "Images",
+    question: "Reverse image search is used to:",
+    options: [
+      "Find where an image appears online",
+      "Extract DNS records",
+      "Scan for open ports",
+      "Encrypt images",
+    ],
+    correctAnswer: 0,
+    explanation: "Reverse search locates identical or similar images.",
+  },
+  {
+    id: 41,
+    topic: "People",
+    question: "Why analyze social media profiles?",
+    options: [
+      "They can reveal roles, projects, and contacts",
+      "They provide DNS configurations",
+      "They always contain passwords",
+      "They disable logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Profiles provide org structure and context.",
+  },
+  {
+    id: 42,
+    topic: "People",
+    question: "Username enumeration helps to:",
+    options: [
+      "Find accounts across multiple platforms",
+      "Reset user passwords automatically",
+      "Disable MFA",
+      "Patch servers",
+    ],
+    correctAnswer: 0,
+    explanation: "Usernames often repeat across services.",
+  },
+  {
+    id: 43,
+    topic: "Web",
+    question: "Why use cached pages (Google/Bing)?",
+    options: [
+      "To view content that has changed or been removed",
+      "To bypass authentication",
+      "To scan ports",
+      "To decrypt TLS traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Caches can reveal older content and endpoints.",
+  },
+  {
+    id: 44,
+    topic: "DNS",
+    question: "Passive DNS provides:",
+    options: [
+      "Historical mappings of domains to IPs",
+      "Live shell access",
+      "Password hashes",
+      "Source code repositories",
+    ],
+    correctAnswer: 0,
+    explanation: "Passive DNS shows historical resolution data.",
+  },
+  {
+    id: 45,
+    topic: "Analysis",
+    question: "Link analysis is used to:",
+    options: [
+      "Map relationships between entities",
+      "Encrypt DNS traffic",
+      "Disable logging",
+      "Extract kernel modules",
+    ],
+    correctAnswer: 0,
+    explanation: "Link analysis helps connect people, domains, and assets.",
+  },
+  {
+    id: 46,
+    topic: "Basics",
+    question: "OSINT sources are typically:",
+    options: [
+      "Publicly available or legally accessible",
+      "Always private and restricted",
+      "Only internal company databases",
+      "Only dark web content",
+    ],
+    correctAnswer: 0,
+    explanation: "OSINT uses publicly accessible information.",
+  },
+  {
+    id: 47,
+    topic: "Legal",
+    question: "Which activity usually requires explicit authorization?",
+    options: [
+      "Active scanning of target systems",
+      "Reading public web pages",
+      "Searching public profiles",
+      "Using public DNS records",
+    ],
+    correctAnswer: 0,
+    explanation: "Active probing can be intrusive and often needs permission.",
+  },
+  {
+    id: 48,
+    topic: "Legal",
+    question: "Why avoid doxxing in OSINT work?",
+    options: [
+      "It violates privacy and ethical guidelines",
+      "It improves data accuracy",
+      "It is required by law",
+      "It reduces documentation needs",
+    ],
+    correctAnswer: 0,
+    explanation: "OSINT should respect privacy and legal boundaries.",
+  },
+  {
+    id: 49,
+    topic: "OPSEC",
+    question: "A good OPSEC practice during OSINT is to:",
+    options: [
+      "Use dedicated accounts and isolate research activity",
+      "Use personal accounts for all research",
+      "Share credentials across team members",
+      "Disable browser protections",
+    ],
+    correctAnswer: 0,
+    explanation: "Dedicated accounts reduce exposure and attribution risk.",
+  },
+  {
+    id: 50,
+    topic: "OPSEC",
+    question: "Why avoid contacting the target during passive OSINT?",
+    options: [
+      "It can alert the target and bias findings",
+      "It improves data quality",
+      "It is always required",
+      "It reduces detection risk",
+    ],
+    correctAnswer: 0,
+    explanation: "Direct contact can tip off the target.",
+  },
+  {
+    id: 51,
+    topic: "Validation",
+    question: "Why confirm data across multiple sources?",
+    options: [
+      "To reduce false positives and stale data",
+      "To increase noise in reports",
+      "To avoid evidence collection",
+      "To skip documentation",
+    ],
+    correctAnswer: 0,
+    explanation: "Cross-source validation improves accuracy.",
+  },
+  {
+    id: 52,
+    topic: "Domains",
+    question: "Typosquatting refers to:",
+    options: [
+      "Domains that mimic common misspellings",
+      "Domains that use long TLDs only",
+      "Domains without any DNS records",
+      "Domains owned by registrars",
+    ],
+    correctAnswer: 0,
+    explanation: "Typosquatting targets misspelled domains.",
+  },
+  {
+    id: 53,
+    topic: "Email",
+    question: "SPF records indicate:",
+    options: [
+      "Which servers can send mail for a domain",
+      "Which web servers host a domain",
+      "Which ports are open on a host",
+      "Which databases are exposed",
+    ],
+    correctAnswer: 0,
+    explanation: "SPF defines authorized mail senders.",
+  },
+  {
+    id: 54,
+    topic: "Email",
+    question: "DKIM records are used to:",
+    options: [
+      "Validate email authenticity with cryptographic signatures",
+      "Encrypt files on disk",
+      "Store DNS zone files",
+      "Disable phishing detection",
+    ],
+    correctAnswer: 0,
+    explanation: "DKIM uses cryptographic signatures to validate email.",
+  },
+  {
+    id: 55,
+    topic: "Email",
+    question: "DMARC provides:",
+    options: [
+      "Policy guidance for SPF and DKIM alignment",
+      "An alternative to TLS",
+      "A network segmentation policy",
+      "A password manager",
+    ],
+    correctAnswer: 0,
+    explanation: "DMARC specifies how to handle SPF/DKIM failures.",
+  },
+  {
+    id: 56,
+    topic: "Certificates",
+    question: "Certificate Transparency logs are useful because they:",
+    options: [
+      "List certificates issued for domains, often exposing subdomains",
+      "Show live web traffic",
+      "Store server passwords",
+      "Block DNS resolution",
+    ],
+    correctAnswer: 0,
+    explanation: "CT logs provide visibility into cert issuance.",
+  },
+  {
+    id: 57,
+    topic: "Risk",
+    question: "A dangling CNAME can indicate:",
+    options: [
+      "Potential subdomain takeover risk",
+      "A patched system",
+      "An internal-only host",
+      "A closed port",
+    ],
+    correctAnswer: 0,
+    explanation: "Dangling CNAMEs can be claimed by attackers.",
+  },
+  {
+    id: 58,
+    topic: "Cloud",
+    question: "Public cloud storage buckets are risky because they:",
+    options: [
+      "Can expose data if misconfigured for public access",
+      "Always require MFA",
+      "Automatically encrypt all data",
+      "Cannot be enumerated",
+    ],
+    correctAnswer: 0,
+    explanation: "Misconfigured buckets can leak data publicly.",
+  },
+  {
+    id: 59,
+    topic: "Tools",
+    question: "Maltego is often used for:",
+    options: [
+      "Link analysis and relationship mapping",
+      "Port scanning",
+      "Password cracking",
+      "Kernel debugging",
+    ],
+    correctAnswer: 0,
+    explanation: "Maltego maps relationships between entities.",
+  },
+  {
+    id: 60,
+    topic: "Tools",
+    question: "Recon-ng is best described as:",
+    options: [
+      "A modular OSINT framework",
+      "A malware analysis sandbox",
+      "A packet capture tool",
+      "A firewall manager",
+    ],
+    correctAnswer: 0,
+    explanation: "Recon-ng provides modules for OSINT collection.",
+  },
+  {
+    id: 61,
+    topic: "Active Recon",
+    question: "Port scanning is generally considered:",
+    options: [
+      "Active reconnaissance",
+      "Passive reconnaissance",
+      "Pure OSINT",
+      "Offline analysis only",
+    ],
+    correctAnswer: 0,
+    explanation: "Port scanning interacts directly with target systems.",
+  },
+  {
+    id: 62,
+    topic: "DNS",
+    question: "A DNS zone transfer (AXFR) attempt is:",
+    options: [
+      "An active check for misconfigured DNS servers",
+      "A passive recon technique",
+      "A search engine query",
+      "A social media lookup",
+    ],
+    correctAnswer: 0,
+    explanation: "AXFR is an active request to copy DNS zones.",
+  },
+  {
+    id: 63,
+    topic: "People",
+    question: "LinkedIn is commonly used to:",
+    options: [
+      "Identify employees, roles, and org structure",
+      "Scan open ports",
+      "Download DNS zones",
+      "Retrieve TLS certificates",
+    ],
+    correctAnswer: 0,
+    explanation: "LinkedIn helps map staff and organizational roles.",
+  },
+  {
+    id: 64,
+    topic: "Email",
+    question: "Email pattern discovery helps by:",
+    options: [
+      "Predicting user email formats for a domain",
+      "Patching mail servers",
+      "Decrypting emails",
+      "Removing spam filters",
+    ],
+    correctAnswer: 0,
+    explanation: "Patterns help validate email address formats.",
+  },
+  {
+    id: 65,
+    topic: "Reporting",
+    question: "Good OSINT reporting includes:",
+    options: [
+      "Sources and timestamps for findings",
+      "Only conclusions without evidence",
+      "No data validation",
+      "Unverified rumors",
+    ],
+    correctAnswer: 0,
+    explanation: "Evidence and timestamps improve credibility and reproducibility.",
+  },
+  {
+    id: 66,
+    topic: "Reporting",
+    question: "Why minimize sensitive personal data in reports?",
+    options: [
+      "To respect privacy and reduce risk",
+      "To weaken findings",
+      "To avoid documentation",
+      "To increase false positives",
+    ],
+    correctAnswer: 0,
+    explanation: "Reports should be privacy-aware and need-to-know.",
+  },
+  {
+    id: 67,
+    topic: "Validation",
+    question: "A single OSINT source should be treated as:",
+    options: [
+      "A lead that needs corroboration",
+      "Guaranteed truth",
+      "Legally binding evidence",
+      "A replacement for verification",
+    ],
+    correctAnswer: 0,
+    explanation: "OSINT sources can be inaccurate; validate where possible.",
+  },
+  {
+    id: 68,
+    topic: "Risk",
+    question: "Why monitor for exposed `.env` or config files?",
+    options: [
+      "They often contain secrets and internal URLs",
+      "They only store comments",
+      "They are always encrypted",
+      "They are unrelated to security",
+    ],
+    correctAnswer: 0,
+    explanation: "Config files can leak credentials and endpoints.",
+  },
+  {
+    id: 69,
+    topic: "Tools",
+    question: "dnsrecon is used for:",
+    options: [
+      "DNS enumeration and record collection",
+      "Memory forensics",
+      "Password cracking",
+      "Disk imaging",
+    ],
+    correctAnswer: 0,
+    explanation: "dnsrecon collects DNS records and performs checks.",
+  },
+  {
+    id: 70,
+    topic: "Tools",
+    question: "dig or nslookup are used to:",
+    options: [
+      "Query DNS records",
+      "Scan open ports",
+      "Enumerate Windows services",
+      "Perform code audits",
+    ],
+    correctAnswer: 0,
+    explanation: "dig and nslookup query DNS data.",
+  },
+  {
+    id: 71,
+    topic: "Web",
+    question: "Why check HTTP response headers?",
+    options: [
+      "They can reveal technologies or misconfigurations",
+      "They provide password hashes",
+      "They expose DNS zones",
+      "They show kernel modules",
+    ],
+    correctAnswer: 0,
+    explanation: "Headers can indicate software stacks and configuration details.",
+  },
+  {
+    id: 72,
+    topic: "Risk",
+    question: "A public `.git` directory can expose:",
+    options: [
+      "Source code and commit history",
+      "Only log files",
+      "Only images",
+      "Only CSS files",
+    ],
+    correctAnswer: 0,
+    explanation: "Exposed Git metadata can leak code and secrets.",
+  },
+  {
+    id: 73,
+    topic: "OPSEC",
+    question: "Why separate research browsing from personal accounts?",
+    options: [
+      "To reduce attribution and privacy risk",
+      "To increase target visibility",
+      "To bypass authentication",
+      "To avoid documentation",
+    ],
+    correctAnswer: 0,
+    explanation: "Separating accounts reduces correlation and exposure.",
+  },
+  {
+    id: 74,
+    topic: "Web",
+    question: "What is a common OSINT use of `site:pastebin.com`?",
+    options: [
+      "Find leaked references to a target",
+      "Scan for open ports",
+      "Reset credentials",
+      "Disable caching",
+    ],
+    correctAnswer: 0,
+    explanation: "Site-restricted searches can reveal leaked references.",
+  },
+  {
+    id: 75,
+    topic: "Basics",
+    question: "Which statement best summarizes OSINT value?",
+    options: [
+      "It builds a broader picture of a target using public data",
+      "It replaces all technical testing",
+      "It guarantees no false positives",
+      "It always requires direct scanning",
+    ],
+    correctAnswer: 0,
+    explanation: "OSINT provides context and leads from public sources.",
+  },
+];
+
 const OSINTReconPage: React.FC = () => {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
@@ -95,9 +1079,15 @@ const OSINTReconPage: React.FC = () => {
       <Container maxWidth="lg">
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-            Back to Learn Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 2 }}
+          />
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <TravelExploreIcon sx={{ fontSize: 40, color: "#f97316" }} />
             <Typography
@@ -1570,6 +2560,28 @@ echo "[*] Recon complete! Results in $OUTPUT/"`}
           </TabPanel>
         </Paper>
 
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="OSINT and Reconnaissance Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
         {/* Footer */}
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
@@ -1578,7 +2590,7 @@ echo "[*] Recon complete! Results in $OUTPUT/"`}
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#f97316", color: "#f97316" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -25,8 +26,14 @@ import {
   AccordionDetails,
   Alert,
   AlertTitle,
+  Drawer,
+  Fab,
+  IconButton,
+  Tooltip,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import FolderIcon from "@mui/icons-material/Folder";
@@ -67,6 +74,10 @@ import SaveIcon from "@mui/icons-material/Save";
 import NavigationIcon from "@mui/icons-material/Navigation";
 import SelectAllIcon from "@mui/icons-material/SelectAll";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 // Core Linux concepts
 const linuxConcepts = [
@@ -1276,23 +1287,952 @@ const securityHardening = [
   { category: "Updates", task: "Enable automatic security updates", file: "Command", setting: "apt install unattended-upgrades && dpkg-reconfigure unattended-upgrades", priority: "High" },
 ];
 
+const ACCENT_COLOR = "#f97316";
+const QUIZ_QUESTION_COUNT = 10;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "File System",
+    question: "What is the root directory in Linux?",
+    options: ["/", "/root", "/home", "C:\\"],
+    correctAnswer: 0,
+    explanation: "Linux uses a single hierarchy rooted at /.",
+  },
+  {
+    id: 2,
+    topic: "File System",
+    question: "Which character separates directories in Linux paths?",
+    options: ["/", "\\", ":", "|"],
+    correctAnswer: 0,
+    explanation: "Linux paths use the forward slash.",
+  },
+  {
+    id: 3,
+    topic: "File System",
+    question: "What directory typically stores user home folders?",
+    options: ["/home", "/etc", "/var", "/bin"],
+    correctAnswer: 0,
+    explanation: "User home directories are usually under /home.",
+  },
+  {
+    id: 4,
+    topic: "File System",
+    question: "Which directory contains system configuration files?",
+    options: ["/etc", "/usr", "/opt", "/srv"],
+    correctAnswer: 0,
+    explanation: "/etc stores system-wide configuration.",
+  },
+  {
+    id: 5,
+    topic: "File System",
+    question: "Which directory is used for variable data like logs?",
+    options: ["/var", "/tmp", "/dev", "/proc"],
+    correctAnswer: 0,
+    explanation: "/var holds variable data such as logs and spool files.",
+  },
+  {
+    id: 6,
+    topic: "File System",
+    question: "Which directory is intended for temporary files?",
+    options: ["/tmp", "/boot", "/lib", "/root"],
+    correctAnswer: 0,
+    explanation: "/tmp is used for temporary files.",
+  },
+  {
+    id: 7,
+    topic: "File System",
+    question: "Which directory contains essential user binaries?",
+    options: ["/bin", "/sbin", "/etc", "/opt"],
+    correctAnswer: 0,
+    explanation: "/bin stores essential user commands.",
+  },
+  {
+    id: 8,
+    topic: "File System",
+    question: "Which directory contains system administration binaries?",
+    options: ["/sbin", "/bin", "/usr/bin", "/home"],
+    correctAnswer: 0,
+    explanation: "/sbin holds system administration commands.",
+  },
+  {
+    id: 9,
+    topic: "File System",
+    question: "What does the /proc directory provide?",
+    options: ["Process and kernel information", "User profiles", "Installed packages", "Network logs"],
+    correctAnswer: 0,
+    explanation: "/proc is a virtual filesystem exposing process and kernel info.",
+  },
+  {
+    id: 10,
+    topic: "File System",
+    question: "Which directory commonly stores third-party software?",
+    options: ["/opt", "/etc", "/dev", "/sys"],
+    correctAnswer: 0,
+    explanation: "/opt is commonly used for optional or third-party apps.",
+  },
+  {
+    id: 11,
+    topic: "Users",
+    question: "Which user ID (UID) is reserved for root?",
+    options: ["0", "1", "1000", "65534"],
+    correctAnswer: 0,
+    explanation: "Root always has UID 0.",
+  },
+  {
+    id: 12,
+    topic: "Users",
+    question: "Which file lists user accounts and basic info?",
+    options: ["/etc/passwd", "/etc/shadow", "/etc/group", "/etc/sudoers"],
+    correctAnswer: 0,
+    explanation: "/etc/passwd stores user account entries.",
+  },
+  {
+    id: 13,
+    topic: "Users",
+    question: "Where are hashed user passwords stored?",
+    options: ["/etc/shadow", "/etc/passwd", "/etc/group", "/var/log/auth.log"],
+    correctAnswer: 0,
+    explanation: "/etc/shadow contains password hashes and is readable by root only.",
+  },
+  {
+    id: 14,
+    topic: "Users",
+    question: "Which file defines group memberships?",
+    options: ["/etc/group", "/etc/passwd", "/etc/shadow", "/etc/hosts"],
+    correctAnswer: 0,
+    explanation: "/etc/group contains group definitions.",
+  },
+  {
+    id: 15,
+    topic: "Users",
+    question: "What command shows the current user and groups?",
+    options: ["id", "who", "uname", "uptime"],
+    correctAnswer: 0,
+    explanation: "id prints the current user identity and group memberships.",
+  },
+  {
+    id: 16,
+    topic: "Users",
+    question: "Which command switches to another user account?",
+    options: ["su", "ssh", "scp", "sudo"],
+    correctAnswer: 0,
+    explanation: "su switches to another user account.",
+  },
+  {
+    id: 17,
+    topic: "Users",
+    question: "Which command creates a new user?",
+    options: ["useradd", "usermod", "userdel", "passwd"],
+    correctAnswer: 0,
+    explanation: "useradd creates a new user account.",
+  },
+  {
+    id: 18,
+    topic: "Users",
+    question: "Which command adds a user to a supplementary group?",
+    options: ["usermod -aG", "useradd -g", "groupadd", "passwd -g"],
+    correctAnswer: 0,
+    explanation: "usermod -aG adds a user to additional groups.",
+  },
+  {
+    id: 19,
+    topic: "Users",
+    question: "Which file controls sudo permissions?",
+    options: ["/etc/sudoers", "/etc/passwd", "/etc/group", "/etc/profile"],
+    correctAnswer: 0,
+    explanation: "/etc/sudoers defines sudo rules.",
+  },
+  {
+    id: 20,
+    topic: "Users",
+    question: "What command prints the current username?",
+    options: ["whoami", "hostname", "groups", "users"],
+    correctAnswer: 0,
+    explanation: "whoami prints the effective user name.",
+  },
+  {
+    id: 21,
+    topic: "Permissions",
+    question: "Linux file permissions are represented by:",
+    options: ["rwx for user, group, others", "rwx for user only", "read only flags", "ACLs only"],
+    correctAnswer: 0,
+    explanation: "Standard permissions are rwx for user, group, and others.",
+  },
+  {
+    id: 22,
+    topic: "Permissions",
+    question: "What does chmod 755 set?",
+    options: ["rwxr-xr-x", "rw-r--r--", "rwx------", "r--r--r--"],
+    correctAnswer: 0,
+    explanation: "755 corresponds to rwxr-xr-x.",
+  },
+  {
+    id: 23,
+    topic: "Permissions",
+    question: "What does chmod 644 set?",
+    options: ["rw-r--r--", "rwxr-xr-x", "rw-rw----", "r--------"],
+    correctAnswer: 0,
+    explanation: "644 corresponds to rw-r--r--.",
+  },
+  {
+    id: 24,
+    topic: "Permissions",
+    question: "Which command changes file ownership?",
+    options: ["chown", "chmod", "chgrp", "umask"],
+    correctAnswer: 0,
+    explanation: "chown changes file owner.",
+  },
+  {
+    id: 25,
+    topic: "Permissions",
+    question: "Which command changes file permissions?",
+    options: ["chmod", "chown", "ls", "cat"],
+    correctAnswer: 0,
+    explanation: "chmod changes permissions on files or directories.",
+  },
+  {
+    id: 26,
+    topic: "Permissions",
+    question: "What does the SUID bit do?",
+    options: [
+      "Runs a program with the file owner's privileges",
+      "Hides files from listings",
+      "Encrypts files automatically",
+      "Forces a file to be read-only",
+    ],
+    correctAnswer: 0,
+    explanation: "SUID runs the program with the owner's permissions.",
+  },
+  {
+    id: 27,
+    topic: "Permissions",
+    question: "What does the SGID bit do on a file?",
+    options: [
+      "Runs with the file group's privileges",
+      "Encrypts group files",
+      "Changes the owner to root",
+      "Disables execution",
+    ],
+    correctAnswer: 0,
+    explanation: "SGID runs with the file group's permissions.",
+  },
+  {
+    id: 28,
+    topic: "Permissions",
+    question: "What does the sticky bit do on /tmp?",
+    options: [
+      "Prevents users from deleting other users' files",
+      "Automatically deletes files",
+      "Encrypts temporary files",
+      "Forces root ownership",
+    ],
+    correctAnswer: 0,
+    explanation: "The sticky bit restricts deletions to file owners.",
+  },
+  {
+    id: 29,
+    topic: "Permissions",
+    question: "What does umask control?",
+    options: ["Default permission mask", "Process priority", "System time zone", "Network routes"],
+    correctAnswer: 0,
+    explanation: "umask sets default permissions for new files.",
+  },
+  {
+    id: 30,
+    topic: "Permissions",
+    question: "Which command shows permissions in a long listing?",
+    options: ["ls -l", "ls -a", "ls -h", "ls -t"],
+    correctAnswer: 0,
+    explanation: "ls -l shows permissions, owner, group, and timestamps.",
+  },
+  {
+    id: 31,
+    topic: "Processes",
+    question: "What does PID stand for?",
+    options: ["Process ID", "Program Index Descriptor", "Process Instance Directory", "Priority ID"],
+    correctAnswer: 0,
+    explanation: "PID means Process ID.",
+  },
+  {
+    id: 32,
+    topic: "Processes",
+    question: "What does PPID represent?",
+    options: ["Parent process ID", "Primary process ID", "Process priority ID", "Protected process ID"],
+    correctAnswer: 0,
+    explanation: "PPID is the Parent Process ID.",
+  },
+  {
+    id: 33,
+    topic: "Processes",
+    question: "Which command lists running processes?",
+    options: ["ps", "grep", "find", "mount"],
+    correctAnswer: 0,
+    explanation: "ps lists processes.",
+  },
+  {
+    id: 34,
+    topic: "Processes",
+    question: "Which command provides a real-time process view?",
+    options: ["top", "cat", "ls", "pwd"],
+    correctAnswer: 0,
+    explanation: "top shows processes in real time.",
+  },
+  {
+    id: 35,
+    topic: "Processes",
+    question: "Which command manages services on systemd systems?",
+    options: ["systemctl", "service", "initctl", "chkconfig"],
+    correctAnswer: 0,
+    explanation: "systemctl is used with systemd.",
+  },
+  {
+    id: 36,
+    topic: "Processes",
+    question: "Which command views systemd logs?",
+    options: ["journalctl", "dmesg", "tail", "logger"],
+    correctAnswer: 0,
+    explanation: "journalctl queries the systemd journal.",
+  },
+  {
+    id: 37,
+    topic: "Processes",
+    question: "Which signal does kill -9 send?",
+    options: ["SIGKILL", "SIGTERM", "SIGHUP", "SIGINT"],
+    correctAnswer: 0,
+    explanation: "kill -9 sends SIGKILL.",
+  },
+  {
+    id: 38,
+    topic: "Processes",
+    question: "Which signal is a graceful termination request?",
+    options: ["SIGTERM", "SIGKILL", "SIGSTOP", "SIGSEGV"],
+    correctAnswer: 0,
+    explanation: "SIGTERM requests graceful termination.",
+  },
+  {
+    id: 39,
+    topic: "Processes",
+    question: "What does nice adjust?",
+    options: ["Process priority", "Memory usage", "Disk quotas", "Network routes"],
+    correctAnswer: 0,
+    explanation: "nice adjusts process CPU priority.",
+  },
+  {
+    id: 40,
+    topic: "Processes",
+    question: "What init system is common on modern Linux?",
+    options: ["systemd", "sysvinit", "launchd", "upstart only"],
+    correctAnswer: 0,
+    explanation: "systemd is widely used on modern distributions.",
+  },
+  {
+    id: 41,
+    topic: "Packages",
+    question: "Which command updates package lists on Debian-based systems?",
+    options: ["apt update", "apt install", "apt clean", "apt remove"],
+    correctAnswer: 0,
+    explanation: "apt update refreshes package lists.",
+  },
+  {
+    id: 42,
+    topic: "Packages",
+    question: "Which command upgrades installed packages on Debian-based systems?",
+    options: ["apt upgrade", "apt update", "apt purge", "apt search"],
+    correctAnswer: 0,
+    explanation: "apt upgrade installs available updates.",
+  },
+  {
+    id: 43,
+    topic: "Packages",
+    question: "Which package manager is common on Red Hat based systems?",
+    options: ["dnf", "apt", "pacman", "zypper"],
+    correctAnswer: 0,
+    explanation: "dnf (or yum) is common on Red Hat based systems.",
+  },
+  {
+    id: 44,
+    topic: "Packages",
+    question: "Which command installs a .deb package file?",
+    options: ["dpkg -i", "rpm -i", "apt update", "snap install"],
+    correctAnswer: 0,
+    explanation: "dpkg -i installs a .deb package.",
+  },
+  {
+    id: 45,
+    topic: "Packages",
+    question: "Which command installs an RPM package file?",
+    options: ["rpm -i", "dpkg -i", "apt install", "pacman -S"],
+    correctAnswer: 0,
+    explanation: "rpm -i installs an RPM package.",
+  },
+  {
+    id: 46,
+    topic: "Packages",
+    question: "Which command removes a package on Debian-based systems?",
+    options: ["apt remove", "apt update", "apt list", "apt show"],
+    correctAnswer: 0,
+    explanation: "apt remove uninstalls packages.",
+  },
+  {
+    id: 47,
+    topic: "Packages",
+    question: "Which command removes a package and its config files?",
+    options: ["apt purge", "apt remove", "apt update", "apt policy"],
+    correctAnswer: 0,
+    explanation: "apt purge removes packages and configuration files.",
+  },
+  {
+    id: 48,
+    topic: "Packages",
+    question: "Which command searches for packages on Debian-based systems?",
+    options: ["apt search", "apt cache", "apt list", "apt repo"],
+    correctAnswer: 0,
+    explanation: "apt search finds packages by keyword.",
+  },
+  {
+    id: 49,
+    topic: "Packages",
+    question: "Which command updates the package list on Alpine Linux?",
+    options: ["apk update", "apt update", "dnf update", "yum update"],
+    correctAnswer: 0,
+    explanation: "apk update is used on Alpine.",
+  },
+  {
+    id: 50,
+    topic: "Packages",
+    question: "Which command installs packages on Arch Linux?",
+    options: ["pacman -S", "apt install", "rpm -i", "dnf install"],
+    correctAnswer: 0,
+    explanation: "pacman -S installs packages on Arch.",
+  },
+  {
+    id: 51,
+    topic: "Networking",
+    question: "Which command shows IP addresses and interfaces?",
+    options: ["ip a", "ifdown", "route", "arp"],
+    correctAnswer: 0,
+    explanation: "ip a shows addresses and interfaces.",
+  },
+  {
+    id: 52,
+    topic: "Networking",
+    question: "Which command tests connectivity to a host?",
+    options: ["ping", "dig", "curl", "ssh"],
+    correctAnswer: 0,
+    explanation: "ping checks reachability.",
+  },
+  {
+    id: 53,
+    topic: "Networking",
+    question: "Which command traces the path to a host?",
+    options: ["traceroute", "ping", "ss", "netstat"],
+    correctAnswer: 0,
+    explanation: "traceroute shows hops to a destination.",
+  },
+  {
+    id: 54,
+    topic: "Networking",
+    question: "Which command lists listening sockets?",
+    options: ["ss -tuln", "ls -l", "ps aux", "dmesg"],
+    correctAnswer: 0,
+    explanation: "ss -tuln lists listening TCP and UDP sockets.",
+  },
+  {
+    id: 55,
+    topic: "Networking",
+    question: "Which command resolves DNS names?",
+    options: ["dig", "pwd", "kill", "uname"],
+    correctAnswer: 0,
+    explanation: "dig queries DNS servers.",
+  },
+  {
+    id: 56,
+    topic: "Networking",
+    question: "Which command provides a remote shell over SSH?",
+    options: ["ssh", "scp", "rsync", "sftp"],
+    correctAnswer: 0,
+    explanation: "ssh opens a secure remote shell.",
+  },
+  {
+    id: 57,
+    topic: "Networking",
+    question: "Which command copies files over SSH?",
+    options: ["scp", "ssh", "rsync", "wget"],
+    correctAnswer: 0,
+    explanation: "scp copies files over SSH.",
+  },
+  {
+    id: 58,
+    topic: "Networking",
+    question: "Which firewall tool is a frontend for iptables on Ubuntu?",
+    options: ["ufw", "firewalld", "nft", "tcpdump"],
+    correctAnswer: 0,
+    explanation: "ufw is a simple firewall on Ubuntu.",
+  },
+  {
+    id: 59,
+    topic: "Networking",
+    question: "Which file maps hostnames to IPs locally?",
+    options: ["/etc/hosts", "/etc/resolv.conf", "/etc/passwd", "/etc/network/interfaces"],
+    correctAnswer: 0,
+    explanation: "/etc/hosts contains local hostname mappings.",
+  },
+  {
+    id: 60,
+    topic: "Networking",
+    question: "Which file lists DNS servers?",
+    options: ["/etc/resolv.conf", "/etc/hosts", "/etc/hostname", "/etc/apt/sources.list"],
+    correctAnswer: 0,
+    explanation: "/etc/resolv.conf defines DNS servers.",
+  },
+  {
+    id: 61,
+    topic: "Shell",
+    question: "Which command prints the current directory?",
+    options: ["pwd", "ls", "cd", "whoami"],
+    correctAnswer: 0,
+    explanation: "pwd shows the current working directory.",
+  },
+  {
+    id: 62,
+    topic: "Shell",
+    question: "Which command lists files including hidden files?",
+    options: ["ls -a", "ls -l", "ls -h", "ls -t"],
+    correctAnswer: 0,
+    explanation: "ls -a shows hidden files.",
+  },
+  {
+    id: 63,
+    topic: "Shell",
+    question: "Which command searches text within files?",
+    options: ["grep", "cat", "touch", "mkdir"],
+    correctAnswer: 0,
+    explanation: "grep searches for text patterns in files.",
+  },
+  {
+    id: 64,
+    topic: "Shell",
+    question: "Which command finds files by name?",
+    options: ["find", "locate", "which", "whereis"],
+    correctAnswer: 0,
+    explanation: "find searches the filesystem for matching files.",
+  },
+  {
+    id: 65,
+    topic: "Shell",
+    question: "Which command prints the contents of a file?",
+    options: ["cat", "pwd", "cd", "ls"],
+    correctAnswer: 0,
+    explanation: "cat prints file contents.",
+  },
+  {
+    id: 66,
+    topic: "Shell",
+    question: "Which command shows a file page by page?",
+    options: ["less", "cp", "mv", "rm"],
+    correctAnswer: 0,
+    explanation: "less provides paged viewing.",
+  },
+  {
+    id: 67,
+    topic: "Shell",
+    question: "Which command archives files into a tarball?",
+    options: ["tar -czf", "zip -r", "gzip -d", "unzip"],
+    correctAnswer: 0,
+    explanation: "tar -czf creates a compressed tarball.",
+  },
+  {
+    id: 68,
+    topic: "Shell",
+    question: "Which command changes directories?",
+    options: ["cd", "ls", "pwd", "echo"],
+    correctAnswer: 0,
+    explanation: "cd changes the current directory.",
+  },
+  {
+    id: 69,
+    topic: "Shell",
+    question: "Which command displays command history?",
+    options: ["history", "alias", "export", "env"],
+    correctAnswer: 0,
+    explanation: "history shows recent commands.",
+  },
+  {
+    id: 70,
+    topic: "Shell",
+    question: "Which command edits a user's crontab?",
+    options: ["crontab -e", "cron -e", "at -e", "systemctl edit"],
+    correctAnswer: 0,
+    explanation: "crontab -e edits the user's cron entries.",
+  },
+  {
+    id: 71,
+    topic: "Security",
+    question: "Where are most system logs stored?",
+    options: ["/var/log", "/etc/logs", "/usr/logs", "/root/logs"],
+    correctAnswer: 0,
+    explanation: "System logs are typically under /var/log.",
+  },
+  {
+    id: 72,
+    topic: "Security",
+    question: "Which log file commonly records SSH and sudo activity on Debian?",
+    options: ["/var/log/auth.log", "/var/log/secure", "/var/log/messages", "/var/log/syslog"],
+    correctAnswer: 0,
+    explanation: "Debian-based systems use /var/log/auth.log for auth events.",
+  },
+  {
+    id: 73,
+    topic: "Security",
+    question: "What does the command 'sudo !!' do?",
+    options: ["Repeats the last command with sudo", "Shows sudo logs", "Edits sudoers", "Clears sudo cache"],
+    correctAnswer: 0,
+    explanation: "sudo !! re-runs the previous command with sudo.",
+  },
+  {
+    id: 74,
+    topic: "Security",
+    question: "Which tool helps block brute force SSH attempts?",
+    options: ["fail2ban", "cron", "rsync", "telnet"],
+    correctAnswer: 0,
+    explanation: "fail2ban bans IPs after repeated failed logins.",
+  },
+  {
+    id: 75,
+    topic: "Security",
+    question: "Which SSH setting disables root logins?",
+    options: ["PermitRootLogin no", "PasswordAuthentication yes", "AllowUsers root", "UsePAM no"],
+    correctAnswer: 0,
+    explanation: "PermitRootLogin no prevents root SSH logins.",
+  },
+];
+
 export default function LinuxFundamentalsPage() {
   const theme = useTheme();
   const navigate = useNavigate();
+  const accent = "#22c55e";
+
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "history", label: "History & Timeline", icon: <HistoryIcon /> },
+    { id: "stats", label: "By The Numbers", icon: <SpeedIcon /> },
+    { id: "core-concepts", label: "Core Concepts", icon: <ComputerIcon /> },
+    { id: "distributions", label: "Distributions", icon: <LayersIcon /> },
+    { id: "boot-process", label: "Boot Process", icon: <PlayArrowIcon /> },
+    { id: "directories", label: "Directories", icon: <FolderIcon /> },
+    { id: "commands", label: "Essential Commands", icon: <TerminalIcon /> },
+    { id: "permissions", label: "File Permissions", icon: <LockIcon /> },
+    { id: "logs", label: "Log Files", icon: <DescriptionIcon /> },
+    { id: "systemd", label: "systemd & Services", icon: <SettingsIcon /> },
+    { id: "security-tools", label: "Security Tools", icon: <SecurityIcon /> },
+    { id: "cron", label: "Cron Scheduling", icon: <LoopIcon /> },
+    { id: "environment", label: "Environment Vars", icon: <BuildIcon /> },
+    { id: "shortcuts", label: "Keyboard Shortcuts", icon: <KeyIcon /> },
+    { id: "scripting", label: "Shell Scripting", icon: <CodeIcon /> },
+    { id: "editors", label: "Text Editors", icon: <EditIcon /> },
+    { id: "pioneers", label: "Pioneers & Philosophy", icon: <MenuBookIcon /> },
+    { id: "administration", label: "Administration", icon: <AdminPanelSettingsIcon /> },
+    { id: "quiz", label: "Knowledge Check", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const yOffset = -80;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150 && rect.bottom >= 150) {
+            currentSection = sectionId;
+            break;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  const [quizPool] = React.useState<QuizQuestion[]>(() =>
+    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
+  );
 
   const pageContext = `Linux Fundamentals learning page - Essential Linux operating system concepts for security professionals. Covers file system hierarchy, users & groups, processes & services, package management, and shell basics.`;
 
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        position: "sticky",
+        top: 80,
+        p: 2,
+        borderRadius: 3,
+        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        backdropFilter: "blur(20px)",
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        "&::-webkit-scrollbar": { width: 6 },
+        "&::-webkit-scrollbar-track": { background: "transparent" },
+        "&::-webkit-scrollbar-thumb": {
+          background: alpha(accent, 0.3),
+          borderRadius: 3,
+          "&:hover": { background: alpha(accent, 0.5) },
+        },
+      }}
+    >
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", textTransform: "uppercase", letterSpacing: 1 }}>
+          Navigation
+        </Typography>
+        <Box sx={{ mt: 1 }}>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 4,
+              borderRadius: 2,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 2,
+              },
+            }}
+          />
+        </Box>
+      </Box>
+      <Divider sx={{ mb: 1 }} />
+      <List dense sx={{ mx: -1 }}>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              borderRadius: 1.5,
+              mb: 0.25,
+              py: 0.5,
+              cursor: "pointer",
+              bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+              borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+              "&:hover": {
+                bgcolor: alpha(accent, 0.08),
+              },
+              transition: "all 0.15s ease",
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? accent : "text.secondary" }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: activeSection === item.id ? 700 : 500,
+                    color: activeSection === item.id ? accent : "text.secondary",
+                    fontSize: "0.75rem",
+                  }}
+                >
+                  {item.label}
+                </Typography>
+              }
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Linux Fundamentals" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Back Button */}
-        <Chip
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3, fontWeight: 600 }}
-          clickable
-        />
+      {/* Floating Action Buttons */}
+      <Tooltip title="Navigation" placement="left">
+        <Fab
+          color="primary"
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            bgcolor: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.9) },
+            zIndex: 1000,
+          }}
+          onClick={() => setNavDrawerOpen(true)}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          sx={{
+            position: "fixed",
+            bottom: 24,
+            right: 24,
+            bgcolor: alpha(theme.palette.background.paper, 0.9),
+            backdropFilter: "blur(10px)",
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            "&:hover": { bgcolor: theme.palette.background.paper },
+            zIndex: 1000,
+          }}
+          onClick={scrollToTop}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 3 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Navigation
+            </Typography>
+            <IconButton size="small" onClick={() => setNavDrawerOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          {/* Progress Bar */}
+          <Box sx={{ mb: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ color: activeSection === item.id ? accent : "text.secondary", minWidth: 36 }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: accent,
+                      color: "white",
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </Drawer>
+
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation - Desktop */}
+          {!isMobile && (
+            <Grid item md={3}>
+              {sidebarNav}
+            </Grid>
+          )}
+
+          {/* Main Content */}
+          <Grid item xs={12} md={9}>
+            {/* Back Button */}
+            <Chip
+              component={Link}
+              to="/learn"
+              icon={<ArrowBackIcon />}
+              label="Back to Learning Hub"
+              clickable
+              variant="outlined"
+              sx={{ borderRadius: 2, mb: 3 }}
+            />
 
         {/* Hero Banner */}
         <Paper
@@ -1362,6 +2302,7 @@ export default function LinuxFundamentalsPage() {
 
         {/* Overview Section - Comprehensive */}
         <Paper
+          id="intro"
           sx={{
             p: 4,
             mb: 5,
@@ -1456,7 +2397,7 @@ export default function LinuxFundamentalsPage() {
         </Paper>
 
         {/* Linux History Timeline */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="history" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           📜 Linux History & Timeline
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -1498,7 +2439,7 @@ export default function LinuxFundamentalsPage() {
         </Paper>
 
         {/* Linux Market Stats */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="stats" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           📊 Linux By The Numbers
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -1559,7 +2500,7 @@ export default function LinuxFundamentalsPage() {
         </Grid>
 
         {/* Core Concepts */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="core-concepts" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           🐧 Core Linux Concepts
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -1661,7 +2602,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="distributions" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           🐧 Linux Distributions
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2073,7 +3014,7 @@ export default function LinuxFundamentalsPage() {
         </Paper>
 
         {/* Boot Process */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="boot-process" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           🚀 Linux Boot Process
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2125,7 +3066,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="directories" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           📁 Important Directories
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2264,7 +3205,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="commands" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           ⌨️ Essential Commands
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2348,7 +3289,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="permissions" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           🔐 File Permissions
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2456,7 +3397,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="logs" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           📋 Log Files
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2566,7 +3507,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="systemd" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           ⚙️ systemd & Service Management
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2600,7 +3541,7 @@ export default function LinuxFundamentalsPage() {
         </Grid>
 
         {/* Security Tools */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="security-tools" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           🛡️ Security Tools
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2653,7 +3594,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="cron" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           ⏰ Cron Scheduling
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2717,7 +3658,7 @@ export default function LinuxFundamentalsPage() {
         </Grid>
 
         {/* Environment Variables */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="environment" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           🔧 Environment Variables
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2751,7 +3692,7 @@ export default function LinuxFundamentalsPage() {
         </Grid>
 
         {/* Keyboard Shortcuts */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="shortcuts" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           ⌨️ Keyboard Shortcuts
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -2803,7 +3744,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="scripting" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           📜 Shell Scripting Basics
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -3164,7 +4105,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="editors" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           ✏️ Text Editors (Vim & Nano)
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -3515,7 +4456,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="pioneers" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           🏛️ Linux Pioneers & Philosophy
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -3690,7 +4631,7 @@ export default function LinuxFundamentalsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography id="administration" variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           🔧 Linux Administration
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -4227,6 +5168,19 @@ export default function LinuxFundamentalsPage() {
             />
           </Box>
         </Paper>
+
+            {/* Quiz Section */}
+            <Box id="quiz" sx={{ mt: 5 }}>
+              <QuizSection
+                questions={quizPool}
+                accentColor={ACCENT_COLOR}
+                title="Linux Fundamentals Knowledge Check"
+                description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
+                questionsPerQuiz={QUIZ_QUESTION_COUNT}
+              />
+            </Box>
+          </Grid>
+        </Grid>
       </Container>
     </LearnPageLayout>
   );

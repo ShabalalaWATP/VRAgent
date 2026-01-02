@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -557,13 +558,15 @@ const HtmlCssGuidePage: React.FC = () => {
         {sidebarNav}
         <Box sx={{ flex: 1, minWidth: 0 }}>
         {/* Back Button */}
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3 }}
-        >
-          Back to Learning Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 3 }}
+        />
 
         {/* Hero Banner */}
         <Paper

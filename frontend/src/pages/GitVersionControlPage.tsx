@@ -47,7 +47,7 @@ import SpeedIcon from "@mui/icons-material/Speed";
 import CloseIcon from "@mui/icons-material/Close";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 // ==================== QUIZ SECTION ====================
@@ -704,9 +704,15 @@ const GitVersionControlPage: React.FC = () => {
 
         {/* Main Content */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 3 }}>
-            Back to Learning Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
 
           {/* ==================== HERO SECTION ==================== */}
           <Paper
@@ -3654,6 +3660,17 @@ Thumbs.db
             <QuizSection />
           </Paper>
 
+          {/* Bottom Navigation */}
+          <Box sx={{ mt: 4, textAlign: "center" }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+            >
+              Back to Learning Hub
+            </Button>
+          </Box>
         </Box>
       </Box>
     </LearnPageLayout>

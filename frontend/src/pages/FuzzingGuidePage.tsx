@@ -1,4 +1,5 @@
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Typography,
@@ -24,7 +25,7 @@ import {
   Divider,
 } from "@mui/material";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -36,6 +37,7 @@ import MemoryIcon from "@mui/icons-material/Memory";
 import StorageIcon from "@mui/icons-material/Storage";
 import HttpIcon from "@mui/icons-material/Http";
 import TerminalIcon from "@mui/icons-material/Terminal";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -208,6 +210,616 @@ const interestingPayloads = {
     { value: "Circular references", reason: "Infinite loops" },
   ],
 };
+
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#ef4444";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "Fuzzing is best described as:",
+    options: [
+      "Automated input generation to find bugs",
+      "Manual code review only",
+      "Static analysis without execution",
+      "Firewall rule tuning",
+    ],
+    correctAnswer: 0,
+    explanation: "Fuzzing feeds many inputs to trigger unexpected behavior.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "Coverage-guided fuzzing uses:",
+    options: ["Runtime coverage feedback", "Only static signatures", "Only wordlists", "No execution"],
+    correctAnswer: 0,
+    explanation: "Coverage feedback helps select inputs that reach new code.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "Grey-box fuzzing means:",
+    options: ["Using partial feedback like coverage", "No knowledge of the target", "Full symbolic execution", "Only manual testing"],
+    correctAnswer: 0,
+    explanation: "Grey-box fuzzing uses limited internal feedback.",
+  },
+  {
+    id: 4,
+    topic: "Harness",
+    question: "A fuzzing harness is:",
+    options: ["A small wrapper that feeds input to a target", "A firewall rule set", "A vulnerability scanner", "A log parser"],
+    correctAnswer: 0,
+    explanation: "Harnesses adapt targets for fuzzing inputs.",
+  },
+  {
+    id: 5,
+    topic: "Harness",
+    question: "A good harness should be:",
+    options: ["Deterministic and fast", "Non-deterministic", "Slow and stateful only", "Dependent on manual input"],
+    correctAnswer: 0,
+    explanation: "Deterministic behavior improves coverage and triage.",
+  },
+  {
+    id: 6,
+    topic: "Corpus",
+    question: "A seed corpus is used to:",
+    options: ["Provide valid starting inputs", "Replace sanitizers", "Disable coverage", "Hide crashes"],
+    correctAnswer: 0,
+    explanation: "Seeds help the fuzzer reach deeper states sooner.",
+  },
+  {
+    id: 7,
+    topic: "Corpus",
+    question: "Corpus minimization aims to:",
+    options: ["Keep only inputs that add coverage", "Increase input size", "Remove all inputs", "Disable triage"],
+    correctAnswer: 0,
+    explanation: "Minimization keeps a small, high-value corpus.",
+  },
+  {
+    id: 8,
+    topic: "Corpus",
+    question: "Crash deduplication groups crashes by:",
+    options: ["Similar stack traces or coverage", "File size only", "CPU usage", "Timestamp"],
+    correctAnswer: 0,
+    explanation: "Deduplication reduces duplicate crash reports.",
+  },
+  {
+    id: 9,
+    topic: "Mutation",
+    question: "Mutation-based fuzzing primarily:",
+    options: ["Mutates existing inputs", "Generates from grammar only", "Uses no inputs", "Only checks logs"],
+    correctAnswer: 0,
+    explanation: "Mutation fuzzers change seeds to explore new paths.",
+  },
+  {
+    id: 10,
+    topic: "Mutation",
+    question: "A dictionary in fuzzing provides:",
+    options: ["Known tokens to insert", "Stack traces", "Crash logs", "Compiler flags"],
+    correctAnswer: 0,
+    explanation: "Dictionaries help reach parsers that expect keywords.",
+  },
+  {
+    id: 11,
+    topic: "Mutation",
+    question: "Bit flipping is useful for:",
+    options: ["Boundary and off-by-one cases", "TLS handshakes", "File compression", "Log rotation"],
+    correctAnswer: 0,
+    explanation: "Small mutations can trigger edge conditions.",
+  },
+  {
+    id: 12,
+    topic: "Mutation",
+    question: "Havoc mode typically:",
+    options: ["Applies random combinations of mutations", "Only flips one bit", "Stops all mutations", "Uses only grammar rules"],
+    correctAnswer: 0,
+    explanation: "Havoc is a chaotic, high-entropy stage.",
+  },
+  {
+    id: 13,
+    topic: "Mutation",
+    question: "Splicing does what?",
+    options: ["Combines parts of two inputs", "Encrypts inputs", "Removes all bytes", "Only changes headers"],
+    correctAnswer: 0,
+    explanation: "Splicing mixes inputs to create new variants.",
+  },
+  {
+    id: 14,
+    topic: "Mutation",
+    question: "Arithmetic mutation targets:",
+    options: ["Numeric boundary values", "Only strings", "Only timestamps", "Only Unicode"],
+    correctAnswer: 0,
+    explanation: "Small numeric changes hit boundary conditions.",
+  },
+  {
+    id: 15,
+    topic: "Coverage",
+    question: "Edge coverage tracks:",
+    options: ["Transitions between basic blocks", "Only function names", "Only CPU usage", "Only file size"],
+    correctAnswer: 0,
+    explanation: "Edge coverage counts control-flow transitions.",
+  },
+  {
+    id: 16,
+    topic: "Coverage",
+    question: "Compile-time instrumentation is used to:",
+    options: ["Collect coverage during execution", "Encrypt binaries", "Disable logs", "Remove symbols"],
+    correctAnswer: 0,
+    explanation: "Instrumentation enables coverage-guided fuzzing.",
+  },
+  {
+    id: 17,
+    topic: "Execution",
+    question: "In-process fuzzers are typically:",
+    options: ["Faster due to lower overhead", "Slower than fork mode", "Unable to use sanitizers", "Only for web apps"],
+    correctAnswer: 0,
+    explanation: "In-process fuzzers avoid process startup costs.",
+  },
+  {
+    id: 18,
+    topic: "Execution",
+    question: "AFL++ often uses a:",
+    options: ["Forkserver to speed execs", "Database server", "Browser engine", "Kernel module"],
+    correctAnswer: 0,
+    explanation: "Forkserver reduces process creation overhead.",
+  },
+  {
+    id: 19,
+    topic: "Execution",
+    question: "libFuzzer is:",
+    options: ["In-process and linked with the target", "A network scanner", "A GUI-only fuzzer", "A packet sniffer"],
+    correctAnswer: 0,
+    explanation: "libFuzzer links into the target for fast cycles.",
+  },
+  {
+    id: 20,
+    topic: "Execution",
+    question: "Honggfuzz is known for:",
+    options: ["Parallel fuzzing and hardware coverage options", "Only black-box fuzzing", "Only Java fuzzing", "Only mutation dictionaries"],
+    correctAnswer: 0,
+    explanation: "Honggfuzz supports multi-process and hardware tracing.",
+  },
+  {
+    id: 21,
+    topic: "Sanitizers",
+    question: "AddressSanitizer detects:",
+    options: ["Out-of-bounds and use-after-free bugs", "SQL injection", "CSRF", "TLS misconfigurations"],
+    correctAnswer: 0,
+    explanation: "ASan finds memory safety issues.",
+  },
+  {
+    id: 22,
+    topic: "Sanitizers",
+    question: "UBSan detects:",
+    options: ["Undefined behavior like overflows", "Network latency", "Disk errors", "TLS errors"],
+    correctAnswer: 0,
+    explanation: "UBSan catches undefined behavior at runtime.",
+  },
+  {
+    id: 23,
+    topic: "Sanitizers",
+    question: "MSan detects:",
+    options: ["Use of uninitialized memory", "SQL injection", "XSS", "Buffer size only"],
+    correctAnswer: 0,
+    explanation: "MSan reports reads of uninitialized data.",
+  },
+  {
+    id: 24,
+    topic: "Sanitizers",
+    question: "LSan detects:",
+    options: ["Memory leaks", "Cross-site scripting", "Weak passwords", "Race conditions only"],
+    correctAnswer: 0,
+    explanation: "LSan reports memory that is never freed.",
+  },
+  {
+    id: 25,
+    topic: "Crashes",
+    question: "A timeout usually indicates:",
+    options: ["A hang or infinite loop", "A clean exit", "A compiler error", "A valid input"],
+    correctAnswer: 0,
+    explanation: "Timeouts often signal hangs or heavy computation.",
+  },
+  {
+    id: 26,
+    topic: "Crashes",
+    question: "An out-of-memory crash often means:",
+    options: ["Input triggers excessive allocation", "The input is valid", "Coverage is low", "The sanitizer is off"],
+    correctAnswer: 0,
+    explanation: "Huge allocations can exhaust memory.",
+  },
+  {
+    id: 27,
+    topic: "Triage",
+    question: "Crash triage should include:",
+    options: ["Reproduce with the same input", "Delete the input", "Disable sanitizers", "Ignore stack traces"],
+    correctAnswer: 0,
+    explanation: "Repro steps confirm the issue.",
+  },
+  {
+    id: 28,
+    topic: "Triage",
+    question: "Minimizing a crash input helps to:",
+    options: ["Isolate the root cause", "Hide the bug", "Reduce coverage", "Disable ASan"],
+    correctAnswer: 0,
+    explanation: "Smaller inputs simplify debugging.",
+  },
+  {
+    id: 29,
+    topic: "Triage",
+    question: "Reproducibility matters because:",
+    options: ["It confirms a real defect", "It reduces coverage", "It slows fuzzing", "It disables triage"],
+    correctAnswer: 0,
+    explanation: "Non-reproducible crashes are hard to fix.",
+  },
+  {
+    id: 30,
+    topic: "Performance",
+    question: "Executions per second (EPS) is:",
+    options: ["A key fuzzing throughput metric", "A cryptographic function", "A CPU voltage", "A filesystem setting"],
+    correctAnswer: 0,
+    explanation: "Higher EPS explores more inputs.",
+  },
+  {
+    id: 31,
+    topic: "Performance",
+    question: "Persistent mode improves speed by:",
+    options: ["Reusing a process for many inputs", "Rebooting the machine", "Disabling coverage", "Using a GUI"],
+    correctAnswer: 0,
+    explanation: "Persistent loops avoid process restarts.",
+  },
+  {
+    id: 32,
+    topic: "Performance",
+    question: "Reducing logging during fuzzing:",
+    options: ["Improves throughput", "Prevents crashes", "Fixes bugs", "Increases code size"],
+    correctAnswer: 0,
+    explanation: "Less IO means faster execution.",
+  },
+  {
+    id: 33,
+    topic: "Coverage",
+    question: "A new coverage path indicates:",
+    options: ["A potentially interesting input", "A fixed bug", "A compiler warning", "A patch failure"],
+    correctAnswer: 0,
+    explanation: "New paths mean new behavior to explore.",
+  },
+  {
+    id: 34,
+    topic: "Corpus",
+    question: "High-quality seeds usually:",
+    options: ["Are valid and diverse", "Are all empty", "Only contain zeros", "Are all identical"],
+    correctAnswer: 0,
+    explanation: "Diverse valid inputs reach more code.",
+  },
+  {
+    id: 35,
+    topic: "Techniques",
+    question: "Grammar-based fuzzing is best for:",
+    options: ["Structured inputs like file formats", "Random byte streams only", "Network latency testing", "CPU benchmarking"],
+    correctAnswer: 0,
+    explanation: "Grammars preserve structure while mutating.",
+  },
+  {
+    id: 36,
+    topic: "Techniques",
+    question: "Stateful fuzzing targets:",
+    options: ["Protocols with sequences of messages", "Only single files", "Static images", "Only CPU registers"],
+    correctAnswer: 0,
+    explanation: "Stateful fuzzers track protocol state.",
+  },
+  {
+    id: 37,
+    topic: "Techniques",
+    question: "Differential fuzzing compares:",
+    options: ["Multiple implementations for inconsistent behavior", "Only file sizes", "Only timestamps", "Only bandwidth"],
+    correctAnswer: 0,
+    explanation: "Differences between implementations reveal bugs.",
+  },
+  {
+    id: 38,
+    topic: "Techniques",
+    question: "Property-based fuzzing checks:",
+    options: ["Invariants that must always hold", "Only runtime speed", "Only log volume", "Only formatting"],
+    correctAnswer: 0,
+    explanation: "Properties define expected behavior for all inputs.",
+  },
+  {
+    id: 39,
+    topic: "Techniques",
+    question: "Mutation-based fuzzing is useful when:",
+    options: ["Input format is unknown or complex", "A strict grammar is required", "No inputs exist", "Only network packets are used"],
+    correctAnswer: 0,
+    explanation: "Mutation fuzzers can explore without full specs.",
+  },
+  {
+    id: 40,
+    topic: "Tools",
+    question: "AFL++ is best for:",
+    options: ["Native binaries and file parsers", "Only web fuzzing", "Only mobile apps", "Only packet capture"],
+    correctAnswer: 0,
+    explanation: "AFL++ targets native code with coverage guidance.",
+  },
+  {
+    id: 41,
+    topic: "Tools",
+    question: "libFuzzer is best for:",
+    options: ["Library APIs and unit-level fuzzing", "Only network scanning", "Only GUI testing", "Only kernel fuzzing"],
+    correctAnswer: 0,
+    explanation: "libFuzzer is designed for in-process library fuzzing.",
+  },
+  {
+    id: 42,
+    topic: "Tools",
+    question: "ffuf is commonly used for:",
+    options: ["Web directory and parameter fuzzing", "Kernel debugging", "Heap grooming", "Binary patching"],
+    correctAnswer: 0,
+    explanation: "ffuf focuses on web app fuzzing.",
+  },
+  {
+    id: 43,
+    topic: "Tools",
+    question: "Burp Intruder is:",
+    options: ["A GUI fuzzing tool for web requests", "A kernel fuzzer", "A static analyzer", "A crash minimizer"],
+    correctAnswer: 0,
+    explanation: "Intruder fuzzes HTTP requests in a GUI workflow.",
+  },
+  {
+    id: 44,
+    topic: "Tools",
+    question: "Radamsa is known for:",
+    options: ["Black-box mutation of inputs", "Coverage-guided fuzzing only", "Symbolic execution", "Network packet capture"],
+    correctAnswer: 0,
+    explanation: "Radamsa mutates inputs without instrumentation.",
+  },
+  {
+    id: 45,
+    topic: "Tools",
+    question: "Jazzer targets:",
+    options: ["JVM languages like Java and Kotlin", "Only C code", "Only web apps", "Only firmware"],
+    correctAnswer: 0,
+    explanation: "Jazzer is a JVM fuzzing tool.",
+  },
+  {
+    id: 46,
+    topic: "Tools",
+    question: "Atheris targets:",
+    options: ["Python code", "Only C code", "Only SQL queries", "Only kernel modules"],
+    correctAnswer: 0,
+    explanation: "Atheris is a Python fuzzing engine.",
+  },
+  {
+    id: 47,
+    topic: "Harness",
+    question: "A common libFuzzer entry point signature is:",
+    options: ["LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)", "main(int argc, char **argv)", "void start()", "int fuzz()"],
+    correctAnswer: 0,
+    explanation: "libFuzzer uses LLVMFuzzerTestOneInput.",
+  },
+  {
+    id: 48,
+    topic: "Harness",
+    question: "To speed fuzzing, prefer:",
+    options: ["In-memory processing over disk IO", "Heavy logging", "Network calls", "Manual input"],
+    correctAnswer: 0,
+    explanation: "Avoiding slow IO increases throughput.",
+  },
+  {
+    id: 49,
+    topic: "Harness",
+    question: "Timeouts should be set to:",
+    options: ["Detect hangs without too many false positives", "Never trigger", "Always trigger", "Disable fuzzing"],
+    correctAnswer: 0,
+    explanation: "Timeouts balance hang detection and valid slow cases.",
+  },
+  {
+    id: 50,
+    topic: "Harness",
+    question: "Compiling with sanitizers helps:",
+    options: ["Turn bugs into visible crashes", "Reduce coverage", "Disable fuzzing", "Hide errors"],
+    correctAnswer: 0,
+    explanation: "Sanitizers make subtle bugs detectable.",
+  },
+  {
+    id: 51,
+    topic: "Corpus",
+    question: "Seed selection should aim for:",
+    options: ["Diversity across formats and sizes", "Only empty files", "Only the largest file", "Only one sample"],
+    correctAnswer: 0,
+    explanation: "Diverse seeds improve coverage early.",
+  },
+  {
+    id: 52,
+    topic: "Mutation",
+    question: "Dictionary tokens are especially useful for:",
+    options: ["Keyword-driven parsers", "Random byte streams", "CPU benchmarks", "Disk tests"],
+    correctAnswer: 0,
+    explanation: "Tokens help reach parser code paths.",
+  },
+  {
+    id: 53,
+    topic: "Mutation",
+    question: "Magic bytes matter because:",
+    options: ["They gate file format parsing", "They disable sanitizers", "They slow down IO", "They fix bugs"],
+    correctAnswer: 0,
+    explanation: "Valid magic bytes are required to parse formats.",
+  },
+  {
+    id: 54,
+    topic: "Safety",
+    question: "Fuzzing should be done:",
+    options: ["Only with authorization and scope", "On any public system", "Without logging", "Only on production"],
+    correctAnswer: 0,
+    explanation: "Fuzzing can be disruptive and needs permission.",
+  },
+  {
+    id: 55,
+    topic: "Reporting",
+    question: "A good fuzzing bug report includes:",
+    options: ["Repro input and stack trace", "Only a screenshot", "Only the tool name", "Only the date"],
+    correctAnswer: 0,
+    explanation: "Inputs and traces help developers reproduce and fix.",
+  },
+  {
+    id: 56,
+    topic: "Operations",
+    question: "CI fuzzing helps by:",
+    options: ["Catching regressions automatically", "Removing coverage", "Disabling tests", "Hiding crashes"],
+    correctAnswer: 0,
+    explanation: "CI fuzzing keeps bug fixes from regressing.",
+  },
+  {
+    id: 57,
+    topic: "Operations",
+    question: "To reproduce a crash, keep:",
+    options: ["The exact input and binary build", "Only a log snippet", "Only the seed count", "Only the runtime"],
+    correctAnswer: 0,
+    explanation: "Repro requires the same input and environment.",
+  },
+  {
+    id: 58,
+    topic: "Fundamentals",
+    question: "Grey-box fuzzing uses feedback like:",
+    options: ["Coverage or sanitizer signals", "Only timestamps", "Only file sizes", "Only hashes"],
+    correctAnswer: 0,
+    explanation: "Feedback guides input selection.",
+  },
+  {
+    id: 59,
+    topic: "Fundamentals",
+    question: "White-box fuzzing often uses:",
+    options: ["Symbolic execution", "Only mutation", "Only random inputs", "No program analysis"],
+    correctAnswer: 0,
+    explanation: "White-box fuzzing uses deeper program analysis.",
+  },
+  {
+    id: 60,
+    topic: "Value",
+    question: "Fuzzing is useful for:",
+    options: ["Reliability and security testing", "Only UI design", "Only marketing", "Only backups"],
+    correctAnswer: 0,
+    explanation: "Fuzzing uncovers crashes and security bugs.",
+  },
+  {
+    id: 61,
+    topic: "Triage",
+    question: "Stack traces help by:",
+    options: ["Pointing to the failing code path", "Reducing coverage", "Avoiding reproduction", "Disabling sanitizers"],
+    correctAnswer: 0,
+    explanation: "Traces show where the failure happened.",
+  },
+  {
+    id: 62,
+    topic: "Crashes",
+    question: "A SIGSEGV usually means:",
+    options: ["Invalid memory access", "Normal exit", "Network timeout", "File not found"],
+    correctAnswer: 0,
+    explanation: "SIGSEGV signals a memory access violation.",
+  },
+  {
+    id: 63,
+    topic: "Crashes",
+    question: "A double free is often detected by:",
+    options: ["ASan or allocator checks", "DNS logs", "HTTP status", "Kernel modules"],
+    correctAnswer: 0,
+    explanation: "Sanitizers and allocators detect double frees.",
+  },
+  {
+    id: 64,
+    topic: "Corpus",
+    question: "AFL-cmin is used to:",
+    options: ["Minimize a corpus by coverage", "Encrypt inputs", "Compile targets", "Patch binaries"],
+    correctAnswer: 0,
+    explanation: "afl-cmin reduces inputs while preserving coverage.",
+  },
+  {
+    id: 65,
+    topic: "Corpus",
+    question: "Keeping the corpus small helps:",
+    options: ["Speed and focus on unique coverage", "Increase duplicates", "Reduce findings", "Hide crashes"],
+    correctAnswer: 0,
+    explanation: "Smaller corpuses reduce redundant fuzzing.",
+  },
+  {
+    id: 66,
+    topic: "Coverage",
+    question: "Branch coverage differs from edge coverage by:",
+    options: ["Tracking individual branch outcomes", "Only counting files", "Ignoring control flow", "Measuring disk IO"],
+    correctAnswer: 0,
+    explanation: "Branch coverage tracks true/false branch outcomes.",
+  },
+  {
+    id: 67,
+    topic: "Mutation",
+    question: "Deterministic stages usually include:",
+    options: ["Systematic bit and byte flips", "Only random changes", "Only dictionary insertion", "Only splicing"],
+    correctAnswer: 0,
+    explanation: "Deterministic stages try predictable mutations first.",
+  },
+  {
+    id: 68,
+    topic: "Mutation",
+    question: "Havoc stages are:",
+    options: ["Random and high-entropy", "Deterministic", "Disabled by default", "Only for web fuzzing"],
+    correctAnswer: 0,
+    explanation: "Havoc uses random mutation combinations.",
+  },
+  {
+    id: 69,
+    topic: "Techniques",
+    question: "Stateful fuzzers often model:",
+    options: ["Protocol state transitions", "Only file size", "Only CPU use", "Only disk IO"],
+    correctAnswer: 0,
+    explanation: "Stateful fuzzing tracks session state.",
+  },
+  {
+    id: 70,
+    topic: "Techniques",
+    question: "Network fuzzing commonly uses:",
+    options: ["A harness that feeds packet data to parsers", "Only static files", "Only GUI tools", "Only patching"],
+    correctAnswer: 0,
+    explanation: "Network fuzzing targets protocol parsers.",
+  },
+  {
+    id: 71,
+    topic: "Metrics",
+    question: "A useful metric is:",
+    options: ["Unique crashes and new coverage", "Only runtime", "Only file size", "Only CPU brand"],
+    correctAnswer: 0,
+    explanation: "Unique crashes and coverage show progress.",
+  },
+  {
+    id: 72,
+    topic: "Corpus",
+    question: "Valid samples often help because:",
+    options: ["They pass initial parsing checks", "They bypass sanitizers", "They disable fuzzing", "They remove coverage"],
+    correctAnswer: 0,
+    explanation: "Valid inputs reach deeper parsing logic.",
+  },
+  {
+    id: 73,
+    topic: "Build",
+    question: "libFuzzer builds often include:",
+    options: ["-fsanitize=fuzzer,address", "Only -O0", "Only -static", "Only -g0"],
+    correctAnswer: 0,
+    explanation: "libFuzzer integrates with sanitizer flags.",
+  },
+  {
+    id: 74,
+    topic: "Build",
+    question: "In AFL, the @@ token:",
+    options: ["Is replaced with the input file path", "Is a comment", "Disables mutations", "Starts a debugger"],
+    correctAnswer: 0,
+    explanation: "@@ points to the generated input file.",
+  },
+  {
+    id: 75,
+    topic: "Operations",
+    question: "A clean fuzzing environment should:",
+    options: ["Be isolated and reproducible", "Share production secrets", "Disable logging", "Run as root always"],
+    correctAnswer: 0,
+    explanation: "Isolation reduces risk and improves reproducibility.",
+  },
+];
 
 export default function FuzzingGuidePage() {
   const theme = useTheme();
@@ -791,12 +1403,19 @@ ffuf -u https://target.com/graphql -X POST \\
   return (
     <LearnPageLayout pageTitle="Fuzzing Deep Dive" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Back Button */}
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
+
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-          <ArrowBackIcon />
-        </IconButton>
-        
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
           <Box
             sx={{
@@ -1090,6 +1709,28 @@ ffuf -u https://target.com/graphql -X POST \\
           </TableContainer>
         </Paper>
       </TabPanel>
+
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 4,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={QUIZ_ACCENT_COLOR}
+          title="Fuzzing Deep Dive Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
 
       {/* Footer CTA */}
       <Paper

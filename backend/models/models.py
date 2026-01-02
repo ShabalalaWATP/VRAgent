@@ -3,6 +3,7 @@ from typing import Optional
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     DateTime,
     Float,
@@ -214,6 +215,7 @@ class Finding(Base):
     summary = Column(Text, nullable=False)
     details = Column(JSON, nullable=True)
     linked_vulnerability_id = Column(Integer, ForeignKey("vulnerabilities.id"), nullable=True)
+    is_duplicate = Column(Boolean, default=False, nullable=False, server_default="false", index=True)  # Fix #2: Track duplicates
 
     project = relationship("Project", back_populates="findings")
     scan_run = relationship("ScanRun", back_populates="findings")
@@ -879,4 +881,134 @@ class ReportChatMessage(Base):
     
     # Relationships
     report = relationship("DocumentAnalysisReport", back_populates="chat_messages")
-    user = relationship("User", backref="report_chats")
+    user = relationship("User", backref="report_chat_messages")
+
+
+# ============================================================================
+# User Presence Models
+# ============================================================================
+
+class UserPresence(Base):
+    """User online presence and custom status."""
+    __tablename__ = "user_presence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    
+    # Status: online, away, busy, dnd (do not disturb), offline
+    status = Column(String, nullable=False, default="offline")
+    # Custom status message (e.g., "In a meeting", "Deep work mode")
+    custom_status = Column(String(100), nullable=True)
+    # Custom status emoji
+    status_emoji = Column(String(10), nullable=True)
+    # When the custom status expires (null = never)
+    status_expires_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Activity tracking
+    last_seen_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_active_at = Column(DateTime(timezone=True), nullable=True)  # Last meaningful activity
+    
+    # Relationships
+    user = relationship("User", backref="presence")
+
+
+# ============================================================================
+# Kanban Board Models
+# ============================================================================
+
+class KanbanBoard(Base):
+    """A Kanban board for project task management."""
+    __tablename__ = "kanban_boards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False, default="Project Board")
+    description = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Board settings
+    settings = Column(JSON, nullable=True)  # Colors, WIP limits, etc.
+    
+    # Relationships
+    project = relationship("Project", backref="kanban_boards")
+    creator = relationship("User", backref="created_boards")
+    columns = relationship("KanbanColumn", back_populates="board", cascade="all, delete-orphan", order_by="KanbanColumn.position")
+
+
+class KanbanColumn(Base):
+    """A column/list in a Kanban board."""
+    __tablename__ = "kanban_columns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    board_id = Column(Integer, ForeignKey("kanban_boards.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    position = Column(Integer, nullable=False, default=0)  # Order of column
+    color = Column(String, nullable=True)  # Column header color
+    wip_limit = Column(Integer, nullable=True)  # Work-in-progress limit
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    board = relationship("KanbanBoard", back_populates="columns")
+    cards = relationship("KanbanCard", back_populates="column", cascade="all, delete-orphan", order_by="KanbanCard.position")
+
+
+class KanbanCard(Base):
+    """A card/task in a Kanban column."""
+    __tablename__ = "kanban_cards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    column_id = Column(Integer, ForeignKey("kanban_columns.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Card content
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    position = Column(Integer, nullable=False, default=0)  # Order within column
+    
+    # Card metadata
+    priority = Column(String, nullable=True)  # low, medium, high, critical
+    labels = Column(JSON, nullable=True)  # Array of label objects [{name, color}]
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    estimated_hours = Column(Float, nullable=True)
+    
+    # Assignees (stored as JSON array of user IDs)
+    assignee_ids = Column(JSON, nullable=True)
+    
+    # Tracking
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Link to findings (optional)
+    finding_id = Column(Integer, ForeignKey("findings.id", ondelete="SET NULL"), nullable=True)
+    
+    # Checklist items stored as JSON
+    checklist = Column(JSON, nullable=True)  # [{id, text, completed}]
+    
+    # Attachments/comments count (for display)
+    attachment_count = Column(Integer, default=0)
+    comment_count = Column(Integer, default=0)
+    
+    # Relationships
+    column = relationship("KanbanColumn", back_populates="cards")
+    creator = relationship("User", backref="created_cards")
+    finding = relationship("Finding", backref="kanban_cards")
+    comments = relationship("KanbanCardComment", back_populates="card", cascade="all, delete-orphan")
+
+
+class KanbanCardComment(Base):
+    """Comments on Kanban cards."""
+    __tablename__ = "kanban_card_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    card_id = Column(Integer, ForeignKey("kanban_cards.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    card = relationship("KanbanCard", back_populates="comments")
+    user = relationship("User", backref="kanban_comments")

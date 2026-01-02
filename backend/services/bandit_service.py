@@ -109,7 +109,8 @@ def run_bandit_scan(
             "-r" if recursive else "",  # Recursive
             "-ll",              # Only medium and higher severity
             "-ii",              # Only medium and higher confidence (reduces false positives)
-            "--exclude", ".venv,venv,env,node_modules,__pycache__,dist,build,.git",  # Skip common non-source dirs
+            "-x", ".venv,venv,env,node_modules,__pycache__,dist,build,.git,tests,test,*_test.py,test_*",  # Skip non-source and test dirs
+            "--skip", "B101",   # Skip assert_used - too noisy, used legitimately in many codebases
             str(source_path)
         ]
         # Remove empty strings from command

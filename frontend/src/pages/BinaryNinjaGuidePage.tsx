@@ -44,7 +44,7 @@ import SecurityIcon from "@mui/icons-material/Security";
 import QuizIcon from "@mui/icons-material/Quiz";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 interface TabPanelProps {
@@ -1284,9 +1284,15 @@ for s in bv.strings:
     <LearnPageLayout pageTitle="Binary Ninja Essentials" pageContext={pageContext}>
       <Box sx={{ minHeight: "100vh", bgcolor: "#080d12", py: 4 }}>
         <Container maxWidth="lg">
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-            Back to Learn Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 2 }}
+          />
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <MemoryIcon sx={{ fontSize: 42, color: "#14b8a6" }} />
@@ -1793,7 +1799,7 @@ for s in bv.strings:
               onClick={() => navigate("/learn")}
               sx={{ borderColor: "#14b8a6", color: "#14b8a6" }}
             >
-              Back to Learn Hub
+              Back to Learning Hub
             </Button>
           </Box>
         </Container>

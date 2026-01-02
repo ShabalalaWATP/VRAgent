@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Box,
   Container,
@@ -205,13 +206,15 @@ const BinaryAnalysisGuidePage: React.FC = () => {
       <Container maxWidth="lg">
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Button
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ mb: 2, color: "#f97316" }}
-          >
-            Back to Learning Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 2, color: "#f97316", borderColor: "#f97316" }}
+          />
           
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f97316", 0.1) }}>
@@ -973,6 +976,18 @@ void copy_user_input(char *input) {
             </Grid>
           </Grid>
         </TabPanel>
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </Box>
     </LearnPageLayout>

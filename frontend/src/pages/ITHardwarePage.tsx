@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -21,6 +22,16 @@ import {
   AccordionDetails,
   Alert,
   Button,
+  Drawer,
+  Fab,
+  IconButton,
+  Tooltip,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -42,26 +53,973 @@ import KeyboardIcon from "@mui/icons-material/Keyboard";
 import MouseIcon from "@mui/icons-material/Mouse";
 import SdStorageIcon from "@mui/icons-material/SdStorage";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { useNavigate } from "react-router-dom";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import QuizIcon from "@mui/icons-material/Quiz";
+import SchoolIcon from "@mui/icons-material/School";
+import BugReportIcon from "@mui/icons-material/BugReport";
+import { Link, useNavigate } from "react-router-dom";
+
+const ACCENT_COLOR = "#8b5cf6";
+const QUIZ_QUESTION_COUNT = 10;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "CPU",
+    question: "What does CPU stand for?",
+    options: ["Central Processing Unit", "Core Processing Unit", "Computer Power Unit", "Central Performance Utility"],
+    correctAnswer: 0,
+    explanation: "CPU stands for Central Processing Unit.",
+  },
+  {
+    id: 2,
+    topic: "CPU",
+    question: "Which CPU component stores frequently used data for quick access?",
+    options: ["Cache", "RAM", "SSD", "GPU"],
+    correctAnswer: 0,
+    explanation: "CPU cache stores frequently used data close to the processor.",
+  },
+  {
+    id: 3,
+    topic: "CPU",
+    question: "More CPU cores generally help with:",
+    options: ["Parallel workloads", "Lower voltage only", "Larger monitors", "Faster storage only"],
+    correctAnswer: 0,
+    explanation: "More cores improve performance on parallel tasks.",
+  },
+  {
+    id: 4,
+    topic: "Memory",
+    question: "RAM is considered:",
+    options: ["Volatile memory", "Non-volatile storage", "Permanent storage", "A CPU register"],
+    correctAnswer: 0,
+    explanation: "RAM is volatile; it loses data when power is removed.",
+  },
+  {
+    id: 5,
+    topic: "Memory",
+    question: "Which memory type detects and corrects errors?",
+    options: ["ECC", "DDR3", "SO-DIMM", "SRAM only"],
+    correctAnswer: 0,
+    explanation: "ECC memory can detect and correct errors.",
+  },
+  {
+    id: 6,
+    topic: "Memory",
+    question: "Laptop memory modules are commonly called:",
+    options: ["SO-DIMM", "DIMM", "VRAM", "Cache line"],
+    correctAnswer: 0,
+    explanation: "SO-DIMM modules are used in laptops and small form factors.",
+  },
+  {
+    id: 7,
+    topic: "Motherboard",
+    question: "Which component connects all hardware together?",
+    options: ["Motherboard", "PSU", "GPU", "SSD"],
+    correctAnswer: 0,
+    explanation: "The motherboard provides the main interconnects.",
+  },
+  {
+    id: 8,
+    topic: "Motherboard",
+    question: "The chipset primarily manages:",
+    options: ["Communication between CPU, memory, and devices", "Power conversion", "Display output", "Printer drivers"],
+    correctAnswer: 0,
+    explanation: "Chipsets coordinate communication between key system components.",
+  },
+  {
+    id: 9,
+    topic: "Firmware",
+    question: "What is BIOS/UEFI used for?",
+    options: ["Initialize hardware and start boot", "Render graphics", "Store user files", "Provide internet access"],
+    correctAnswer: 0,
+    explanation: "BIOS/UEFI initializes hardware and starts the boot process.",
+  },
+  {
+    id: 10,
+    topic: "Firmware",
+    question: "What is the typical CMOS battery type?",
+    options: ["CR2032", "AA", "AAA", "18650"],
+    correctAnswer: 0,
+    explanation: "CR2032 is the common CMOS battery type.",
+  },
+  {
+    id: 11,
+    topic: "Expansion",
+    question: "Which slot is typically used for a discrete GPU?",
+    options: ["PCIe x16", "PCIe x1", "M.2", "SATA"],
+    correctAnswer: 0,
+    explanation: "GPUs typically use PCIe x16 slots.",
+  },
+  {
+    id: 12,
+    topic: "Storage",
+    question: "Which interface is used by most SATA SSDs?",
+    options: ["SATA", "PCIe", "USB", "Thunderbolt"],
+    correctAnswer: 0,
+    explanation: "SATA SSDs connect via SATA interfaces.",
+  },
+  {
+    id: 13,
+    topic: "Storage",
+    question: "NVMe drives communicate over:",
+    options: ["PCIe", "SATA", "USB 2.0", "IDE"],
+    correctAnswer: 0,
+    explanation: "NVMe uses PCIe lanes for high performance.",
+  },
+  {
+    id: 14,
+    topic: "Storage",
+    question: "Which storage device has moving parts?",
+    options: ["HDD", "SSD", "NVMe", "USB flash"],
+    correctAnswer: 0,
+    explanation: "Hard disk drives use spinning platters.",
+  },
+  {
+    id: 15,
+    topic: "Storage",
+    question: "TRIM is associated with:",
+    options: ["SSDs", "Optical drives", "PSUs", "Fans"],
+    correctAnswer: 0,
+    explanation: "TRIM helps SSDs manage deleted blocks efficiently.",
+  },
+  {
+    id: 16,
+    topic: "Storage",
+    question: "RAID 0 provides:",
+    options: ["Performance without redundancy", "Redundancy only", "Parity with redundancy", "Mirroring only"],
+    correctAnswer: 0,
+    explanation: "RAID 0 stripes data for speed but has no redundancy.",
+  },
+  {
+    id: 17,
+    topic: "Storage",
+    question: "RAID 1 provides:",
+    options: ["Mirroring for redundancy", "Striping for speed", "Parity with striping", "No redundancy"],
+    correctAnswer: 0,
+    explanation: "RAID 1 mirrors data across drives.",
+  },
+  {
+    id: 18,
+    topic: "Storage",
+    question: "RAID 5 requires at least:",
+    options: ["3 drives", "2 drives", "4 drives", "1 drive"],
+    correctAnswer: 0,
+    explanation: "RAID 5 uses distributed parity across three or more drives.",
+  },
+  {
+    id: 19,
+    topic: "Power",
+    question: "PSU stands for:",
+    options: ["Power Supply Unit", "Primary System Utility", "Power Storage Unit", "Peripheral Supply Unit"],
+    correctAnswer: 0,
+    explanation: "PSU stands for Power Supply Unit.",
+  },
+  {
+    id: 20,
+    topic: "Power",
+    question: "80 Plus certification indicates:",
+    options: ["Power efficiency", "Network speed", "CPU cores", "Memory size"],
+    correctAnswer: 0,
+    explanation: "80 Plus ratings measure power efficiency.",
+  },
+  {
+    id: 21,
+    topic: "Power",
+    question: "The standard motherboard power connector is:",
+    options: ["24-pin ATX", "6-pin PCIe", "8-pin EPS", "SATA power"],
+    correctAnswer: 0,
+    explanation: "Most modern motherboards use a 24-pin ATX connector.",
+  },
+  {
+    id: 22,
+    topic: "Power",
+    question: "The CPU power connector is typically:",
+    options: ["8-pin EPS", "24-pin ATX", "SATA power", "Molex only"],
+    correctAnswer: 0,
+    explanation: "CPUs are powered by 8-pin EPS connectors.",
+  },
+  {
+    id: 23,
+    topic: "Cooling",
+    question: "Thermal paste is used to:",
+    options: ["Improve heat transfer", "Increase voltage", "Clean contacts", "Lock CPU pins"],
+    correctAnswer: 0,
+    explanation: "Thermal paste improves heat transfer between CPU and cooler.",
+  },
+  {
+    id: 24,
+    topic: "Cooling",
+    question: "Thermal throttling happens when:",
+    options: ["A CPU reduces speed due to heat", "A PSU shuts down", "RAM fails to boot", "Storage is full"],
+    correctAnswer: 0,
+    explanation: "CPUs throttle to prevent overheating.",
+  },
+  {
+    id: 25,
+    topic: "Cooling",
+    question: "Good case airflow helps with:",
+    options: ["Lower temperatures", "Higher voltage", "More storage", "Faster internet"],
+    correctAnswer: 0,
+    explanation: "Airflow removes heat from components.",
+  },
+  {
+    id: 26,
+    topic: "Ports",
+    question: "USB 2.0 maximum speed is about:",
+    options: ["480 Mbps", "5 Gbps", "10 Gbps", "20 Gbps"],
+    correctAnswer: 0,
+    explanation: "USB 2.0 is 480 Mbps.",
+  },
+  {
+    id: 27,
+    topic: "Ports",
+    question: "USB-C is known for:",
+    options: ["Reversible connector", "Analog video only", "Single speed only", "No power delivery"],
+    correctAnswer: 0,
+    explanation: "USB-C is reversible and supports multiple protocols.",
+  },
+  {
+    id: 28,
+    topic: "Ports",
+    question: "HDMI carries:",
+    options: ["Digital audio and video", "Analog video only", "Power only", "Network traffic only"],
+    correctAnswer: 0,
+    explanation: "HDMI carries both audio and video digitally.",
+  },
+  {
+    id: 29,
+    topic: "Ports",
+    question: "DisplayPort supports:",
+    options: ["Daisy chaining monitors", "Only analog output", "PS/2 devices", "IDE drives"],
+    correctAnswer: 0,
+    explanation: "DisplayPort can daisy chain compatible monitors.",
+  },
+  {
+    id: 30,
+    topic: "Ports",
+    question: "VGA is:",
+    options: ["Analog video", "Digital audio", "Optical", "Network"],
+    correctAnswer: 0,
+    explanation: "VGA is an older analog video standard.",
+  },
+  {
+    id: 31,
+    topic: "Networking",
+    question: "RJ-45 is used for:",
+    options: ["Ethernet", "VGA", "SATA", "Audio out"],
+    correctAnswer: 0,
+    explanation: "RJ-45 connectors are used for Ethernet cables.",
+  },
+  {
+    id: 32,
+    topic: "Networking",
+    question: "Cat5e typically supports:",
+    options: ["1 Gbps", "10 Gbps only", "100 Mbps max", "No networking"],
+    correctAnswer: 0,
+    explanation: "Cat5e supports gigabit Ethernet in many cases.",
+  },
+  {
+    id: 33,
+    topic: "Networking",
+    question: "Fiber optic cable is best for:",
+    options: ["Long distance and high bandwidth", "Short runs only", "Analog audio", "Power delivery"],
+    correctAnswer: 0,
+    explanation: "Fiber supports long distances and high speeds.",
+  },
+  {
+    id: 34,
+    topic: "Peripherals",
+    question: "Laser printers use:",
+    options: ["Toner", "Liquid ink", "Thermal paper only", "Ribbon only"],
+    correctAnswer: 0,
+    explanation: "Laser printers use toner powder.",
+  },
+  {
+    id: 35,
+    topic: "Peripherals",
+    question: "Inkjet printers use:",
+    options: ["Liquid ink", "Toner", "Filament", "Thermal paste"],
+    correctAnswer: 0,
+    explanation: "Inkjet printers spray liquid ink.",
+  },
+  {
+    id: 36,
+    topic: "Peripherals",
+    question: "A monitor resolution of 1920x1080 is called:",
+    options: ["1080p", "720p", "4K", "8K"],
+    correctAnswer: 0,
+    explanation: "1920x1080 is commonly called 1080p.",
+  },
+  {
+    id: 37,
+    topic: "Graphics",
+    question: "VRAM is used for:",
+    options: ["Graphics data storage", "Power regulation", "CPU caching", "Audio mixing"],
+    correctAnswer: 0,
+    explanation: "VRAM stores textures and frame buffers for GPUs.",
+  },
+  {
+    id: 38,
+    topic: "Graphics",
+    question: "Integrated graphics are:",
+    options: ["Built into the CPU or chipset", "Always faster than discrete GPUs", "Always require PCIe x16", "Only used in servers"],
+    correctAnswer: 0,
+    explanation: "Integrated graphics are built into the CPU or chipset.",
+  },
+  {
+    id: 39,
+    topic: "Storage",
+    question: "SATA III provides up to:",
+    options: ["6 Gbps", "1.5 Gbps", "3 Gbps", "12 Gbps"],
+    correctAnswer: 0,
+    explanation: "SATA III is 6 Gbps.",
+  },
+  {
+    id: 40,
+    topic: "Troubleshooting",
+    question: "POST stands for:",
+    options: ["Power-On Self-Test", "Primary Output System Test", "Program Operation Startup Test", "Power-On System Transfer"],
+    correctAnswer: 0,
+    explanation: "POST is Power-On Self-Test.",
+  },
+  {
+    id: 41,
+    topic: "Troubleshooting",
+    question: "Beep codes typically indicate:",
+    options: ["Hardware errors", "Successful OS update", "Network connectivity", "Printer status"],
+    correctAnswer: 0,
+    explanation: "Beep codes are used to signal hardware issues during boot.",
+  },
+  {
+    id: 42,
+    topic: "Troubleshooting",
+    question: "SMART is used to monitor:",
+    options: ["Drive health", "CPU temperature", "Network traffic", "Printer ink"],
+    correctAnswer: 0,
+    explanation: "SMART provides drive health indicators.",
+  },
+  {
+    id: 43,
+    topic: "Troubleshooting",
+    question: "A system that powers on but shows no display could be caused by:",
+    options: ["Loose video cable", "Too much disk space", "A full recycle bin", "Wrong mouse DPI"],
+    correctAnswer: 0,
+    explanation: "Display issues often stem from cables or GPU seating.",
+  },
+  {
+    id: 44,
+    topic: "Maintenance",
+    question: "ESD protection is important because:",
+    options: ["Static can damage components", "It improves performance", "It reduces noise", "It saves power"],
+    correctAnswer: 0,
+    explanation: "Static discharge can damage sensitive electronics.",
+  },
+  {
+    id: 45,
+    topic: "Maintenance",
+    question: "A common ESD safety tool is:",
+    options: ["Anti-static wrist strap", "Hammer", "Paper towel", "Magnet"],
+    correctAnswer: 0,
+    explanation: "Wrist straps help prevent static discharge.",
+  },
+  {
+    id: 46,
+    topic: "Maintenance",
+    question: "Dust buildup can lead to:",
+    options: ["Overheating", "More storage", "Better airflow", "Faster boot"],
+    correctAnswer: 0,
+    explanation: "Dust restricts airflow and increases heat.",
+  },
+  {
+    id: 47,
+    topic: "Form Factors",
+    question: "Which is the smallest common desktop form factor?",
+    options: ["Mini-ITX", "Micro-ATX", "ATX", "E-ATX"],
+    correctAnswer: 0,
+    explanation: "Mini-ITX is a compact form factor.",
+  },
+  {
+    id: 48,
+    topic: "Form Factors",
+    question: "ATX is typically:",
+    options: ["Full-size desktop form factor", "Laptop-only", "Server-only", "Tablet-only"],
+    correctAnswer: 0,
+    explanation: "ATX is a standard full-size desktop form factor.",
+  },
+  {
+    id: 49,
+    topic: "Storage",
+    question: "M.2 drives can use:",
+    options: ["SATA or NVMe", "IDE only", "USB only", "SCSI only"],
+    correctAnswer: 0,
+    explanation: "M.2 slots can support SATA or NVMe depending on the board.",
+  },
+  {
+    id: 50,
+    topic: "Storage",
+    question: "Optical drives commonly use:",
+    options: ["SATA", "PCIe", "M.2", "USB internal only"],
+    correctAnswer: 0,
+    explanation: "Most optical drives connect via SATA.",
+  },
+  {
+    id: 51,
+    topic: "Power",
+    question: "A UPS is used for:",
+    options: ["Backup power and surge protection", "GPU acceleration", "Audio processing", "Cooling only"],
+    correctAnswer: 0,
+    explanation: "UPS devices provide temporary power during outages.",
+  },
+  {
+    id: 52,
+    topic: "Power",
+    question: "A surge protector mainly guards against:",
+    options: ["Voltage spikes", "Low disk space", "Slow Wi-Fi", "High CPU usage"],
+    correctAnswer: 0,
+    explanation: "Surge protectors guard against spikes.",
+  },
+  {
+    id: 53,
+    topic: "Firmware",
+    question: "Updating BIOS/UEFI is called:",
+    options: ["Flashing", "Formatting", "Defragmenting", "Imaging"],
+    correctAnswer: 0,
+    explanation: "Firmware updates are called flashing.",
+  },
+  {
+    id: 54,
+    topic: "Firmware",
+    question: "Secure Boot helps prevent:",
+    options: ["Unauthorized bootloaders", "Low disk space", "Network outages", "Printer jams"],
+    correctAnswer: 0,
+    explanation: "Secure Boot blocks unsigned bootloaders.",
+  },
+  {
+    id: 55,
+    topic: "Security",
+    question: "TPM stands for:",
+    options: ["Trusted Platform Module", "Total Power Management", "Trusted Peripheral Manager", "Transport Protocol Module"],
+    correctAnswer: 0,
+    explanation: "TPM is the Trusted Platform Module.",
+  },
+  {
+    id: 56,
+    topic: "Graphics",
+    question: "A GPU primarily accelerates:",
+    options: ["Graphics and parallel compute", "Disk IO only", "Audio output only", "Power conversion"],
+    correctAnswer: 0,
+    explanation: "GPUs are optimized for parallel workloads.",
+  },
+  {
+    id: 57,
+    topic: "Cables",
+    question: "SATA data cables connect:",
+    options: ["Storage devices to motherboard", "Monitors to GPU", "Keyboards to PC", "PSU to wall outlet"],
+    correctAnswer: 0,
+    explanation: "SATA data cables connect drives to the motherboard.",
+  },
+  {
+    id: 58,
+    topic: "Cables",
+    question: "A 6-pin or 8-pin PCIe power cable is used for:",
+    options: ["GPUs", "SATA drives", "Case fans only", "Keyboards"],
+    correctAnswer: 0,
+    explanation: "These power cables feed discrete GPUs.",
+  },
+  {
+    id: 59,
+    topic: "Troubleshooting",
+    question: "A system powers off under load; a likely cause is:",
+    options: ["Insufficient PSU wattage", "Too much RAM", "New mouse driver", "Wallpaper resolution"],
+    correctAnswer: 0,
+    explanation: "An underpowered PSU can cause shutdowns.",
+  },
+  {
+    id: 60,
+    topic: "Troubleshooting",
+    question: "A PC beeps continuously at boot; one likely cause is:",
+    options: ["Memory not seated", "Too many icons", "Full SSD", "Wrong time zone"],
+    correctAnswer: 0,
+    explanation: "Memory issues often trigger POST beeps.",
+  },
+  {
+    id: 61,
+    topic: "Maintenance",
+    question: "Cable management helps with:",
+    options: ["Airflow and serviceability", "CPU frequency", "RAM speed", "Disk encryption"],
+    correctAnswer: 0,
+    explanation: "Good cable management improves airflow and maintenance.",
+  },
+  {
+    id: 62,
+    topic: "Displays",
+    question: "DisplayPort and HDMI are both:",
+    options: ["Digital video interfaces", "Analog-only standards", "Power connectors", "Memory sockets"],
+    correctAnswer: 0,
+    explanation: "Both are digital display interfaces.",
+  },
+  {
+    id: 63,
+    topic: "Displays",
+    question: "DVI is primarily:",
+    options: ["Digital video", "Audio only", "Network only", "Power only"],
+    correctAnswer: 0,
+    explanation: "DVI is a digital video interface.",
+  },
+  {
+    id: 64,
+    topic: "Networking",
+    question: "A home router combines:",
+    options: ["Switch, router, and wireless AP", "GPU and CPU", "Printer and scanner", "PSU and battery"],
+    correctAnswer: 0,
+    explanation: "Home routers typically combine multiple network functions.",
+  },
+  {
+    id: 65,
+    topic: "Storage",
+    question: "HDD performance is influenced by:",
+    options: ["RPM and cache", "Monitor size", "Keyboard layout", "USB color"],
+    correctAnswer: 0,
+    explanation: "Higher RPM and cache improve HDD performance.",
+  },
+  {
+    id: 66,
+    topic: "Memory",
+    question: "Dual-channel memory improves:",
+    options: ["Memory bandwidth", "Disk storage", "Screen brightness", "Network latency"],
+    correctAnswer: 0,
+    explanation: "Dual-channel increases memory bandwidth.",
+  },
+  {
+    id: 67,
+    topic: "Storage",
+    question: "SATA power connectors provide:",
+    options: ["Power to drives", "Video signals", "Network packets", "Audio input"],
+    correctAnswer: 0,
+    explanation: "SATA power cables deliver power to storage devices.",
+  },
+  {
+    id: 68,
+    topic: "Troubleshooting",
+    question: "No power at all often indicates:",
+    options: ["PSU or power cable issue", "Wrong wallpaper", "Mouse battery", "DNS failure"],
+    correctAnswer: 0,
+    explanation: "A dead system often points to PSU or power issues.",
+  },
+  {
+    id: 69,
+    topic: "Troubleshooting",
+    question: "A system clock that resets often indicates:",
+    options: ["Dead CMOS battery", "Bad GPU driver", "Low RAM", "Loose SATA cable"],
+    correctAnswer: 0,
+    explanation: "A weak CMOS battery causes time resets.",
+  },
+  {
+    id: 70,
+    topic: "Peripherals",
+    question: "A KVM switch allows:",
+    options: ["One keyboard/mouse/monitor to control multiple PCs", "Multiple GPUs in one PC", "More RAM per slot", "Faster boot times"],
+    correctAnswer: 0,
+    explanation: "KVM switches share a keyboard, video, and mouse across systems.",
+  },
+  {
+    id: 71,
+    topic: "Security",
+    question: "Full disk encryption on laptops often uses:",
+    options: ["TPM-backed keys", "BNC connectors", "DVI cables", "POST codes"],
+    correctAnswer: 0,
+    explanation: "TPM can store encryption keys securely.",
+  },
+  {
+    id: 72,
+    topic: "Memory",
+    question: "DDR stands for:",
+    options: ["Double Data Rate", "Direct Disk Routing", "Dynamic Device Read", "Dual Disk Range"],
+    correctAnswer: 0,
+    explanation: "DDR means Double Data Rate memory.",
+  },
+  {
+    id: 73,
+    topic: "Power",
+    question: "A PSU with too little wattage can cause:",
+    options: ["System instability under load", "Extra storage space", "Faster Wi-Fi", "Lower CPU temperature"],
+    correctAnswer: 0,
+    explanation: "Insufficient power can cause crashes or shutdowns.",
+  },
+  {
+    id: 74,
+    topic: "Maintenance",
+    question: "Which tool is best for cleaning dust inside a PC?",
+    options: ["Compressed air", "Water spray", "Vacuum on high", "Steel brush"],
+    correctAnswer: 0,
+    explanation: "Compressed air safely removes dust.",
+  },
+  {
+    id: 75,
+    topic: "Storage",
+    question: "NAS stands for:",
+    options: ["Network Attached Storage", "New Access System", "Network Allocation Service", "Node Array Storage"],
+    correctAnswer: 0,
+    explanation: "NAS is Network Attached Storage.",
+  },
+];
 
 const ITHardwarePage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const [quizPool] = useState<QuizQuestion[]>(() =>
+    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
+  );
+
+  const accent = ACCENT_COLOR;
+
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "cpu", label: "CPU", icon: <DeveloperBoardIcon /> },
+    { id: "ram", label: "RAM", icon: <MemoryIcon /> },
+    { id: "motherboard", label: "Motherboard", icon: <ComputerIcon /> },
+    { id: "storage", label: "Storage", icon: <StorageIcon /> },
+    { id: "psu", label: "PSU", icon: <PowerIcon /> },
+    { id: "gpu", label: "GPU", icon: <SpeedIcon /> },
+    { id: "video-cables", label: "Video Cables", icon: <SettingsInputHdmiIcon /> },
+    { id: "usb-cables", label: "USB Cables", icon: <UsbIcon /> },
+    { id: "internal-cables", label: "Internal Cables", icon: <CableIcon /> },
+    { id: "network-cables", label: "Network Cables", icon: <RouterIcon /> },
+    { id: "peripherals", label: "Peripherals", icon: <MonitorIcon /> },
+    { id: "troubleshooting", label: "Troubleshooting", icon: <BugReportIcon /> },
+    { id: "maintenance", label: "Maintenance", icon: <ThermostatIcon /> },
+    { id: "comptia", label: "CompTIA A+", icon: <BuildIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  const pageContext = "A comprehensive guide to computer hardware components including CPU, RAM, motherboard, storage devices, PSU, and GPU. Covers cables and connectors like HDMI, DisplayPort, USB standards, SATA, and network cables. Includes peripherals like keyboards, mice, monitors, printers. Also covers troubleshooting POST codes, boot issues, common hardware problems, and maintenance best practices. Relevant for CompTIA A+ certification.";
+
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout
       pageTitle="IT Hardware Fundamentals"
-      pageContext="A comprehensive guide to computer hardware components including CPU, RAM, motherboard, storage devices, PSU, and GPU. Covers cables and connectors like HDMI, DisplayPort, USB standards, SATA, and network cables. Includes peripherals like keyboards, mice, monitors, printers. Also covers troubleshooting POST codes, boot issues, common hardware problems, and maintenance best practices. Relevant for CompTIA A+ certification."
+      pageContext={pageContext}
     >
-      <Container maxWidth="xl" sx={{ py: 4 }}>
-        {/* Back to Hub Button */}
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3, color: "text.secondary" }}
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#7c3aed" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
         >
-          Back to Learning Hub
-        </Button>
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Back to Hub Button */}
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
 
         {/* Page Header */}
         <Box sx={{ mb: 6 }}>
@@ -83,7 +1041,7 @@ const ITHardwarePage: React.FC = () => {
         </Box>
 
         {/* Introduction Section */}
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: "linear-gradient(135deg, rgba(139,92,246,0.05) 0%, rgba(59,130,246,0.05) 100%)", border: "2px solid", borderColor: alpha("#8b5cf6", 0.2) }}>
+        <Paper id="intro" sx={{ p: 4, mb: 4, borderRadius: 3, background: "linear-gradient(135deg, rgba(139,92,246,0.05) 0%, rgba(59,130,246,0.05) 100%)", border: "2px solid", borderColor: alpha("#8b5cf6", 0.2) }}>
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
             📖 What You'll Learn
           </Typography>
@@ -119,7 +1077,7 @@ const ITHardwarePage: React.FC = () => {
         </Box>
 
         {/* CPU */}
-        <Accordion defaultExpanded sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="cpu" defaultExpanded sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#ef4444", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <DeveloperBoardIcon sx={{ color: "#ef4444" }} />
@@ -328,7 +1286,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* RAM */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="ram" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#3b82f6", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <MemoryIcon sx={{ color: "#3b82f6" }} />
@@ -492,7 +1450,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* Motherboard */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="motherboard" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#22c55e", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <DeveloperBoardIcon sx={{ color: "#22c55e" }} />
@@ -696,7 +1654,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* Storage */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="storage" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#f59e0b", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <StorageIcon sx={{ color: "#f59e0b" }} />
@@ -915,7 +1873,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* PSU */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="psu" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#8b5cf6", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <PowerIcon sx={{ color: "#8b5cf6" }} />
@@ -1123,7 +2081,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* GPU */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="gpu" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#06b6d4", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <SpeedIcon sx={{ color: "#06b6d4" }} />
@@ -1331,7 +2289,7 @@ const ITHardwarePage: React.FC = () => {
         </Box>
 
         {/* Video Cables */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="video-cables" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#ec4899", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <SettingsInputHdmiIcon sx={{ color: "#ec4899" }} />
@@ -1462,7 +2420,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* USB */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="usb-cables" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#14b8a6", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <UsbIcon sx={{ color: "#14b8a6" }} />
@@ -1604,7 +2562,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* Internal Cables */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="internal-cables" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#f97316", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <CableIcon sx={{ color: "#f97316" }} />
@@ -1632,7 +2590,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* Network Cables */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="network-cables" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#3b82f6", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <RouterIcon sx={{ color: "#3b82f6" }} />
@@ -1674,7 +2632,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* ========== PERIPHERALS SECTION ========== */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
+        <Box id="peripherals" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
           <Divider sx={{ flex: 1 }} />
           <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>PERIPHERALS & I/O</Typography>
           <Divider sx={{ flex: 1 }} />
@@ -1840,7 +2798,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* ========== TROUBLESHOOTING SECTION ========== */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
+        <Box id="troubleshooting" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
           <Divider sx={{ flex: 1 }} />
           <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>TROUBLESHOOTING & MAINTENANCE</Typography>
           <Divider sx={{ flex: 1 }} />
@@ -2100,7 +3058,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* Maintenance */}
-        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+        <Accordion id="maintenance" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#22c55e", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <ThermostatIcon sx={{ color: "#22c55e" }} />
@@ -2243,7 +3201,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* CompTIA A+ Exam Topics */}
-        <Paper sx={{ p: 4, mt: 6, borderRadius: 3, background: "linear-gradient(135deg, rgba(34,197,94,0.05) 0%, rgba(59,130,246,0.05) 100%)", border: "2px solid", borderColor: alpha("#22c55e", 0.2) }}>
+        <Paper id="comptia" sx={{ p: 4, mt: 6, borderRadius: 3, background: "linear-gradient(135deg, rgba(34,197,94,0.05) 0%, rgba(59,130,246,0.05) 100%)", border: "2px solid", borderColor: alpha("#22c55e", 0.2) }}>
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: "#22c55e" }}>
             🎯 CompTIA A+ Certification Guide
           </Typography>
@@ -2367,7 +3325,30 @@ const ITHardwarePage: React.FC = () => {
           </Grid>
         </Paper>
 
-      </Container>
+        {/* Quiz Section */}
+        <Box id="quiz" sx={{ mt: 5 }}>
+          <QuizSection
+            questions={quizPool}
+            accentColor={ACCENT_COLOR}
+            title="IT Hardware Fundamentals Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Box>
+
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#f97316", color: "#f97316" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
+
+        </Box>
+      </Box>
     </LearnPageLayout>
   );
 };

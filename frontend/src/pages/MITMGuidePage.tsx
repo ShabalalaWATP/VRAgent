@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
@@ -200,6 +200,7 @@ const USE_CASES: UseCaseInfo[] = [
 
 const MITMGuidePage: React.FC = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
@@ -858,6 +859,18 @@ response = requests.get('https://api.example.com', proxies=proxies, verify=False
           Copied to clipboard!
         </Alert>
       )}
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<BackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Box>
     </LearnPageLayout>
   );

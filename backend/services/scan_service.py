@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -344,6 +345,16 @@ def _filter_source_files_fast(source_root: Path, files: List[Path]) -> List[Path
     return filtered
 
 
+# Directories to skip when scanning for vulnerable imports (vendor code)
+SKIP_DIRS_FOR_IMPORT_SCAN = {
+    "node_modules", "vendor", ".venv", "venv", "env",
+    "site-packages", "dist-packages", "__pycache__",
+    "packages", "bower_components", "jspm_packages",
+    "lib", "libs", "third_party", "third-party", "external",
+    ".tox", ".nox", ".eggs", "eggs", "dist", "build",
+}
+
+
 def build_external_intelligence(
     vulns: List[models.Vulnerability],
     scanner_findings: List[models.Finding],
@@ -375,6 +386,14 @@ def build_external_intelligence(
     # Build dependency map (name -> version)
     dep_map = {d.id: {"name": d.name, "version": d.version} for d in deps}
     dep_name_map = {d.name.lower(): d for d in deps}
+    
+    # Populate dependencies list (Fix #4: Rich ExternalIntelligence)
+    for d in deps:
+        intel.dependencies.append({
+            "name": d.name,
+            "version": d.version,
+            "ecosystem": d.ecosystem if hasattr(d, 'ecosystem') else "unknown",
+        })
     
     # Process CVE findings
     for vuln in vulns:
@@ -414,13 +433,21 @@ def build_external_intelligence(
         intel.sast_findings.append(sast_entry)
     
     # Analyze which files import vulnerable packages
+    # Fix #3: Skip vendor/node_modules directories to avoid false positives
     if source_root:
         vulnerable_packages = {c["package"].lower() for c in intel.cve_findings}
+        all_package_names = {d.name.lower() for d in deps}  # All deps, not just vulnerable
         
-        # Quick scan for imports
+        # Quick scan for imports (skipping vendor directories)
         for source_file in source_root.rglob("*"):
             if not source_file.is_file():
                 continue
+            
+            # Fix #3: Skip vendor/node_modules directories
+            rel_parts = source_file.relative_to(source_root).parts
+            if any(part.lower() in SKIP_DIRS_FOR_IMPORT_SCAN for part in rel_parts):
+                continue
+            
             ext = source_file.suffix.lower()
             if ext not in {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rb"}:
                 continue
@@ -429,18 +456,29 @@ def build_external_intelligence(
                 content = source_file.read_text(encoding="utf-8", errors="ignore")[:50000]
                 rel_path = str(source_file.relative_to(source_root))
                 
+                # Fix #4: Use word boundaries for import detection to prevent false positives
+                # This avoids matching 'import my_requests_wrapper' when looking for 'requests'
+                file_imports_list = []
+                for pkg in all_package_names:
+                    # Build regex patterns with word boundaries
+                    pkg_escaped = re.escape(pkg)
+                    patterns = [
+                        rf'\bimport\s+{pkg_escaped}\b',           # Python: import pkg
+                        rf'\bfrom\s+{pkg_escaped}\b',             # Python: from pkg
+                        rf"require\s*\(\s*['\"]({pkg_escaped})['\"]\s*\)",  # JS: require('pkg')
+                        rf"from\s+['\"]({pkg_escaped})['\"]\s*",  # JS/TS: from 'pkg'
+                    ]
+                    for pattern in patterns:
+                        if re.search(pattern, content, re.IGNORECASE):
+                            file_imports_list.append(pkg)
+                            break
+                
+                if file_imports_list:
+                    intel.file_imports[rel_path] = file_imports_list
+                
                 # Check for imports of vulnerable packages
                 for pkg in vulnerable_packages:
-                    # Python: import pkg, from pkg import
-                    # JS/TS: require('pkg'), import ... from 'pkg'
-                    # Simplified check (can be improved with AST parsing)
-                    if (f"import {pkg}" in content.lower() or 
-                        f"from {pkg}" in content.lower() or
-                        f"require('{pkg}')" in content.lower() or
-                        f'require("{pkg}")' in content.lower() or
-                        f"from '{pkg}'" in content.lower() or
-                        f'from "{pkg}"' in content.lower()):
-                        
+                    if pkg in file_imports_list:
                         # Get the CVEs for this package
                         pkg_cves = [c["external_id"] for c in intel.cve_findings 
                                    if c["package"].lower() == pkg]
@@ -455,9 +493,37 @@ def build_external_intelligence(
             except Exception:
                 continue
     
+    # Fix #4: Build security_findings_summary and security_findings list
+    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for f in scanner_findings:
+        sev = (f.severity or "medium").lower()
+        if sev in severity_counts:
+            severity_counts[sev] += 1
+    
+    intel.security_findings_summary = (
+        f"SAST Scanners found {len(scanner_findings)} issues: "
+        f"{severity_counts['critical']} critical, {severity_counts['high']} high, "
+        f"{severity_counts['medium']} medium, {severity_counts['low']} low. "
+        f"CVE Analysis found {len(vulns)} vulnerabilities in {len(deps)} dependencies."
+    )
+    
+    # Top priority security findings (critical/high from SAST)
+    for f in scanner_findings:
+        if (f.severity or "").lower() in ("critical", "high"):
+            intel.security_findings.append({
+                "type": f.type,
+                "file": f.file_path,
+                "line": f.start_line,
+                "severity": f.severity,
+                "summary": f.summary[:200] if f.summary else None,
+            })
+    # Limit to top 50 to keep context manageable
+    intel.security_findings = intel.security_findings[:50]
+    
     logger.info(f"Built ExternalIntelligence: {len(intel.cve_findings)} CVEs, "
                f"{len(intel.sast_findings)} SAST findings, "
-               f"{len(intel.vulnerable_import_files)} files importing vulnerable deps")
+               f"{len(intel.vulnerable_import_files)} files importing vulnerable deps, "
+               f"{len(intel.file_imports)} files with tracked imports")
     
     return intel
 
@@ -490,21 +556,22 @@ def _process_single_file(args: Tuple[Path, Path, int]) -> Tuple[Optional[str], L
         if len(contents) < 10:
             return None, [], None
         
-        # Split into chunks
-        chunks = split_into_chunks(contents)
+        # Get relative path first (needed for language-aware chunking)
+        try:
+            rel_path = str(file_path.relative_to(source_root))
+        except ValueError:
+            rel_path = str(file_path)
+        
+        # Split into chunks - pass file path for language-aware chunking (Fix #3)
+        chunks = split_into_chunks(contents, rel_path)
         
         # Limit chunks per file to prevent single file domination
         if len(chunks) > 50:
             chunks = chunks[:50]
         
-        # Run static pattern checks
-        findings = _static_checks(file_path, contents)
-        
-        # Get relative path
-        try:
-            rel_path = str(file_path.relative_to(source_root))
-        except ValueError:
-            rel_path = str(file_path)
+        # NOTE: Removed _static_checks() - redundant with Semgrep/Bandit
+        # Those tools do proper AST-based analysis with better accuracy
+        findings = []  # Static pattern checks removed - SAST scanners cover all patterns
         
         return rel_path, chunks, findings
         
@@ -1113,32 +1180,15 @@ def _convert_scanner_results_to_findings(
     return findings
 
 
-def _static_checks(file_path: Path, contents: str) -> List[models.Finding]:
-    findings: List[models.Finding] = []
-    lower = contents.lower()
-    patterns = [
-        ("eval(", "medium", "Use of eval detected"),
-        ("exec(", "medium", "Use of exec detected"),
-        ("subprocess", "medium", "Subprocess usage found"),
-        ("shell=true", "high", "Potential shell command injection via shell=True"),
-        ("password=", "high", "Hard coded password-like string"),
-        ("verify=false", "medium", "TLS verification disabled"),
-        ("except Exception:", "low", "Overly broad exception handling"),
-    ]
-    for needle, severity, summary in patterns:
-        if needle in lower:
-            findings.append(
-                models.Finding(
-                    type="code_pattern",
-                    severity=severity,
-                    file_path=str(file_path),
-                    start_line=1,
-                    end_line=None,
-                    summary=summary,
-                    details={"pattern": needle},
-                )
-            )
-    return findings
+# NOTE: _static_checks() function removed - it was redundant with Semgrep/Bandit
+# Those tools properly parse AST and handle context (comments, strings, etc.)
+# The naive substring matching caused false positives.
+# Patterns covered by SAST scanners:
+#   - eval/exec -> Semgrep p/command-injection, Bandit B102/B307
+#   - subprocess/shell=True -> Semgrep p/command-injection, Bandit B602-B607
+#   - password= -> Semgrep p/secrets, Bandit B105-B107
+#   - verify=false -> Semgrep p/insecure-transport, Bandit B501
+#   - except Exception: -> Semgrep p/python, Bandit B110
 
 
 def run_scan(
@@ -1763,10 +1813,51 @@ def run_scan(
             logger.warning(f"Agentic scan with intel failed (non-critical): {e}")
             _broadcast_progress(scan_run.id, "agentic_scan", 90,
                                f"🤖 AI deep analysis skipped: {str(e)[:50]}")
+        
+        # Fix #2: Second deduplication pass AFTER agentic findings
+        # This ensures agentic findings are deduplicated against SAST findings
+        _broadcast_progress(scan_run.id, "deduplication_final", 91, "🔄 Final deduplication (including AI findings)...")
+        logger.debug("Running post-agentic deduplication pass")
+        
+        pre_dedup_count = len(findings)
+        findings_final, dedup_stats_final = deduplication_service.deduplicate_findings(findings)
+        
+        merged_in_final = dedup_stats_final.get("duplicates_merged", 0)
+        merged_finding_ids = dedup_stats_final.get("merged_finding_ids", [])
+        
+        if merged_in_final > 0:
+            # Update the original dedup_stats with final pass info
+            if 'dedup_stats' in dir():
+                dedup_stats["final_pass_merged"] = merged_in_final
+                dedup_stats["total_merged"] = dedup_stats.get("duplicates_merged", 0) + merged_in_final
+            findings = findings_final
+            logger.info(f"Post-agentic dedup: {pre_dedup_count} → {len(findings)} ({merged_in_final} merged)")
+            
+            # Fix #2: Persist dedup to DB - mark duplicate findings as is_duplicate
+            # This ensures findings API and report stay in sync
+            if merged_finding_ids:
+                try:
+                    from sqlalchemy import update
+                    db.execute(
+                        update(models.Finding)
+                        .where(models.Finding.id.in_(merged_finding_ids))
+                        .values(is_duplicate=True)
+                    )
+                    db.commit()
+                    logger.info(f"Marked {len(merged_finding_ids)} findings as duplicates in DB")
+                except Exception as e:
+                    logger.warning(f"Failed to mark duplicates in DB (non-critical): {e}")
+            
+            _broadcast_progress(scan_run.id, "deduplication_final", 92,
+                               f"✅ Final dedup merged {merged_in_final} duplicates")
+        else:
+            findings = findings_final  # Ensure we use the processed list
+            _broadcast_progress(scan_run.id, "deduplication_final", 92, "✅ No additional duplicates found")
+        
         attack_chains_data = []
         ai_summary = None
         if findings:
-            _broadcast_progress(scan_run.id, "ai_analysis", 90, "🧠 AI-enhanced vulnerability analysis...")
+            _broadcast_progress(scan_run.id, "ai_analysis", 92, "🧠 AI-enhanced vulnerability analysis...")
             try:
                 # Convert findings to dicts for AI analysis
                 findings_dicts = []
@@ -1791,7 +1882,8 @@ def run_scan(
                     findings_dicts,
                     code_snippets=code_snippets,
                     enable_llm=True,
-                    max_llm_findings=20
+                    max_llm_findings=20,
+                    external_intel=external_intel  # Pass CVE/dependency/import context
                 ))
                 if ai_result:
                     from sqlalchemy.orm.attributes import flag_modified
@@ -1905,6 +1997,16 @@ def run_scan(
                 "findings": len(iac_result.findings) if iac_result else 0,
                 "frameworks": list(iac_result.frameworks_detected) if iac_result else [],
             } if iac_result else {},
+            # Include external intelligence in report for full context visibility
+            "external_intelligence": {
+                "cve_count": len(external_intel.cve_findings) if external_intel else 0,
+                "sast_findings_count": len(external_intel.sast_findings) if external_intel else 0,
+                "vulnerable_import_files": external_intel.vulnerable_import_files[:20] if external_intel else [],
+                "file_imports_count": len(external_intel.file_imports) if external_intel else 0,
+                "dependencies_count": len(external_intel.dependencies) if external_intel else 0,
+                "security_findings_summary": external_intel.security_findings_summary if external_intel else None,
+                "top_cves": external_intel.cve_findings[:15] if external_intel else [],  # Top 15 CVEs for report
+            } if external_intel else {},
         }
         
         report = report_service.create_report(

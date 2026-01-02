@@ -32,7 +32,7 @@ import {
   useTheme,
   Button,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -1218,12 +1218,20 @@ const GhidraGuidePage: React.FC = () => {
   return (
     <LearnPageLayout pageTitle="Ghidra Reverse Engineering Guide" pageContext={pageContext}>
     <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* Back Button */}
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
+
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <IconButton onClick={() => navigate("/learn")} sx={{ color: "primary.main" }}>
-            <ArrowBackIcon />
-          </IconButton>
           <MemoryIcon sx={{ fontSize: 40, color: "primary.main" }} />
           <Box>
             <Typography variant="h4" fontWeight="bold">
@@ -2844,6 +2852,17 @@ cd $GHIDRA_HOME/server
       {/* Quiz Section */}
       <QuizSection />
 
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

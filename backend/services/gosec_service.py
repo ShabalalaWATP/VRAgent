@@ -104,8 +104,14 @@ def run_gosec_scan(
             "gosec",
             "-fmt=json",
             "-quiet",
+            "-confidence=medium",  # Only medium+ confidence (reduces false positives)
             "-exclude-dir=vendor",
             "-exclude-dir=.git",
+            "-exclude-dir=test",
+            "-exclude-dir=tests",
+            "-exclude-dir=testdata",
+            "-exclude-dir=mocks",
+            "-exclude=G104",  # Unhandled errors - too noisy for most codebases
             "./..."
         ]
         

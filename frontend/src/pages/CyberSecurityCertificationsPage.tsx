@@ -52,7 +52,7 @@ import SchoolIcon from "@mui/icons-material/School";
 import CategoryIcon from "@mui/icons-material/Category";
 import BusinessIcon from "@mui/icons-material/Business";
 import BookmarkIcon from "@mui/icons-material/Bookmark";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 type Level = "Beginner" | "Intermediate" | "Advanced";
 
@@ -986,9 +986,15 @@ All certifications organized by Beginner/Intermediate/Advanced levels with caree
     <LearnPageLayout pageTitle="Education & Certifications" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a12", py: 4 }}>
       <Container maxWidth="lg">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learn Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <WorkspacePremiumIcon sx={{ fontSize: 42, color: "#38bdf8" }} />
@@ -1559,7 +1565,7 @@ All certifications organized by Beginner/Intermediate/Advanced levels with caree
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#38bdf8", color: "#38bdf8" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

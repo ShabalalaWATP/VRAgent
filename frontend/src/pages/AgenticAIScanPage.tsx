@@ -495,19 +495,15 @@ const AgenticAIScanPage: React.FC = () => {
           
           {/* Progress Stats */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={3}>
-              <Typography variant="caption" color="text.secondary">Chunks</Typography>
-              <Typography variant="body1">{progress.analyzed_chunks} / {progress.total_chunks}</Typography>
-            </Grid>
-            <Grid item xs={3}>
+            <Grid item xs={4}>
               <Typography variant="caption" color="text.secondary">Entry Points</Typography>
               <Typography variant="body1">{progress.entry_points_found}</Typography>
             </Grid>
-            <Grid item xs={3}>
+            <Grid item xs={4}>
               <Typography variant="caption" color="text.secondary">Flows Traced</Typography>
               <Typography variant="body1">{progress.flows_traced}</Typography>
             </Grid>
-            <Grid item xs={3}>
+            <Grid item xs={4}>
               <Typography variant="caption" color="text.secondary">Vulnerabilities</Typography>
               <Typography variant="body1" color="error.main">{progress.vulnerabilities_found}</Typography>
             </Grid>
@@ -568,19 +564,7 @@ const AgenticAIScanPage: React.FC = () => {
         <Box>
           {/* Summary Cards */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={6} md={2}>
-              <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <Typography variant="h4" color="primary">
-                    {scanResult.total_chunks}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Code Chunks
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={6} md={2}>
+            <Grid item xs={6} md={3}>
               <Card>
                 <CardContent sx={{ textAlign: 'center' }}>
                   <Typography variant="h4" color="success.main">
@@ -592,7 +576,7 @@ const AgenticAIScanPage: React.FC = () => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={6} md={2}>
+            <Grid item xs={6} md={3}>
               <Card>
                 <CardContent sx={{ textAlign: 'center' }}>
                   <Typography variant="h4" color="info.main">

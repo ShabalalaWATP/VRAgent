@@ -1,5 +1,6 @@
 import React from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -31,7 +32,8 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import SearchIcon from "@mui/icons-material/Search";
 import ShieldIcon from "@mui/icons-material/Shield";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 interface XSSType {
   title: string;
@@ -249,6 +251,611 @@ element.innerHTML = DOMPurify.sanitize(html);`,
   },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#ef4444";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "XSS stands for:",
+    options: ["Cross-Site Scripting", "Cross-Site Security", "Cross-Session Scripting", "Cross-Server Syncing"],
+    correctAnswer: 0,
+    explanation: "XSS is short for Cross-Site Scripting.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "XSS allows attackers to:",
+    options: ["Run script in a victim's browser", "Bypass TLS", "Escalate OS kernel privileges", "Disable firewalls"],
+    correctAnswer: 0,
+    explanation: "XSS executes attacker-controlled script in the victim context.",
+  },
+  {
+    id: 3,
+    topic: "Types",
+    question: "Reflected XSS occurs when:",
+    options: ["Input is reflected in a response and executed", "Payload is stored on the server", "Only the DOM is affected", "No user interaction is required"],
+    correctAnswer: 0,
+    explanation: "Reflected XSS is immediate and request/response based.",
+  },
+  {
+    id: 4,
+    topic: "Types",
+    question: "Stored XSS occurs when:",
+    options: ["Payload is persisted and served to users later", "The payload only lives in the URL", "Only the browser cache is used", "The payload is blocked by default"],
+    correctAnswer: 0,
+    explanation: "Stored XSS is persisted in a database or storage.",
+  },
+  {
+    id: 5,
+    topic: "Types",
+    question: "DOM-based XSS occurs when:",
+    options: ["Client-side code writes unsafe data into the DOM", "The server stores the payload", "Only a WAF is bypassed", "A CSP header is missing"],
+    correctAnswer: 0,
+    explanation: "DOM XSS happens entirely in client-side code.",
+  },
+  {
+    id: 6,
+    topic: "Impact",
+    question: "A common impact of XSS is:",
+    options: ["Session theft and account takeover", "Disk encryption", "Router compromise", "Kernel panic"],
+    correctAnswer: 0,
+    explanation: "XSS can steal tokens or act as the victim user.",
+  },
+  {
+    id: 7,
+    topic: "Impact",
+    question: "XSS can be used to:",
+    options: ["Perform actions as the victim", "Bypass TLS certificates", "Disable DNSSEC", "Patch applications"],
+    correctAnswer: 0,
+    explanation: "Scripts run with the victim's browser privileges.",
+  },
+  {
+    id: 8,
+    topic: "Impact",
+    question: "Stored XSS is often more severe because:",
+    options: ["It can affect many users who view the content", "It never executes", "It requires no permissions", "It only targets admins"],
+    correctAnswer: 0,
+    explanation: "Stored payloads execute for every viewer.",
+  },
+  {
+    id: 9,
+    topic: "Sinks",
+    question: "Which is a dangerous sink for untrusted input?",
+    options: ["innerHTML", "textContent", "createTextNode", "appendChild with text"],
+    correctAnswer: 0,
+    explanation: "innerHTML parses and executes HTML.",
+  },
+  {
+    id: 10,
+    topic: "Sinks",
+    question: "A safer alternative to innerHTML is:",
+    options: ["textContent", "document.write", "eval", "outerHTML"],
+    correctAnswer: 0,
+    explanation: "textContent inserts text without HTML parsing.",
+  },
+  {
+    id: 11,
+    topic: "Sinks",
+    question: "document.write is dangerous because it:",
+    options: ["Parses HTML from untrusted input", "Encrypts output", "Validates input automatically", "Escapes by default"],
+    correctAnswer: 0,
+    explanation: "document.write injects raw HTML.",
+  },
+  {
+    id: 12,
+    topic: "Sinks",
+    question: "Using eval on untrusted input can lead to:",
+    options: ["XSS or code execution in the browser", "Safer parsing", "Automatic escaping", "Input validation"],
+    correctAnswer: 0,
+    explanation: "eval executes attacker-controlled code.",
+  },
+  {
+    id: 13,
+    topic: "Sinks",
+    question: "Which is a common DOM XSS sink?",
+    options: ["insertAdjacentHTML", "textContent", "appendChild", "setAttribute with fixed values"],
+    correctAnswer: 0,
+    explanation: "insertAdjacentHTML parses HTML and scripts.",
+  },
+  {
+    id: 14,
+    topic: "Sources",
+    question: "Which is a common DOM XSS source?",
+    options: ["location.hash", "Math.random()", "Date.now()", "console.log()"],
+    correctAnswer: 0,
+    explanation: "location.* values are user-controlled.",
+  },
+  {
+    id: 15,
+    topic: "Sources",
+    question: "Another common DOM XSS source is:",
+    options: ["document.URL", "document.title", "navigator.platform", "screen.width"],
+    correctAnswer: 0,
+    explanation: "document.URL can contain user input.",
+  },
+  {
+    id: 16,
+    topic: "Sources",
+    question: "document.referrer is risky because it:",
+    options: ["May contain attacker-controlled data", "Is always empty", "Is always trusted", "Is encrypted"],
+    correctAnswer: 0,
+    explanation: "Referrer can be set by external pages.",
+  },
+  {
+    id: 17,
+    topic: "Contexts",
+    question: "Output encoding must be:",
+    options: ["Context-specific", "Always the same", "Skipped for JSON", "Used only on input"],
+    correctAnswer: 0,
+    explanation: "HTML, JS, URL, and CSS contexts differ.",
+  },
+  {
+    id: 18,
+    topic: "Contexts",
+    question: "HTML body context should use:",
+    options: ["HTML entity encoding", "URL encoding", "Base64 only", "No encoding"],
+    correctAnswer: 0,
+    explanation: "HTML entity encoding is correct for body text.",
+  },
+  {
+    id: 19,
+    topic: "Contexts",
+    question: "URL components should use:",
+    options: ["encodeURIComponent", "HTML encoding", "No encoding", "Base64 only"],
+    correctAnswer: 0,
+    explanation: "encodeURIComponent is for URL components.",
+  },
+  {
+    id: 20,
+    topic: "Contexts",
+    question: "JavaScript string context requires:",
+    options: ["Escaping quotes and backslashes", "Only HTML encoding", "Only URL encoding", "No encoding"],
+    correctAnswer: 0,
+    explanation: "JS strings need JS-specific escaping.",
+  },
+  {
+    id: 21,
+    topic: "Contexts",
+    question: "Attribute context requires:",
+    options: ["Escaping quotes and special characters", "Only URL encoding", "No encoding", "Only base64"],
+    correctAnswer: 0,
+    explanation: "Attribute values must be properly escaped.",
+  },
+  {
+    id: 22,
+    topic: "Mitigation",
+    question: "The primary defense against XSS is:",
+    options: ["Output encoding/escaping", "Only input validation", "Only WAFs", "Only logging"],
+    correctAnswer: 0,
+    explanation: "Proper output encoding prevents script execution.",
+  },
+  {
+    id: 23,
+    topic: "Mitigation",
+    question: "Input validation alone is:",
+    options: ["Not sufficient to prevent XSS", "Always sufficient", "The only defense needed", "More important than encoding"],
+    correctAnswer: 0,
+    explanation: "Validation helps but output encoding is required.",
+  },
+  {
+    id: 24,
+    topic: "Mitigation",
+    question: "A Content Security Policy (CSP) helps by:",
+    options: ["Restricting where scripts can load from", "Encoding output", "Validating input", "Disabling JavaScript"],
+    correctAnswer: 0,
+    explanation: "CSP limits script sources and execution.",
+  },
+  {
+    id: 25,
+    topic: "Mitigation",
+    question: "A strong CSP usually avoids:",
+    options: ["unsafe-inline", "script-src 'self'", "object-src 'none'", "nonce-based policies"],
+    correctAnswer: 0,
+    explanation: "unsafe-inline weakens CSP protections.",
+  },
+  {
+    id: 26,
+    topic: "Mitigation",
+    question: "CSP nonces should be:",
+    options: ["Random per response", "Static and reused", "Hard-coded", "Publicly documented"],
+    correctAnswer: 0,
+    explanation: "Nonces must be unpredictable to be effective.",
+  },
+  {
+    id: 27,
+    topic: "Mitigation",
+    question: "CSP hash-based policies allow:",
+    options: ["Specific inline scripts by hash", "All inline scripts", "All external scripts", "No scripts at all"],
+    correctAnswer: 0,
+    explanation: "Hashes allow only matching inline scripts.",
+  },
+  {
+    id: 28,
+    topic: "Cookies",
+    question: "HttpOnly cookies:",
+    options: ["Cannot be read by JavaScript", "Prevent all XSS", "Encrypt the cookie", "Disable sessions"],
+    correctAnswer: 0,
+    explanation: "HttpOnly blocks JS access to cookies.",
+  },
+  {
+    id: 29,
+    topic: "Cookies",
+    question: "HttpOnly does not prevent XSS because:",
+    options: ["Attackers can still act as the user in the browser", "It disables cookies", "It blocks all requests", "It encodes input"],
+    correctAnswer: 0,
+    explanation: "XSS can still perform actions without reading cookies.",
+  },
+  {
+    id: 30,
+    topic: "Headers",
+    question: "The X-XSS-Protection header is:",
+    options: ["Deprecated and not reliable", "Required in all browsers", "A complete fix", "A replacement for CSP"],
+    correctAnswer: 0,
+    explanation: "Modern browsers have deprecated this header.",
+  },
+  {
+    id: 31,
+    topic: "Headers",
+    question: "CSP report-only mode is used to:",
+    options: ["Test policies without breaking pages", "Block all scripts", "Enable unsafe-inline", "Disable logging"],
+    correctAnswer: 0,
+    explanation: "Report-only helps evaluate a CSP safely.",
+  },
+  {
+    id: 32,
+    topic: "Frameworks",
+    question: "Template engines that auto-escape:",
+    options: ["Reduce XSS risk by default", "Eliminate need for encoding", "Make XSS impossible", "Disable JavaScript"],
+    correctAnswer: 0,
+    explanation: "Auto-escaping helps but context matters.",
+  },
+  {
+    id: 33,
+    topic: "Frameworks",
+    question: "React's dangerouslySetInnerHTML is risky because it:",
+    options: ["Injects raw HTML into the DOM", "Sanitizes automatically", "Escapes by default", "Blocks scripts"],
+    correctAnswer: 0,
+    explanation: "It bypasses React's built-in escaping.",
+  },
+  {
+    id: 34,
+    topic: "Frameworks",
+    question: "Using a sanitizer like DOMPurify helps by:",
+    options: ["Removing dangerous HTML and attributes", "Encrypting input", "Skipping encoding", "Adding scripts"],
+    correctAnswer: 0,
+    explanation: "Sanitizers remove risky markup and attributes.",
+  },
+  {
+    id: 35,
+    topic: "Frameworks",
+    question: "Allowlist-based sanitization is:",
+    options: ["Safer than a denylist", "Less safe than a denylist", "Equivalent always", "Not recommended"],
+    correctAnswer: 0,
+    explanation: "Allowlists reduce unknown dangerous elements.",
+  },
+  {
+    id: 36,
+    topic: "Payloads",
+    question: "A basic XSS test payload is:",
+    options: ["<script>alert(1)</script>", "SELECT * FROM users", "127.0.0.1", "DROP TABLE"],
+    correctAnswer: 0,
+    explanation: "A simple alert payload is common for testing.",
+  },
+  {
+    id: 37,
+    topic: "Payloads",
+    question: "Event handler attributes like onclick are:",
+    options: ["Common XSS vectors", "Always safe", "Blocked by HTML", "Only for CSS"],
+    correctAnswer: 0,
+    explanation: "Event handlers execute JavaScript.",
+  },
+  {
+    id: 38,
+    topic: "Payloads",
+    question: "A javascript: URL can cause:",
+    options: ["Script execution when clicked", "TLS errors only", "Safe navigation only", "No effect"],
+    correctAnswer: 0,
+    explanation: "javascript: URLs execute code in the browser.",
+  },
+  {
+    id: 39,
+    topic: "Payloads",
+    question: "SVG files can be risky because they:",
+    options: ["Can contain script and event handlers", "Are always safe images", "Cannot run scripts", "Are text-only"],
+    correctAnswer: 0,
+    explanation: "SVG supports scripting and events.",
+  },
+  {
+    id: 40,
+    topic: "Payloads",
+    question: "Markdown renderers are risky when they:",
+    options: ["Allow raw HTML without sanitization", "Only render text", "Escape HTML by default", "Disable links"],
+    correctAnswer: 0,
+    explanation: "Raw HTML in Markdown can enable XSS.",
+  },
+  {
+    id: 41,
+    topic: "Contexts",
+    question: "Encoding must happen:",
+    options: ["At the point of output", "Only at input", "Only in the database", "Only in the browser"],
+    correctAnswer: 0,
+    explanation: "Output encoding should be applied when rendering.",
+  },
+  {
+    id: 42,
+    topic: "Contexts",
+    question: "Double-encoding user input can:",
+    options: ["Break rendering and create bypasses", "Always improve safety", "Prevent XSS", "Encrypt data"],
+    correctAnswer: 0,
+    explanation: "Improper encoding order can cause issues.",
+  },
+  {
+    id: 43,
+    topic: "DOM",
+    question: "Writing location.hash directly to innerHTML is:",
+    options: ["A DOM XSS vulnerability", "Always safe", "Only a logging issue", "Required for routing"],
+    correctAnswer: 0,
+    explanation: "location.hash is attacker-controlled.",
+  },
+  {
+    id: 44,
+    topic: "DOM",
+    question: "Using textContent with location.hash is:",
+    options: ["Safer than innerHTML", "More dangerous", "Equivalent to eval", "A CSP violation"],
+    correctAnswer: 0,
+    explanation: "textContent treats input as text.",
+  },
+  {
+    id: 45,
+    topic: "DOM",
+    question: "setTimeout(userInput) is risky because it:",
+    options: ["Evaluates input as code", "Encodes input", "Prevents execution", "Blocks scripts"],
+    correctAnswer: 0,
+    explanation: "setTimeout with strings behaves like eval.",
+  },
+  {
+    id: 46,
+    topic: "DOM",
+    question: "new Function(userInput) is risky because it:",
+    options: ["Compiles and executes attacker input", "Escapes automatically", "Is ignored by browsers", "Only logs input"],
+    correctAnswer: 0,
+    explanation: "new Function executes provided code.",
+  },
+  {
+    id: 47,
+    topic: "Defense",
+    question: "A WAF is:",
+    options: ["A helpful layer but not a full fix", "A complete XSS solution", "A replacement for encoding", "Not useful at all"],
+    correctAnswer: 0,
+    explanation: "WAFs help but cannot replace secure coding.",
+  },
+  {
+    id: 48,
+    topic: "Defense",
+    question: "Security testing for XSS should include:",
+    options: ["Manual and automated testing", "Only unit tests", "Only code review", "Only penetration tests"],
+    correctAnswer: 0,
+    explanation: "A mix of testing approaches works best.",
+  },
+  {
+    id: 49,
+    topic: "Defense",
+    question: "A good output encoding library should:",
+    options: ["Be context-aware", "Only support HTML", "Avoid updates", "Be custom and untested"],
+    correctAnswer: 0,
+    explanation: "Libraries should support multiple contexts safely.",
+  },
+  {
+    id: 50,
+    topic: "Defense",
+    question: "Context-aware encoding means:",
+    options: ["Different encoding for HTML, JS, URL, CSS", "One encoding for all outputs", "Only input encoding", "No encoding needed"],
+    correctAnswer: 0,
+    explanation: "Each context needs a specific encoding.",
+  },
+  {
+    id: 51,
+    topic: "XSS vs Other",
+    question: "XSS differs from CSRF because XSS:",
+    options: ["Runs attacker script in the victim browser", "Only sends requests without scripts", "Only affects servers", "Requires no user interaction"],
+    correctAnswer: 0,
+    explanation: "CSRF is request forgery; XSS is script injection.",
+  },
+  {
+    id: 52,
+    topic: "XSS vs Other",
+    question: "JSONP is risky because it:",
+    options: ["Executes JSON as script", "Encrypts responses", "Blocks scripts", "Requires CSP"],
+    correctAnswer: 0,
+    explanation: "JSONP uses script tags, enabling XSS.",
+  },
+  {
+    id: 53,
+    topic: "XSS vs Other",
+    question: "Using innerText is generally:",
+    options: ["Safer for untrusted text", "More dangerous than innerHTML", "Equivalent to eval", "Only for CSS"],
+    correctAnswer: 0,
+    explanation: "innerText does not parse HTML.",
+  },
+  {
+    id: 54,
+    topic: "XSS vs Other",
+    question: "Using setAttribute with untrusted URL is risky because:",
+    options: ["It can allow javascript: URLs", "It always encodes", "It blocks navigation", "It prevents XSS"],
+    correctAnswer: 0,
+    explanation: "URL schemes must be validated.",
+  },
+  {
+    id: 55,
+    topic: "Testing",
+    question: "A safe way to test for XSS is to use:",
+    options: ["Non-destructive payloads like alert(1)", "Real credential theft", "Phishing pages", "Malware"],
+    correctAnswer: 0,
+    explanation: "Testing should be safe and controlled.",
+  },
+  {
+    id: 56,
+    topic: "Testing",
+    question: "When testing reflected XSS, you often look for:",
+    options: ["Unsafely reflected input in responses", "Stored comments only", "DB corruption", "DNS changes"],
+    correctAnswer: 0,
+    explanation: "Reflected input in HTML can execute scripts.",
+  },
+  {
+    id: 57,
+    topic: "Testing",
+    question: "When testing stored XSS, you often look for:",
+    options: ["Payloads saved and shown to other users", "Only query parameters", "Only headers", "Only redirects"],
+    correctAnswer: 0,
+    explanation: "Stored payloads persist and execute later.",
+  },
+  {
+    id: 58,
+    topic: "Testing",
+    question: "When testing DOM XSS, you focus on:",
+    options: ["Client-side sources and sinks", "Server logs only", "Database queries only", "TLS settings only"],
+    correctAnswer: 0,
+    explanation: "DOM XSS happens in JavaScript.",
+  },
+  {
+    id: 59,
+    topic: "Mitigation",
+    question: "A secure CSP often sets object-src to:",
+    options: ["none", "self", "unsafe-inline", "data"],
+    correctAnswer: 0,
+    explanation: "object-src none blocks plugins and risky content.",
+  },
+  {
+    id: 60,
+    topic: "Mitigation",
+    question: "Using strict-dynamic in CSP:",
+    options: ["Allows trusted scripts to load others", "Disables all scripts", "Removes nonces", "Enables unsafe-inline"],
+    correctAnswer: 0,
+    explanation: "strict-dynamic trusts scripts with a nonce or hash.",
+  },
+  {
+    id: 61,
+    topic: "Data Handling",
+    question: "Sanitization should be done:",
+    options: ["Before inserting HTML into the DOM", "Only at input time", "Only in the database", "Only after rendering"],
+    correctAnswer: 0,
+    explanation: "Sanitize before any HTML insertion.",
+  },
+  {
+    id: 62,
+    topic: "Data Handling",
+    question: "Allowing users to upload HTML content requires:",
+    options: ["Strict sanitization and review", "No controls", "Only encryption", "Disabling CSP"],
+    correctAnswer: 0,
+    explanation: "User HTML is risky without sanitization.",
+  },
+  {
+    id: 63,
+    topic: "Data Handling",
+    question: "Escaping should be applied:",
+    options: ["Every time data is rendered", "Only once when saved", "Only in logs", "Only in CSS"],
+    correctAnswer: 0,
+    explanation: "Encoding should be applied at each render.",
+  },
+  {
+    id: 64,
+    topic: "Defense",
+    question: "A defense-in-depth approach includes:",
+    options: ["Encoding, sanitization, and CSP", "Only logging", "Only encryption", "Only WAFs"],
+    correctAnswer: 0,
+    explanation: "Combine multiple layers for best protection.",
+  },
+  {
+    id: 65,
+    topic: "Defense",
+    question: "Trusted Types can help by:",
+    options: ["Restricting DOM sinks to safe values", "Disabling all scripts", "Replacing CSP", "Removing sanitization"],
+    correctAnswer: 0,
+    explanation: "Trusted Types reduce DOM XSS in modern browsers.",
+  },
+  {
+    id: 66,
+    topic: "Defense",
+    question: "Avoiding inline scripts helps because:",
+    options: ["It enables stricter CSP", "It disables cookies", "It removes HTML", "It forces eval"],
+    correctAnswer: 0,
+    explanation: "Strict CSP is easier without inline scripts.",
+  },
+  {
+    id: 67,
+    topic: "Defense",
+    question: "Using template literals with untrusted input can:",
+    options: ["Introduce XSS if inserted into HTML", "Prevent injection", "Encrypt data", "Disable scripts"],
+    correctAnswer: 0,
+    explanation: "Templates do not sanitize automatically.",
+  },
+  {
+    id: 68,
+    topic: "Defense",
+    question: "Escaping for CSS context should:",
+    options: ["Use CSS-specific escaping", "Use HTML escaping only", "Use URL encoding only", "Be skipped"],
+    correctAnswer: 0,
+    explanation: "CSS context requires CSS escaping.",
+  },
+  {
+    id: 69,
+    topic: "Defense",
+    question: "Escaping for URL context should:",
+    options: ["Validate scheme and encode components", "Only escape HTML", "Ignore protocol", "Always allow javascript:"],
+    correctAnswer: 0,
+    explanation: "Validate schemes and encode safely.",
+  },
+  {
+    id: 70,
+    topic: "Defense",
+    question: "XSS in JSON responses can be avoided by:",
+    options: ["Setting correct Content-Type and not executing JSON", "Wrapping JSON in script tags", "Using JSONP", "Disabling CSP"],
+    correctAnswer: 0,
+    explanation: "Serve JSON with application/json and parse safely.",
+  },
+  {
+    id: 71,
+    topic: "Defense",
+    question: "If you must render HTML from users, you should:",
+    options: ["Sanitize and allowlist tags and attributes", "Trust input", "Disable all checks", "Only escape once"],
+    correctAnswer: 0,
+    explanation: "Allowlist-based sanitization is required.",
+  },
+  {
+    id: 72,
+    topic: "Defense",
+    question: "Browser auto-escaping features are:",
+    options: ["Not a replacement for proper encoding", "Always sufficient", "Guaranteed protection", "A CSP substitute"],
+    correctAnswer: 0,
+    explanation: "Do not rely on browser heuristics.",
+  },
+  {
+    id: 73,
+    topic: "Detection",
+    question: "XSS detection in logs can include:",
+    options: ["Suspicious tags or event handlers in input", "Only normal requests", "Only status codes", "Only TLS errors"],
+    correctAnswer: 0,
+    explanation: "Look for script-like payloads in input.",
+  },
+  {
+    id: 74,
+    topic: "Detection",
+    question: "A CSP violation report can help:",
+    options: ["Identify attempted script execution", "Encrypt responses", "Disable logging", "Remove HTML"],
+    correctAnswer: 0,
+    explanation: "Reports show blocked script sources.",
+  },
+  {
+    id: 75,
+    topic: "Summary",
+    question: "The safest approach to prevent XSS is:",
+    options: ["Context-aware output encoding plus CSP", "Only input validation", "Only WAF rules", "Only logging"],
+    correctAnswer: 0,
+    explanation: "Encoding and strong CSP provide robust protection.",
+  },
+];
+
 export default function XSSGuidePage() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -260,9 +867,15 @@ export default function XSSGuidePage() {
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-            Back to Learning Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 2 }}
+          />
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <Box
               sx={{
@@ -678,6 +1291,39 @@ export default function XSSGuidePage() {
             <Chip label="OWASP Top 10 →" clickable onClick={() => navigate("/learn/owasp")} sx={{ fontWeight: 600 }} />
           </Box>
         </Paper>
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Cross-Site Scripting Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </LearnPageLayout>
   );

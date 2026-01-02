@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import { Link } from "react-router-dom";
 import {
   Box,
-  Container,
   Typography,
   Paper,
   Chip,
@@ -12,8 +12,13 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  Drawer,
+  Fab,
+  IconButton,
+  Tooltip,
   alpha,
   useTheme,
+  useMediaQuery,
   Divider,
   Radio,
   RadioGroup,
@@ -43,6 +48,9 @@ import StorageIcon from "@mui/icons-material/Storage";
 import QuizIcon from "@mui/icons-material/Quiz";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { useNavigate } from "react-router-dom";
 
 // Question bank for the quiz (75 questions)
@@ -1505,20 +1513,349 @@ const quickStats = [
 export default function IntroToReverseEngineeringPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const accent = "#dc2626";
+
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "what-is-re", label: "What is RE?", icon: <SearchIcon /> },
+    { id: "why-re", label: "Why Learn RE?", icon: <PsychologyIcon /> },
+    { id: "legal-ethical", label: "Legal & Ethics", icon: <GavelIcon /> },
+    { id: "mindset", label: "RE Mindset", icon: <PsychologyIcon /> },
+    { id: "types-of-re", label: "Types of RE", icon: <ExtensionIcon /> },
+    { id: "static-vs-dynamic", label: "Static vs Dynamic", icon: <VisibilityIcon /> },
+    { id: "tools-overview", label: "Tools", icon: <BuildIcon /> },
+    { id: "file-formats", label: "File Formats", icon: <StorageIcon /> },
+    { id: "assembly-intro", label: "Assembly", icon: <CodeIcon /> },
+    { id: "common-patterns", label: "Patterns", icon: <TipsAndUpdatesIcon /> },
+    { id: "anti-re", label: "Anti-RE", icon: <LockIcon /> },
+    { id: "methodology", label: "Methodology", icon: <TerminalIcon /> },
+    { id: "practice-resources", label: "Practice", icon: <SchoolIcon /> },
+    { id: "career-paths", label: "Careers", icon: <SecurityIcon /> },
+    { id: "outline", label: "Outline", icon: <ListAltIcon /> },
+    { id: "prerequisites", label: "Prerequisites", icon: <CheckCircleIcon /> },
+    { id: "next-steps", label: "Next Steps", icon: <EmojiEventsIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   const pageContext = `Introduction to Reverse Engineering - Comprehensive beginner's guide covering what reverse engineering is, why it's valuable (malware analysis, vulnerability research, interoperability, legacy systems), legal and ethical considerations (DMCA, CFAA, responsible disclosure), the RE mindset, types of RE (software, hardware, protocol, firmware), static vs dynamic analysis, essential tools (Ghidra, IDA, x64dbg, GDB), file formats (PE, ELF, Mach-O, APK), assembly language primer, common patterns, anti-RE techniques, methodology, practice resources, and career paths.`;
 
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Introduction to Reverse Engineering" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Back Button */}
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3 }}
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#b91c1c" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
         >
-          Back to Learning Hub
-        </Button>
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Back Button */}
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
 
         {/* Hero Banner */}
         <Paper
@@ -1676,7 +2013,7 @@ export default function IntroToReverseEngineeringPage() {
                 label={nav.label}
                 size="small"
                 clickable
-                onClick={() => document.getElementById(nav.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                onClick={() => scrollToSection(nav.id)}
                 sx={{
                   fontWeight: 600,
                   fontSize: "0.75rem",
@@ -1718,6 +2055,168 @@ export default function IntroToReverseEngineeringPage() {
             frustrating at times, but the "aha!" moments when pieces click into place are incredibly rewarding.
           </Typography>
         </Paper>
+
+        {/* ==================== COURSE OUTLINE ==================== */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+          <Divider sx={{ flex: 1 }} />
+          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
+            SUMMARY
+          </Typography>
+          <Divider sx={{ flex: 1 }} />
+        </Box>
+
+        <Typography id="outline" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+          ?? Course Outline
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Topics we'll cover in this comprehensive introduction (content coming soon)
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {outlineSections.map((section, index) => (
+            <Grid item xs={12} sm={6} md={4} key={section.id}>
+              <Paper
+                sx={{
+                  p: 2.5,
+                  height: "100%",
+                  borderRadius: 3,
+                  border: `1px solid ${alpha(section.color, section.status === "Complete" ? 0.3 : 0.15)}`,
+                  bgcolor: section.status === "Complete" ? alpha(section.color, 0.03) : "transparent",
+                  opacity: section.status === "Complete" ? 1 : 0.75,
+                  transition: "all 0.2s ease",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    borderColor: section.color,
+                    opacity: 1,
+                    boxShadow: `0 8px 24px ${alpha(section.color, 0.15)}`,
+                  },
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Box
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 1.5,
+                        bgcolor: alpha(section.color, 0.1),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: section.color,
+                      }}
+                    >
+                      {section.icon}
+                    </Box>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                      {String(index + 1).padStart(2, "0")}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={section.status}
+                    size="small"
+                    icon={section.status === "Complete" ? <CheckCircleIcon sx={{ fontSize: 14 }} /> : <RadioButtonUncheckedIcon sx={{ fontSize: 14 }} />}
+                    sx={{
+                      fontSize: "0.65rem",
+                      height: 22,
+                      bgcolor: section.status === "Complete" ? alpha("#10b981", 0.1) : alpha("#6b7280", 0.1),
+                      color: section.status === "Complete" ? "#10b981" : "#6b7280",
+                      "& .MuiChip-icon": {
+                        color: section.status === "Complete" ? "#10b981" : "#6b7280",
+                      },
+                    }}
+                  />
+                </Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                  {section.title}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+                  {section.description}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ==================== PREREQUISITES ==================== */}
+        <Typography id="prerequisites" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+          ?? Prerequisites
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          What you should know before diving into reverse engineering
+        </Typography>
+
+        <Grid container spacing={3} sx={{ mb: 5 }}>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
+                ? Helpful to Have
+              </Typography>
+              <List dense>
+                {[
+                  "Basic programming knowledge (any language)",
+                  "Understanding of how computers work",
+                  "Familiarity with command line",
+                  "Curiosity and patience",
+                  "Basic understanding of memory concepts",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.3, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#10b981" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+                ? Nice to Have
+              </Typography>
+              <List dense>
+                {[
+                  "C/C++ programming experience",
+                  "Understanding of operating systems",
+                  "Basic networking knowledge",
+                  "Experience with hex editors",
+                  "Linux command line familiarity",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.3, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <TipsAndUpdatesIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+                ?? We'll Teach You
+              </Typography>
+              <List dense>
+                {[
+                  "Assembly language basics",
+                  "How to use disassemblers",
+                  "Debugging techniques",
+                  "Binary file formats",
+                  "Common patterns to recognize",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.3, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <SchoolIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+        </Grid>
 
         {/* ==================== WHAT IS REVERSE ENGINEERING ==================== */}
         <Typography id="what-is-re" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
@@ -3311,168 +3810,6 @@ export default function IntroToReverseEngineeringPage() {
           </Grid>
         </Grid>
 
-        {/* ==================== COURSE OUTLINE ==================== */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            SUMMARY
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        <Typography id="outline" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
-          📚 Course Outline
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Topics we'll cover in this comprehensive introduction (content coming soon)
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 5 }}>
-          {outlineSections.map((section, index) => (
-            <Grid item xs={12} sm={6} md={4} key={section.id}>
-              <Paper
-                sx={{
-                  p: 2.5,
-                  height: "100%",
-                  borderRadius: 3,
-                  border: `1px solid ${alpha(section.color, section.status === "Complete" ? 0.3 : 0.15)}`,
-                  bgcolor: section.status === "Complete" ? alpha(section.color, 0.03) : "transparent",
-                  opacity: section.status === "Complete" ? 1 : 0.75,
-                  transition: "all 0.2s ease",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    borderColor: section.color,
-                    opacity: 1,
-                    boxShadow: `0 8px 24px ${alpha(section.color, 0.15)}`,
-                  },
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 1 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 1.5,
-                        bgcolor: alpha(section.color, 0.1),
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: section.color,
-                      }}
-                    >
-                      {section.icon}
-                    </Box>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
-                      {String(index + 1).padStart(2, "0")}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label={section.status}
-                    size="small"
-                    icon={section.status === "Complete" ? <CheckCircleIcon sx={{ fontSize: 14 }} /> : <RadioButtonUncheckedIcon sx={{ fontSize: 14 }} />}
-                    sx={{
-                      fontSize: "0.65rem",
-                      height: 22,
-                      bgcolor: section.status === "Complete" ? alpha("#10b981", 0.1) : alpha("#6b7280", 0.1),
-                      color: section.status === "Complete" ? "#10b981" : "#6b7280",
-                      "& .MuiChip-icon": {
-                        color: section.status === "Complete" ? "#10b981" : "#6b7280",
-                      },
-                    }}
-                  />
-                </Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  {section.title}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.5 }}>
-                  {section.description}
-                </Typography>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* ==================== PREREQUISITES ==================== */}
-        <Typography id="prerequisites" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
-          📋 Prerequisites
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          What you should know before diving into reverse engineering
-        </Typography>
-
-        <Grid container spacing={3} sx={{ mb: 5 }}>
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#10b981", 0.2)}` }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
-                ✅ Helpful to Have
-              </Typography>
-              <List dense>
-                {[
-                  "Basic programming knowledge (any language)",
-                  "Understanding of how computers work",
-                  "Familiarity with command line",
-                  "Curiosity and patience",
-                  "Basic understanding of memory concepts",
-                ].map((item) => (
-                  <ListItem key={item} sx={{ py: 0.3, px: 0 }}>
-                    <ListItemIcon sx={{ minWidth: 24 }}>
-                      <CheckCircleIcon sx={{ fontSize: 14, color: "#10b981" }} />
-                    </ListItemIcon>
-                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                  </ListItem>
-                ))}
-              </List>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
-                ⚡ Nice to Have
-              </Typography>
-              <List dense>
-                {[
-                  "C/C++ programming experience",
-                  "Understanding of operating systems",
-                  "Basic networking knowledge",
-                  "Experience with hex editors",
-                  "Linux command line familiarity",
-                ].map((item) => (
-                  <ListItem key={item} sx={{ py: 0.3, px: 0 }}>
-                    <ListItemIcon sx={{ minWidth: 24 }}>
-                      <TipsAndUpdatesIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
-                    </ListItemIcon>
-                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                  </ListItem>
-                ))}
-              </List>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
-                📚 We'll Teach You
-              </Typography>
-              <List dense>
-                {[
-                  "Assembly language basics",
-                  "How to use disassemblers",
-                  "Debugging techniques",
-                  "Binary file formats",
-                  "Common patterns to recognize",
-                ].map((item) => (
-                  <ListItem key={item} sx={{ py: 0.3, px: 0 }}>
-                    <ListItemIcon sx={{ minWidth: 24 }}>
-                      <SchoolIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
-                    </ListItemIcon>
-                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                  </ListItem>
-                ))}
-              </List>
-            </Paper>
-          </Grid>
-        </Grid>
-
         {/* ==================== NEXT STEPS ==================== */}
         <Typography id="next-steps" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           🚀 Next Steps
@@ -3587,7 +3924,8 @@ export default function IntroToReverseEngineeringPage() {
             Return to Learning Hub
           </Button>
         </Box>
-      </Container>
+      </Box>
+    </Box>
     </LearnPageLayout>
   );
 }

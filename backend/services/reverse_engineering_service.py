@@ -9641,6 +9641,87 @@ def analyze_network_security_config(apk, file_path: Path) -> Dict[str, Any]:
     return result
 
 
+def _get_exported_components_from_manifest(apk) -> Dict[str, Dict[str, Any]]:
+    """
+    Parse AndroidManifest.xml to get properly exported components.
+    
+    A component is exported if:
+    1. android:exported="true" explicitly set, OR
+    2. For targetSdk < 31: has intent-filters AND android:exported not explicitly "false"
+    3. For targetSdk >= 31: must have android:exported explicitly set (implicit export removed)
+    
+    Also checks for android:permission which can restrict access even if exported.
+    
+    Returns:
+        Dict mapping component_name -> {"is_exported": bool, "has_permission": bool, "permission": str, "has_intent_filters": bool}
+    """
+    exported_map = {}
+    
+    try:
+        manifest_xml = apk.get_android_manifest_xml()
+        if manifest_xml is None:
+            return exported_map
+        
+        ns = '{http://schemas.android.com/apk/res/android}'
+        
+        # Get target SDK for implicit export rules
+        target_sdk = 31  # Default to strict mode
+        try:
+            target_sdk = int(apk.get_target_sdk_version()) if apk.get_target_sdk_version() else 31
+        except:
+            pass
+        
+        for component_type in ['activity', 'service', 'receiver', 'provider']:
+            components = manifest_xml.findall(f'.//{component_type}')
+            
+            for comp in components:
+                comp_name = comp.get(f'{ns}name', 'unknown')
+                exported_attr = comp.get(f'{ns}exported')  # Could be None, "true", or "false"
+                permission_attr = comp.get(f'{ns}permission')
+                
+                # Check if has intent filters
+                intent_filters = comp.findall('.//intent-filter')
+                has_intent_filters = len(intent_filters) > 0
+                
+                # Determine if exported
+                if exported_attr == "true":
+                    is_exported = True
+                elif exported_attr == "false":
+                    is_exported = False
+                else:
+                    # Not explicitly set - apply implicit export rules
+                    if target_sdk >= 31:
+                        # Android 12+ requires explicit export - default to False
+                        is_exported = False
+                    else:
+                        # Legacy: exported if has intent-filters
+                        is_exported = has_intent_filters
+                
+                # Check for main launcher activity (always accessible)
+                is_launcher = False
+                for intent_filter in intent_filters:
+                    actions = [a.get(f'{ns}name') for a in intent_filter.findall('.//action')]
+                    categories = [c.get(f'{ns}name') for c in intent_filter.findall('.//category')]
+                    if 'android.intent.action.MAIN' in actions and 'android.intent.category.LAUNCHER' in categories:
+                        is_launcher = True
+                        is_exported = True  # Launcher must be exported
+                        break
+                
+                exported_map[comp_name] = {
+                    "is_exported": is_exported,
+                    "has_permission": permission_attr is not None,
+                    "permission": permission_attr,
+                    "has_intent_filters": has_intent_filters,
+                    "is_launcher": is_launcher,
+                    "component_type": component_type,
+                }
+                
+    except Exception as e:
+        logger.warning(f"Failed to parse exported components from manifest: {e}")
+    
+    return exported_map
+
+
 def analyze_apk(file_path: Path) -> ApkAnalysisResult:
     """Analyze an Android APK file using androguard for comprehensive analysis."""
     
@@ -9686,31 +9767,40 @@ def analyze_apk_with_androguard(file_path: Path) -> ApkAnalysisResult:
                 description=DANGEROUS_PERMISSIONS.get(perm),
             ))
         
-        # Components
+        # Components - use proper manifest parsing for exported status
         components = []
         activities = apk.get_activities() or []
         services = apk.get_services() or []
         receivers = apk.get_receivers() or []
         providers = apk.get_providers() or []
         
-        # Check for exported components
+        # Get proper exported status from manifest (FIX #6: Don't rely on intent filters alone)
+        exported_map = _get_exported_components_from_manifest(apk)
+        
+        # Check for exported components using PROPER manifest parsing
         for activity in activities:
-            is_exported = apk.get_intent_filters("activity", activity) is not None
+            export_info = exported_map.get(activity, {})
+            is_exported = export_info.get("is_exported", False)
+            
+            # Get intent filters for display
             intent_filters = []
             filters = apk.get_intent_filters("activity", activity)
             if filters:
                 for f in filters:
                     if hasattr(f, 'get_action'):
                         intent_filters.extend(f.get_action() or [])
+            
+            # Note: _is_main_activity is still used for launcher detection backup
             components.append(ApkComponent(
                 name=activity,
                 component_type="activity",
-                is_exported=is_exported or _is_main_activity(intent_filters),
+                is_exported=is_exported,
                 intent_filters=intent_filters[:5],
             ))
         
         for service in services:
-            is_exported = apk.get_intent_filters("service", service) is not None
+            export_info = exported_map.get(service, {})
+            is_exported = export_info.get("is_exported", False)
             components.append(ApkComponent(
                 name=service,
                 component_type="service",
@@ -9719,7 +9809,8 @@ def analyze_apk_with_androguard(file_path: Path) -> ApkAnalysisResult:
             ))
         
         for receiver in receivers:
-            is_exported = apk.get_intent_filters("receiver", receiver) is not None
+            export_info = exported_map.get(receiver, {})
+            is_exported = export_info.get("is_exported", False)
             components.append(ApkComponent(
                 name=receiver,
                 component_type="receiver",
@@ -9728,10 +9819,12 @@ def analyze_apk_with_androguard(file_path: Path) -> ApkAnalysisResult:
             ))
         
         for provider in providers:
+            export_info = exported_map.get(provider, {})
+            is_exported = export_info.get("is_exported", False)
             components.append(ApkComponent(
                 name=provider,
                 component_type="provider",
-                is_exported=False,  # Need deeper analysis
+                is_exported=is_exported,
                 intent_filters=[],
             ))
         
@@ -10218,7 +10311,8 @@ def analyze_apk_security_comprehensive(
     if not has_pinning and http_urls:
         issues.append({
             "category": "M3: No Certificate Pinning",
-            "severity": "medium",
+            "severity": "advisory",  # FIX #1: Heuristic check - not a vulnerability
+            "is_advisory": True,
             "description": "No certificate pinning detected - app may be vulnerable to MITM attacks",
             "recommendation": "Implement certificate pinning using OkHttp CertificatePinner or Network Security Config.",
         })
@@ -10257,7 +10351,8 @@ def analyze_apk_security_comprehensive(
     if not has_root_detection:
         issues.append({
             "category": "M6: No Root Detection",
-            "severity": "low",
+            "severity": "advisory",  # FIX #1: Heuristic check - not a vulnerability
+            "is_advisory": True,
             "description": "No root detection mechanism found - app may run on compromised devices",
             "recommendation": "Implement root detection to protect sensitive functionality on rooted devices.",
         })
@@ -10298,7 +10393,8 @@ def analyze_apk_security_comprehensive(
     if not has_tampering_protection:
         issues.append({
             "category": "M8: No Tampering Protection",
-            "severity": "medium",
+            "severity": "advisory",  # FIX #1: Heuristic check - not a vulnerability
+            "is_advisory": True,
             "description": "No code tampering protection detected",
             "recommendation": "Implement Play Integrity API or SafetyNet Attestation to detect tampered apps.",
         })
@@ -10310,7 +10406,8 @@ def analyze_apk_security_comprehensive(
     if not obfuscation_indicators['is_obfuscated']:
         issues.append({
             "category": "M9: No Obfuscation",
-            "severity": "medium",
+            "severity": "advisory",  # FIX #1: Heuristic check - not a vulnerability
+            "is_advisory": True,
             "description": "App does not appear to be obfuscated - code can be easily reverse engineered",
             "recommendation": "Enable R8/ProGuard minification and obfuscation for release builds.",
         })
@@ -10626,11 +10723,118 @@ class ApkLibraryInfo:
     class_count: int
     is_high_risk: bool
     risk_reason: Optional[str]
+    version_source: str = "unknown"  # FIX #2: Track how we got the version
+    version_confidence: str = "low"  # FIX #2: low/medium/high based on source
+
+
+def _extract_library_versions_from_apk(output_dir: Path) -> Dict[str, Dict[str, str]]:
+    """
+    FIX #2: Extract library versions from multiple sources in decompiled APK.
+    
+    Sources checked:
+    1. META-INF/maven/**/pom.properties - most reliable
+    2. META-INF/maven/**/pom.xml - fallback
+    3. BuildConfig.java files - version constants
+    4. build.gradle if present - dependency declarations
+    
+    Returns:
+        Dict mapping library_name -> {"version": "x.y.z", "source": "pom.properties", "confidence": "high"}
+    """
+    versions = {}
+    
+    if not output_dir or not output_dir.exists():
+        return versions
+    
+    # Source 1: pom.properties files (HIGH confidence)
+    meta_inf = output_dir / "resources" / "META-INF"
+    if meta_inf.exists():
+        for pom_props in meta_inf.rglob("pom.properties"):
+            try:
+                content = pom_props.read_text(encoding='utf-8', errors='ignore')
+                artifact_id = None
+                group_id = None
+                version = None
+                
+                for line in content.split('\n'):
+                    line = line.strip()
+                    if line.startswith('groupId='):
+                        group_id = line.split('=', 1)[1]
+                    elif line.startswith('artifactId='):
+                        artifact_id = line.split('=', 1)[1]
+                    elif line.startswith('version='):
+                        version = line.split('=', 1)[1]
+                
+                if group_id and artifact_id and version:
+                    key = f"{group_id}:{artifact_id}"
+                    versions[key] = {"version": version, "source": "pom.properties", "confidence": "high"}
+                    # Also store with just group for matching
+                    versions[group_id] = {"version": version, "source": "pom.properties", "confidence": "high"}
+            except Exception as e:
+                logger.debug(f"Failed to parse {pom_props}: {e}")
+    
+    # Source 2: pom.xml files (MEDIUM confidence - could be bundled)
+    if meta_inf.exists():
+        for pom_xml in meta_inf.rglob("pom.xml"):
+            try:
+                content = pom_xml.read_text(encoding='utf-8', errors='ignore')
+                # Simple XML parsing for version
+                group_match = re.search(r'<groupId>([^<]+)</groupId>', content)
+                artifact_match = re.search(r'<artifactId>([^<]+)</artifactId>', content)
+                version_match = re.search(r'<version>([^<]+)</version>', content)
+                
+                if group_match and artifact_match and version_match:
+                    key = f"{group_match.group(1)}:{artifact_match.group(1)}"
+                    if key not in versions:  # Don't overwrite higher confidence
+                        versions[key] = {"version": version_match.group(1), "source": "pom.xml", "confidence": "medium"}
+            except Exception as e:
+                logger.debug(f"Failed to parse {pom_xml}: {e}")
+    
+    # Source 3: BuildConfig.java files (MEDIUM confidence)
+    sources_dir = output_dir / "sources"
+    if sources_dir.exists():
+        for build_config in sources_dir.rglob("BuildConfig.java"):
+            try:
+                content = build_config.read_text(encoding='utf-8', errors='ignore')
+                
+                # Extract VERSION_NAME constant
+                version_match = re.search(r'VERSION_NAME\s*=\s*["\']([^"\']+)["\']', content)
+                package_match = re.search(r'package\s+([\w.]+);', content)
+                
+                if version_match and package_match:
+                    package = package_match.group(1)
+                    version = version_match.group(1)
+                    if package not in versions:
+                        versions[package] = {"version": version, "source": "BuildConfig", "confidence": "medium"}
+            except Exception as e:
+                logger.debug(f"Failed to parse {build_config}: {e}")
+    
+    # Source 4: build.gradle (HIGH confidence if found)
+    gradle_files = list(output_dir.rglob("build.gradle")) + list(output_dir.rglob("build.gradle.kts"))
+    for gradle_file in gradle_files[:5]:  # Limit to avoid processing too many
+        try:
+            content = gradle_file.read_text(encoding='utf-8', errors='ignore')
+            # Match implementation 'group:artifact:version' or implementation("group:artifact:version")
+            dep_patterns = [
+                r"implementation\s*['\"]([^:]+):([^:]+):([^'\"]+)['\"]",
+                r"api\s*['\"]([^:]+):([^:]+):([^'\"]+)['\"]",
+                r"implementation\s*\(['\"]([^:]+):([^:]+):([^'\"]+)['\"]\)",
+            ]
+            for pattern in dep_patterns:
+                for match in re.finditer(pattern, content):
+                    group, artifact, version = match.groups()
+                    key = f"{group}:{artifact}"
+                    if key not in versions:
+                        versions[key] = {"version": version, "source": "build.gradle", "confidence": "high"}
+        except Exception as e:
+            logger.debug(f"Failed to parse {gradle_file}: {e}")
+    
+    return versions
 
 
 def extract_apk_dependencies(
     class_names: List[str],
-    gradle_content: Optional[str] = None
+    gradle_content: Optional[str] = None,
+    output_dir: Optional[Path] = None  # FIX #2: Add output_dir for version extraction
 ) -> List[ApkLibraryInfo]:
     """
     Extract third-party library dependencies from APK.
@@ -10638,15 +10842,23 @@ def extract_apk_dependencies(
     Detection methods:
     1. Class name prefixes matching known libraries
     2. Gradle file parsing if decompiled source available
+    3. FIX #2: Version extraction from pom.properties, pom.xml, BuildConfig, gradle
     
     Args:
         class_names: List of class names from decompiled APK
         gradle_content: Optional build.gradle content if available
+        output_dir: Optional JADX output directory for version extraction
         
     Returns:
-        List of detected libraries with metadata
+        List of detected libraries with metadata and version confidence
     """
     libraries: Dict[str, ApkLibraryInfo] = {}
+    
+    # FIX #2: Extract versions from APK resources first
+    version_info = {}
+    if output_dir:
+        version_info = _extract_library_versions_from_apk(Path(output_dir))
+        logger.info(f"Extracted version info for {len(version_info)} libraries from APK")
     
     # Method 1: Detect from class names
     for class_name in class_names:
@@ -10654,14 +10866,30 @@ def extract_apk_dependencies(
             if class_name.startswith(prefix):
                 if prefix not in libraries:
                     is_high_risk = prefix in HIGH_RISK_LIBRARIES
+                    
+                    # FIX #2: Try to find version from extracted info
+                    version = None
+                    version_source = "unknown"
+                    version_confidence = "low"
+                    
+                    # Check various key formats
+                    for key_to_try in [maven_coord, prefix, prefix.replace("/", ".")]:
+                        if key_to_try in version_info:
+                            version = version_info[key_to_try]["version"]
+                            version_source = version_info[key_to_try]["source"]
+                            version_confidence = version_info[key_to_try]["confidence"]
+                            break
+                    
                     libraries[prefix] = ApkLibraryInfo(
                         package_prefix=prefix,
                         maven_coordinate=maven_coord,
                         ecosystem=ecosystem,
-                        version=None,  # Can't determine from class names alone
+                        version=version,
                         class_count=1,
                         is_high_risk=is_high_risk,
                         risk_reason=HIGH_RISK_LIBRARIES.get(prefix),
+                        version_source=version_source,
+                        version_confidence=version_confidence,
                     )
                 else:
                     libraries[prefix].class_count += 1
@@ -10777,13 +11005,43 @@ async def lookup_apk_cves(libraries: List[ApkLibraryInfo]) -> List[Dict[str, Any
                                     severity = "low"
                                 break
                         
-                        # Extract affected versions
+                        # Extract affected versions and fixed version
                         affected_versions = []
+                        fixed_version = None
                         for affected in vuln.get("affected", []):
                             for range_info in affected.get("ranges", []):
                                 for event in range_info.get("events", []):
                                     if "fixed" in event:
-                                        affected_versions.append(f"Fixed in {event['fixed']}")
+                                        fixed_version = event['fixed']
+                                        affected_versions.append(f"Fixed in {fixed_version}")
+                        
+                        # FIX #2: Calculate CVE match confidence based on version info
+                        cve_confidence = "low"
+                        version_matches = False
+                        
+                        if lib.version and lib.version != "unknown":
+                            if lib.version_confidence == "high":
+                                cve_confidence = "high"
+                            elif lib.version_confidence == "medium":
+                                cve_confidence = "medium"
+                            else:
+                                cve_confidence = "medium"
+                            
+                            # Check if our version is affected
+                            if fixed_version:
+                                try:
+                                    from packaging import version as pkg_version
+                                    if pkg_version.parse(lib.version) < pkg_version.parse(fixed_version):
+                                        version_matches = True
+                                except:
+                                    # If we can't parse versions, assume it could be affected
+                                    version_matches = True
+                            else:
+                                version_matches = True  # No fix version means still affected
+                        else:
+                            # No version info - we can't confirm if this CVE applies
+                            cve_confidence = "low"
+                            version_matches = True  # Assume possibly affected
                         
                         # Extract references
                         references = []
@@ -10793,6 +11051,7 @@ async def lookup_apk_cves(libraries: List[ApkLibraryInfo]) -> List[Dict[str, Any
                         vulnerabilities.append({
                             "library": lib.maven_coordinate,
                             "library_version": lib.version or "unknown",
+                            "version_source": getattr(lib, 'version_source', 'unknown'),
                             "cve_id": vuln.get("id", "Unknown"),
                             "aliases": vuln.get("aliases", []),
                             "summary": vuln.get("summary", "No description available"),
@@ -10800,9 +11059,13 @@ async def lookup_apk_cves(libraries: List[ApkLibraryInfo]) -> List[Dict[str, Any
                             "severity": severity,
                             "cvss_score": cvss_score,
                             "affected_versions": affected_versions,
+                            "fixed_version": fixed_version,
                             "references": references,
                             "published": vuln.get("published", ""),
                             "modified": vuln.get("modified", ""),
+                            # FIX #2: Add confidence field
+                            "cve_confidence": cve_confidence,
+                            "version_confirmed": version_matches,
                             # Attack-focused fields
                             "exploitation_potential": _assess_exploitation_potential(vuln, lib),
                             "attack_vector": _determine_attack_vector(vuln),
@@ -11441,9 +11704,14 @@ class ApkAIReports:
     legacy_report: Optional[str] = None  # Combined for backwards compatibility
 
 
-async def analyze_apk_with_ai(result: ApkAnalysisResult, output_dir: Optional[Path] = None, decompiled_findings: Optional[List[Dict]] = None) -> Optional[str]:
+async def analyze_apk_with_ai(
+    result: ApkAnalysisResult, 
+    output_dir: Optional[Path] = None, 
+    decompiled_findings: Optional[List[Dict]] = None,
+    verification_results: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
     """Use Gemini to provide comprehensive security analysis of APK."""
-    reports = await generate_apk_ai_reports(result, output_dir, decompiled_findings)
+    reports = await generate_apk_ai_reports(result, output_dir, decompiled_findings, verification_results)
     if reports:
         # Return combined report for backwards compatibility
         result.ai_report_functionality = reports.functionality_report
@@ -12787,7 +13055,12 @@ def _collect_source_code_samples(output_dir: Path, max_classes: int = 15) -> str
     return result.get("code_context", "")
 
 
-async def generate_apk_ai_reports(result: ApkAnalysisResult, output_dir: Optional[Path] = None, decompiled_findings: Optional[List[Dict]] = None) -> Optional[ApkAIReports]:
+async def generate_apk_ai_reports(
+    result: ApkAnalysisResult, 
+    output_dir: Optional[Path] = None, 
+    decompiled_findings: Optional[List[Dict]] = None,
+    verification_results: Optional[Dict[str, Any]] = None
+) -> Optional[ApkAIReports]:
     """
     Generate two separate AI reports: functionality and security.
     
@@ -12795,6 +13068,7 @@ async def generate_apk_ai_reports(result: ApkAnalysisResult, output_dir: Optiona
         result: The APK analysis result with metadata
         output_dir: Optional JADX output directory to include decompiled source code
         decompiled_findings: Optional list of findings from pattern-based scanners
+        verification_results: Optional dict with verified_findings (FP-filtered) and verification_stats
     """
     if not settings.gemini_api_key:
         return None
@@ -12809,14 +13083,14 @@ async def generate_apk_ai_reports(result: ApkAnalysisResult, output_dir: Optiona
         parallel_scan_data = {"aggregated": {}, "stats": {}}
         if output_dir and Path(output_dir).exists():
             logger.info("AI Reports: Phase 1 - Parallel scan of all source files...")
-            parallel_scan_data = _scan_files_parallel(Path(output_dir), max_files=500, workers=4)
+            parallel_scan_data = _scan_files_parallel(Path(output_dir), max_files=800, workers=4)  # FIX #5: Increased from 500
             logger.info(f"AI Reports: Parallel scan completed - {parallel_scan_data['stats'].get('scanned', 0)} files in {parallel_scan_data['stats'].get('duration_seconds', 0)}s")
         
         # PHASE 2: Cross-reference analysis for data flow understanding
         cross_ref_data = {"call_graph": {}, "data_flows": [], "component_interactions": []}
         if output_dir and Path(output_dir).exists():
             logger.info("AI Reports: Phase 2 - Cross-reference analysis...")
-            cross_ref_data = _analyze_cross_references(Path(output_dir), max_files=300)
+            cross_ref_data = _analyze_cross_references(Path(output_dir), max_files=500)  # FIX #5: Increased from 300
             logger.info(f"AI Reports: Cross-ref found {cross_ref_data['stats'].get('call_edges', 0)} call edges, {cross_ref_data['stats'].get('sensitive_data_fields', 0)} sensitive fields")
         
         # PHASE 3: Full structured scan for AI context
@@ -12835,7 +13109,7 @@ async def generate_apk_ai_reports(result: ApkAnalysisResult, output_dir: Optiona
         source_context_data = {"code_context": "", "features": [], "endpoints": [], "stats": {}}
         if output_dir and Path(output_dir).exists():
             logger.info("AI Reports: Phase 4 - Extracting detailed code samples...")
-            source_context_data = _collect_comprehensive_source_context(Path(output_dir), max_classes=80)
+            source_context_data = _collect_comprehensive_source_context(Path(output_dir), max_classes=150)  # FIX #5: Increased from 80
         
         source_code_context = source_context_data.get("code_context", "")
         detected_features = source_context_data.get("features", [])
@@ -12871,10 +13145,17 @@ async def generate_apk_ai_reports(result: ApkAnalysisResult, output_dir: Optiona
                         except:
                             pass
                 
-                # Extract dependencies from class names
-                libraries = extract_apk_dependencies(class_names, None)
+                # FIX #2: Extract dependencies with version info from APK resources
+                libraries = extract_apk_dependencies(class_names, None, output_dir)
                 cve_data["libraries"] = [
-                    {"name": lib.maven_coordinate, "version": lib.version, "is_high_risk": lib.is_high_risk, "risk_reason": lib.risk_reason}
+                    {
+                        "name": lib.maven_coordinate, 
+                        "version": lib.version, 
+                        "version_source": lib.version_source,
+                        "version_confidence": lib.version_confidence,
+                        "is_high_risk": lib.is_high_risk, 
+                        "risk_reason": lib.risk_reason
+                    }
                     for lib in libraries
                 ]
                 
@@ -13203,16 +13484,53 @@ REQUIRED SECTIONS (BE THOROUGH):
 BE THOROUGH AND SPECIFIC. Reference actual classes and methods you see in the code. Don't make assumptions - only report what you can verify from the code."""
 
         # ==================== REPORT 2: Security Findings (ATTACKER'S PERSPECTIVE) ====================
+        # Use VERIFIED findings if available (FP-filtered), otherwise fall back to raw findings
+        verified_vulns = []
+        verified_secrets = []
+        verification_summary = ""
+        
+        if verification_results:
+            verified_vulns = verification_results.get("verified_findings", [])
+            verified_secrets = verification_results.get("verified_secrets", [])
+            v_stats = verification_results.get("verification_stats", {})
+            
+            # Build verification summary for AI context
+            verification_summary = f"""
+=== AI VERIFICATION APPLIED ===
+Total Findings Analyzed: {v_stats.get('total', 0)}
+Verified as Real: {v_stats.get('verified', 0)}
+Filtered as False Positives: {v_stats.get('filtered', 0)}
+Average Confidence: {v_stats.get('avg_confidence', 0):.0f}%
+Verdict Breakdown:
+- CONFIRMED (high confidence): {v_stats.get('by_verdict', {}).get('CONFIRMED', 0)}
+- LIKELY (medium confidence): {v_stats.get('by_verdict', {}).get('LIKELY', 0)}
+- SUSPICIOUS (needs investigation): {v_stats.get('by_verdict', {}).get('SUSPICIOUS', 0)}
+"""
+        
+        # Use verified findings for the security report to avoid FPs
+        # Fall back to raw findings if no verification was done
+        security_issues_to_report = verified_vulns if verified_vulns else result.security_issues
+        secrets_to_report = verified_secrets if verified_secrets else result.secrets
+        
+        # FIX #1: Separate advisory items from actual vulnerabilities
+        actual_vulnerabilities = [i for i in security_issues_to_report if not i.get("is_advisory", False)]
+        advisory_items = [i for i in security_issues_to_report if i.get("is_advisory", False)]
+        
         security_context = f"""
 {app_context}
+{verification_summary}
+=== VERIFIED SECURITY FINDINGS ===
+Actual Vulnerabilities ({len(actual_vulnerabilities)}):
+{chr(10).join(f'- [{i.get("severity", "INFO").upper()}] {i.get("category", "Unknown")}: {i.get("description", i.get("title", ""))} (confidence: {i.get("verification", {}).get("confidence", "N/A")}%)' for i in actual_vulnerabilities[:25]) or "None"}
 
-=== STATIC ANALYSIS SECURITY FINDINGS ===
-Security Issues ({len(result.security_issues)}):
-{chr(10).join(f'- [{i.get("severity", "INFO").upper()}] {i["category"]}: {i["description"]}' for i in result.security_issues[:20]) or "None"}
+=== SECURITY HARDENING RECOMMENDATIONS (Advisory - Not Vulnerabilities) ===
+Advisory Items ({len(advisory_items)}):
+{chr(10).join(f'- [ADVISORY] {i.get("category", "Unknown")}: {i.get("description", "")}' for i in advisory_items[:10]) or "None"}
+NOTE: Advisory items are hardening recommendations, NOT exploitable vulnerabilities. Include them in recommendations but don't count as findings.
 
 === HARDCODED SECRETS DETECTED ===
-Secrets/Keys Found ({len(result.secrets)}):
-{chr(10).join(f'- {s["type"]}: {s["masked_value"]} (in {s.get("file", "unknown")})' for s in result.secrets[:15]) or "None"}
+Secrets/Keys Found ({len(secrets_to_report)}):
+{chr(10).join(f'- {s.get("type", "secret")}: {s.get("masked_value", s.get("value", "***")[:20])} (in {s.get("file", "unknown")})' for s in secrets_to_report[:15]) or "None"}
 
 === APP CONFIGURATION ===
 Debuggable: {result.debuggable}
@@ -25595,6 +25913,302 @@ Respond with JSON: [{{"id": 0, "keep": true/false}}, ...]"""
 
 
 # ============================================================================
+# FIX #3: Field Name Normalization
+# Standardizes field names across different scanners for consistent processing
+# ============================================================================
+
+def normalize_finding_fields(finding: Dict[str, Any], source: str = "unknown") -> Dict[str, Any]:
+    """
+    Normalize finding fields to a consistent schema.
+    
+    Different scanners use different field names:
+    - Pattern scanner: file_path, line_number, code_snippet, class_name
+    - Vuln hunt: affected_class, line, code, class
+    - Sensitive data: file_path, line, code_context
+    - CVE: library, cve_id, severity
+    
+    This function normalizes to a consistent schema:
+    - file_path: Path to the file
+    - line_number: Line number in file
+    - code_snippet: Relevant code
+    - class_name: Class name
+    - source: Which scanner found this
+    """
+    normalized = finding.copy()
+    
+    # Normalize file path
+    if "file_path" not in normalized or not normalized.get("file_path"):
+        normalized["file_path"] = (
+            finding.get("affected_class") or
+            finding.get("class") or
+            finding.get("file") or
+            ""
+        )
+    
+    # Normalize line number
+    if "line_number" not in normalized or not normalized.get("line_number"):
+        normalized["line_number"] = (
+            finding.get("line") or
+            finding.get("line_num") or
+            0
+        )
+    
+    # Normalize code snippet
+    if "code_snippet" not in normalized or not normalized.get("code_snippet"):
+        normalized["code_snippet"] = (
+            finding.get("code") or
+            finding.get("code_context") or
+            finding.get("snippet") or
+            ""
+        )
+    
+    # Normalize class name
+    if "class_name" not in normalized or not normalized.get("class_name"):
+        file_path = normalized.get("file_path", "")
+        if file_path:
+            # Extract class name from path
+            normalized["class_name"] = Path(file_path).stem if "/" in file_path or "\\" in file_path else file_path.replace(".java", "")
+        else:
+            normalized["class_name"] = finding.get("class", "Unknown")
+    
+    # Add/update source
+    if "source" not in normalized or not normalized.get("source"):
+        normalized["source"] = source
+    
+    # Ensure severity exists
+    if "severity" not in normalized:
+        normalized["severity"] = finding.get("risk_level", "medium")
+    
+    # Ensure title exists
+    if "title" not in normalized:
+        normalized["title"] = (
+            finding.get("type") or
+            finding.get("category") or
+            finding.get("cve_id") or
+            "Unknown Finding"
+        )
+    
+    return normalized
+
+
+def normalize_findings_batch(findings: List[Dict[str, Any]], source: str = "unknown") -> List[Dict[str, Any]]:
+    """Normalize a batch of findings to consistent field names."""
+    return [normalize_finding_fields(f, source) for f in findings]
+
+
+# ============================================================================
+# FIX #1: CVE Reachability Verification
+# Validates whether CVE-affected code is actually reachable in the app
+# ============================================================================
+
+async def verify_cve_reachability(
+    cve_findings: List[Dict[str, Any]],
+    sources_dir: Path,
+    package_name: str = ""
+) -> Dict[str, Any]:
+    """
+    Verify CVE findings by checking if vulnerable library code is actually used.
+    
+    This prevents false positives from CVEs in libraries that are included
+    but never actually called by the app code.
+    
+    Args:
+        cve_findings: List of CVE findings with library info
+        sources_dir: Path to decompiled sources
+        package_name: App package name
+        
+    Returns:
+        {
+            "verified_cves": [...],     # CVEs with reachable vulnerable code
+            "unreachable_cves": [...],  # CVEs in unused library code
+            "verification_stats": {...}
+        }
+    """
+    from google import genai
+    from google.genai import types
+    
+    if not cve_findings:
+        return {
+            "verified_cves": [],
+            "unreachable_cves": [],
+            "verification_stats": {"total": 0, "reachable": 0, "unreachable": 0}
+        }
+    
+    if not settings.gemini_api_key:
+        logger.warning("Gemini API key not configured - skipping CVE reachability check")
+        # Return all as verified (conservative approach)
+        return {
+            "verified_cves": cve_findings,
+            "unreachable_cves": [],
+            "verification_stats": {
+                "total": len(cve_findings),
+                "reachable": len(cve_findings),
+                "unreachable": 0,
+                "skipped_reason": "AI API key not configured"
+            }
+        }
+    
+    logger.info(f"CVE reachability check: Analyzing {len(cve_findings)} CVEs")
+    client = genai.Client(api_key=settings.gemini_api_key)
+    
+    verified_cves = []
+    unreachable_cves = []
+    
+    # Collect app imports to check library usage
+    app_imports = set()
+    library_usages = {}
+    
+    try:
+        for java_file in sources_dir.rglob("*.java"):
+            try:
+                content = java_file.read_text(encoding='utf-8', errors='ignore')
+                
+                # Extract imports
+                import_matches = re.findall(r'^import\s+([\w\.]+);', content, re.MULTILINE)
+                app_imports.update(import_matches)
+                
+                # Track which library classes are actually used in code
+                for imp in import_matches:
+                    lib_prefix = '.'.join(imp.split('.')[:3])  # e.g., com.squareup.okhttp
+                    if lib_prefix not in library_usages:
+                        library_usages[lib_prefix] = {"count": 0, "files": []}
+                    library_usages[lib_prefix]["count"] += 1
+                    library_usages[lib_prefix]["files"].append(str(java_file.name))
+            except:
+                continue
+    except Exception as e:
+        logger.warning(f"Failed to collect app imports: {e}")
+    
+    # Process CVEs in batches
+    batch_size = 10
+    for i in range(0, len(cve_findings), batch_size):
+        batch = cve_findings[i:i + batch_size]
+        
+        # Build context for AI verification
+        cve_context = []
+        for idx, cve in enumerate(batch):
+            library = cve.get("library", "")
+            # Check if library is imported anywhere
+            lib_parts = library.replace("-", ".").replace("_", ".").split(":")
+            lib_package = lib_parts[0] if lib_parts else library
+            
+            usage_info = "NOT FOUND IN IMPORTS"
+            for imp_prefix, usage in library_usages.items():
+                if lib_package.lower() in imp_prefix.lower() or imp_prefix.lower() in lib_package.lower():
+                    usage_info = f"IMPORTED {usage['count']} times in: {', '.join(usage['files'][:5])}"
+                    break
+            
+            cve_context.append({
+                "id": idx,
+                "cve_id": cve.get("cve_id", "Unknown"),
+                "library": library,
+                "version": cve.get("library_version", ""),
+                "severity": cve.get("severity", ""),
+                "summary": cve.get("summary", "")[:200],
+                "vulnerable_function": cve.get("vulnerable_function", ""),
+                "usage_in_app": usage_info
+            })
+        
+        prompt = f"""Analyze these CVE findings for an Android app to determine if the vulnerable code is actually REACHABLE.
+
+## App Package: {package_name}
+
+## App Imports (libraries actually used):
+{json.dumps(list(app_imports)[:100], indent=2)}
+
+## CVEs to Analyze:
+{json.dumps(cve_context, indent=2)}
+
+## Task
+For each CVE, determine:
+1. Is the vulnerable library actually imported/used by the app?
+2. Is the specific vulnerable functionality likely to be called?
+3. Could this CVE actually be exploited given how the app uses the library?
+
+Return JSON:
+```json
+[
+  {{
+    "id": 0,
+    "reachable": true/false,
+    "confidence": 0-100,
+    "reasoning": "Brief explanation",
+    "exploitation_likelihood": "high/medium/low/none",
+    "affected_functionality": "What app functionality might be vulnerable"
+  }}
+]
+```
+
+Be CONSERVATIVE - if the library is imported, assume reachable unless you have strong evidence otherwise.
+Focus on whether the SPECIFIC vulnerable functions/classes are likely used."""
+
+        try:
+            response = await gemini_request_with_retry(
+                lambda: client.aio.models.generate_content(
+                    model=settings.gemini_model_id,
+                    contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+                ),
+                max_retries=2,
+                base_delay=2.0,
+                timeout_seconds=90.0,
+                operation_name="CVE reachability verification"
+            )
+            
+            if response is None:
+                # On failure, assume all reachable (conservative)
+                verified_cves.extend(batch)
+                continue
+            
+            # Parse response
+            json_match = re.search(r'\[[\s\S]*\]', response.text)
+            if json_match:
+                verdicts = json.loads(json_match.group())
+                verdict_map = {v.get("id"): v for v in verdicts}
+                
+                for idx, cve in enumerate(batch):
+                    verdict = verdict_map.get(idx, {})
+                    is_reachable = verdict.get("reachable", True)  # Default to reachable
+                    
+                    # Add verification info
+                    cve["reachability"] = {
+                        "verified": True,
+                        "reachable": is_reachable,
+                        "confidence": verdict.get("confidence", 50),
+                        "reasoning": verdict.get("reasoning", ""),
+                        "exploitation_likelihood": verdict.get("exploitation_likelihood", "unknown"),
+                        "affected_functionality": verdict.get("affected_functionality", "")
+                    }
+                    
+                    if is_reachable:
+                        verified_cves.append(cve)
+                    else:
+                        cve["filtered_reason"] = verdict.get("reasoning", "Vulnerable code not reachable")
+                        unreachable_cves.append(cve)
+            else:
+                # Parsing failed - keep all (conservative)
+                verified_cves.extend(batch)
+                
+        except Exception as e:
+            logger.warning(f"CVE reachability batch failed: {e}")
+            verified_cves.extend(batch)
+    
+    stats = {
+        "total": len(cve_findings),
+        "reachable": len(verified_cves),
+        "unreachable": len(unreachable_cves),
+        "filter_rate": round(len(unreachable_cves) / max(len(cve_findings), 1) * 100, 1)
+    }
+    
+    logger.info(f"CVE reachability: {len(verified_cves)} reachable, {len(unreachable_cves)} unreachable")
+    
+    return {
+        "verified_cves": verified_cves,
+        "unreachable_cves": unreachable_cves,
+        "verification_stats": stats
+    }
+
+
+# ============================================================================
 # Unified Finding Verification Layer
 # Runs on ALL findings with confidence scoring and cross-correlation
 # ============================================================================
@@ -25735,7 +26349,7 @@ async def verify_findings_unified(
         end = min(len(source_lines), line_num + 15)
         
         context = '\n'.join(f"{i+1}: {line}" for i, line in enumerate(source_lines[start:end], start=start))
-        return context[:3000]
+        return context[:5000]  # FIX #5: Increased from 3000 for better verification context
     
     # ========================================================================
     # Step 3: Process findings in batches with AI verification
@@ -26599,10 +27213,73 @@ def _scan_all_patterns_single_pass(files: List[Path], sources_dir: Path) -> List
     OPTIMIZED: Single-pass scanner - reads each file ONCE and runs ALL patterns.
     This replaces 11 separate scanners that each read all files.
     Maintains FULL accuracy of original scanners.
+    
+    FIX #3: Added context-aware filters:
+    - Skips test classes (files with Test, Mock, Fake in name)
+    - Skips commented-out code
+    - Adds confidence based on code context
     """
     import time
     start = time.time()
     findings = []
+    
+    # FIX #3: Patterns to identify test files (skip these to reduce false positives)
+    TEST_FILE_PATTERNS = [
+        re.compile(r'Test\.java$', re.I),
+        re.compile(r'Tests\.java$', re.I),
+        re.compile(r'TestCase\.java$', re.I),
+        re.compile(r'Mock[A-Z].*\.java$', re.I),
+        re.compile(r'Fake[A-Z].*\.java$', re.I),
+        re.compile(r'/test/', re.I),
+        re.compile(r'/tests/', re.I),
+        re.compile(r'/androidTest/', re.I),
+        re.compile(r'/testDebug/', re.I),
+    ]
+    
+    def _is_test_file(file_path: Path) -> bool:
+        """FIX #3: Check if file is a test file."""
+        path_str = str(file_path)
+        return any(p.search(path_str) for p in TEST_FILE_PATTERNS)
+    
+    def _is_in_comment(content: str, match_start: int) -> bool:
+        """FIX #3: Check if match is inside a comment."""
+        # Find the last newline before the match
+        line_start = content.rfind('\n', 0, match_start) + 1
+        line_content = content[line_start:match_start]
+        
+        # Check for // comment
+        if '//' in line_content:
+            return True
+        
+        # Check for block comment /* ... */
+        # Find last /* before match
+        block_start = content.rfind('/*', 0, match_start)
+        if block_start != -1:
+            # Find if there's a */ between /* and match
+            block_end = content.find('*/', block_start, match_start)
+            if block_end == -1:
+                return True  # In block comment
+        
+        return False
+    
+    def _get_code_context_confidence(content: str, match_start: int, match_end: int, file_path: str) -> str:
+        """FIX #3: Determine confidence based on code context."""
+        # Get surrounding context
+        context_start = max(0, match_start - 200)
+        context_end = min(len(content), match_end + 200)
+        context = content[context_start:context_end].lower()
+        
+        # High confidence indicators
+        high_indicators = ['user', 'input', 'request', 'param', 'untrusted', 'extern']
+        if any(ind in context for ind in high_indicators):
+            return "high"
+        
+        # Low confidence indicators (likely safe usage)
+        low_indicators = ['@test', 'mock', 'fake', 'stub', 'assert', 'debug', 'example']
+        if any(ind in context for ind in low_indicators):
+            return "low"
+        
+        return "medium"
     
     # Pre-compile ALL patterns from all original scanners for speed
     # Group by file type filter for efficiency
@@ -26726,10 +27403,16 @@ def _scan_all_patterns_single_pass(files: List[Path], sources_dir: Path) -> List
     logger.info(f"Single-pass scanner loaded {len(all_patterns)} patterns")
     
     files_scanned = 0
+    test_files_skipped = 0  # FIX #3: Track skipped test files
     log_interval = max(len(files) // 10, 100)
     
     for file_path in files:
         try:
+            # FIX #3: Skip test files to reduce false positives
+            if _is_test_file(file_path):
+                test_files_skipped += 1
+                continue
+            
             content = file_path.read_text(encoding='utf-8', errors='ignore')
             
             if len(content) < 50:
@@ -26748,8 +27431,15 @@ def _scan_all_patterns_single_pass(files: List[Path], sources_dir: Path) -> List
                     continue
                     
                 for match in p["pattern"].finditer(content):
+                    # FIX #3: Skip findings in comments
+                    if _is_in_comment(content, match.start()):
+                        continue
+                    
                     line_num = content[:match.start()].count('\n') + 1
                     line_idx = line_num - 1
+                    
+                    # FIX #3: Calculate confidence based on context
+                    confidence = _get_code_context_confidence(content, match.start(), match.end(), rel_path)
                     
                     start_ctx = max(0, line_idx - 2)
                     end_ctx = min(len(lines), line_idx + 3)
@@ -26769,6 +27459,7 @@ def _scan_all_patterns_single_pass(files: List[Path], sources_dir: Path) -> List
                         "context_after": "\n".join(lines[line_idx+1:end_ctx]),
                         "exploitation": p.get("exploitation", ""),
                         "remediation": p.get("remediation", ""),
+                        "confidence": confidence,  # FIX #3: Add confidence based on context
                     })
             
             files_scanned += 1
@@ -26779,7 +27470,8 @@ def _scan_all_patterns_single_pass(files: List[Path], sources_dir: Path) -> List
             continue
     
     elapsed = time.time() - start
-    logger.info(f"Single-pass scan complete: {len(findings)} findings from {files_scanned} files in {elapsed:.1f}s")
+    # FIX #3: Log skipped test files
+    logger.info(f"Single-pass scan complete: {len(findings)} findings from {files_scanned} files in {elapsed:.1f}s (skipped {test_files_skipped} test files)")
     return findings
 
 

@@ -217,7 +217,7 @@ export default function FriendRequestsTab({ requests, onRefresh }: FriendRequest
       {isEmpty && (
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <Typography color="text.secondary">
-            No pending friend requests
+            No pending contact requests
           </Typography>
         </Box>
       )}

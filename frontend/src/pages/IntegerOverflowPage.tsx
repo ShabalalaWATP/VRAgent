@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -52,7 +53,8 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import ErrorIcon from "@mui/icons-material/Error";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import DataObjectIcon from "@mui/icons-material/DataObject";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 // CodeBlock component for syntax highlighting
 const CodeBlock: React.FC<{ children: string; language?: string; title?: string }> = ({
@@ -723,6 +725,611 @@ const compilerFlags = [
   },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#22c55e";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "An integer overflow occurs when:",
+    options: ["A value exceeds the maximum representable range", "A file is encrypted", "A pointer is null", "A function returns"],
+    correctAnswer: 0,
+    explanation: "Overflow happens when a value cannot fit in its type.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "An integer underflow occurs when:",
+    options: ["A value goes below the minimum representable range", "A buffer is too large", "A file is closed", "A log is written"],
+    correctAnswer: 0,
+    explanation: "Underflow happens when a value drops below the minimum.",
+  },
+  {
+    id: 3,
+    topic: "C/C++",
+    question: "Signed integer overflow in C/C++ is:",
+    options: ["Undefined behavior", "Guaranteed wraparound", "Always safe", "A compile-time error"],
+    correctAnswer: 0,
+    explanation: "Signed overflow is undefined behavior in C/C++.",
+  },
+  {
+    id: 4,
+    topic: "C/C++",
+    question: "Unsigned integer overflow in C/C++ typically:",
+    options: ["Wraps modulo 2^n", "Crashes immediately", "Is undefined", "Always saturates"],
+    correctAnswer: 0,
+    explanation: "Unsigned arithmetic wraps around modulo 2^n.",
+  },
+  {
+    id: 5,
+    topic: "Types",
+    question: "size_t is:",
+    options: ["An unsigned type for sizes", "Always signed", "A floating type", "A pointer type"],
+    correctAnswer: 0,
+    explanation: "size_t is an unsigned type for sizes and counts.",
+  },
+  {
+    id: 6,
+    topic: "Types",
+    question: "Casting -1 to size_t results in:",
+    options: ["A very large value", "Zero", "An exception", "Undefined behavior"],
+    correctAnswer: 0,
+    explanation: "Negative to unsigned yields a large wraparound value.",
+  },
+  {
+    id: 7,
+    topic: "Types",
+    question: "Casting a 64-bit integer to 32-bit can:",
+    options: ["Truncate the high bits", "Increase precision", "Prevent overflow", "Make it signed"],
+    correctAnswer: 0,
+    explanation: "Narrowing truncates higher-order bits.",
+  },
+  {
+    id: 8,
+    topic: "Arithmetic",
+    question: "Multiplication overflow is risky because it can:",
+    options: ["Produce too-small allocation sizes", "Increase bounds checks", "Improve safety", "Disable ASLR"],
+    correctAnswer: 0,
+    explanation: "Overflowed sizes can cause under-allocation.",
+  },
+  {
+    id: 9,
+    topic: "Arithmetic",
+    question: "A safe multiplication check is:",
+    options: ["if (a != 0 && b > MAX / a)", "if (a == b)", "if (a < b)", "if (a == 0 && b == 0)"],
+    correctAnswer: 0,
+    explanation: "This pattern prevents overflow before multiply.",
+  },
+  {
+    id: 10,
+    topic: "Arithmetic",
+    question: "An off-by-one error often comes from:",
+    options: ["Using <= instead of <", "Using == instead of !=", "Using + instead of -", "Using * instead of /"],
+    correctAnswer: 0,
+    explanation: "Boundary checks can be off by one element.",
+  },
+  {
+    id: 11,
+    topic: "Representation",
+    question: "Most modern systems use:",
+    options: ["Two's complement for signed integers", "One's complement", "Sign-magnitude", "BCD only"],
+    correctAnswer: 0,
+    explanation: "Two's complement is the standard representation.",
+  },
+  {
+    id: 12,
+    topic: "Constants",
+    question: "INT_MAX represents:",
+    options: ["The largest signed int value", "The smallest signed int value", "The largest unsigned value", "Zero"],
+    correctAnswer: 0,
+    explanation: "INT_MAX is the maximum signed int.",
+  },
+  {
+    id: 13,
+    topic: "Constants",
+    question: "INT_MIN represents:",
+    options: ["The smallest signed int value", "The largest unsigned value", "The largest signed int value", "The smallest unsigned value"],
+    correctAnswer: 0,
+    explanation: "INT_MIN is the minimum signed int.",
+  },
+  {
+    id: 14,
+    topic: "Unsigned",
+    question: "0 - 1 in an unsigned type becomes:",
+    options: ["The maximum value of that type", "Zero", "Undefined", "A crash"],
+    correctAnswer: 0,
+    explanation: "Unsigned underflow wraps to the maximum.",
+  },
+  {
+    id: 15,
+    topic: "Signedness",
+    question: "A signedness bug often occurs when:",
+    options: ["Signed and unsigned values are mixed", "All values are signed", "All values are unsigned", "No comparisons exist"],
+    correctAnswer: 0,
+    explanation: "Mixed signed/unsigned comparisons can misbehave.",
+  },
+  {
+    id: 16,
+    topic: "Signedness",
+    question: "Comparing a negative int to a size_t can:",
+    options: ["Promote the negative to a large unsigned value", "Always evaluate to false", "Cause a compile error", "Fix overflow"],
+    correctAnswer: 0,
+    explanation: "Negative values convert to large unsigned values.",
+  },
+  {
+    id: 17,
+    topic: "Bounds",
+    question: "Integer overflow can lead to:",
+    options: ["Out-of-bounds reads or writes", "Automatic patching", "Safe truncation", "Only slower code"],
+    correctAnswer: 0,
+    explanation: "Overflowed sizes can break bounds checks.",
+  },
+  {
+    id: 18,
+    topic: "Bounds",
+    question: "Integer underflow can cause:",
+    options: ["Huge loop counts or indexes", "Safe exits", "Shorter buffers", "Only logging"],
+    correctAnswer: 0,
+    explanation: "Underflow in unsigned values creates large numbers.",
+  },
+  {
+    id: 19,
+    topic: "Allocation",
+    question: "A common risky pattern is:",
+    options: ["malloc(count * size) without overflow checks", "Using sizeof", "Using size_t", "Checking bounds"],
+    correctAnswer: 0,
+    explanation: "Multiplication can overflow and under-allocate.",
+  },
+  {
+    id: 20,
+    topic: "Allocation",
+    question: "calloc can still be unsafe if:",
+    options: ["The multiplication overflows internally", "The pointer is null", "The count is zero", "The system is 64-bit"],
+    correctAnswer: 0,
+    explanation: "You still need to validate size calculations.",
+  },
+  {
+    id: 21,
+    topic: "Conversions",
+    question: "Narrowing conversions are risky because they:",
+    options: ["Discard high bits", "Increase range", "Prevent overflow", "Encrypt values"],
+    correctAnswer: 0,
+    explanation: "High bits are lost when narrowing.",
+  },
+  {
+    id: 22,
+    topic: "Conversions",
+    question: "Implicit conversions in expressions can:",
+    options: ["Change signedness and range", "Always widen safely", "Prevent wraparound", "Disable compiler warnings"],
+    correctAnswer: 0,
+    explanation: "Promotion rules may surprise you.",
+  },
+  {
+    id: 23,
+    topic: "Checks",
+    question: "A safe addition check is:",
+    options: ["if (a > MAX - b)", "if (a < b)", "if (a == b)", "if (a <= b)"],
+    correctAnswer: 0,
+    explanation: "Check before adding to avoid overflow.",
+  },
+  {
+    id: 24,
+    topic: "Checks",
+    question: "A safe subtraction check is:",
+    options: ["if (a < b)", "if (a > b)", "if (a == b)", "if (a >= b)"],
+    correctAnswer: 0,
+    explanation: "If a < b, subtraction underflows for unsigned.",
+  },
+  {
+    id: 25,
+    topic: "Algorithms",
+    question: "Loop bounds should use:",
+    options: ["Types that match the container size", "Random types", "Only signed int", "Only short"],
+    correctAnswer: 0,
+    explanation: "Use consistent types to avoid wrap issues.",
+  },
+  {
+    id: 26,
+    topic: "Algorithms",
+    question: "Using int for byte lengths is risky because:",
+    options: ["Large sizes can overflow 32-bit", "It always crashes", "It disables ASLR", "It encrypts data"],
+    correctAnswer: 0,
+    explanation: "Large sizes can exceed 32-bit range.",
+  },
+  {
+    id: 27,
+    topic: "Security",
+    question: "Integer overflow bugs often enable:",
+    options: ["Buffer overflows", "SQL injection", "Phishing", "TLS downgrade"],
+    correctAnswer: 0,
+    explanation: "Incorrect size checks can allow buffer overflow.",
+  },
+  {
+    id: 28,
+    topic: "Security",
+    question: "Integer underflow is common in:",
+    options: ["Index calculations and length checks", "TLS handshakes", "DNS records", "UI themes"],
+    correctAnswer: 0,
+    explanation: "Subtractions on sizes can underflow.",
+  },
+  {
+    id: 29,
+    topic: "Prevention",
+    question: "Using 64-bit types helps by:",
+    options: ["Increasing the safe numeric range", "Removing all bugs", "Disabling fuzzing", "Making code slower only"],
+    correctAnswer: 0,
+    explanation: "Wider types reduce overflow risk.",
+  },
+  {
+    id: 30,
+    topic: "Prevention",
+    question: "std::numeric_limits provides:",
+    options: ["Min and max values for types", "Only error codes", "Network limits", "Memory allocators"],
+    correctAnswer: 0,
+    explanation: "numeric_limits exposes type ranges.",
+  },
+  {
+    id: 31,
+    topic: "Prevention",
+    question: "Checked arithmetic libraries help by:",
+    options: ["Detecting overflow at runtime", "Disabling the heap", "Removing loops", "Encrypting values"],
+    correctAnswer: 0,
+    explanation: "Checked operations detect overflow conditions.",
+  },
+  {
+    id: 32,
+    topic: "Prevention",
+    question: "Saturating arithmetic means:",
+    options: ["Clamping at min or max on overflow", "Wrapping around", "Always returning zero", "Throwing away results"],
+    correctAnswer: 0,
+    explanation: "Saturation clamps to the nearest limit.",
+  },
+  {
+    id: 33,
+    topic: "Unsigned",
+    question: "Unsigned wraparound is useful for:",
+    options: ["Ring buffer indexes", "SQL queries", "TLS keys", "Log rotation"],
+    correctAnswer: 0,
+    explanation: "Modulo arithmetic can be intentional for circular buffers.",
+  },
+  {
+    id: 34,
+    topic: "Unsigned",
+    question: "UINT32_MAX equals:",
+    options: ["0xFFFFFFFF", "0x7FFFFFFF", "0x80000000", "0x00000000"],
+    correctAnswer: 0,
+    explanation: "UINT32_MAX is 0xFFFFFFFF.",
+  },
+  {
+    id: 35,
+    topic: "Signed",
+    question: "INT32_MIN in hex is commonly:",
+    options: ["0x80000000", "0x7FFFFFFF", "0x00000000", "0xFFFFFFFF"],
+    correctAnswer: 0,
+    explanation: "INT32_MIN is 0x80000000 in two's complement.",
+  },
+  {
+    id: 36,
+    topic: "Sizing",
+    question: "Length checks should be done:",
+    options: ["Before allocating or copying", "After copying", "Only when debugging", "Only in production"],
+    correctAnswer: 0,
+    explanation: "Validate sizes before using them.",
+  },
+  {
+    id: 37,
+    topic: "Sizing",
+    question: "A common risky pattern is:",
+    options: ["len + 1 without overflow check", "len - 1 with check", "len == 0", "len == 1"],
+    correctAnswer: 0,
+    explanation: "Adding can overflow when len is max.",
+  },
+  {
+    id: 38,
+    topic: "Comparisons",
+    question: "Using signed comparisons on unsigned sizes can:",
+    options: ["Introduce logic bypasses", "Fix all bugs", "Remove overflows", "Increase ASLR"],
+    correctAnswer: 0,
+    explanation: "Signedness mismatches cause incorrect comparisons.",
+  },
+  {
+    id: 39,
+    topic: "Indexes",
+    question: "Negative indexes are dangerous because:",
+    options: ["They can convert to large unsigned values", "They are always rejected", "They are always safe", "They reduce buffer size"],
+    correctAnswer: 0,
+    explanation: "Negative values can wrap to huge indexes.",
+  },
+  {
+    id: 40,
+    topic: "Indexes",
+    question: "Integer bugs often appear in:",
+    options: ["Array indexing and length math", "TLS negotiation", "UI fonts", "Process IDs only"],
+    correctAnswer: 0,
+    explanation: "Index math is a common source of issues.",
+  },
+  {
+    id: 41,
+    topic: "APIs",
+    question: "memcpy expects a length of type:",
+    options: ["size_t", "int", "float", "double"],
+    correctAnswer: 0,
+    explanation: "memcpy uses size_t for length.",
+  },
+  {
+    id: 42,
+    topic: "APIs",
+    question: "strlen returns:",
+    options: ["size_t", "int", "char", "long double"],
+    correctAnswer: 0,
+    explanation: "strlen returns size_t.",
+  },
+  {
+    id: 43,
+    topic: "APIs",
+    question: "strnlen is useful because it:",
+    options: ["Caps the maximum length scanned", "Always returns zero", "Encrypts strings", "Disables checks"],
+    correctAnswer: 0,
+    explanation: "strnlen prevents runaway scans.",
+  },
+  {
+    id: 44,
+    topic: "Prevention",
+    question: "A good pattern for sizes is:",
+    options: ["Use size_t and validate before arithmetic", "Use char for all sizes", "Skip validation", "Rely on wraparound"],
+    correctAnswer: 0,
+    explanation: "Use appropriate types and validate operations.",
+  },
+  {
+    id: 45,
+    topic: "Security",
+    question: "Integer overflow can lead to:",
+    options: ["Heap corruption via undersized allocations", "Only slower performance", "Only log issues", "Only UI glitches"],
+    correctAnswer: 0,
+    explanation: "Small allocations followed by large copies can corrupt heap.",
+  },
+  {
+    id: 46,
+    topic: "Security",
+    question: "Integer underflow can bypass checks like:",
+    options: ["index < length", "index == length", "index > length", "index != length"],
+    correctAnswer: 0,
+    explanation: "Underflowed values can appear very large.",
+  },
+  {
+    id: 47,
+    topic: "Testing",
+    question: "Fuzzing helps find integer bugs by:",
+    options: ["Generating boundary values automatically", "Avoiding edge cases", "Disabling checks", "Hiding crashes"],
+    correctAnswer: 0,
+    explanation: "Fuzzers hit boundary conditions often.",
+  },
+  {
+    id: 48,
+    topic: "Testing",
+    question: "UBSan is useful because it:",
+    options: ["Detects undefined integer behavior", "Prevents all crashes", "Hides errors", "Disables ASLR"],
+    correctAnswer: 0,
+    explanation: "UBSan flags undefined behavior at runtime.",
+  },
+  {
+    id: 49,
+    topic: "Testing",
+    question: "Compiler warnings about truncation should be:",
+    options: ["Investigated and addressed", "Ignored", "Disabled globally", "Hidden in CI"],
+    correctAnswer: 0,
+    explanation: "Warnings can indicate real integer bugs.",
+  },
+  {
+    id: 50,
+    topic: "Design",
+    question: "A safe size check for copy is:",
+    options: ["if (len <= dst_size)", "if (len >= 0)", "if (len == 0)", "if (len != 0)"],
+    correctAnswer: 0,
+    explanation: "Ensure the destination can hold the data.",
+  },
+  {
+    id: 51,
+    topic: "Design",
+    question: "When computing bytes = width * height * bpp:",
+    options: ["Check each multiplication for overflow", "Assume it fits", "Use int only", "Ignore bpp"],
+    correctAnswer: 0,
+    explanation: "Multiple multiplications can overflow.",
+  },
+  {
+    id: 52,
+    topic: "Design",
+    question: "Using signed types for sizes can:",
+    options: ["Allow negative values that break checks", "Prevent all bugs", "Remove overflows", "Force wraparound"],
+    correctAnswer: 0,
+    explanation: "Negative sizes cause logic errors.",
+  },
+  {
+    id: 53,
+    topic: "Conversions",
+    question: "A common bug is:",
+    options: ["Comparing signed int to size_t", "Using size_t consistently", "Using explicit checks", "Using bounds macros"],
+    correctAnswer: 0,
+    explanation: "Mixed signed/unsigned comparisons are risky.",
+  },
+  {
+    id: 54,
+    topic: "Conversions",
+    question: "Casting user input to unsigned without checks can:",
+    options: ["Turn negative values into huge sizes", "Improve validation", "Fix overflow", "Prevent truncation"],
+    correctAnswer: 0,
+    explanation: "Negative values wrap to large unsigned values.",
+  },
+  {
+    id: 55,
+    topic: "Arithmetic",
+    question: "A safe subtraction check before a - b is:",
+    options: ["if (a >= b)", "if (a <= b)", "if (a == 0)", "if (b == 0)"],
+    correctAnswer: 0,
+    explanation: "Ensure a is at least b before subtracting.",
+  },
+  {
+    id: 56,
+    topic: "Arithmetic",
+    question: "Using sizeof in calculations helps by:",
+    options: ["Matching element size to count", "Guaranteeing no overflow", "Avoiding all checks", "Making values signed"],
+    correctAnswer: 0,
+    explanation: "sizeof improves correctness but does not prevent overflow.",
+  },
+  {
+    id: 57,
+    topic: "Prevention",
+    question: "Prefer functions that return errors on overflow such as:",
+    options: ["Checked add/mul helpers", "Raw operators only", "Macros with side effects", "Casting to smaller types"],
+    correctAnswer: 0,
+    explanation: "Checked helpers detect overflow conditions.",
+  },
+  {
+    id: 58,
+    topic: "Prevention",
+    question: "Using size_t for array indexes is helpful because it:",
+    options: ["Matches the array size type", "Prevents all bugs", "Removes bounds checks", "Forces negative values"],
+    correctAnswer: 0,
+    explanation: "Consistent types reduce signedness issues.",
+  },
+  {
+    id: 59,
+    topic: "Prevention",
+    question: "A common safe pattern is:",
+    options: ["Cap sizes using a maximum allowed limit", "Accept any size", "Use negative sizes", "Disable validation"],
+    correctAnswer: 0,
+    explanation: "Maximum limits avoid extreme values.",
+  },
+  {
+    id: 60,
+    topic: "Analysis",
+    question: "Static analysis can help by:",
+    options: ["Finding risky integer arithmetic", "Fixing bugs automatically", "Disabling checks", "Generating passwords"],
+    correctAnswer: 0,
+    explanation: "Static tools flag suspicious math.",
+  },
+  {
+    id: 61,
+    topic: "Analysis",
+    question: "Dynamic analysis can help by:",
+    options: ["Catching overflow during execution", "Only reviewing code", "Only checking syntax", "Only linting"],
+    correctAnswer: 0,
+    explanation: "Runtime tools detect overflow in practice.",
+  },
+  {
+    id: 62,
+    topic: "Security",
+    question: "Integer bugs are often part of:",
+    options: ["Memory corruption chains", "Only UI issues", "Only DNS failures", "Only config errors"],
+    correctAnswer: 0,
+    explanation: "Overflow can lead to memory corruption.",
+  },
+  {
+    id: 63,
+    topic: "Security",
+    question: "Integer bugs in parsers are risky because:",
+    options: ["Attackers control input sizes", "Parsers never crash", "Inputs are trusted", "Sizes are constant"],
+    correctAnswer: 0,
+    explanation: "Untrusted input drives size calculations.",
+  },
+  {
+    id: 64,
+    topic: "Testing",
+    question: "Boundary testing should include:",
+    options: ["0, 1, max, max-1", "Only average values", "Only random values", "Only negative values"],
+    correctAnswer: 0,
+    explanation: "Boundary values often trigger overflow.",
+  },
+  {
+    id: 65,
+    topic: "Testing",
+    question: "A common overflow trigger is:",
+    options: ["Values near INT_MAX", "Small constants only", "Zero only", "Strings only"],
+    correctAnswer: 0,
+    explanation: "Values near limits can overflow on increment.",
+  },
+  {
+    id: 66,
+    topic: "APIs",
+    question: "When using atoi, you should:",
+    options: ["Validate range and handle errors", "Assume input is safe", "Ignore negatives", "Disable checks"],
+    correctAnswer: 0,
+    explanation: "atoi lacks robust error handling.",
+  },
+  {
+    id: 67,
+    topic: "APIs",
+    question: "strtol is safer because it:",
+    options: ["Provides error reporting via errno", "Always clamps values", "Never overflows", "Returns unsigned"],
+    correctAnswer: 0,
+    explanation: "strtol allows error checks for overflow.",
+  },
+  {
+    id: 68,
+    topic: "Design",
+    question: "Avoid using signed types for:",
+    options: ["Sizes and lengths", "Offsets with negatives", "Mathematical formulas", "Loop counters"],
+    correctAnswer: 0,
+    explanation: "Sizes should not be negative.",
+  },
+  {
+    id: 69,
+    topic: "Design",
+    question: "A safe pattern for array access is:",
+    options: ["Check index < length before access", "Check index <= length", "Check index != length", "Skip checks"],
+    correctAnswer: 0,
+    explanation: "Index must be strictly less than length.",
+  },
+  {
+    id: 70,
+    topic: "Security",
+    question: "Integer overflow can be used to bypass:",
+    options: ["Length checks and bounds checks", "TLS encryption", "DNSSEC", "MFA"],
+    correctAnswer: 0,
+    explanation: "Overflow can make checks pass incorrectly.",
+  },
+  {
+    id: 71,
+    topic: "Security",
+    question: "Underflow in an index calculation can lead to:",
+    options: ["Out-of-bounds access before a buffer", "Only safe reads", "Only logs", "Faster parsing"],
+    correctAnswer: 0,
+    explanation: "Negative values can become large unsigned indexes.",
+  },
+  {
+    id: 72,
+    topic: "Prevention",
+    question: "Prefer using:",
+    options: ["Checked helper functions for arithmetic", "Raw operators only", "Implicit casts", "Random limits"],
+    correctAnswer: 0,
+    explanation: "Checked helpers make overflow handling explicit.",
+  },
+  {
+    id: 73,
+    topic: "Prevention",
+    question: "Compiler flags can help detect overflow via:",
+    options: ["Sanitizers like UBSan", "Omitting debug symbols", "Stripping binaries", "Disabling warnings"],
+    correctAnswer: 0,
+    explanation: "Sanitizers catch overflow at runtime.",
+  },
+  {
+    id: 74,
+    topic: "Prevention",
+    question: "A review checklist should include:",
+    options: ["All size calculations and casts", "Only UI strings", "Only log formatting", "Only comments"],
+    correctAnswer: 0,
+    explanation: "Review size math carefully.",
+  },
+  {
+    id: 75,
+    topic: "Summary",
+    question: "The safest strategy is to:",
+    options: ["Validate input ranges before arithmetic", "Assume sizes are safe", "Disable checks for speed", "Rely on overflow"],
+    correctAnswer: 0,
+    explanation: "Validate sizes and ranges before use.",
+  },
+];
+
 export default function IntegerOverflowPage() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -735,9 +1342,15 @@ export default function IntegerOverflowPage() {
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-            Back to Learning Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 2 }}
+          />
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <Box
               sx={{
@@ -1787,6 +2400,38 @@ int get_element(int index) {
             <Chip label="Binary Exploitation ->" clickable onClick={() => navigate("/learn/binary-exploitation")} sx={{ fontWeight: 600 }} />
           </Box>
         </Paper>
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Integer Overflow and Underflow Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#f97316", color: "#f97316" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </LearnPageLayout>
   );

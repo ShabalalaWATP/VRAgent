@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -47,7 +48,8 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import ShieldIcon from "@mui/icons-material/Shield";
 import StorageIcon from "@mui/icons-material/Storage";
 import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -111,6 +113,987 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
     </Paper>
   );
 };
+
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#f97316";
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Basics",
+    question: "What does Living off the Land (LOTL) mean?",
+    options: [
+      "Using legitimate system tools and binaries to perform actions",
+      "Installing custom malware for every task",
+      "Only using cloud services for attacks",
+      "Disabling all local logging before execution",
+    ],
+    correctAnswer: 0,
+    explanation: "LOTL leverages built-in tools to reduce the need for custom binaries.",
+  },
+  {
+    id: 2,
+    topic: "Basics",
+    question: "Why do attackers favor LOLBins and LOLBAS?",
+    options: [
+      "They are signed and often trusted by controls",
+      "They always bypass MFA",
+      "They only work on unpatched systems",
+      "They remove the need for credentials",
+    ],
+    correctAnswer: 0,
+    explanation: "Signed binaries and trusted tools can blend into normal activity.",
+  },
+  {
+    id: 3,
+    topic: "Basics",
+    question: "LOLBAS primarily refers to:",
+    options: [
+      "Living Off The Land Binaries and Scripts on Windows",
+      "A Linux-only exploitation toolkit",
+      "A macOS package manager",
+      "A cloud vulnerability scanner",
+    ],
+    correctAnswer: 0,
+    explanation: "LOLBAS documents Windows binaries and scripts that can be abused.",
+  },
+  {
+    id: 4,
+    topic: "Basics",
+    question: "GTFOBins is best described as:",
+    options: [
+      "A catalog of Unix binaries that can be abused for escalation or file access",
+      "A Windows-only logging tool",
+      "A malware packer",
+      "A password manager",
+    ],
+    correctAnswer: 0,
+    explanation: "GTFOBins lists Unix binaries with exploitable features.",
+  },
+  {
+    id: 5,
+    topic: "Basics",
+    question: "What is proxy execution in LOTL context?",
+    options: [
+      "Using a trusted binary to execute a payload indirectly",
+      "Routing traffic through a VPN",
+      "Using a browser extension to run code",
+      "Spawning a new service for each command",
+    ],
+    correctAnswer: 0,
+    explanation: "Proxy execution uses trusted binaries as wrappers to run code.",
+  },
+  {
+    id: 6,
+    topic: "Windows LOLBins",
+    question: "Which Windows utility is commonly abused to download files?",
+    options: [
+      "certutil",
+      "diskpart",
+      "notepad",
+      "calc",
+    ],
+    correctAnswer: 0,
+    explanation: "certutil can download and decode files.",
+  },
+  {
+    id: 7,
+    topic: "Windows LOLBins",
+    question: "Which tool can schedule tasks for later execution?",
+    options: [
+      "schtasks",
+      "ping",
+      "whoami",
+      "tasklist",
+    ],
+    correctAnswer: 0,
+    explanation: "schtasks creates or runs scheduled tasks.",
+  },
+  {
+    id: 8,
+    topic: "Windows LOLBins",
+    question: "Which tool is often used to execute HTML applications (HTA)?",
+    options: [
+      "mshta",
+      "regedit",
+      "netstat",
+      "ipconfig",
+    ],
+    correctAnswer: 0,
+    explanation: "mshta can execute HTA files and scripts.",
+  },
+  {
+    id: 9,
+    topic: "Windows LOLBins",
+    question: "Which utility can run exported functions from DLLs?",
+    options: [
+      "rundll32",
+      "powershell",
+      "control",
+      "wmic",
+    ],
+    correctAnswer: 0,
+    explanation: "rundll32 can call DLL exports and is often abused.",
+  },
+  {
+    id: 10,
+    topic: "Windows LOLBins",
+    question: "Which signed binary can be abused to register COM components or run scripts?",
+    options: [
+      "regsvr32",
+      "gpupdate",
+      "chkdsk",
+      "dxdiag",
+    ],
+    correctAnswer: 0,
+    explanation: "regsvr32 supports script-based COM registration.",
+  },
+  {
+    id: 11,
+    topic: "Windows LOLBins",
+    question: "PowerShell is popular in LOTL because it:",
+    options: [
+      "Is a built-in scripting environment with rich system access",
+      "Always runs without logging",
+      "Disables antivirus by default",
+      "Only supports local commands",
+    ],
+    correctAnswer: 0,
+    explanation: "PowerShell provides powerful scripting and access to Windows APIs.",
+  },
+  {
+    id: 12,
+    topic: "Windows LOLBins",
+    question: "Which utility can be abused for background downloads?",
+    options: [
+      "bitsadmin",
+      "format",
+      "attrib",
+      "clip",
+    ],
+    correctAnswer: 0,
+    explanation: "bitsadmin can transfer files via BITS jobs.",
+  },
+  {
+    id: 13,
+    topic: "Windows LOLBins",
+    question: "Which tool can execute WMI-based process creation?",
+    options: [
+      "wmic",
+      "taskkill",
+      "arp",
+      "hostname",
+    ],
+    correctAnswer: 0,
+    explanation: "wmic can create processes remotely or locally.",
+  },
+  {
+    id: 14,
+    topic: "Windows LOLBins",
+    question: "Which utility can be used to modify firewall rules?",
+    options: [
+      "netsh",
+      "net use",
+      "nslookup",
+      "whoami",
+    ],
+    correctAnswer: 0,
+    explanation: "netsh manages network configuration including firewall rules.",
+  },
+  {
+    id: 15,
+    topic: "Windows LOLBins",
+    question: "Which tool can install MSI packages silently?",
+    options: [
+      "msiexec",
+      "tasklist",
+      "wevtutil",
+      "tree",
+    ],
+    correctAnswer: 0,
+    explanation: "msiexec installs MSI packages and can be abused for execution.",
+  },
+  {
+    id: 16,
+    topic: "Windows LOLBins",
+    question: "Which scripting hosts execute VBScript or JScript files?",
+    options: [
+      "cscript and wscript",
+      "netstat and route",
+      "regedit and reg",
+      "attrib and icacls",
+    ],
+    correctAnswer: 0,
+    explanation: "cscript and wscript are Windows script hosts.",
+  },
+  {
+    id: 17,
+    topic: "Windows LOLBins",
+    question: "Which utility can run commands for matching files in a directory?",
+    options: [
+      "forfiles",
+      "findstr",
+      "tasklist",
+      "title",
+    ],
+    correctAnswer: 0,
+    explanation: "forfiles can execute commands against file sets.",
+  },
+  {
+    id: 18,
+    topic: "Windows LOLBins",
+    question: "certutil is also commonly abused to:",
+    options: [
+      "Decode Base64 or convert file formats",
+      "Disable Windows Defender",
+      "Create domain users",
+      "Patch the kernel",
+    ],
+    correctAnswer: 0,
+    explanation: "certutil can encode or decode files for staging.",
+  },
+  {
+    id: 19,
+    topic: "Linux LOTL",
+    question: "Which Linux tool is commonly used for file downloads?",
+    options: [
+      "curl or wget",
+      "chmod",
+      "ps",
+      "who",
+    ],
+    correctAnswer: 0,
+    explanation: "curl and wget retrieve remote content over HTTP or HTTPS.",
+  },
+  {
+    id: 20,
+    topic: "Linux LOTL",
+    question: "Which command can execute other commands via `-exec`?",
+    options: [
+      "find",
+      "df",
+      "uptime",
+      "pwd",
+    ],
+    correctAnswer: 0,
+    explanation: "find supports `-exec` to run commands on matches.",
+  },
+  {
+    id: 21,
+    topic: "Linux LOTL",
+    question: "Which binary is documented in GTFOBins for shell access?",
+    options: [
+      "tar",
+      "ls",
+      "cat",
+      "head",
+    ],
+    correctAnswer: 0,
+    explanation: "tar has options that can be abused to execute commands.",
+  },
+  {
+    id: 22,
+    topic: "Linux LOTL",
+    question: "Why are scripting languages like Python or Perl useful in LOTL?",
+    options: [
+      "They are often preinstalled and can execute complex logic",
+      "They always disable logging",
+      "They require no permissions to access root files",
+      "They only run on Windows",
+    ],
+    correctAnswer: 0,
+    explanation: "Preinstalled scripting languages provide flexible execution paths.",
+  },
+  {
+    id: 23,
+    topic: "Linux LOTL",
+    question: "Why is `bash -c` commonly seen in LOTL activity?",
+    options: [
+      "It executes an arbitrary command string",
+      "It disables all audit logs",
+      "It encrypts network traffic",
+      "It removes user accounts",
+    ],
+    correctAnswer: 0,
+    explanation: "`bash -c` executes a provided command string.",
+  },
+  {
+    id: 24,
+    topic: "Linux LOTL",
+    question: "Which tool is often used for port forwarding or relays?",
+    options: [
+      "socat",
+      "sed",
+      "grep",
+      "cut",
+    ],
+    correctAnswer: 0,
+    explanation: "socat can relay traffic and create tunnels.",
+  },
+  {
+    id: 25,
+    topic: "Linux LOTL",
+    question: "Why is `curl | sh` risky?",
+    options: [
+      "It executes remote content without validation",
+      "It forces a reboot",
+      "It disables SSH",
+      "It always fails on Linux",
+    ],
+    correctAnswer: 0,
+    explanation: "Piping remote content into a shell can execute untrusted code.",
+  },
+  {
+    id: 26,
+    topic: "macOS",
+    question: "Which macOS tool executes AppleScript?",
+    options: [
+      "osascript",
+      "diskutil",
+      "launchctl",
+      "defaults",
+    ],
+    correctAnswer: 0,
+    explanation: "osascript runs AppleScript and JavaScript for Automation.",
+  },
+  {
+    id: 27,
+    topic: "macOS",
+    question: "Which macOS tool manages launch agents and daemons?",
+    options: [
+      "launchctl",
+      "xattr",
+      "ditto",
+      "spctl",
+    ],
+    correctAnswer: 0,
+    explanation: "launchctl loads and manages LaunchAgents and LaunchDaemons.",
+  },
+  {
+    id: 28,
+    topic: "macOS",
+    question: "The `defaults` command is used to:",
+    options: [
+      "Read and write macOS preference files",
+      "Encrypt disks with FileVault",
+      "Create new user accounts",
+      "Disable SIP",
+    ],
+    correctAnswer: 0,
+    explanation: "defaults reads and modifies preference settings.",
+  },
+  {
+    id: 29,
+    topic: "macOS",
+    question: "What is `plutil` primarily used for?",
+    options: [
+      "Viewing or converting plist files",
+      "Managing firewall rules",
+      "Updating system packages",
+      "Signing binaries",
+    ],
+    correctAnswer: 0,
+    explanation: "plutil inspects and converts plist formats.",
+  },
+  {
+    id: 30,
+    topic: "macOS",
+    question: "The `security` command can:",
+    options: [
+      "Interact with keychains and certificates",
+      "Disable Gatekeeper permanently",
+      "Replace kernel extensions",
+      "Clear system logs",
+    ],
+    correctAnswer: 0,
+    explanation: "security manages keychains and cryptographic items.",
+  },
+  {
+    id: 31,
+    topic: "Detection",
+    question: "Why is command-line logging important for LOTL detection?",
+    options: [
+      "It captures suspicious arguments and encoded commands",
+      "It disables PowerShell",
+      "It prevents file writes",
+      "It replaces antivirus",
+    ],
+    correctAnswer: 0,
+    explanation: "Command-line logs reveal intent and unusual parameters.",
+  },
+  {
+    id: 32,
+    topic: "Detection",
+    question: "Which Windows event ID captures process creation?",
+    options: [
+      "4688",
+      "4624",
+      "4768",
+      "1102",
+    ],
+    correctAnswer: 0,
+    explanation: "Event 4688 records new process creation in Security logs.",
+  },
+  {
+    id: 33,
+    topic: "Detection",
+    question: "Which Sysmon event commonly logs process creation?",
+    options: [
+      "Event ID 1",
+      "Event ID 3",
+      "Event ID 11",
+      "Event ID 22",
+    ],
+    correctAnswer: 0,
+    explanation: "Sysmon 1 records process creation with command lines.",
+  },
+  {
+    id: 34,
+    topic: "Detection",
+    question: "PowerShell Script Block Logging corresponds to:",
+    options: [
+      "Event ID 4104",
+      "Event ID 4625",
+      "Event ID 7045",
+      "Event ID 4769",
+    ],
+    correctAnswer: 0,
+    explanation: "Event 4104 records PowerShell script block content.",
+  },
+  {
+    id: 35,
+    topic: "Detection",
+    question: "What is a common LOTL detection signal?",
+    options: [
+      "Office spawning PowerShell with encoded arguments",
+      "Regular Windows updates",
+      "User logins during business hours",
+      "System restore points",
+    ],
+    correctAnswer: 0,
+    explanation: "Unusual parent-child chains with encoded commands are suspicious.",
+  },
+  {
+    id: 36,
+    topic: "Detection",
+    question: "Why monitor for unusual outbound traffic from LOLBins?",
+    options: [
+      "Many LOLBins are not expected to make network calls",
+      "LOLBins always use DNS tunnels",
+      "LOLBins only run offline",
+      "LOLBins never touch the network",
+    ],
+    correctAnswer: 0,
+    explanation: "Network activity from unexpected binaries can indicate abuse.",
+  },
+  {
+    id: 37,
+    topic: "Hardening",
+    question: "What is a strong control against LOLBin abuse?",
+    options: [
+      "Application allowlisting with AppLocker or WDAC",
+      "Disabling all logging",
+      "Allowing unsigned scripts by default",
+      "Removing antivirus",
+    ],
+    correctAnswer: 0,
+    explanation: "Allowlisting restricts what binaries can run.",
+  },
+  {
+    id: 38,
+    topic: "Hardening",
+    question: "Constrained Language Mode helps by:",
+    options: [
+      "Limiting PowerShell capabilities for untrusted scripts",
+      "Disabling all PowerShell usage",
+      "Forcing encrypted DNS",
+      "Allowing unsigned drivers",
+    ],
+    correctAnswer: 0,
+    explanation: "Constrained Language Mode restricts advanced PowerShell features.",
+  },
+  {
+    id: 39,
+    topic: "Hardening",
+    question: "AMSI provides:",
+    options: [
+      "Content inspection for scripts at runtime",
+      "Automatic patching of the OS",
+      "A password manager for admins",
+      "A kernel debugger",
+    ],
+    correctAnswer: 0,
+    explanation: "AMSI allows security tools to scan script content.",
+  },
+  {
+    id: 40,
+    topic: "Hardening",
+    question: "Why restrict macros and Office child processes?",
+    options: [
+      "Office is a common entry point for LOTL execution chains",
+      "Office never spawns other processes",
+      "Office updates are required for security",
+      "Office does not support scripting",
+    ],
+    correctAnswer: 0,
+    explanation: "Office macro abuse often launches LOLBins.",
+  },
+  {
+    id: 41,
+    topic: "Hardening",
+    question: "What is the goal of egress filtering?",
+    options: [
+      "Limit outbound traffic paths for suspicious tools",
+      "Block all inbound network connections",
+      "Disable local logging",
+      "Increase download speeds",
+    ],
+    correctAnswer: 0,
+    explanation: "Egress controls reduce the ability of tools to reach the internet.",
+  },
+  {
+    id: 42,
+    topic: "Hardening",
+    question: "Why is regular tool inventory valuable?",
+    options: [
+      "It identifies risky binaries and scripts to monitor",
+      "It disables system updates",
+      "It removes the need for alerting",
+      "It guarantees no misuse",
+    ],
+    correctAnswer: 0,
+    explanation: "Inventorying tools helps prioritize monitoring and controls.",
+  },
+  {
+    id: 43,
+    topic: "Telemetry",
+    question: "Which log source helps identify PowerShell abuse?",
+    options: [
+      "Windows PowerShell logs and Script Block Logging",
+      "Printer service logs only",
+      "DHCP server logs only",
+      "BIOS event logs",
+    ],
+    correctAnswer: 0,
+    explanation: "PowerShell logs capture script activity and encoded commands.",
+  },
+  {
+    id: 44,
+    topic: "Telemetry",
+    question: "Why is parent-child process analysis useful?",
+    options: [
+      "It highlights unusual execution chains",
+      "It replaces network monitoring",
+      "It disables malware",
+      "It prevents file writes",
+    ],
+    correctAnswer: 0,
+    explanation: "Unexpected parent-child chains are common LOTL indicators.",
+  },
+  {
+    id: 45,
+    topic: "Telemetry",
+    question: "What does Sysmon Event ID 3 record?",
+    options: [
+      "Network connections",
+      "Process creation",
+      "Registry changes",
+      "File deletions",
+    ],
+    correctAnswer: 0,
+    explanation: "Sysmon 3 captures network connections.",
+  },
+  {
+    id: 46,
+    topic: "Telemetry",
+    question: "A base64 encoded PowerShell command often indicates:",
+    options: [
+      "Obfuscation to evade detection",
+      "Standard system maintenance",
+      "User account creation",
+      "Registry backup activity",
+    ],
+    correctAnswer: 0,
+    explanation: "Encoded commands commonly hide malicious intent.",
+  },
+  {
+    id: 47,
+    topic: "MITRE",
+    question: "Signed Binary Proxy Execution maps to which MITRE technique?",
+    options: [
+      "T1218",
+      "T1078",
+      "T1041",
+      "T1567",
+    ],
+    correctAnswer: 0,
+    explanation: "T1218 covers signed binary proxy execution.",
+  },
+  {
+    id: 48,
+    topic: "MITRE",
+    question: "PowerShell abuse commonly maps to:",
+    options: [
+      "T1059.001 (Command and Scripting Interpreter: PowerShell)",
+      "T1555.003 (Credentials from Web Browsers)",
+      "T1207 (Rogue Domain Controller)",
+      "T1490 (Inhibit System Recovery)",
+    ],
+    correctAnswer: 0,
+    explanation: "PowerShell is covered under T1059.001.",
+  },
+  {
+    id: 49,
+    topic: "Windows LOLBins",
+    question: "Why are signed binaries attractive to attackers?",
+    options: [
+      "They are often trusted by application allowlists",
+      "They are guaranteed to evade all detection",
+      "They provide root access by default",
+      "They bypass authentication automatically",
+    ],
+    correctAnswer: 0,
+    explanation: "Signed binaries may be trusted by controls and users.",
+  },
+  {
+    id: 50,
+    topic: "Windows LOLBins",
+    question: "What is the primary risk of `rundll32` abuse?",
+    options: [
+      "It can execute code via DLL exports without dropping new binaries",
+      "It disables Defender services permanently",
+      "It encrypts disks by default",
+      "It reboots the system after execution",
+    ],
+    correctAnswer: 0,
+    explanation: "rundll32 can execute DLL exports with minimal artifacts.",
+  },
+  {
+    id: 51,
+    topic: "Windows LOLBins",
+    question: "Why is `regsvr32` notable for defense teams?",
+    options: [
+      "It can execute scripts in a signed binary context",
+      "It is only used by malware",
+      "It requires kernel permissions to run",
+      "It is deprecated on all Windows versions",
+    ],
+    correctAnswer: 0,
+    explanation: "regsvr32 supports script-based COM registration paths.",
+  },
+  {
+    id: 52,
+    topic: "Windows LOLBins",
+    question: "Which tool is often seen with `-EncodedCommand`?",
+    options: [
+      "powershell",
+      "tasklist",
+      "net use",
+      "route",
+    ],
+    correctAnswer: 0,
+    explanation: "PowerShell supports encoded command arguments.",
+  },
+  {
+    id: 53,
+    topic: "Windows LOLBins",
+    question: "Which utility is commonly used for WMI query and execution?",
+    options: [
+      "wmic",
+      "route",
+      "tracert",
+      "fsutil",
+    ],
+    correctAnswer: 0,
+    explanation: "wmic performs WMI queries and can launch processes.",
+  },
+  {
+    id: 54,
+    topic: "Linux LOTL",
+    question: "Which tool can create encrypted tunnels or TLS connections?",
+    options: [
+      "openssl",
+      "tail",
+      "cut",
+      "uniq",
+    ],
+    correctAnswer: 0,
+    explanation: "openssl can establish TLS connections and proxies.",
+  },
+  {
+    id: 55,
+    topic: "Linux LOTL",
+    question: "Why are `awk` and `sed` sometimes involved in LOTL?",
+    options: [
+      "They can transform data and create scripts on the fly",
+      "They disable system logging automatically",
+      "They only work on Windows",
+      "They are used for password hashing only",
+    ],
+    correctAnswer: 0,
+    explanation: "Text processing tools can reformat or generate commands.",
+  },
+  {
+    id: 56,
+    topic: "Linux LOTL",
+    question: "What is the main defensive concern with `python -c`?",
+    options: [
+      "Inline code execution with minimal artifacts",
+      "Automatic privilege escalation",
+      "Hardware encryption bypass",
+      "Kernel patching",
+    ],
+    correctAnswer: 0,
+    explanation: "Inline execution allows quick logic without writing files.",
+  },
+  {
+    id: 57,
+    topic: "Linux LOTL",
+    question: "Which tool can open a reverse shell or listener in GTFOBins?",
+    options: [
+      "nmap",
+      "ps",
+      "du",
+      "chown",
+    ],
+    correctAnswer: 0,
+    explanation: "nmap has scripting and interactive modes that can be abused.",
+  },
+  {
+    id: 58,
+    topic: "Detection",
+    question: "Why is AMSI bypassing a concern for defenders?",
+    options: [
+      "It weakens script inspection for malicious content",
+      "It improves log quality",
+      "It forces MFA enrollment",
+      "It disables PowerShell entirely",
+    ],
+    correctAnswer: 0,
+    explanation: "AMSI bypasses reduce visibility into malicious script content.",
+  },
+  {
+    id: 59,
+    topic: "Detection",
+    question: "A sudden spike in `regsvr32` or `mshta` usage could indicate:",
+    options: [
+      "Potential LOTL abuse",
+      "Normal Windows updates",
+      "User profile cleanup",
+      "Printer configuration changes",
+    ],
+    correctAnswer: 0,
+    explanation: "Unusual usage of these binaries is suspicious.",
+  },
+  {
+    id: 60,
+    topic: "Hardening",
+    question: "Why is removing legacy tools helpful?",
+    options: [
+      "It reduces the number of abuseable binaries",
+      "It increases system uptime",
+      "It ensures all users are admins",
+      "It disables network security controls",
+    ],
+    correctAnswer: 0,
+    explanation: "Fewer tools reduce available execution vectors.",
+  },
+  {
+    id: 61,
+    topic: "Hardening",
+    question: "Why should admin tools be restricted to admin workstations?",
+    options: [
+      "To prevent broad abuse across the enterprise",
+      "To make patching harder",
+      "To disable logging",
+      "To avoid using MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Limiting admin tooling reduces exposure on user endpoints.",
+  },
+  {
+    id: 62,
+    topic: "Hardening",
+    question: "Which is a safe defensive practice for LOTL?",
+    options: [
+      "Baseline normal process usage and alert on deviations",
+      "Disable all security logs",
+      "Allow unsigned scripts by default",
+      "Ignore command-line arguments",
+    ],
+    correctAnswer: 0,
+    explanation: "Baselining helps detect unusual tool usage.",
+  },
+  {
+    id: 63,
+    topic: "Telemetry",
+    question: "Why monitor for suspicious child processes of browsers?",
+    options: [
+      "Browsers rarely spawn admin tools in normal usage",
+      "Browsers never spawn any processes",
+      "Browser logs include password hashes",
+      "Browsers require kernel access",
+    ],
+    correctAnswer: 0,
+    explanation: "Browser-spawned admin tools often indicate malicious activity.",
+  },
+  {
+    id: 64,
+    topic: "Telemetry",
+    question: "What is one common indicator for `certutil` misuse?",
+    options: [
+      "Network downloads followed by Base64 decode commands",
+      "Only local file reads",
+      "Usage limited to certificate stores",
+      "No command-line arguments",
+    ],
+    correctAnswer: 0,
+    explanation: "Download and decode combinations often indicate staging.",
+  },
+  {
+    id: 65,
+    topic: "Telemetry",
+    question: "Why track process hash and signer information?",
+    options: [
+      "To confirm whether a binary is legitimate and unmodified",
+      "To replace endpoint detection tools",
+      "To disable Windows updates",
+      "To automatically grant admin rights",
+    ],
+    correctAnswer: 0,
+    explanation: "Signer and hash data help verify trusted binaries.",
+  },
+  {
+    id: 66,
+    topic: "Telemetry",
+    question: "What does a high volume of `powershell.exe` execution suggest?",
+    options: [
+      "Potential automation or abuse that deserves review",
+      "Guaranteed malware infection",
+      "A required OS update",
+      "A completed backup",
+    ],
+    correctAnswer: 0,
+    explanation: "High usage may be legitimate or suspicious; it should be reviewed.",
+  },
+  {
+    id: 67,
+    topic: "MITRE",
+    question: "Command and Scripting Interpreter maps to which MITRE technique?",
+    options: [
+      "T1059",
+      "T1071",
+      "T1041",
+      "T1090",
+    ],
+    correctAnswer: 0,
+    explanation: "T1059 covers command and scripting interpreter usage.",
+  },
+  {
+    id: 68,
+    topic: "MITRE",
+    question: "LOLBAS activity often overlaps with which tactic?",
+    options: [
+      "Defense Evasion",
+      "Impact",
+      "Resource Development",
+      "Reconnaissance",
+    ],
+    correctAnswer: 0,
+    explanation: "LOTL techniques often aim to evade defenses.",
+  },
+  {
+    id: 69,
+    topic: "Basics",
+    question: "LOTL activity is not always fileless because:",
+    options: [
+      "It can still write scripts or staged payloads to disk",
+      "It only runs in memory by definition",
+      "It requires kernel drivers",
+      "It deletes all files automatically",
+    ],
+    correctAnswer: 0,
+    explanation: "LOTL can be fileless but may also drop staged artifacts.",
+  },
+  {
+    id: 70,
+    topic: "Basics",
+    question: "What is the main defensive value of the LOLBAS project?",
+    options: [
+      "It catalogs abuseable binaries for monitoring and hardening",
+      "It provides malware samples",
+      "It is a paid EDR product",
+      "It replaces patch management",
+    ],
+    correctAnswer: 0,
+    explanation: "LOLBAS helps defenders prioritize monitoring and controls.",
+  },
+  {
+    id: 71,
+    topic: "Windows LOLBins",
+    question: "Why is `msiexec` sometimes monitored in SOCs?",
+    options: [
+      "It can install packages with minimal user prompts",
+      "It is a network scanner",
+      "It only runs in safe mode",
+      "It disables Windows updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Silent installs can be abused for execution.",
+  },
+  {
+    id: 72,
+    topic: "Windows LOLBins",
+    question: "Which behavior could indicate `regsvr32` abuse?",
+    options: [
+      "Fetching scripts from a remote URL",
+      "Reading local certificate stores",
+      "Enumerating local disks",
+      "Listing printers",
+    ],
+    correctAnswer: 0,
+    explanation: "Remote script loading is a known abuse pattern.",
+  },
+  {
+    id: 73,
+    topic: "Linux LOTL",
+    question: "Why monitor for new outbound connections from `bash`?",
+    options: [
+      "Interactive shells usually do not open network connections",
+      "bash is never used by admins",
+      "bash cannot execute commands",
+      "bash only runs on Windows",
+    ],
+    correctAnswer: 0,
+    explanation: "Unexpected network activity from shells is suspicious.",
+  },
+  {
+    id: 74,
+    topic: "Detection",
+    question: "Which is a good detection strategy for LOTL?",
+    options: [
+      "Combine process, command-line, and network telemetry",
+      "Rely only on file hashes",
+      "Disable script logging",
+      "Ignore parent-child relationships",
+    ],
+    correctAnswer: 0,
+    explanation: "Multiple signals improve detection accuracy.",
+  },
+  {
+    id: 75,
+    topic: "Basics",
+    question: "The main risk of LOTL techniques is that they:",
+    options: [
+      "Blend with normal admin activity and are harder to spot",
+      "Always crash systems",
+      "Require physical access",
+      "Only work on outdated systems",
+    ],
+    correctAnswer: 0,
+    explanation: "LOTL uses trusted tools, which makes detection more difficult.",
+  },
+];
 
 const LivingOffTheLandPage: React.FC = () => {
   const navigate = useNavigate();
@@ -855,9 +1838,15 @@ const LivingOffTheLandPage: React.FC = () => {
     <LearnPageLayout pageTitle="Living off the Land (LOLBAS/GTFOBins)" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
       <Container maxWidth="lg">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learn Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <TerminalIcon sx={{ fontSize: 42, color: "#f97316" }} />
@@ -1503,6 +2492,28 @@ ls -la ~/Library/LaunchAgents`}
           </TabPanel>
         </Paper>
 
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Living Off The Land Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
@@ -1510,7 +2521,7 @@ ls -la ~/Library/LaunchAgents`}
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#f97316", color: "#f97316" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

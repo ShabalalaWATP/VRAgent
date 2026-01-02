@@ -347,14 +347,15 @@ export default function SSLTLSGuidePage() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Button
+        <Chip
           component={Link}
           to="/learn"
-          startIcon={<ArrowBackIcon />}
-          sx={{ mb: 2, color: "text.secondary" }}
-        >
-          Back to Learning Hub
-        </Button>
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
         <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 2 }}>
           <Box
             sx={{

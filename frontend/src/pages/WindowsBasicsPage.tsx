@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
+  Button,
   Container,
   Typography,
   Paper,
@@ -25,8 +27,14 @@ import {
   AccordionDetails,
   Alert,
   AlertTitle,
+  Drawer,
+  Fab,
+  IconButton,
+  Tooltip,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DesktopWindowsIcon from "@mui/icons-material/DesktopWindows";
 import FolderIcon from "@mui/icons-material/Folder";
@@ -51,6 +59,10 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import KeyIcon from "@mui/icons-material/Key";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import LayersIcon from "@mui/icons-material/Layers";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 // Core Windows concepts
 const windowsConcepts = [
@@ -457,25 +469,830 @@ const environmentVariables = [
   { variable: "%PROGRAMFILES(X86)%", example: "C:\\Program Files (x86)", description: "32-bit program installations" },
 ];
 
+const ACCENT_COLOR = "#0078d4";
+const QUIZ_QUESTION_COUNT = 10;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "NTFS",
+    question: "What is the default file system for modern Windows installations?",
+    options: ["NTFS", "FAT32", "ext4", "APFS"],
+    correctAnswer: 0,
+    explanation: "NTFS is the default file system for modern Windows versions.",
+  },
+  {
+    id: 2,
+    topic: "NTFS",
+    question: "Which NTFS feature allows data to be hidden within files?",
+    options: ["Alternate Data Streams (ADS)", "Journaling", "Compression", "Shadow Copies"],
+    correctAnswer: 0,
+    explanation: "Alternate Data Streams can store hidden data alongside a file.",
+  },
+  {
+    id: 3,
+    topic: "NTFS",
+    question: "NTFS permissions are implemented using:",
+    options: ["Access Control Lists (ACLs)", "File ownership only", "Password-protected folders", "BIOS settings"],
+    correctAnswer: 0,
+    explanation: "NTFS uses ACLs to define detailed permissions.",
+  },
+  {
+    id: 4,
+    topic: "NTFS",
+    question: "What does MFT stand for in NTFS?",
+    options: ["Master File Table", "Main File Tree", "Microsoft File Tracker", "Metadata File Table"],
+    correctAnswer: 0,
+    explanation: "The MFT stores metadata for files and directories in NTFS.",
+  },
+  {
+    id: 5,
+    topic: "NTFS",
+    question: "Which character is used as the path separator in Windows?",
+    options: ["Backslash (\\)", "Forward slash (/)", "Colon (:)", "Pipe (|)"],
+    correctAnswer: 0,
+    explanation: "Windows paths use the backslash character.",
+  },
+  {
+    id: 6,
+    topic: "NTFS",
+    question: "Drive letters like C: and D: represent:",
+    options: ["Volumes", "User accounts", "Services", "Registry hives"],
+    correctAnswer: 0,
+    explanation: "Drive letters map to volumes or partitions.",
+  },
+  {
+    id: 7,
+    topic: "NTFS",
+    question: "What Windows feature provides file-level encryption on NTFS?",
+    options: ["EFS (Encrypting File System)", "BitLocker", "Secure Boot", "SmartScreen"],
+    correctAnswer: 0,
+    explanation: "EFS provides file-level encryption on NTFS volumes.",
+  },
+  {
+    id: 8,
+    topic: "NTFS",
+    question: "Which file attribute hides files from normal directory listings?",
+    options: ["Hidden", "Archive", "System", "Read-only"],
+    correctAnswer: 0,
+    explanation: "The Hidden attribute prevents files from appearing in normal listings.",
+  },
+  {
+    id: 9,
+    topic: "NTFS",
+    question: "Which command checks a disk for file system errors?",
+    options: ["chkdsk", "dir", "tasklist", "netstat"],
+    correctAnswer: 0,
+    explanation: "chkdsk scans and repairs file system issues.",
+  },
+  {
+    id: 10,
+    topic: "NTFS",
+    question: "Which NTFS capability is not supported by FAT32?",
+    options: ["File permissions", "Basic file storage", "Short file names", "Bootable partitions"],
+    correctAnswer: 0,
+    explanation: "FAT32 does not support NTFS-style permissions.",
+  },
+  {
+    id: 11,
+    topic: "Registry",
+    question: "Which registry hive stores system-wide settings?",
+    options: ["HKEY_LOCAL_MACHINE (HKLM)", "HKEY_CURRENT_USER (HKCU)", "HKEY_USERS (HKU)", "HKEY_CLASSES_ROOT (HKCR)"],
+    correctAnswer: 0,
+    explanation: "HKLM holds system-wide configuration.",
+  },
+  {
+    id: 12,
+    topic: "Registry",
+    question: "Which registry hive stores the current user's settings?",
+    options: ["HKEY_CURRENT_USER (HKCU)", "HKEY_LOCAL_MACHINE (HKLM)", "HKEY_CURRENT_CONFIG (HKCC)", "HKEY_CLASSES_ROOT (HKCR)"],
+    correctAnswer: 0,
+    explanation: "HKCU stores settings for the currently logged-in user.",
+  },
+  {
+    id: 13,
+    topic: "Registry",
+    question: "Which registry hive is commonly used for file associations?",
+    options: ["HKEY_CLASSES_ROOT (HKCR)", "HKEY_USERS (HKU)", "HKEY_CURRENT_CONFIG (HKCC)", "HKEY_LOCAL_MACHINE (HKLM)"],
+    correctAnswer: 0,
+    explanation: "HKCR manages file type associations and COM registrations.",
+  },
+  {
+    id: 14,
+    topic: "Registry",
+    question: "Which hive contains all user profiles on the system?",
+    options: ["HKEY_USERS (HKU)", "HKEY_CURRENT_USER (HKCU)", "HKEY_LOCAL_MACHINE (HKLM)", "HKEY_CLASSES_ROOT (HKCR)"],
+    correctAnswer: 0,
+    explanation: "HKU stores per-user hives for all profiles.",
+  },
+  {
+    id: 15,
+    topic: "Registry",
+    question: "Which hive represents the current hardware profile?",
+    options: ["HKEY_CURRENT_CONFIG (HKCC)", "HKEY_LOCAL_MACHINE (HKLM)", "HKEY_CURRENT_USER (HKCU)", "HKEY_USERS (HKU)"],
+    correctAnswer: 0,
+    explanation: "HKCC reflects the current hardware profile.",
+  },
+  {
+    id: 16,
+    topic: "Registry",
+    question: "What is the GUI tool for editing the Windows Registry?",
+    options: ["regedit.exe", "services.msc", "eventvwr.msc", "gpedit.msc"],
+    correctAnswer: 0,
+    explanation: "regedit.exe is the Registry Editor.",
+  },
+  {
+    id: 17,
+    topic: "Registry",
+    question: "Which command-line tool can query and edit the Registry?",
+    options: ["reg.exe", "sc.exe", "whoami", "diskpart"],
+    correctAnswer: 0,
+    explanation: "reg.exe provides command-line registry access.",
+  },
+  {
+    id: 18,
+    topic: "Registry",
+    question: "Which file stores a user's registry hive on disk?",
+    options: ["NTUSER.DAT", "SAM", "SYSTEM", "SECURITY"],
+    correctAnswer: 0,
+    explanation: "NTUSER.DAT contains the per-user registry hive.",
+  },
+  {
+    id: 19,
+    topic: "Registry",
+    question: "The Run and RunOnce keys are commonly used for:",
+    options: ["Startup programs", "Disk encryption", "Time synchronization", "Firewall rules"],
+    correctAnswer: 0,
+    explanation: "Run and RunOnce control startup execution.",
+  },
+  {
+    id: 20,
+    topic: "Registry",
+    question: "Which registry data type stores a 32-bit integer?",
+    options: ["REG_DWORD", "REG_SZ", "REG_BINARY", "REG_MULTI_SZ"],
+    correctAnswer: 0,
+    explanation: "REG_DWORD is a 32-bit integer value.",
+  },
+  {
+    id: 21,
+    topic: "Services",
+    question: "What does services.msc open?",
+    options: ["Services management console", "Event Viewer", "Registry Editor", "Task Scheduler"],
+    correctAnswer: 0,
+    explanation: "services.msc opens the Services console.",
+  },
+  {
+    id: 22,
+    topic: "Services",
+    question: "Which service account has the highest privileges?",
+    options: ["LocalSystem", "LocalService", "NetworkService", "Guest"],
+    correctAnswer: 0,
+    explanation: "LocalSystem has extensive privileges on the local machine.",
+  },
+  {
+    id: 23,
+    topic: "Services",
+    question: "Which service account is the least privileged?",
+    options: ["LocalService", "NetworkService", "LocalSystem", "Administrator"],
+    correctAnswer: 0,
+    explanation: "LocalService has minimal privileges.",
+  },
+  {
+    id: 24,
+    topic: "Services",
+    question: "Which command-line tool manages Windows services?",
+    options: ["sc.exe", "reg.exe", "icacls", "netstat"],
+    correctAnswer: 0,
+    explanation: "sc.exe is used for service control.",
+  },
+  {
+    id: 25,
+    topic: "Services",
+    question: "Which PowerShell cmdlet lists Windows services?",
+    options: ["Get-Service", "Get-Process", "Get-EventLog", "Get-Content"],
+    correctAnswer: 0,
+    explanation: "Get-Service lists installed services.",
+  },
+  {
+    id: 26,
+    topic: "Services",
+    question: "Windows services typically run in:",
+    options: ["Session 0", "Session 1", "Session 2", "Session 3"],
+    correctAnswer: 0,
+    explanation: "Services run in Session 0, isolated from user sessions.",
+  },
+  {
+    id: 27,
+    topic: "Services",
+    question: "Which startup type begins after a short boot delay?",
+    options: ["Automatic (Delayed)", "Manual", "Disabled", "Boot"],
+    correctAnswer: 0,
+    explanation: "Automatic (Delayed) starts shortly after boot.",
+  },
+  {
+    id: 28,
+    topic: "Services",
+    question: "Service dependencies are used to:",
+    options: [
+      "Ensure required services start before others",
+      "Set user permissions",
+      "Encrypt service binaries",
+      "Disable logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Dependencies control service start order and prerequisites.",
+  },
+  {
+    id: 29,
+    topic: "Services",
+    question: "Service configurations are stored under which registry path?",
+    options: [
+      "HKLM\\SYSTEM\\CurrentControlSet\\Services",
+      "HKCU\\Software\\Services",
+      "HKLM\\SOFTWARE\\Classes",
+      "HKU\\Default\\Services",
+    ],
+    correctAnswer: 0,
+    explanation: "Service settings are under HKLM\\SYSTEM\\CurrentControlSet\\Services.",
+  },
+  {
+    id: 30,
+    topic: "Services",
+    question: "Misconfigured service permissions can lead to:",
+    options: ["Privilege escalation", "Network throttling", "Time drift", "File compression"],
+    correctAnswer: 0,
+    explanation: "Weak service permissions are a common escalation path.",
+  },
+  {
+    id: 31,
+    topic: "Users and Permissions",
+    question: "What is the primary purpose of User Account Control (UAC)?",
+    options: [
+      "Require elevation for administrative actions",
+      "Disable antivirus",
+      "Encrypt disks",
+      "Manage DNS records",
+    ],
+    correctAnswer: 0,
+    explanation: "UAC prompts for elevation to reduce unauthorized changes.",
+  },
+  {
+    id: 32,
+    topic: "Users and Permissions",
+    question: "Which built-in group has administrative rights on a Windows machine?",
+    options: ["Administrators", "Users", "Guests", "Remote Desktop Users"],
+    correctAnswer: 0,
+    explanation: "Members of the Administrators group have elevated rights.",
+  },
+  {
+    id: 33,
+    topic: "Users and Permissions",
+    question: "What does SID stand for?",
+    options: ["Security Identifier", "System Identity Descriptor", "Secure ID", "Session Identifier"],
+    correctAnswer: 0,
+    explanation: "A SID uniquely identifies a user or group.",
+  },
+  {
+    id: 34,
+    topic: "Users and Permissions",
+    question: "Which permission rule takes precedence in NTFS?",
+    options: ["Explicit deny", "Inherited allow", "Explicit allow", "Inherited deny"],
+    correctAnswer: 0,
+    explanation: "Explicit deny entries override allow entries.",
+  },
+  {
+    id: 35,
+    topic: "Users and Permissions",
+    question: "ACLs are made up of:",
+    options: ["Access Control Entries (ACEs)", "User tokens", "Service descriptors", "Registry keys"],
+    correctAnswer: 0,
+    explanation: "ACLs consist of ACEs that grant or deny permissions.",
+  },
+  {
+    id: 36,
+    topic: "Users and Permissions",
+    question: "Which tool manages local users and groups on Windows Pro?",
+    options: ["lusrmgr.msc", "taskschd.msc", "diskmgmt.msc", "perfmon.msc"],
+    correctAnswer: 0,
+    explanation: "lusrmgr.msc opens Local Users and Groups.",
+  },
+  {
+    id: 37,
+    topic: "Users and Permissions",
+    question: "Where are user profiles stored by default?",
+    options: ["C:\\Users", "C:\\Windows\\System32", "C:\\Program Files", "C:\\Temp"],
+    correctAnswer: 0,
+    explanation: "User profiles live under C:\\Users by default.",
+  },
+  {
+    id: 38,
+    topic: "Users and Permissions",
+    question: "A Windows access token represents:",
+    options: ["A user's security context", "A registry key", "A service dependency", "A disk partition"],
+    correctAnswer: 0,
+    explanation: "Tokens describe a user's identity and privileges.",
+  },
+  {
+    id: 39,
+    topic: "Users and Permissions",
+    question: "The principle of least privilege means:",
+    options: [
+      "Grant only the permissions needed",
+      "Grant admin rights to all",
+      "Disable auditing",
+      "Use shared accounts",
+    ],
+    correctAnswer: 0,
+    explanation: "Least privilege minimizes access to what is required.",
+  },
+  {
+    id: 40,
+    topic: "Users and Permissions",
+    question: "Which built-in account is typically disabled by default?",
+    options: ["Administrator", "Guest", "DefaultAccount", "WDAGUtilityAccount"],
+    correctAnswer: 0,
+    explanation: "The built-in Administrator account is disabled by default on modern Windows.",
+  },
+  {
+    id: 41,
+    topic: "Processes",
+    question: "Which process commonly hosts multiple Windows services?",
+    options: ["svchost.exe", "explorer.exe", "lsass.exe", "winlogon.exe"],
+    correctAnswer: 0,
+    explanation: "svchost.exe is a shared host for many services.",
+  },
+  {
+    id: 42,
+    topic: "Processes",
+    question: "What is the role of explorer.exe?",
+    options: ["Windows shell and file manager", "Firewall service", "Update manager", "Registry editor"],
+    correctAnswer: 0,
+    explanation: "explorer.exe provides the desktop UI and file manager.",
+  },
+  {
+    id: 43,
+    topic: "Processes",
+    question: "Which process handles authentication and security policies?",
+    options: ["lsass.exe", "svchost.exe", "explorer.exe", "spoolsv.exe"],
+    correctAnswer: 0,
+    explanation: "LSASS manages authentication and local security policy.",
+  },
+  {
+    id: 44,
+    topic: "Processes",
+    question: "Which process manages user logon and logoff?",
+    options: ["winlogon.exe", "services.exe", "csrss.exe", "taskhostw.exe"],
+    correctAnswer: 0,
+    explanation: "winlogon.exe handles logon and session setup.",
+  },
+  {
+    id: 45,
+    topic: "Processes",
+    question: "What file is used for virtual memory paging?",
+    options: ["pagefile.sys", "boot.ini", "swapfile.sys", "hiberfil.sys"],
+    correctAnswer: 0,
+    explanation: "pagefile.sys is used for virtual memory paging.",
+  },
+  {
+    id: 46,
+    topic: "Processes",
+    question: "The System process (PID 4) primarily represents:",
+    options: ["Kernel and drivers", "User shell", "Network stack only", "Windows Update"],
+    correctAnswer: 0,
+    explanation: "The System process is tied to kernel and driver activity.",
+  },
+  {
+    id: 47,
+    topic: "Tools",
+    question: "Which command opens Task Manager?",
+    options: ["taskmgr.exe", "services.msc", "regedit.exe", "perfmon.exe"],
+    correctAnswer: 0,
+    explanation: "taskmgr.exe launches Task Manager.",
+  },
+  {
+    id: 48,
+    topic: "Tools",
+    question: "Which Sysinternals tool provides advanced process inspection?",
+    options: ["Process Explorer", "TCPView", "Autoruns", "Sigcheck"],
+    correctAnswer: 0,
+    explanation: "Process Explorer shows detailed process information.",
+  },
+  {
+    id: 49,
+    topic: "Tools",
+    question: "Which Sysinternals tool tracks file, registry, and process activity?",
+    options: ["Process Monitor", "Process Explorer", "PsExec", "TCPView"],
+    correctAnswer: 0,
+    explanation: "Process Monitor (procmon) provides detailed activity tracing.",
+  },
+  {
+    id: 50,
+    topic: "Tools",
+    question: "Which tool opens the Windows Event Viewer?",
+    options: ["eventvwr.msc", "services.msc", "taskschd.msc", "diskmgmt.msc"],
+    correctAnswer: 0,
+    explanation: "eventvwr.msc opens Event Viewer.",
+  },
+  {
+    id: 51,
+    topic: "Command Line",
+    question: "Which command shows IP configuration?",
+    options: ["ipconfig", "whoami", "net user", "systeminfo"],
+    correctAnswer: 0,
+    explanation: "ipconfig displays network configuration details.",
+  },
+  {
+    id: 52,
+    topic: "Command Line",
+    question: "Which command lists active network connections?",
+    options: ["netstat", "tasklist", "dir", "ping"],
+    correctAnswer: 0,
+    explanation: "netstat shows active connections and listening ports.",
+  },
+  {
+    id: 53,
+    topic: "Command Line",
+    question: "Which command is commonly used to query DNS records?",
+    options: ["nslookup", "chkdsk", "sc", "icacls"],
+    correctAnswer: 0,
+    explanation: "nslookup queries DNS servers.",
+  },
+  {
+    id: 54,
+    topic: "Command Line",
+    question: "Which command tests basic network connectivity?",
+    options: ["ping", "tasklist", "reg", "gpresult"],
+    correctAnswer: 0,
+    explanation: "ping checks reachability to a host.",
+  },
+  {
+    id: 55,
+    topic: "Command Line",
+    question: "Which command traces the network path to a host?",
+    options: ["tracert", "netstat", "dir", "format"],
+    correctAnswer: 0,
+    explanation: "tracert shows each hop to a destination.",
+  },
+  {
+    id: 56,
+    topic: "Command Line",
+    question: "Which command shows the current user and groups?",
+    options: ["whoami", "ipconfig", "hostname", "net use"],
+    correctAnswer: 0,
+    explanation: "whoami prints the current user and groups.",
+  },
+  {
+    id: 57,
+    topic: "Command Line",
+    question: "Which command outputs OS and hardware details?",
+    options: ["systeminfo", "tree", "dir", "cls"],
+    correctAnswer: 0,
+    explanation: "systeminfo prints OS and hardware information.",
+  },
+  {
+    id: 58,
+    topic: "Command Line",
+    question: "Which command runs a process as another user?",
+    options: ["runas", "taskkill", "net share", "shutdown"],
+    correctAnswer: 0,
+    explanation: "runas starts a process with alternate credentials.",
+  },
+  {
+    id: 59,
+    topic: "Command Line",
+    question: "Which command modifies NTFS permissions from the CLI?",
+    options: ["icacls", "attrib", "type", "copy"],
+    correctAnswer: 0,
+    explanation: "icacls manages NTFS ACLs from the command line.",
+  },
+  {
+    id: 60,
+    topic: "PowerShell",
+    question: "Which PowerShell cmdlet lists running processes?",
+    options: ["Get-Process", "Get-Service", "Get-EventLog", "Get-ChildItem"],
+    correctAnswer: 0,
+    explanation: "Get-Process shows running processes.",
+  },
+  {
+    id: 61,
+    topic: "Security",
+    question: "Which built-in tool provides antivirus protection?",
+    options: ["Microsoft Defender", "BitLocker", "SmartScreen", "UAC"],
+    correctAnswer: 0,
+    explanation: "Microsoft Defender provides built-in antivirus protection.",
+  },
+  {
+    id: 62,
+    topic: "Security",
+    question: "Windows Defender Firewall is a:",
+    options: ["Host-based firewall", "Disk encryption tool", "Process monitor", "Registry editor"],
+    correctAnswer: 0,
+    explanation: "Windows Defender Firewall controls inbound and outbound traffic.",
+  },
+  {
+    id: 63,
+    topic: "Security",
+    question: "Which Windows feature provides full disk encryption?",
+    options: ["BitLocker", "EFS", "UAC", "SmartScreen"],
+    correctAnswer: 0,
+    explanation: "BitLocker provides full disk encryption.",
+  },
+  {
+    id: 64,
+    topic: "Security",
+    question: "SmartScreen helps by:",
+    options: ["Warning about untrusted downloads and apps", "Disabling updates", "Encrypting files", "Managing services"],
+    correctAnswer: 0,
+    explanation: "SmartScreen uses reputation checks to warn about risky downloads.",
+  },
+  {
+    id: 65,
+    topic: "Logging",
+    question: "Windows Security Event ID 4624 indicates:",
+    options: ["Successful logon", "Failed logon", "Service install", "System shutdown"],
+    correctAnswer: 0,
+    explanation: "Event ID 4624 is a successful logon event.",
+  },
+  {
+    id: 66,
+    topic: "Logging",
+    question: "Windows Security Event ID 4625 indicates:",
+    options: ["Failed logon", "Successful logon", "Account lockout", "Time change"],
+    correctAnswer: 0,
+    explanation: "Event ID 4625 is a failed logon event.",
+  },
+  {
+    id: 67,
+    topic: "Logging",
+    question: "Which Windows log stores authentication events?",
+    options: ["Security", "Application", "System", "Setup"],
+    correctAnswer: 0,
+    explanation: "The Security log stores authentication and authorization events.",
+  },
+  {
+    id: 68,
+    topic: "Networking",
+    question: "SMB typically uses which TCP port?",
+    options: ["445", "80", "22", "3389"],
+    correctAnswer: 0,
+    explanation: "SMB uses TCP port 445.",
+  },
+  {
+    id: 69,
+    topic: "Networking",
+    question: "Remote Desktop Protocol (RDP) typically uses which TCP port?",
+    options: ["3389", "443", "21", "53"],
+    correctAnswer: 0,
+    explanation: "RDP uses TCP port 3389.",
+  },
+  {
+    id: 70,
+    topic: "Networking",
+    question: "Where is the Windows hosts file located?",
+    options: [
+      "C:\\Windows\\System32\\drivers\\etc\\hosts",
+      "C:\\Windows\\System32\\hosts",
+      "C:\\Windows\\Temp\\hosts",
+      "C:\\Users\\Public\\hosts",
+    ],
+    correctAnswer: 0,
+    explanation: "The hosts file is under C:\\Windows\\System32\\drivers\\etc.",
+  },
+  {
+    id: 71,
+    topic: "Maintenance",
+    question: "Which Windows component handles system updates?",
+    options: ["Windows Update", "Task Scheduler", "Registry Editor", "Disk Cleanup"],
+    correctAnswer: 0,
+    explanation: "Windows Update manages OS patching and updates.",
+  },
+  {
+    id: 72,
+    topic: "Tools",
+    question: "Which tool opens Task Scheduler?",
+    options: ["taskschd.msc", "services.msc", "eventvwr.msc", "diskmgmt.msc"],
+    correctAnswer: 0,
+    explanation: "taskschd.msc opens Task Scheduler.",
+  },
+  {
+    id: 73,
+    topic: "Policies",
+    question: "Which tool edits Local Group Policy?",
+    options: ["gpedit.msc", "lusrmgr.msc", "mmc.exe", "regedit.exe"],
+    correctAnswer: 0,
+    explanation: "gpedit.msc opens the Local Group Policy Editor.",
+  },
+  {
+    id: 74,
+    topic: "Time",
+    question: "Which service provides time synchronization?",
+    options: ["Windows Time (w32time)", "Print Spooler", "DNS Client", "Remote Registry"],
+    correctAnswer: 0,
+    explanation: "Windows Time (w32time) synchronizes system time.",
+  },
+  {
+    id: 75,
+    topic: "Environment",
+    question: "What does the %SYSTEMROOT% environment variable point to?",
+    options: ["Windows installation directory", "User profile directory", "Temporary files", "Program Files"],
+    correctAnswer: 0,
+    explanation: "%SYSTEMROOT% points to the Windows directory (typically C:\\Windows).",
+  },
+];
+
 export default function WindowsBasicsPage() {
   const theme = useTheme();
   const navigate = useNavigate();
+  const [quizPool] = React.useState<QuizQuestion[]>(() =>
+    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
+  );
+
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const accent = "#0078d4"; // Windows blue
+
+  // Section navigation items
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <InfoIcon /> },
+    { id: "version-history", label: "Version History", icon: <HistoryIcon /> },
+    { id: "boot-process", label: "Boot Process", icon: <SpeedIcon /> },
+    { id: "core-concepts", label: "Core Concepts", icon: <DesktopWindowsIcon /> },
+    { id: "architecture", label: "Architecture", icon: <AccountTreeIcon /> },
+    { id: "directories", label: "Directories", icon: <FolderIcon /> },
+    { id: "registry-keys", label: "Registry Keys", icon: <KeyIcon /> },
+    { id: "cmd-commands", label: "CMD Commands", icon: <TerminalIcon /> },
+    { id: "powershell", label: "PowerShell", icon: <TerminalIcon /> },
+    { id: "processes", label: "Processes", icon: <MemoryIcon /> },
+    { id: "security-events", label: "Security Events", icon: <SecurityIcon /> },
+    { id: "shortcuts", label: "Shortcuts", icon: <KeyboardArrowUpIcon /> },
+    { id: "tools", label: "Tools", icon: <BuildIcon /> },
+    { id: "environment-vars", label: "Environment Vars", icon: <SettingsIcon /> },
+    { id: "pro-tips", label: "Pro Tips", icon: <TipsAndUpdatesIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  // Scroll to section
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  // Track active section on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Scroll to top
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // Progress calculation
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   const pageContext = `Windows Fundamentals learning page - Comprehensive guide to the Microsoft Windows operating system for security professionals, system administrators, and IT practitioners. This in-depth resource covers core concepts including the NTFS file system, Windows Registry, Services architecture, Users & Permissions model, Command Line interfaces (CMD and PowerShell), and Process/Memory management. Includes detailed reference tables for important directory locations, security-critical registry keys, essential CMD commands with PowerShell equivalents, critical system processes, Windows Security Event IDs for detection and forensics, and productivity keyboard shortcuts.`;
 
   const commandCategories = [...new Set(essentialCommands.map(c => c.category))];
 
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Windows Fundamentals" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Back Button */}
-        <Chip
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3, fontWeight: 600 }}
-          clickable
-        />
+      <Box sx={{ display: "flex", gap: 3, position: "relative" }}>
+        {/* Sidebar Navigation */}
+        {sidebarNav}
+
+        {/* Main Content */}
+        <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
+          {/* Back Button */}
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
 
         {/* Hero Banner */}
         <Paper
@@ -528,19 +1345,20 @@ export default function WindowsBasicsPage() {
         </Paper>
 
         {/* Overview Section */}
-        <Paper
-          sx={{
-            p: 4,
-            mb: 5,
-            borderRadius: 4,
-            bgcolor: alpha(theme.palette.background.paper, 0.6),
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-            <InfoIcon sx={{ color: "#0078d4" }} />
-            Overview
-          </Typography>
+        <Box id="intro">
+          <Paper
+            sx={{
+              p: 4,
+              mb: 5,
+              borderRadius: 4,
+              bgcolor: alpha(theme.palette.background.paper, 0.6),
+              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <InfoIcon sx={{ color: "#0078d4" }} />
+              Overview
+            </Typography>
           <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
             Microsoft Windows is the world's most widely deployed desktop operating system, powering over 1 billion devices globally 
             and dominating enterprise environments with approximately 75% market share in corporate settings. Originally released in 1985 
@@ -636,10 +1454,13 @@ export default function WindowsBasicsPage() {
           </Typography>
           <Divider sx={{ flex: 1 }} />
         </Box>
+        </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          📅 Windows Version History
-        </Typography>
+        {/* Version History Section */}
+        <Box id="version-history">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            📅 Windows Version History
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Understanding which Windows versions you may encounter
         </Typography>
@@ -675,10 +1496,13 @@ export default function WindowsBasicsPage() {
           ))}
         </Grid>
 
+        </Box>
+
         {/* Boot Process Section */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          🚀 Windows Boot Process
-        </Typography>
+        <Box id="boot-process">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🚀 Windows Boot Process
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Understanding how Windows starts - essential for troubleshooting and security analysis
         </Typography>
@@ -728,10 +1552,13 @@ export default function WindowsBasicsPage() {
           malware analysis, and system administration. This guide covers the core concepts you need.
         </Alert>
 
+        </Box>
+
         {/* Core Concepts */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          🖥️ Core Windows Concepts
-        </Typography>
+        <Box id="core-concepts">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🖥️ Core Windows Concepts
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Fundamental building blocks of the Windows operating system
         </Typography>
@@ -866,9 +1693,13 @@ export default function WindowsBasicsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          🏗️ Windows Architecture Overview
-        </Typography>
+        </Box>
+
+        {/* Architecture Section */}
+        <Box id="architecture">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🏗️ Windows Architecture Overview
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Understanding the layered structure of Windows
         </Typography>
@@ -933,10 +1764,13 @@ export default function WindowsBasicsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
+        </Box>
+
         {/* Important Directories */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          📁 Important Directories
-        </Typography>
+        <Box id="directories">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            📁 Important Directories
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Key locations you should know on a Windows system
         </Typography>
@@ -1025,9 +1859,13 @@ export default function WindowsBasicsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          🗝️ Important Registry Keys
-        </Typography>
+        </Box>
+
+        {/* Registry Keys Section */}
+        <Box id="registry-keys">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🗝️ Important Registry Keys
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Security-relevant registry locations to monitor
         </Typography>
@@ -1104,10 +1942,13 @@ export default function WindowsBasicsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
+        </Box>
+
         {/* Essential Commands - Grouped by Category */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          ⌨️ Essential CMD Commands
-        </Typography>
+        <Box id="cmd-commands">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            ⌨️ Essential CMD Commands
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Comprehensive command reference organized by category
         </Typography>
@@ -1180,10 +2021,13 @@ export default function WindowsBasicsPage() {
           </Box>
         ))}
 
+        </Box>
+
         {/* PowerShell Comparison */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          🔷 PowerShell Equivalents
-        </Typography>
+        <Box id="powershell">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🔷 PowerShell Equivalents
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Modern PowerShell cmdlets with usage examples
         </Typography>
@@ -1255,9 +2099,13 @@ export default function WindowsBasicsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          ⚙️ Critical Windows Processes
-        </Typography>
+        </Box>
+
+        {/* Processes Section */}
+        <Box id="processes">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            ⚙️ Critical Windows Processes
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Know these processes - suspicious variations often indicate compromise
         </Typography>
@@ -1332,9 +2180,13 @@ export default function WindowsBasicsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          📋 Security Event IDs
-        </Typography>
+        </Box>
+
+        {/* Security Events Section */}
+        <Box id="security-events">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            📋 Security Event IDs
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Key Windows Security Log events for detection and forensics
         </Typography>
@@ -1393,9 +2245,13 @@ export default function WindowsBasicsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          ⌨️ Essential Keyboard Shortcuts
-        </Typography>
+        </Box>
+
+        {/* Shortcuts Section */}
+        <Box id="shortcuts">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            ⌨️ Essential Keyboard Shortcuts
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Speed up your Windows workflow with these key combinations
         </Typography>
@@ -1444,9 +2300,13 @@ export default function WindowsBasicsPage() {
           <Divider sx={{ flex: 1 }} />
         </Box>
 
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          🛠️ Essential Windows Tools
-        </Typography>
+        </Box>
+
+        {/* Tools Section */}
+        <Box id="tools">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🛠️ Essential Windows Tools
+          </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Built-in and Sysinternals tools every admin should know
         </Typography>
@@ -1510,8 +2370,11 @@ export default function WindowsBasicsPage() {
           ))}
         </Grid>
 
+        </Box>
+
         {/* Environment Variables Section */}
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+        <Box id="environment-vars">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           🔤 Environment Variables
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -1568,23 +2431,26 @@ export default function WindowsBasicsPage() {
           </Table>
         </TableContainer>
 
+        </Box>
+
         {/* Pro Tips - Enhanced */}
-        <Paper
-          sx={{
-            p: 3,
-            mb: 5,
-            borderRadius: 4,
-            background: `linear-gradient(135deg, ${alpha("#f59e0b", 0.05)} 0%, ${alpha("#f59e0b", 0.02)} 100%)`,
-            border: `1px solid ${alpha("#f59e0b", 0.2)}`,
-          }}
-        >
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+        <Box id="pro-tips">
+          <Paper
+            sx={{
+              p: 3,
+              mb: 5,
+              borderRadius: 4,
+              background: `linear-gradient(135deg, ${alpha("#f59e0b", 0.05)} 0%, ${alpha("#f59e0b", 0.02)} 100%)`,
+              border: `1px solid ${alpha("#f59e0b", 0.2)}`,
+            }}
           >
-            <TipsAndUpdatesIcon sx={{ color: "#f59e0b" }} />
-            Pro Tips for Security Professionals
-          </Typography>
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+            >
+              <TipsAndUpdatesIcon sx={{ color: "#f59e0b" }} />
+              Pro Tips for Security Professionals
+            </Typography>
           <Grid container spacing={2}>
             {[
               "Use Win+R to open the Run dialog for quick access to commands like mmc, regedit, services.msc",
@@ -1620,22 +2486,22 @@ export default function WindowsBasicsPage() {
           systems you don't have explicit permission to test.
         </Alert>
 
-        {/* Related Learning */}
-        <Paper
-          sx={{
-            p: 3,
-            borderRadius: 4,
-            background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, transparent 100%)`,
-            border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
-          }}
-        >
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+          {/* Related Learning */}
+          <Paper
+            sx={{
+              p: 3,
+              borderRadius: 4,
+              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, transparent 100%)`,
+              border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+            }}
           >
-            <SchoolIcon sx={{ color: theme.palette.primary.main }} />
-            Continue Learning
-          </Typography>
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+            >
+              <SchoolIcon sx={{ color: theme.palette.primary.main }} />
+              Continue Learning
+            </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Build on these fundamentals with more advanced topics
           </Typography>
@@ -1671,8 +2537,160 @@ export default function WindowsBasicsPage() {
               sx={{ fontWeight: 600 }}
             />
           </Box>
-        </Paper>
-      </Container>
+          </Paper>
+        </Box>
+
+        {/* Quiz Section */}
+        <Box id="quiz" sx={{ mt: 5 }}>
+          <QuizSection
+            questions={quizPool}
+            accentColor={ACCENT_COLOR}
+            title="Windows Fundamentals Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Box>
+        </Container>
+      </Box>
+
+      {/* Floating Action Buttons */}
+      <Fab
+        color="primary"
+        onClick={() => setNavDrawerOpen(true)}
+        sx={{
+          position: "fixed",
+          bottom: 90,
+          right: 24,
+          zIndex: 1000,
+          bgcolor: accent,
+          "&:hover": { bgcolor: "#005a9e" },
+          boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+          display: { xs: "flex", lg: "none" },
+        }}
+      >
+        <ListAltIcon />
+      </Fab>
+
+      {/* Scroll to Top FAB */}
+      <Fab
+        size="small"
+        onClick={scrollToTop}
+        sx={{
+          position: "fixed",
+          bottom: 32,
+          right: 28,
+          zIndex: 1000,
+          bgcolor: alpha(accent, 0.15),
+          color: accent,
+          "&:hover": { bgcolor: alpha(accent, 0.25) },
+          display: { xs: "flex", lg: "none" },
+        }}
+      >
+        <KeyboardArrowUpIcon />
+      </Fab>
+
+      {/* Navigation Drawer for Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.08),
+                  },
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? accent : "text.secondary" }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </Drawer>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </LearnPageLayout>
   );
 }

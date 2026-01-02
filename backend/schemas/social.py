@@ -19,6 +19,7 @@ class MessageType(str, Enum):
     FILE = "file"
     IMAGE = "image"
     REPORT_SHARE = "report_share"
+    FINDING_SHARE = "finding_share"
     SYSTEM = "system"
     POLL = "poll"
 
@@ -207,6 +208,7 @@ class MessageResponse(BaseModel):
     attachment_data: Optional[dict] = None
     reply_to: Optional[dict] = None  # ReplyInfo
     reactions: List[dict] = []  # List of ReactionSummary
+    reply_count: int = 0  # Number of replies in thread
     created_at: datetime
     updated_at: datetime
     is_edited: bool
@@ -427,6 +429,14 @@ class ReplyInfo(BaseModel):
     sender_username: str
     content_preview: str  # First 100 chars
     message_type: MessageType
+
+
+class ThreadRepliesResponse(BaseModel):
+    """Response for thread replies."""
+    parent_message: "MessageResponse"
+    replies: List["MessageResponse"]
+    total_replies: int
+    conversation_id: int
 
 
 # ============================================================================
@@ -828,3 +838,112 @@ class MessageEditHistoryResponse(BaseModel):
     current_content: str
     edit_count: int
     history: List[EditHistoryEntry]
+
+
+# ============================================================================
+# Share Findings & Reports Schemas
+# ============================================================================
+
+class ShareFindingRequest(BaseModel):
+    """Request to share a finding to a conversation."""
+    finding_id: int
+    conversation_id: int
+    comment: Optional[str] = None  # Optional comment when sharing
+
+
+class ShareReportRequest(BaseModel):
+    """Request to share a report/scan to a conversation."""
+    report_id: int
+    conversation_id: int
+    comment: Optional[str] = None  # Optional comment when sharing
+
+
+class SharedFindingData(BaseModel):
+    """Data structure for shared finding in message attachment."""
+    finding_id: int
+    project_id: int
+    project_name: str
+    scan_run_id: Optional[int] = None
+    severity: str
+    type: str
+    summary: str
+    file_path: Optional[str] = None
+    start_line: Optional[int] = None
+    end_line: Optional[int] = None
+    details: Optional[dict] = None
+    shared_by_username: str
+    shared_at: datetime
+
+
+class SharedReportData(BaseModel):
+    """Data structure for shared report in message attachment."""
+    report_id: int
+    project_id: int
+    project_name: str
+    scan_run_id: Optional[int] = None
+    title: str
+    summary: Optional[str] = None
+    risk_score: Optional[float] = None
+    finding_count: int = 0
+    critical_count: int = 0
+    high_count: int = 0
+    medium_count: int = 0
+    low_count: int = 0
+    shared_by_username: str
+    shared_at: datetime
+
+
+class ShareResponse(BaseModel):
+    """Response after sharing a finding or report."""
+    success: bool
+    message_id: int
+    conversation_id: int
+
+
+# ============================================================================
+# User Presence Schemas
+# ============================================================================
+
+class PresenceStatus(str, Enum):
+    """User presence status options."""
+    ONLINE = "online"
+    AWAY = "away"
+    BUSY = "busy"
+    DND = "dnd"  # Do Not Disturb
+    OFFLINE = "offline"
+
+
+class UserPresenceUpdate(BaseModel):
+    """Request to update user presence."""
+    status: Optional[PresenceStatus] = None
+    custom_status: Optional[str] = Field(None, max_length=100)
+    status_emoji: Optional[str] = Field(None, max_length=10)
+    # Duration in hours for custom status (null = indefinite)
+    status_duration_hours: Optional[int] = Field(None, ge=1, le=168)  # Max 1 week
+    clear_custom_status: Optional[bool] = False
+
+
+class UserPresenceResponse(BaseModel):
+    """Response with user presence info."""
+    user_id: int
+    username: str
+    first_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    status: PresenceStatus
+    custom_status: Optional[str] = None
+    status_emoji: Optional[str] = None
+    status_expires_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+    is_online: bool = False
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BulkPresenceRequest(BaseModel):
+    """Request to get presence for multiple users."""
+    user_ids: List[int]
+
+
+class BulkPresenceResponse(BaseModel):
+    """Response with presence for multiple users."""
+    users: List[UserPresenceResponse]

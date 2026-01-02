@@ -32,7 +32,7 @@ import {
   useTheme,
   Button,
 } from "@mui/material";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -1101,6 +1101,7 @@ const injectionMethods = [
 const WindowsInternalsREPage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const theme = useTheme();
+  const navigate = useNavigate();
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -2928,6 +2929,18 @@ dt ntdll!_TEB       # Dump TEB structure
 
         {/* Quiz Section */}
         <QuizSection />
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </LearnPageLayout>
   );

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -519,16 +519,13 @@ export default function CppProgrammingPage() {
         <Box sx={{ flex: 1, p: { xs: 2, md: 4 }, maxWidth: 1000, mx: "auto" }}>
           {/* Back to Learning Hub */}
           <Chip
+            component={Link}
+            to="/learn"
             icon={<ArrowBackIcon />}
             label="Back to Learning Hub"
-            onClick={() => navigate("/learn")}
-            sx={{
-              mb: 3,
-              fontWeight: 600,
-              cursor: "pointer",
-              "&:hover": { bgcolor: alpha(accentColor, 0.1) },
-            }}
             clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
           />
 
           {/* Hero Section */}
@@ -3934,6 +3931,18 @@ extern "C" {
               ))}
             </Box>
           </Paper>
+
+          {/* Bottom Navigation */}
+          <Box sx={{ mt: 4, textAlign: "center" }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+            >
+              Back to Learning Hub
+            </Button>
+          </Box>
         </Box>
       </Box>
     </LearnPageLayout>

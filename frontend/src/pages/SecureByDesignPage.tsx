@@ -63,7 +63,7 @@ import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import KeyIcon from "@mui/icons-material/Key";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import HttpsIcon from "@mui/icons-material/Https";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 interface QuizQuestion {
   id: number;
@@ -744,7 +744,15 @@ export default function SecureByDesignPage() {
 
         {/* Main Content */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Chip icon={<ArrowBackIcon />} label="Back to Learning Hub" onClick={() => navigate("/learn")} sx={{ mb: 3, fontWeight: 600, cursor: "pointer" }} clickable />
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
 
           {/* Hero Section */}
           <Paper

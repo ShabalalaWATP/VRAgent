@@ -111,6 +111,20 @@ def run_semgrep_scan(
             "--config", config,
             "--no-git-ignore",  # Scan all files
             "--metrics", "off",  # Disable telemetry
+            "--exclude", "*_test.py",  # Skip test files (reduce FPs)
+            "--exclude", "*_test.go",
+            "--exclude", "*.test.js",
+            "--exclude", "*.test.ts",
+            "--exclude", "*.spec.js",
+            "--exclude", "*.spec.ts",
+            "--exclude", "test_*.py",
+            "--exclude", "tests/*",
+            "--exclude", "__tests__/*",
+            "--exclude", "**/test/**",
+            "--exclude", "**/tests/**",
+            "--exclude", "**/mock/**",
+            "--exclude", "**/mocks/**",
+            "--exclude", "**/fixtures/**",
         ]
         
         # Add severity filter if specified

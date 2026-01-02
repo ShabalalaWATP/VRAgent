@@ -19,15 +19,18 @@ import {
   Link,
   Alert,
   LinearProgress,
+  Button,
 } from "@mui/material";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LaunchIcon from "@mui/icons-material/Launch";
 import WarningIcon from "@mui/icons-material/Warning";
 import SecurityIcon from "@mui/icons-material/Security";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 interface OwaspItem {
   id: string;
@@ -350,6 +353,752 @@ const owaspTop10: OwaspItem[] = [
   },
 ];
 
+const ACCENT_COLOR = "#dc2626";
+const QUIZ_QUESTION_COUNT = 10;
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Overview",
+    question: "What is the OWASP Top 10?",
+    options: [
+      "A list of the ten most critical web application security risks",
+      "A certification program for developers",
+      "A vulnerability scanner maintained by OWASP",
+      "A compliance standard for payment systems",
+    ],
+    correctAnswer: 0,
+    explanation: "The OWASP Top 10 is an awareness list of the most critical web application security risks.",
+  },
+  {
+    id: 2,
+    topic: "Overview",
+    question: "What is the primary purpose of the OWASP Top 10?",
+    options: [
+      "A compliance requirement for all web apps",
+      "A developer awareness and prioritization guide",
+      "A complete list of every vulnerability",
+      "A replacement for threat modeling",
+    ],
+    correctAnswer: 1,
+    explanation: "The Top 10 is an awareness document used to prioritize the most critical risks.",
+  },
+  {
+    id: 3,
+    topic: "Overview",
+    question: "What does OWASP stand for?",
+    options: [
+      "Open Web Application Security Project",
+      "Online Web App Security Program",
+      "Open Web App Standards Program",
+      "Operational Web App Security Practice",
+    ],
+    correctAnswer: 0,
+    explanation: "OWASP is the Open Web Application Security Project.",
+  },
+  {
+    id: 4,
+    topic: "Overview",
+    question: "Which OWASP Top 10 edition is covered on this page?",
+    options: ["2017", "2019", "2021", "2023"],
+    correctAnswer: 2,
+    explanation: "The page focuses on the OWASP Top 10 (2021).",
+  },
+  {
+    id: 5,
+    topic: "Overview",
+    question: "The 2021 Top 10 is based on data from roughly:",
+    options: ["50,000 apps", "500,000 apps and APIs", "5 million apps", "10,000 apps"],
+    correctAnswer: 1,
+    explanation: "The 2021 edition is based on data from over 500,000 applications and APIs.",
+  },
+  {
+    id: 6,
+    topic: "A01: Broken Access Control",
+    question: "Which risk is ranked A01 in the 2021 OWASP Top 10?",
+    options: ["Broken Access Control", "Security Misconfiguration", "Injection", "SSRF"],
+    correctAnswer: 0,
+    explanation: "A01 is Broken Access Control.",
+  },
+  {
+    id: 7,
+    topic: "A01: Broken Access Control",
+    question: "IDOR (Insecure Direct Object Reference) is an example of:",
+    options: ["Broken Access Control", "Insecure Design", "SSRF", "Cryptographic Failures"],
+    correctAnswer: 0,
+    explanation: "IDOR is a classic access control failure.",
+  },
+  {
+    id: 8,
+    topic: "A01: Broken Access Control",
+    question: "Access control checks should be:",
+    options: [
+      "Implemented only in the UI",
+      "Enforced server-side and consistently",
+      "Optional for trusted users",
+      "Handled only in the database",
+    ],
+    correctAnswer: 1,
+    explanation: "Access control must be enforced on the server and applied consistently.",
+  },
+  {
+    id: 9,
+    topic: "A01: Broken Access Control",
+    question: "The principle of 'deny by default' means:",
+    options: [
+      "Allow everything unless blocked",
+      "Block everything unless explicitly allowed",
+      "Log and allow all requests",
+      "Require user consent only",
+    ],
+    correctAnswer: 1,
+    explanation: "Deny by default blocks access unless it is explicitly allowed.",
+  },
+  {
+    id: 10,
+    topic: "A01: Broken Access Control",
+    question: "Which control helps reduce automated access control abuse?",
+    options: ["Rate limiting sensitive endpoints", "Verbose error messages", "Client-side validation only", "Disabling logging"],
+    correctAnswer: 0,
+    explanation: "Rate limiting reduces automated attacks against access control.",
+  },
+  {
+    id: 11,
+    topic: "A01: Broken Access Control",
+    question: "CORS misconfiguration enabling unauthorized API access falls under:",
+    options: ["Broken Access Control", "Cryptographic Failures", "Insecure Design", "SSRF"],
+    correctAnswer: 0,
+    explanation: "CORS misconfigurations can result in access control failures.",
+  },
+  {
+    id: 12,
+    topic: "A01: Broken Access Control",
+    question: "Which practice helps prevent users accessing other users' data?",
+    options: [
+      "Enforce record ownership in the model layer",
+      "Rely on hidden form fields",
+      "Only validate on the client",
+      "Store IDs in cookies only",
+    ],
+    correctAnswer: 0,
+    explanation: "Model-layer ownership checks enforce proper authorization for each record.",
+  },
+  {
+    id: 13,
+    topic: "A02: Cryptographic Failures",
+    question: "A02:2021 is named:",
+    options: ["Cryptographic Failures", "Sensitive Data Exposure", "Security Misconfiguration", "Injection"],
+    correctAnswer: 0,
+    explanation: "A02 is Cryptographic Failures in the 2021 list.",
+  },
+  {
+    id: 14,
+    topic: "A02: Cryptographic Failures",
+    question: "Which is an example of a cryptographic failure?",
+    options: ["Using MD5 or SHA-1 for passwords", "Enforcing MFA", "Using TLS 1.2", "Rotating encryption keys"],
+    correctAnswer: 0,
+    explanation: "Weak hashing algorithms like MD5 or SHA-1 are cryptographic failures.",
+  },
+  {
+    id: 15,
+    topic: "A02: Cryptographic Failures",
+    question: "Best practice for protecting data in transit is:",
+    options: ["HTTP only", "TLS 1.2+ with strong ciphers", "Base64 encoding", "Gzip compression"],
+    correctAnswer: 1,
+    explanation: "TLS 1.2+ provides secure transport encryption.",
+  },
+  {
+    id: 16,
+    topic: "A02: Cryptographic Failures",
+    question: "HSTS primarily helps by:",
+    options: ["Encrypting databases", "Forcing browsers to use HTTPS", "Rotating keys", "Preventing SQL injection"],
+    correctAnswer: 1,
+    explanation: "HSTS tells browsers to always use HTTPS for a site.",
+  },
+  {
+    id: 17,
+    topic: "A02: Cryptographic Failures",
+    question: "Which is poor key management?",
+    options: ["Hardcoded or reused keys", "Key rotation", "Using an HSM", "Unique per-environment keys"],
+    correctAnswer: 0,
+    explanation: "Hardcoded or reused keys are a common crypto failure.",
+  },
+  {
+    id: 18,
+    topic: "A02: Cryptographic Failures",
+    question: "Authenticated encryption provides:",
+    options: ["Confidentiality only", "Integrity only", "Confidentiality and integrity", "Compression only"],
+    correctAnswer: 2,
+    explanation: "Authenticated encryption protects both confidentiality and integrity.",
+  },
+  {
+    id: 19,
+    topic: "A02: Cryptographic Failures",
+    question: "Which storage practice aligns with A02 prevention?",
+    options: [
+      "Store only necessary sensitive data",
+      "Store all data for convenience",
+      "Log plaintext secrets",
+      "Disable encryption at rest",
+    ],
+    correctAnswer: 0,
+    explanation: "Minimizing stored sensitive data reduces exposure and risk.",
+  },
+  {
+    id: 20,
+    topic: "A03: Injection",
+    question: "A03:2021 focuses on:",
+    options: ["Injection", "Logging Failures", "Insecure Design", "Security Misconfiguration"],
+    correctAnswer: 0,
+    explanation: "A03 covers injection flaws such as SQL, NoSQL, and command injection.",
+  },
+  {
+    id: 21,
+    topic: "A03: Injection",
+    question: "Parameterized queries are most effective against:",
+    options: ["SQL injection", "XSS", "SSRF", "CSRF"],
+    correctAnswer: 0,
+    explanation: "Parameterized queries separate code from data to prevent SQL injection.",
+  },
+  {
+    id: 22,
+    topic: "A03: Injection",
+    question: "Which code pattern is a command injection risk?",
+    options: ["system('ping ' + userInput)", "Math.random()", "JSON.stringify(userInput)", "encodeURIComponent(userInput)"],
+    correctAnswer: 0,
+    explanation: "Concatenating user input into OS commands enables command injection.",
+  },
+  {
+    id: 23,
+    topic: "A03: Injection",
+    question: "Server-side template injection (SSTI) is categorized as:",
+    options: ["Injection", "Cryptographic Failures", "Access Control", "Logging Failures"],
+    correctAnswer: 0,
+    explanation: "SSTI is a type of injection vulnerability.",
+  },
+  {
+    id: 24,
+    topic: "A03: Injection",
+    question: "Positive (allowlist) input validation means:",
+    options: [
+      "Allow only expected formats",
+      "Allow any input",
+      "Reject only known bad inputs",
+      "Sanitize on the client only",
+    ],
+    correctAnswer: 0,
+    explanation: "Allowlist validation accepts only expected, safe input formats.",
+  },
+  {
+    id: 25,
+    topic: "A03: Injection",
+    question: "Injection attacks can lead to:",
+    options: ["Data loss or host takeover", "Faster performance", "Only cosmetic issues", "No impact if logged"],
+    correctAnswer: 0,
+    explanation: "Injection can cause data loss, corruption, or full system compromise.",
+  },
+  {
+    id: 26,
+    topic: "A03: Injection",
+    question: "Which is a recommended mitigation for injection?",
+    options: ["Escape special characters for interpreters", "Hide error messages only", "Rely on client validation", "Allow dynamic SQL"],
+    correctAnswer: 0,
+    explanation: "Escaping input for interpreters reduces injection risk.",
+  },
+  {
+    id: 27,
+    topic: "A04: Insecure Design",
+    question: "A04:2021 is:",
+    options: ["Insecure Design", "Security Misconfiguration", "Broken Access Control", "SSRF"],
+    correctAnswer: 0,
+    explanation: "A04 covers Insecure Design.",
+  },
+  {
+    id: 28,
+    topic: "A04: Insecure Design",
+    question: "Which is an insecure design example?",
+    options: [
+      "No rate limiting on password reset",
+      "Missing log rotation",
+      "Outdated library in production",
+      "Weak hashing algorithm",
+    ],
+    correctAnswer: 0,
+    explanation: "Missing rate limiting on critical flows is an insecure design decision.",
+  },
+  {
+    id: 29,
+    topic: "A04: Insecure Design",
+    question: "Threat modeling is used to:",
+    options: [
+      "Identify risks early and design controls",
+      "Speed up coding",
+      "Replace security testing",
+      "Avoid documentation",
+    ],
+    correctAnswer: 0,
+    explanation: "Threat modeling helps identify and address risks during design.",
+  },
+  {
+    id: 30,
+    topic: "A04: Insecure Design",
+    question: "The statement 'secure implementation cannot fix insecure design' implies:",
+    options: [
+      "Architectural changes are required",
+      "Code review is enough",
+      "Unit tests fix everything",
+      "Encryption is optional",
+    ],
+    correctAnswer: 0,
+    explanation: "Insecure design requires design-level changes, not just code fixes.",
+  },
+  {
+    id: 31,
+    topic: "A04: Insecure Design",
+    question: "Which practice directly addresses insecure design?",
+    options: [
+      "Secure SDLC with security input",
+      "Client-side validation only",
+      "Disable logs",
+      "Skip requirements",
+    ],
+    correctAnswer: 0,
+    explanation: "A secure SDLC and early security input help prevent design flaws.",
+  },
+  {
+    id: 32,
+    topic: "A04: Insecure Design",
+    question: "Allowing negative quantities or prices in checkout is an example of:",
+    options: ["Missing business logic validation", "Cryptographic failure", "SSRF", "Logging failure"],
+    correctAnswer: 0,
+    explanation: "Business logic validation prevents invalid or abusive workflows.",
+  },
+  {
+    id: 33,
+    topic: "A04: Insecure Design",
+    question: "Segregation of duties helps by:",
+    options: [
+      "Reducing design flaws through separated responsibilities",
+      "Increasing feature speed",
+      "Removing the need for access control",
+      "Eliminating logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Segregation of duties reduces systemic design weaknesses.",
+  },
+  {
+    id: 34,
+    topic: "A05: Security Misconfiguration",
+    question: "A05:2021 is:",
+    options: ["Security Misconfiguration", "Insecure Design", "Injection", "Broken Access Control"],
+    correctAnswer: 0,
+    explanation: "A05 is Security Misconfiguration.",
+  },
+  {
+    id: 35,
+    topic: "A05: Security Misconfiguration",
+    question: "Which is a typical security misconfiguration?",
+    options: ["Default admin/admin credentials", "Enforced MFA", "Parameterized queries", "SRI checks"],
+    correctAnswer: 0,
+    explanation: "Default credentials are a common misconfiguration.",
+  },
+  {
+    id: 36,
+    topic: "A05: Security Misconfiguration",
+    question: "Missing security headers like CSP or HSTS is considered:",
+    options: ["Misconfiguration", "Injection", "Access Control", "Integrity Failure"],
+    correctAnswer: 0,
+    explanation: "Missing security headers are configuration issues.",
+  },
+  {
+    id: 37,
+    topic: "A05: Security Misconfiguration",
+    question: "A repeatable hardening process is important because it:",
+    options: [
+      "Makes secure deployments consistent",
+      "Replaces patching",
+      "Avoids logging",
+      "Blocks all traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Hardening ensures consistent, secure configuration across environments.",
+  },
+  {
+    id: 38,
+    topic: "A05: Security Misconfiguration",
+    question: "Directory listing enabled on a web server is:",
+    options: ["Misconfiguration", "Cryptographic Failure", "Injection", "Secure by Design"],
+    correctAnswer: 0,
+    explanation: "Directory listing exposes sensitive files and is a misconfiguration.",
+  },
+  {
+    id: 39,
+    topic: "A05: Security Misconfiguration",
+    question: "Publicly accessible cloud storage buckets are an example of:",
+    options: ["Misconfiguration", "Authentication Failure", "SSRF", "Logging Failure"],
+    correctAnswer: 0,
+    explanation: "Public buckets often result from improper configuration.",
+  },
+  {
+    id: 40,
+    topic: "A05: Security Misconfiguration",
+    question: "Which action helps prevent configuration drift?",
+    options: ["Automated configuration verification", "Disabling updates", "Storing secrets in code", "Leaving defaults"],
+    correctAnswer: 0,
+    explanation: "Automated checks help ensure secure configuration remains intact.",
+  },
+  {
+    id: 41,
+    topic: "A06: Vulnerable and Outdated Components",
+    question: "A06:2021 addresses:",
+    options: ["Vulnerable and Outdated Components", "Insecure Design", "SSRF", "Logging Failures"],
+    correctAnswer: 0,
+    explanation: "A06 is Vulnerable and Outdated Components.",
+  },
+  {
+    id: 42,
+    topic: "A06: Vulnerable and Outdated Components",
+    question: "Log4Shell is an example of:",
+    options: ["Vulnerable component risk", "Broken access control", "Cryptographic failure", "SSRF"],
+    correctAnswer: 0,
+    explanation: "Log4Shell was a critical vulnerability in a widely used component.",
+  },
+  {
+    id: 43,
+    topic: "A06: Vulnerable and Outdated Components",
+    question: "SBOM stands for:",
+    options: ["Software Bill of Materials", "Secure Backup of Modules", "System Boundary Operations Manual", "Standard Build Output Manifest"],
+    correctAnswer: 0,
+    explanation: "An SBOM is a Software Bill of Materials.",
+  },
+  {
+    id: 44,
+    topic: "A06: Vulnerable and Outdated Components",
+    question: "Which practice reduces component risk?",
+    options: ["Remove unused dependencies", "Ignore updates", "Use unofficial mirrors", "Disable inventory"],
+    correctAnswer: 0,
+    explanation: "Removing unused dependencies reduces the attack surface.",
+  },
+  {
+    id: 45,
+    topic: "A06: Vulnerable and Outdated Components",
+    question: "Components should be obtained:",
+    options: [
+      "From official sources over secure links",
+      "From random forums",
+      "Via copy-paste from blogs",
+      "From unknown binaries",
+    ],
+    correctAnswer: 0,
+    explanation: "Use trusted, official sources to reduce supply chain risks.",
+  },
+  {
+    id: 46,
+    topic: "A06: Vulnerable and Outdated Components",
+    question: "Why is end-of-life software risky?",
+    options: [
+      "No security patches are provided",
+      "It runs faster",
+      "It is more compatible",
+      "It prevents injection",
+    ],
+    correctAnswer: 0,
+    explanation: "EOL software no longer receives security updates.",
+  },
+  {
+    id: 47,
+    topic: "A06: Vulnerable and Outdated Components",
+    question: "Which tool or process helps find vulnerable dependencies?",
+    options: ["Software composition analysis (SCA)", "Only manual code review", "Client-side validation", "Input encoding"],
+    correctAnswer: 0,
+    explanation: "SCA tools scan dependencies for known vulnerabilities.",
+  },
+  {
+    id: 48,
+    topic: "A07: Identification and Authentication Failures",
+    question: "A07:2021 is:",
+    options: ["Identification and Authentication Failures", "Insecure Design", "Security Misconfiguration", "Injection"],
+    correctAnswer: 0,
+    explanation: "A07 covers authentication and session management failures.",
+  },
+  {
+    id: 49,
+    topic: "A07: Identification and Authentication Failures",
+    question: "Credential stuffing is primarily a risk in:",
+    options: [
+      "Identification and Authentication Failures",
+      "SSRF",
+      "Cryptographic Failures",
+      "Integrity Failures",
+    ],
+    correctAnswer: 0,
+    explanation: "Credential stuffing targets weak authentication defenses.",
+  },
+  {
+    id: 50,
+    topic: "A07: Identification and Authentication Failures",
+    question: "MFA helps mitigate:",
+    options: ["Account takeover from stolen passwords", "SSRF", "SQL injection", "Logging failures"],
+    correctAnswer: 0,
+    explanation: "MFA reduces the impact of stolen passwords.",
+  },
+  {
+    id: 51,
+    topic: "A07: Identification and Authentication Failures",
+    question: "Session IDs in URLs are risky because:",
+    options: [
+      "They can leak via logs or referrers",
+      "They encrypt traffic",
+      "They enforce access control",
+      "They speed up sessions",
+    ],
+    correctAnswer: 0,
+    explanation: "URLs are logged and shared, which can expose session IDs.",
+  },
+  {
+    id: 52,
+    topic: "A07: Identification and Authentication Failures",
+    question: "A weak password recovery process can lead to:",
+    options: ["Account compromise", "Faster login", "Encrypted storage", "Better auditing"],
+    correctAnswer: 0,
+    explanation: "Weak recovery mechanisms can be abused to take over accounts.",
+  },
+  {
+    id: 53,
+    topic: "A07: Identification and Authentication Failures",
+    question: "After successful login, session identifiers should be:",
+    options: ["Rotated to prevent fixation", "Kept the same forever", "Stored in localStorage only", "Displayed to users"],
+    correctAnswer: 0,
+    explanation: "Rotating session IDs reduces session fixation risks.",
+  },
+  {
+    id: 54,
+    topic: "A07: Identification and Authentication Failures",
+    question: "Limiting failed login attempts primarily helps reduce:",
+    options: ["Brute force attacks", "SQL injection", "SSRF", "Logging noise only"],
+    correctAnswer: 0,
+    explanation: "Rate limiting reduces brute force and credential stuffing attempts.",
+  },
+  {
+    id: 55,
+    topic: "A08: Software and Data Integrity Failures",
+    question: "A08:2021 focuses on:",
+    options: ["Software and Data Integrity Failures", "Misconfiguration", "Access Control", "Cryptographic Failures"],
+    correctAnswer: 0,
+    explanation: "A08 covers integrity risks across software and data pipelines.",
+  },
+  {
+    id: 56,
+    topic: "A08: Software and Data Integrity Failures",
+    question: "Unsigned updates or untrusted plugins are examples of:",
+    options: ["Integrity failures", "Logging failures", "Injection", "Access control issues"],
+    correctAnswer: 0,
+    explanation: "Unsigned or untrusted updates can be tampered with.",
+  },
+  {
+    id: 57,
+    topic: "A08: Software and Data Integrity Failures",
+    question: "Subresource Integrity (SRI) is used to:",
+    options: ["Verify integrity of CDN assets", "Enforce MFA", "Encrypt databases", "Validate JWTs"],
+    correctAnswer: 0,
+    explanation: "SRI verifies that CDN-delivered files have not been tampered with.",
+  },
+  {
+    id: 58,
+    topic: "A08: Software and Data Integrity Failures",
+    question: "Insecure deserialization risk is included in:",
+    options: ["A08", "A05", "A02", "A01"],
+    correctAnswer: 0,
+    explanation: "Insecure deserialization is part of integrity failures in A08.",
+  },
+  {
+    id: 59,
+    topic: "A08: Software and Data Integrity Failures",
+    question: "A secure CI/CD pipeline should include:",
+    options: [
+      "Access controls and signed artifacts",
+      "Public write access",
+      "No reviews",
+      "Disabled logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Secure pipelines require access controls and integrity checks.",
+  },
+  {
+    id: 60,
+    topic: "A08: Software and Data Integrity Failures",
+    question: "Digital signatures primarily provide:",
+    options: ["Integrity and authenticity", "Compression", "Confidentiality only", "Rate limiting"],
+    correctAnswer: 0,
+    explanation: "Signatures verify integrity and authenticity of data and code.",
+  },
+  {
+    id: 61,
+    topic: "A08: Software and Data Integrity Failures",
+    question: "Why should serialized data not be accepted unsigned from untrusted clients?",
+    options: [
+      "It can be tampered with to alter behavior",
+      "It improves performance too much",
+      "It prevents logging",
+      "It guarantees integrity",
+    ],
+    correctAnswer: 0,
+    explanation: "Unsigned serialized data can be modified to trigger unexpected behavior.",
+  },
+  {
+    id: 62,
+    topic: "A09: Security Logging and Monitoring Failures",
+    question: "A09:2021 is:",
+    options: ["Security Logging and Monitoring Failures", "Insecure Design", "Injection", "SSRF"],
+    correctAnswer: 0,
+    explanation: "A09 covers insufficient logging, monitoring, and response.",
+  },
+  {
+    id: 63,
+    topic: "A09: Security Logging and Monitoring Failures",
+    question: "Which events should always be logged?",
+    options: [
+      "Login attempts and access control failures",
+      "Only UI clicks",
+      "Only successful logins",
+      "Only client-side errors",
+    ],
+    correctAnswer: 0,
+    explanation: "Authentication and access control failures are critical security events.",
+  },
+  {
+    id: 64,
+    topic: "A09: Security Logging and Monitoring Failures",
+    question: "Why is storing logs only locally risky?",
+    options: [
+      "Attackers can tamper with or erase them",
+      "It improves integrity",
+      "It enables MFA",
+      "It prevents SSRF",
+    ],
+    correctAnswer: 0,
+    explanation: "Local-only logs are easier for attackers to delete or alter.",
+  },
+  {
+    id: 65,
+    topic: "A09: Security Logging and Monitoring Failures",
+    question: "Lack of alerting thresholds leads to:",
+    options: ["Delayed breach detection", "Faster authentication", "Fewer vulnerabilities", "Stronger encryption"],
+    correctAnswer: 0,
+    explanation: "Without alerting, attacks can go unnoticed for long periods.",
+  },
+  {
+    id: 66,
+    topic: "A09: Security Logging and Monitoring Failures",
+    question: "Logs should be formatted to be consumed by:",
+    options: ["Centralized log management or SIEM", "Only plain text viewers", "Client browsers", "QR codes"],
+    correctAnswer: 0,
+    explanation: "Centralized logging makes monitoring and alerting practical.",
+  },
+  {
+    id: 67,
+    topic: "A09: Security Logging and Monitoring Failures",
+    question: "An incident response plan helps by:",
+    options: [
+      "Enabling faster detection and recovery",
+      "Disabling access controls",
+      "Replacing encryption",
+      "Eliminating logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Response plans help teams detect, contain, and recover from incidents.",
+  },
+  {
+    id: 68,
+    topic: "A09: Security Logging and Monitoring Failures",
+    question: "Without monitoring, attackers can often:",
+    options: ["Persist and pivot undetected", "Fix vulnerabilities", "Improve performance", "Reduce risk automatically"],
+    correctAnswer: 0,
+    explanation: "Poor monitoring allows attackers to stay hidden and move laterally.",
+  },
+  {
+    id: 69,
+    topic: "A10: Server-Side Request Forgery (SSRF)",
+    question: "A10:2021 refers to:",
+    options: ["Server-Side Request Forgery (SSRF)", "SQL Injection", "Insecure Design", "Misconfiguration"],
+    correctAnswer: 0,
+    explanation: "A10 is Server-Side Request Forgery (SSRF).",
+  },
+  {
+    id: 70,
+    topic: "A10: Server-Side Request Forgery (SSRF)",
+    question: "SSRF lets attackers make the server:",
+    options: [
+      "Request internal or unintended resources",
+      "Encrypt all traffic",
+      "Log out users",
+      "Disable CSP",
+    ],
+    correctAnswer: 0,
+    explanation: "SSRF abuses server-side fetching to reach internal resources.",
+  },
+  {
+    id: 71,
+    topic: "A10: Server-Side Request Forgery (SSRF)",
+    question: "The IP 169.254.169.254 is commonly used for:",
+    options: ["Cloud instance metadata", "Public DNS", "Time servers", "CDN edge nodes"],
+    correctAnswer: 0,
+    explanation: "Cloud metadata services often use 169.254.169.254.",
+  },
+  {
+    id: 72,
+    topic: "A10: Server-Side Request Forgery (SSRF)",
+    question: "Which control is recommended to mitigate SSRF?",
+    options: [
+      "Allowlists for URL schemes, hosts, and ports",
+      "Client-side validation only",
+      "Disable TLS",
+      "Expose raw responses",
+    ],
+    correctAnswer: 0,
+    explanation: "Allowlists restrict where server-side requests can go.",
+  },
+  {
+    id: 73,
+    topic: "A10: Server-Side Request Forgery (SSRF)",
+    question: "Disabling HTTP redirects helps because:",
+    options: [
+      "It prevents SSRF chaining to unintended targets",
+      "It enforces MFA",
+      "It fixes SQL injection",
+      "It increases latency",
+    ],
+    correctAnswer: 0,
+    explanation: "Redirects can be abused to reach disallowed targets.",
+  },
+  {
+    id: 74,
+    topic: "A10: Server-Side Request Forgery (SSRF)",
+    question: "Why segment remote resource access into separate networks?",
+    options: [
+      "To limit SSRF impact and access to internal systems",
+      "To speed up requests",
+      "To avoid logging",
+      "To remove authentication",
+    ],
+    correctAnswer: 0,
+    explanation: "Segmentation limits the blast radius of SSRF.",
+  },
+  {
+    id: 75,
+    topic: "A10: Server-Side Request Forgery (SSRF)",
+    question: "Why avoid returning raw SSRF responses to clients?",
+    options: [
+      "They can reveal internal data",
+      "They are always encrypted",
+      "They improve UX",
+      "They prevent injection",
+    ],
+    correctAnswer: 0,
+    explanation: "Raw responses can leak sensitive internal information.",
+  },
+];
+
 export default function OwaspTop10Page() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -361,9 +1110,15 @@ export default function OwaspTop10Page() {
     <LearnPageLayout pageTitle="OWASP Top 10 Web Security Risks" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
-      <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-        <ArrowBackIcon />
-      </IconButton>
+      <Chip
+        component={RouterLink}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
 
       {/* Header */}
       <Box sx={{ mb: 5 }}>
@@ -624,6 +1379,40 @@ export default function OwaspTop10Page() {
           ))}
         </Grid>
       </Paper>
+
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 4,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(ACCENT_COLOR, 0.2)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={ACCENT_COLOR}
+          title="OWASP Top 10 Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

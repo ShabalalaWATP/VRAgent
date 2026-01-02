@@ -47,7 +47,7 @@ import {
   ContentCopy as CopyIcon,
   Terminal as TerminalIcon,
 } from "@mui/icons-material";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 // ============================================================================
 // Command Reference Data
@@ -183,6 +183,7 @@ const TROUBLESHOOTING_SCENARIOS: TroubleshootingScenario[] = [
 
 const TracerouteGuidePage: React.FC = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
 
@@ -846,6 +847,18 @@ const TracerouteGuidePage: React.FC = () => {
           </Grid>
         </Grid>
       )}
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<BackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Box>
     </LearnPageLayout>
   );

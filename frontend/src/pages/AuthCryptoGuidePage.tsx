@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Typography,
@@ -29,8 +30,9 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Button,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LockIcon from "@mui/icons-material/Lock";
@@ -53,6 +55,7 @@ import EnhancedEncryptionIcon from "@mui/icons-material/EnhancedEncryption";
 import StorageIcon from "@mui/icons-material/Storage";
 import LoginIcon from "@mui/icons-material/Login";
 import LinkIcon from "@mui/icons-material/Link";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -738,6 +741,986 @@ const tabSections = [
   { label: "Checklists", icon: <ChecklistIcon />, sections: ["checklists"] },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#3b82f6";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "What is the difference between authentication and authorization?",
+    options: [
+      "Authentication checks permissions, authorization checks identity",
+      "Authentication verifies identity, authorization checks permissions",
+      "They are the same thing",
+      "Authorization happens before authentication",
+    ],
+    correctAnswer: 1,
+    explanation: "Authentication proves who you are; authorization decides what you can access.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "Multi-factor authentication (MFA) means:",
+    options: [
+      "Using multiple passwords",
+      "Using two or more verification factors",
+      "Logging in from multiple devices",
+      "Disabling password resets",
+    ],
+    correctAnswer: 1,
+    explanation: "MFA combines factors like something you know, have, or are.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "Credential stuffing is:",
+    options: [
+      "A secure password vault",
+      "Reusing stolen credentials across sites",
+      "A rate limiting technique",
+      "A password hashing method",
+    ],
+    correctAnswer: 1,
+    explanation: "Attackers try breached username/password pairs on other services.",
+  },
+  {
+    id: 4,
+    topic: "Fundamentals",
+    question: "Session fixation occurs when:",
+    options: [
+      "A session never expires",
+      "An attacker sets a known session ID before login",
+      "A cookie is HttpOnly",
+      "A token is signed with RSA",
+    ],
+    correctAnswer: 1,
+    explanation: "Attackers try to force victims to use a session ID they control.",
+  },
+  {
+    id: 5,
+    topic: "Fundamentals",
+    question: "Password spraying is:",
+    options: [
+      "Trying many passwords on a single account",
+      "Trying a few common passwords across many accounts",
+      "Resetting passwords for all users",
+      "Using a password manager",
+    ],
+    correctAnswer: 1,
+    explanation: "Spraying avoids lockouts by using a small set of common passwords.",
+  },
+  {
+    id: 6,
+    topic: "Fundamentals",
+    question: "Rate limiting on authentication endpoints is used to:",
+    options: [
+      "Improve UI performance",
+      "Slow brute force attempts",
+      "Encrypt passwords",
+      "Disable MFA",
+    ],
+    correctAnswer: 1,
+    explanation: "Rate limiting reduces automated guessing speed.",
+  },
+  {
+    id: 7,
+    topic: "Fundamentals",
+    question: "Why should login error messages be generic?",
+    options: [
+      "To improve SEO",
+      "To prevent user enumeration",
+      "To speed up responses",
+      "To disable logging",
+    ],
+    correctAnswer: 1,
+    explanation: "Different messages leak which users exist.",
+  },
+  {
+    id: 8,
+    topic: "Fundamentals",
+    question: "The authentication surface is:",
+    options: [
+      "Only the login page",
+      "All endpoints and flows that verify identity",
+      "Only the database",
+      "Only mobile apps",
+    ],
+    correctAnswer: 1,
+    explanation: "Any auth flow or endpoint expands the attack surface.",
+  },
+  {
+    id: 9,
+    topic: "Fundamentals",
+    question: "Client-side authentication checks are insufficient because:",
+    options: [
+      "They are too fast",
+      "They can be bypassed or modified",
+      "They require TLS",
+      "They always fail",
+    ],
+    correctAnswer: 1,
+    explanation: "Attackers can skip or alter client-side checks.",
+  },
+  {
+    id: 10,
+    topic: "Fundamentals",
+    question: "Least privilege in access control means:",
+    options: [
+      "Everyone is an admin",
+      "Users get only the permissions they need",
+      "Permissions never change",
+      "No one can log in",
+    ],
+    correctAnswer: 1,
+    explanation: "Reducing permissions limits blast radius.",
+  },
+  {
+    id: 11,
+    topic: "Sessions",
+    question: "A session is:",
+    options: [
+      "A random password",
+      "Server-side state tied to an authenticated user",
+      "A TLS certificate",
+      "A public key",
+    ],
+    correctAnswer: 1,
+    explanation: "Sessions associate multiple requests with one user identity.",
+  },
+  {
+    id: 12,
+    topic: "Sessions",
+    question: "The HttpOnly cookie flag prevents:",
+    options: [
+      "Cookies being sent over HTTPS",
+      "JavaScript access to cookies",
+      "Cookies being stored",
+      "Session expiration",
+    ],
+    correctAnswer: 1,
+    explanation: "HttpOnly protects cookies from XSS-based theft.",
+  },
+  {
+    id: 13,
+    topic: "Sessions",
+    question: "The Secure cookie flag means:",
+    options: [
+      "Send only over HTTPS",
+      "Send only over HTTP",
+      "Never send the cookie",
+      "Encrypt the cookie",
+    ],
+    correctAnswer: 0,
+    explanation: "Secure cookies are restricted to HTTPS.",
+  },
+  {
+    id: 14,
+    topic: "Sessions",
+    question: "SameSite=Strict helps prevent:",
+    options: [
+      "SQL injection",
+      "CSRF",
+      "XSS",
+      "RCE",
+    ],
+    correctAnswer: 1,
+    explanation: "SameSite limits cross-site requests that carry cookies.",
+  },
+  {
+    id: 15,
+    topic: "Sessions",
+    question: "Regenerating session IDs on login prevents:",
+    options: [
+      "Session fixation",
+      "Password spraying",
+      "TLS downgrade",
+      "Token refresh",
+    ],
+    correctAnswer: 0,
+    explanation: "New session IDs stop attackers from using a fixed ID.",
+  },
+  {
+    id: 16,
+    topic: "Sessions",
+    question: "Where is the safest place to store web session tokens?",
+    options: [
+      "localStorage",
+      "HttpOnly cookies",
+      "URL query parameters",
+      "SessionStorage without HttpOnly",
+    ],
+    correctAnswer: 1,
+    explanation: "HttpOnly cookies reduce XSS token theft risk.",
+  },
+  {
+    id: 17,
+    topic: "Sessions",
+    question: "Session timeouts are used to:",
+    options: [
+      "Increase session lifetime",
+      "Limit how long a session stays valid",
+      "Disable logging",
+      "Avoid MFA",
+    ],
+    correctAnswer: 1,
+    explanation: "Shorter lifetimes reduce exposure from stolen sessions.",
+  },
+  {
+    id: 18,
+    topic: "Sessions",
+    question: "Logout should ideally:",
+    options: [
+      "Only clear client cookies",
+      "Invalidate the server-side session",
+      "Do nothing",
+      "Change the password",
+    ],
+    correctAnswer: 1,
+    explanation: "Server invalidation prevents reuse of stolen tokens.",
+  },
+  {
+    id: 19,
+    topic: "Sessions",
+    question: "Session IDs in URLs are risky because:",
+    options: [
+      "They are encrypted",
+      "They leak via logs and referrers",
+      "They improve caching",
+      "They are required by OAuth",
+    ],
+    correctAnswer: 1,
+    explanation: "URLs are shared and logged, exposing session IDs.",
+  },
+  {
+    id: 20,
+    topic: "Sessions",
+    question: "CSRF tokens protect against:",
+    options: [
+      "Cross-site request forgery",
+      "Brute force",
+      "SQL injection",
+      "Credential stuffing",
+    ],
+    correctAnswer: 0,
+    explanation: "CSRF tokens ensure requests are intentional and same-site.",
+  },
+  {
+    id: 21,
+    topic: "Passwords",
+    question: "Hashing vs encryption: hashing is:",
+    options: [
+      "Reversible with a key",
+      "One-way and not reversible",
+      "The same as encoding",
+      "Only for TLS",
+    ],
+    correctAnswer: 1,
+    explanation: "Password hashes should not be reversible.",
+  },
+  {
+    id: 22,
+    topic: "Passwords",
+    question: "Recommended password hashing algorithms are:",
+    options: [
+      "MD5 and SHA1",
+      "bcrypt, Argon2, or scrypt",
+      "Base64",
+      "ROT13",
+    ],
+    correctAnswer: 1,
+    explanation: "These are slow, adaptive hashing algorithms designed for passwords.",
+  },
+  {
+    id: 23,
+    topic: "Passwords",
+    question: "The purpose of a salt is to:",
+    options: [
+      "Encrypt the password",
+      "Make each hash unique and prevent rainbow tables",
+      "Speed up hashing",
+      "Replace the password",
+    ],
+    correctAnswer: 1,
+    explanation: "Salts make precomputed attacks ineffective.",
+  },
+  {
+    id: 24,
+    topic: "Passwords",
+    question: "A pepper is:",
+    options: [
+      "A client-side secret",
+      "A server-side secret added before hashing",
+      "A type of MFA token",
+      "A TLS extension",
+    ],
+    correctAnswer: 1,
+    explanation: "Peppers add a server-held secret to each hash.",
+  },
+  {
+    id: 25,
+    topic: "Passwords",
+    question: "MD5 and SHA1 are poor for passwords because:",
+    options: [
+      "They are too slow",
+      "They are fast and easily brute forced",
+      "They are encrypted",
+      "They require TLS",
+    ],
+    correctAnswer: 1,
+    explanation: "Fast hashes enable high-speed offline cracking.",
+  },
+  {
+    id: 26,
+    topic: "Passwords",
+    question: "Slow password hashing reduces risk by:",
+    options: [
+      "Making brute force attempts expensive",
+      "Disabling MFA",
+      "Increasing cookie size",
+      "Turning off logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Higher cost slows attackers trying many guesses.",
+  },
+  {
+    id: 27,
+    topic: "Passwords",
+    question: "A rainbow table is:",
+    options: [
+      "A list of encrypted emails",
+      "Precomputed hash values used for cracking",
+      "A TLS cipher suite",
+      "A session store",
+    ],
+    correctAnswer: 1,
+    explanation: "Rainbow tables map common passwords to hashes.",
+  },
+  {
+    id: 28,
+    topic: "Passwords",
+    question: "Password reset tokens should be:",
+    options: [
+      "Short and predictable",
+      "Random, short-lived, and one-time",
+      "Stored in URLs for weeks",
+      "Reused across users",
+    ],
+    correctAnswer: 1,
+    explanation: "Reset tokens must be unguessable and expire quickly.",
+  },
+  {
+    id: 29,
+    topic: "Passwords",
+    question: "Storing passwords with reversible encryption is risky because:",
+    options: [
+      "It improves UX",
+      "If the key leaks, all passwords are exposed",
+      "It slows logins",
+      "It blocks MFA",
+    ],
+    correctAnswer: 1,
+    explanation: "Encryption can be reversed if keys are compromised.",
+  },
+  {
+    id: 30,
+    topic: "Passwords",
+    question: "Password hints are discouraged because they:",
+    options: [
+      "Increase password entropy",
+      "Leak information about the password",
+      "Stop brute force",
+      "Enable MFA",
+    ],
+    correctAnswer: 1,
+    explanation: "Hints give attackers clues for guessing.",
+  },
+  {
+    id: 31,
+    topic: "MFA",
+    question: "TOTP stands for:",
+    options: [
+      "Time-based One-Time Password",
+      "Tokenized Online Password Transfer",
+      "Temporary OAuth Token",
+      "Trusted One-Time Protocol",
+    ],
+    correctAnswer: 0,
+    explanation: "TOTP uses the current time and a shared secret.",
+  },
+  {
+    id: 32,
+    topic: "MFA",
+    question: "A common weakness of SMS OTP is:",
+    options: [
+      "It is too long",
+      "SIM swap and interception attacks",
+      "It requires HTTPS",
+      "It uses strong cryptography",
+    ],
+    correctAnswer: 1,
+    explanation: "SMS can be intercepted or hijacked via SIM swaps.",
+  },
+  {
+    id: 33,
+    topic: "MFA",
+    question: "MFA fatigue refers to:",
+    options: [
+      "Users ignoring strong passwords",
+      "Repeated push prompts until a user approves",
+      "Rate limiting failures",
+      "Strong token rotation",
+    ],
+    correctAnswer: 1,
+    explanation: "Attackers spam push approvals hoping for a mistake.",
+  },
+  {
+    id: 34,
+    topic: "MFA",
+    question: "Hardware security keys are strong because they are:",
+    options: [
+      "Phishing resistant and use cryptographic challenges",
+      "Easy to copy",
+      "Based on SMS",
+      "Stored in localStorage",
+    ],
+    correctAnswer: 0,
+    explanation: "FIDO2/WebAuthn keys verify origin and resist phishing.",
+  },
+  {
+    id: 35,
+    topic: "MFA",
+    question: "Backup codes should be:",
+    options: [
+      "Reused across logins",
+      "Single-use and stored securely",
+      "Posted in plain text",
+      "Shared with support",
+    ],
+    correctAnswer: 1,
+    explanation: "Backup codes act like passwords and must be protected.",
+  },
+  {
+    id: 36,
+    topic: "MFA",
+    question: "Rate limiting should typically apply to:",
+    options: [
+      "Only one IP address",
+      "Both account and IP behavior",
+      "Only admins",
+      "Only GET requests",
+    ],
+    correctAnswer: 1,
+    explanation: "Combining signals reduces bypass options.",
+  },
+  {
+    id: 37,
+    topic: "MFA",
+    question: "Step-up authentication is used for:",
+    options: [
+      "Viewing a public page",
+      "Sensitive actions like changing email or payout details",
+      "Loading images",
+      "Logging out",
+    ],
+    correctAnswer: 1,
+    explanation: "High-risk actions should require stronger verification.",
+  },
+  {
+    id: 38,
+    topic: "MFA",
+    question: "Remembered devices should:",
+    options: [
+      "Never expire",
+      "Expire and be revocable",
+      "Skip logging",
+      "Disable MFA entirely",
+    ],
+    correctAnswer: 1,
+    explanation: "Long-lived trusted devices increase risk if stolen.",
+  },
+  {
+    id: 39,
+    topic: "MFA",
+    question: "Account lockout is helpful but can be abused for:",
+    options: [
+      "Denial of service against users",
+      "Password hashing",
+      "TLS downgrade",
+      "Session fixation",
+    ],
+    correctAnswer: 0,
+    explanation: "Attackers can intentionally lock out victims.",
+  },
+  {
+    id: 40,
+    topic: "MFA",
+    question: "Adaptive authentication uses:",
+    options: [
+      "Only a password",
+      "Risk signals like device, IP, or location",
+      "Static passwords only",
+      "Base64 tokens",
+    ],
+    correctAnswer: 1,
+    explanation: "Risk-based signals adjust authentication requirements.",
+  },
+  {
+    id: 41,
+    topic: "OAuth",
+    question: "OAuth 2.0 is primarily an:",
+    options: [
+      "Authentication protocol",
+      "Authorization framework for delegated access",
+      "Encryption standard",
+      "Password hashing method",
+    ],
+    correctAnswer: 1,
+    explanation: "OAuth is designed for delegated authorization.",
+  },
+  {
+    id: 42,
+    topic: "OAuth",
+    question: "OpenID Connect (OIDC) adds:",
+    options: [
+      "Identity layer on top of OAuth",
+      "A new hashing algorithm",
+      "TLS certificates",
+      "Database encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "OIDC provides authentication on top of OAuth.",
+  },
+  {
+    id: 43,
+    topic: "OAuth",
+    question: "Validating redirect URIs prevents:",
+    options: [
+      "Token leakage to attacker-controlled sites",
+      "Password hashing errors",
+      "TLS expiration",
+      "MFA fatigue",
+    ],
+    correctAnswer: 0,
+    explanation: "Open redirects can steal authorization codes or tokens.",
+  },
+  {
+    id: 44,
+    topic: "OAuth",
+    question: "The authorization code flow is recommended for:",
+    options: [
+      "Server-side applications with a backend",
+      "Legacy browsers only",
+      "Static HTML without a backend",
+      "Email clients",
+    ],
+    correctAnswer: 0,
+    explanation: "It keeps tokens off the front end and supports secure exchanges.",
+  },
+  {
+    id: 45,
+    topic: "OAuth",
+    question: "The implicit flow is discouraged because:",
+    options: [
+      "Tokens are exposed in URLs and clients cannot keep secrets",
+      "It uses HTTPS",
+      "It requires PKCE",
+      "It rotates keys too often",
+    ],
+    correctAnswer: 0,
+    explanation: "Modern guidance prefers code flow with PKCE.",
+  },
+  {
+    id: 46,
+    topic: "OAuth",
+    question: "PKCE protects against:",
+    options: [
+      "Authorization code interception attacks",
+      "SQL injection",
+      "CSRF in forms",
+      "XSS in HTML",
+    ],
+    correctAnswer: 0,
+    explanation: "PKCE binds the code to the original client request.",
+  },
+  {
+    id: 47,
+    topic: "OAuth",
+    question: "The state parameter in OAuth defends against:",
+    options: [
+      "CSRF",
+      "Brute force",
+      "Hash collisions",
+      "TLS downgrade",
+    ],
+    correctAnswer: 0,
+    explanation: "State ensures the callback matches the original request.",
+  },
+  {
+    id: 48,
+    topic: "OAuth",
+    question: "Refresh tokens should be:",
+    options: [
+      "Stored securely and rotated",
+      "Publicly logged",
+      "Short and guessable",
+      "Embedded in URLs",
+    ],
+    correctAnswer: 0,
+    explanation: "Refresh tokens are powerful and must be protected.",
+  },
+  {
+    id: 49,
+    topic: "OAuth",
+    question: "OAuth scopes should follow:",
+    options: [
+      "Least privilege",
+      "Maximum privilege",
+      "No restrictions",
+      "Random selection",
+    ],
+    correctAnswer: 0,
+    explanation: "Limit access to only what the client needs.",
+  },
+  {
+    id: 50,
+    topic: "OAuth",
+    question: "SSO token misuse is reduced by validating:",
+    options: [
+      "Audience (aud) and issuer (iss) claims",
+      "CSS files",
+      "Cache headers",
+      "Image sizes",
+    ],
+    correctAnswer: 0,
+    explanation: "Audience and issuer validation ensures correct token use.",
+  },
+  {
+    id: 51,
+    topic: "JWT",
+    question: "A JWT is:",
+    options: [
+      "A signed token containing claims",
+      "A password hashing algorithm",
+      "An encryption key",
+      "A TLS certificate",
+    ],
+    correctAnswer: 0,
+    explanation: "JWTs carry claims and are protected by signatures.",
+  },
+  {
+    id: 52,
+    topic: "JWT",
+    question: "Base64 encoding in JWTs is:",
+    options: [
+      "Encryption",
+      "Not encryption, just encoding",
+      "A signature",
+      "A hash function",
+    ],
+    correctAnswer: 1,
+    explanation: "JWT payloads are readable without the signing key.",
+  },
+  {
+    id: 53,
+    topic: "JWT",
+    question: "The 'alg=none' issue refers to:",
+    options: [
+      "Disabling signatures entirely",
+      "Using RSA keys",
+      "Adding encryption",
+      "Using PKCE",
+    ],
+    correctAnswer: 0,
+    explanation: "Tokens must never be accepted without signature validation.",
+  },
+  {
+    id: 54,
+    topic: "JWT",
+    question: "HS256 vs RS256 means:",
+    options: [
+      "Symmetric secret vs asymmetric key pair",
+      "Two different hashing algorithms only",
+      "Both are encryption modes",
+      "RS256 uses no signatures",
+    ],
+    correctAnswer: 0,
+    explanation: "HS256 uses a shared secret; RS256 uses a private/public key pair.",
+  },
+  {
+    id: 55,
+    topic: "JWT",
+    question: "A strong HMAC secret should be:",
+    options: [
+      "Short and memorable",
+      "Long, random, and stored securely",
+      "Stored in client-side code",
+      "Reused across all apps",
+    ],
+    correctAnswer: 1,
+    explanation: "Weak secrets can be brute forced and forged.",
+  },
+  {
+    id: 56,
+    topic: "JWT",
+    question: "Token validation should always check:",
+    options: [
+      "exp and nbf claims",
+      "Only the user name",
+      "Only the issuer text",
+      "Only the UI theme",
+    ],
+    correctAnswer: 0,
+    explanation: "Expiration and not-before limits prevent replay.",
+  },
+  {
+    id: 57,
+    topic: "JWT",
+    question: "You should only trust JWT claims after:",
+    options: [
+      "Signature verification",
+      "Base64 decoding",
+      "Adding a cookie",
+      "Checking HTTP status",
+    ],
+    correctAnswer: 0,
+    explanation: "Claims are untrusted until the signature is validated.",
+  },
+  {
+    id: 58,
+    topic: "JWT",
+    question: "A common challenge with stateless JWTs is:",
+    options: [
+      "Revocation and logout",
+      "TLS encryption",
+      "Cookie size limits",
+      "OAuth state",
+    ],
+    correctAnswer: 0,
+    explanation: "Stateless tokens are harder to revoke instantly.",
+  },
+  {
+    id: 59,
+    topic: "JWT",
+    question: "Short-lived access tokens reduce:",
+    options: [
+      "The window of abuse if stolen",
+      "The need for TLS",
+      "The need for logging",
+      "The need for MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Short TTL limits exposure from stolen tokens.",
+  },
+  {
+    id: 60,
+    topic: "JWT",
+    question: "The 'aud' claim is used to:",
+    options: [
+      "Identify the intended audience of the token",
+      "Encrypt the payload",
+      "Store the password",
+      "Disable MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Audience validation prevents token replay across services.",
+  },
+  {
+    id: 61,
+    topic: "TLS",
+    question: "Symmetric encryption uses:",
+    options: [
+      "The same key for encrypt and decrypt",
+      "A public and private key",
+      "No keys",
+      "Only passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Symmetric algorithms use a shared secret key.",
+  },
+  {
+    id: 62,
+    topic: "TLS",
+    question: "Symmetric encryption is typically used for:",
+    options: [
+      "Bulk data because it is fast",
+      "Key exchange only",
+      "Certificates",
+      "Hashing",
+    ],
+    correctAnswer: 0,
+    explanation: "Symmetric ciphers are efficient for large data.",
+  },
+  {
+    id: 63,
+    topic: "TLS",
+    question: "TLS provides:",
+    options: [
+      "Confidentiality, integrity, and server authentication",
+      "Only compression",
+      "Only DNS security",
+      "Only password hashing",
+    ],
+    correctAnswer: 0,
+    explanation: "TLS secures data in transit and verifies the server.",
+  },
+  {
+    id: 64,
+    topic: "TLS",
+    question: "A certificate chain of trust means:",
+    options: [
+      "Certificates are validated through trusted CAs",
+      "All certificates are self-signed",
+      "TLS is optional",
+      "Only mobile apps use TLS",
+    ],
+    correctAnswer: 0,
+    explanation: "Browsers trust roots and validate intermediates to the site.",
+  },
+  {
+    id: 65,
+    topic: "TLS",
+    question: "HSTS is used to:",
+    options: [
+      "Force browsers to use HTTPS",
+      "Disable cookies",
+      "Encrypt passwords at rest",
+      "Rotate keys",
+    ],
+    correctAnswer: 0,
+    explanation: "HSTS prevents HTTP downgrade attacks.",
+  },
+  {
+    id: 66,
+    topic: "TLS",
+    question: "Certificate pinning helps prevent:",
+    options: [
+      "Man-in-the-middle attacks with fake certs",
+      "SQL injection",
+      "CSRF",
+      "Brute force",
+    ],
+    correctAnswer: 0,
+    explanation: "Pinning ensures the server uses expected certificates.",
+  },
+  {
+    id: 67,
+    topic: "TLS",
+    question: "TLS 1.0 and 1.1 should be disabled because they are:",
+    options: [
+      "Obsolete and weak",
+      "Faster and safer",
+      "Required for OAuth",
+      "Used by JWTs",
+    ],
+    correctAnswer: 0,
+    explanation: "Old TLS versions have known weaknesses.",
+  },
+  {
+    id: 68,
+    topic: "TLS",
+    question: "AEAD ciphers like AES-GCM provide:",
+    options: [
+      "Encryption plus integrity protection",
+      "Only hashing",
+      "Only compression",
+      "Only key exchange",
+    ],
+    correctAnswer: 0,
+    explanation: "AEAD modes provide confidentiality and integrity together.",
+  },
+  {
+    id: 69,
+    topic: "TLS",
+    question: "Key exchange establishes:",
+    options: [
+      "A shared session key",
+      "A password reset token",
+      "A database schema",
+      "A new username",
+    ],
+    correctAnswer: 0,
+    explanation: "Key exchange creates the symmetric key for the session.",
+  },
+  {
+    id: 70,
+    topic: "TLS",
+    question: "Perfect forward secrecy means:",
+    options: [
+      "Compromise of long-term keys does not expose past sessions",
+      "Passwords are stored in plaintext",
+      "Sessions never expire",
+      "TLS is optional",
+    ],
+    correctAnswer: 0,
+    explanation: "Ephemeral keys prevent retroactive decryption.",
+  },
+  {
+    id: 71,
+    topic: "Crypto Hygiene",
+    question: "Key rotation reduces risk by:",
+    options: [
+      "Limiting impact of compromised keys",
+      "Removing MFA",
+      "Disabling TLS",
+      "Increasing token lifetime",
+    ],
+    correctAnswer: 0,
+    explanation: "Regular rotation shortens the exposure window.",
+  },
+  {
+    id: 72,
+    topic: "Crypto Hygiene",
+    question: "Hardcoded keys are risky because:",
+    options: [
+      "They are easy to extract from code",
+      "They improve performance",
+      "They prevent brute force",
+      "They rotate automatically",
+    ],
+    correctAnswer: 0,
+    explanation: "Hardcoded secrets are often leaked via code or binaries.",
+  },
+  {
+    id: 73,
+    topic: "Crypto Hygiene",
+    question: "Reusing an IV or nonce with AEAD can:",
+    options: [
+      "Break confidentiality and integrity",
+      "Increase security",
+      "Enable hashing",
+      "Fix JWTs",
+    ],
+    correctAnswer: 0,
+    explanation: "Nonce reuse can reveal plaintext or allow forgeries.",
+  },
+  {
+    id: 74,
+    topic: "Crypto Hygiene",
+    question: "A KDF like PBKDF2 or Argon2 is used to:",
+    options: [
+      "Derive keys from passwords securely",
+      "Encrypt TLS traffic",
+      "Generate JWTs",
+      "Store cookies",
+    ],
+    correctAnswer: 0,
+    explanation: "KDFs slow down password-based key derivation.",
+  },
+  {
+    id: 75,
+    topic: "Crypto Hygiene",
+    question: "HMAC provides:",
+    options: [
+      "Integrity and authenticity, not confidentiality",
+      "Encryption of data",
+      "TLS certificates",
+      "Password hashing",
+    ],
+    correctAnswer: 0,
+    explanation: "HMAC verifies data integrity and origin.",
+  },
+];
+
 function SectionContent({ section }: { section: Section }) {
   const theme = useTheme();
 
@@ -910,9 +1893,15 @@ export default function AuthCryptoGuidePage() {
     <LearnPageLayout pageTitle="Authentication & Cryptography Guide" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
-      <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-        <ArrowBackIcon />
-      </IconButton>
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
 
       {/* Header */}
       <Box sx={{ mb: 5 }}>
@@ -1125,6 +2114,40 @@ export default function AuthCryptoGuidePage() {
           ))}
         </Grid>
       </Paper>
+
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 4,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={QUIZ_ACCENT_COLOR}
+          title="Authentication and Crypto Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

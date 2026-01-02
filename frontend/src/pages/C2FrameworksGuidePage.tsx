@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Typography,
   Container,
   Paper,
@@ -33,7 +34,7 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SettingsRemoteIcon from "@mui/icons-material/SettingsRemote";
 import CloudIcon from "@mui/icons-material/Cloud";
@@ -69,6 +70,8 @@ import MemoryIcon from "@mui/icons-material/Memory";
 import FingerprintIcon from "@mui/icons-material/Fingerprint";
 import GavelIcon from "@mui/icons-material/Gavel";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 // C2 Framework data with expanded details
 const c2Frameworks = [
@@ -861,6 +864,987 @@ const mitreAttackMappings = [
   },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#8b5cf6";
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Core Concepts",
+    question: "What is the primary purpose of a C2 framework?",
+    options: [
+      "Coordinate command and control of implants during operations",
+      "Scan the internet for vulnerabilities",
+      "Replace endpoint protection with custom agents",
+      "Automatically patch systems after exploitation",
+    ],
+    correctAnswer: 0,
+    explanation: "C2 frameworks help operators task and manage implants on targets.",
+  },
+  {
+    id: 2,
+    topic: "Core Concepts",
+    question: "In C2 terminology, what is a beacon?",
+    options: [
+      "A periodic check-in from the implant to the server",
+      "A dashboard used to view operator activity",
+      "An encrypted log file stored on disk",
+      "A payload compiler used to build agents",
+    ],
+    correctAnswer: 0,
+    explanation: "Beacons call back at intervals to receive tasks and send results.",
+  },
+  {
+    id: 3,
+    topic: "Core Concepts",
+    question: "What does a listener do in a C2 framework?",
+    options: [
+      "Waits for inbound connections from agents",
+      "Encrypts files for exfiltration",
+      "Collects passwords from browsers",
+      "Scans ports for open services",
+    ],
+    correctAnswer: 0,
+    explanation: "Listeners accept and manage incoming agent communications.",
+  },
+  {
+    id: 4,
+    topic: "Payloads",
+    question: "What is the key difference between staged and stageless payloads?",
+    options: [
+      "Staged payloads fetch additional code; stageless payloads contain everything",
+      "Stageless payloads only work on Linux",
+      "Staged payloads cannot be encrypted",
+      "Stageless payloads require a separate server",
+    ],
+    correctAnswer: 0,
+    explanation: "Staged payloads download a second stage, while stageless payloads are self-contained.",
+  },
+  {
+    id: 5,
+    topic: "Core Concepts",
+    question: "In C2 terms, an implant refers to what?",
+    options: [
+      "The agent or payload running on the target system",
+      "A web shell used only for initial access",
+      "A network scanner on the C2 server",
+      "A report generated after an operation",
+    ],
+    correctAnswer: 0,
+    explanation: "An implant is the agent that executes on the target and communicates with C2.",
+  },
+  {
+    id: 6,
+    topic: "Operations",
+    question: "Why are team servers used in C2 frameworks?",
+    options: [
+      "To centralize control and allow multiple operators",
+      "To automatically exploit vulnerabilities",
+      "To host the public website of the framework",
+      "To store backups of target data",
+    ],
+    correctAnswer: 0,
+    explanation: "Team servers coordinate shared access and session management for operators.",
+  },
+  {
+    id: 7,
+    topic: "Traffic Shaping",
+    question: "What is a malleable C2 profile primarily used for?",
+    options: [
+      "Customizing network indicators to blend with normal traffic",
+      "Increasing payload size for faster deployment",
+      "Disabling encryption on C2 channels",
+      "Generating vulnerability reports for clients",
+    ],
+    correctAnswer: 0,
+    explanation: "Malleable profiles let operators shape headers, URIs, and timing to match benign traffic.",
+  },
+  {
+    id: 8,
+    topic: "Traffic Shaping",
+    question: "What is the purpose of jitter in beaconing?",
+    options: [
+      "Randomize callback intervals to reduce detection",
+      "Force the agent to sleep permanently",
+      "Disable all network encryption",
+      "Increase the bandwidth of the C2 channel",
+    ],
+    correctAnswer: 0,
+    explanation: "Jitter breaks up fixed intervals that are easy to spot in network telemetry.",
+  },
+  {
+    id: 9,
+    topic: "Infrastructure",
+    question: "What is a redirector in C2 infrastructure?",
+    options: [
+      "An intermediate host that forwards traffic and hides the team server",
+      "A tool that changes user passwords on targets",
+      "A credential storage service",
+      "A local firewall rule on the implant",
+    ],
+    correctAnswer: 0,
+    explanation: "Redirectors act as front-end relays to protect the core C2 server.",
+  },
+  {
+    id: 10,
+    topic: "Infrastructure",
+    question: "Dead drop resolvers are used to:",
+    options: [
+      "Store tasks in third-party services for agents to poll",
+      "Delete files after execution",
+      "Encrypt payloads during staging",
+      "Disable endpoint security products",
+    ],
+    correctAnswer: 0,
+    explanation: "Dead drops use services like cloud storage or social media to pass tasks indirectly.",
+  },
+  {
+    id: 11,
+    topic: "Infrastructure",
+    question: "Domain fronting primarily helps by:",
+    options: [
+      "Hiding the true destination behind a CDN front domain",
+      "Encrypting files on the target system",
+      "Bypassing local file permissions",
+      "Disabling DNS logging entirely",
+    ],
+    correctAnswer: 0,
+    explanation: "Domain fronting makes C2 traffic appear to go to a legitimate CDN domain.",
+  },
+  {
+    id: 12,
+    topic: "Transport Security",
+    question: "What does mutual TLS (mTLS) provide?",
+    options: [
+      "Both client and server authenticate with certificates",
+      "Faster data transfer than normal TLS",
+      "Automatic malware removal",
+      "A backup channel over DNS",
+    ],
+    correctAnswer: 0,
+    explanation: "mTLS requires both sides to present certificates, improving authentication.",
+  },
+  {
+    id: 13,
+    topic: "Protocols",
+    question: "Why is DNS C2 often used despite low bandwidth?",
+    options: [
+      "DNS is commonly allowed through egress controls",
+      "DNS has the highest throughput of any protocol",
+      "DNS traffic is never logged",
+      "DNS eliminates the need for encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Many environments allow DNS by default, making it a common fallback channel.",
+  },
+  {
+    id: 14,
+    topic: "Protocols",
+    question: "SMB or named pipe C2 is most useful for:",
+    options: [
+      "Internal network operations where SMB is allowed",
+      "Global internet communications from any host",
+      "Cloud-native API access",
+      "Wireless device management",
+    ],
+    correctAnswer: 0,
+    explanation: "SMB and named pipes are typically viable inside Windows networks.",
+  },
+  {
+    id: 15,
+    topic: "Protocols",
+    question: "Why use HTTPS for C2 communications?",
+    options: [
+      "It encrypts traffic and blends with normal web usage",
+      "It removes the need for authentication",
+      "It prevents all endpoint logging",
+      "It makes payloads smaller",
+    ],
+    correctAnswer: 0,
+    explanation: "HTTPS adds encryption and helps C2 traffic look like regular web traffic.",
+  },
+  {
+    id: 16,
+    topic: "Beaconing",
+    question: "What does beacon sleep time control?",
+    options: [
+      "The time between agent check-ins",
+      "The number of files collected per task",
+      "The encryption algorithm used for traffic",
+      "The number of operators allowed",
+    ],
+    correctAnswer: 0,
+    explanation: "Sleep time sets how frequently the implant calls home.",
+  },
+  {
+    id: 17,
+    topic: "Beaconing",
+    question: "What is a common tradeoff of long sleep intervals?",
+    options: [
+      "Lower detection risk but slower response",
+      "Higher bandwidth usage",
+      "No need for encryption",
+      "Guaranteed persistence",
+    ],
+    correctAnswer: 0,
+    explanation: "Longer sleeps reduce noise but make the agent less responsive to tasks.",
+  },
+  {
+    id: 18,
+    topic: "OPSEC",
+    question: "What is a kill date in an implant?",
+    options: [
+      "A time when the agent self-terminates",
+      "A timestamp when data exfiltration starts",
+      "A method for deleting logs",
+      "A DNS record used for staging",
+    ],
+    correctAnswer: 0,
+    explanation: "Kill dates help limit exposure if an operation runs too long.",
+  },
+  {
+    id: 19,
+    topic: "Infrastructure",
+    question: "What is a staging server?",
+    options: [
+      "A host that delivers additional stages separate from the team server",
+      "A database for storing operator notes",
+      "A server used only for vulnerability scanning",
+      "A host used to decrypt stolen data",
+    ],
+    correctAnswer: 0,
+    explanation: "Separating staging reduces exposure of the core team server.",
+  },
+  {
+    id: 20,
+    topic: "Core Concepts",
+    question: "What does call-home C2 mean?",
+    options: [
+      "The target initiates the outbound connection to the server",
+      "The server scans targets and connects inward",
+      "Operators must be on-site to connect",
+      "The C2 channel is limited to DNS only",
+    ],
+    correctAnswer: 0,
+    explanation: "Call-home models use outbound connections to traverse firewalls.",
+  },
+  {
+    id: 21,
+    topic: "C2 Frameworks",
+    question: "Cobalt Strike Aggressor Script is used for:",
+    options: [
+      "Automating tasks and extending framework behavior",
+      "Encrypting all traffic with mTLS",
+      "Performing kernel exploits automatically",
+      "Replacing the Beacon payload at runtime",
+    ],
+    correctAnswer: 0,
+    explanation: "Aggressor Script lets operators customize workflows and automation.",
+  },
+  {
+    id: 22,
+    topic: "C2 Frameworks",
+    question: "Beacon Object Files (BOFs) enable:",
+    options: [
+      "Running small COFF modules in memory without new processes",
+      "Building full GUI clients for operators",
+      "Replacing system drivers on disk",
+      "Sending data only over DNS",
+    ],
+    correctAnswer: 0,
+    explanation: "BOFs allow modular capabilities executed in Beacon memory space.",
+  },
+  {
+    id: 23,
+    topic: "C2 Frameworks",
+    question: "Sliver's Armory provides:",
+    options: [
+      "Community extensions and tools",
+      "A built-in vulnerability scanner",
+      "A managed hosting service for team servers",
+      "A password vault for operators",
+    ],
+    correctAnswer: 0,
+    explanation: "Armory is the ecosystem for Sliver plugins and extensions.",
+  },
+  {
+    id: 24,
+    topic: "C2 Frameworks",
+    question: "In Mythic, a payload type is best described as:",
+    options: [
+      "An implementation of an agent or implant",
+      "A UI theme for the web console",
+      "A network redirector configuration",
+      "A set of firewall rules for C2 traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Payload types define how Mythic agents are built and behave.",
+  },
+  {
+    id: 25,
+    topic: "C2 Frameworks",
+    question: "Covenant's default agent is called:",
+    options: [
+      "Grunt",
+      "Beacon",
+      "Demon",
+      "Stager",
+    ],
+    correctAnswer: 0,
+    explanation: "Covenant uses a .NET agent known as Grunt.",
+  },
+  {
+    id: 26,
+    topic: "C2 Frameworks",
+    question: "PowerShell Empire is best known for using which language for agents?",
+    options: [
+      "PowerShell",
+      "Rust",
+      "Go",
+      "Java",
+    ],
+    correctAnswer: 0,
+    explanation: "Empire popularized PowerShell-based post-exploitation agents.",
+  },
+  {
+    id: 27,
+    topic: "C2 Frameworks",
+    question: "Havoc's agent is named:",
+    options: [
+      "Demon",
+      "Grunt",
+      "Beacon",
+      "Stager",
+    ],
+    correctAnswer: 0,
+    explanation: "Havoc uses the Demon agent for operations.",
+  },
+  {
+    id: 28,
+    topic: "C2 Frameworks",
+    question: "Sliver is primarily written in:",
+    options: [
+      "Go",
+      "Python",
+      "C#",
+      "Ruby",
+    ],
+    correctAnswer: 0,
+    explanation: "Sliver is a Go-based C2 framework with cross-platform agents.",
+  },
+  {
+    id: 29,
+    topic: "Payloads",
+    question: "What is a stager?",
+    options: [
+      "A small loader that retrieves the full payload",
+      "A report generated after staging completes",
+      "A defensive tool that blocks malware",
+      "A network sensor for detecting C2 traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Stagers are lightweight loaders that fetch a larger agent.",
+  },
+  {
+    id: 30,
+    topic: "OPSEC",
+    question: "What is a primary downside of using default C2 profiles?",
+    options: [
+      "They are easily signatured and detected",
+      "They require kernel access to run",
+      "They only work on macOS",
+      "They cannot execute shell commands",
+    ],
+    correctAnswer: 0,
+    explanation: "Default profiles often have well-known indicators used by defenders.",
+  },
+  {
+    id: 31,
+    topic: "Protocols",
+    question: "Which protocol is typically most bandwidth constrained?",
+    options: [
+      "DNS",
+      "HTTPS",
+      "SMB",
+      "TCP raw sockets",
+    ],
+    correctAnswer: 0,
+    explanation: "DNS requests and responses are small and constrained.",
+  },
+  {
+    id: 32,
+    topic: "Beaconing",
+    question: "A beaconing pattern refers to:",
+    options: [
+      "Regular, repeated check-ins to the C2 server",
+      "One-time payload downloads",
+      "Encrypted file storage on disk",
+      "Authentication against a database",
+    ],
+    correctAnswer: 0,
+    explanation: "Beaconing is periodic communication from implant to server.",
+  },
+  {
+    id: 33,
+    topic: "Protocols",
+    question: "Why use HTTP POST instead of GET for C2 data?",
+    options: [
+      "POST can send larger data in the request body",
+      "GET is always blocked by firewalls",
+      "POST does not require a listener",
+      "GET cannot be encrypted",
+    ],
+    correctAnswer: 0,
+    explanation: "POST requests are better for sending larger payloads or results.",
+  },
+  {
+    id: 34,
+    topic: "Infrastructure",
+    question: "A pivot listener is used to:",
+    options: [
+      "Route C2 traffic through a compromised host",
+      "Rotate DNS zones for a domain",
+      "Encrypt data at rest on the server",
+      "Disable outbound network access",
+    ],
+    correctAnswer: 0,
+    explanation: "Pivot listeners help extend C2 into segmented networks.",
+  },
+  {
+    id: 35,
+    topic: "Protocols",
+    question: "What does protocol tunneling mean in C2?",
+    options: [
+      "Encapsulating C2 traffic inside another protocol",
+      "Disabling encryption on the channel",
+      "Sending traffic only over UDP",
+      "Using only local named pipes",
+    ],
+    correctAnswer: 0,
+    explanation: "Tunneling hides C2 traffic inside a different protocol like HTTP or DNS.",
+  },
+  {
+    id: 36,
+    topic: "Infrastructure",
+    question: "What is a CDN redirector used for?",
+    options: [
+      "Hiding the origin server behind CDN infrastructure",
+      "Replacing malware with security updates",
+      "Automatically rotating encryption keys",
+      "Blocking inbound connections",
+    ],
+    correctAnswer: 0,
+    explanation: "CDNs can obscure the real C2 origin and blend with normal traffic.",
+  },
+  {
+    id: 37,
+    topic: "Infrastructure",
+    question: "What is a DGA used for in C2 operations?",
+    options: [
+      "Generating many domains for rendezvous and resiliency",
+      "Encrypting files with AES",
+      "Compressing payloads for speed",
+      "Blocking DNS queries from clients",
+    ],
+    correctAnswer: 0,
+    explanation: "DGAs create numerous domains to evade blocks and takedowns.",
+  },
+  {
+    id: 38,
+    topic: "OPSEC",
+    question: "Why avoid long-lived outbound TCP connections?",
+    options: [
+      "They are easier to detect and can time out",
+      "They increase disk usage on the target",
+      "They prevent use of HTTPS",
+      "They require admin rights to open",
+    ],
+    correctAnswer: 0,
+    explanation: "Persistent connections stand out and are often monitored.",
+  },
+  {
+    id: 39,
+    topic: "Resilience",
+    question: "Fallback channels are used to:",
+    options: [
+      "Provide alternative communications if the primary channel is blocked",
+      "Disable all encryption for performance",
+      "Force agents to never sleep",
+      "Replace team servers with peer-to-peer traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Fallbacks keep access alive when a channel is disrupted.",
+  },
+  {
+    id: 40,
+    topic: "Infrastructure",
+    question: "Why separate staging and C2 servers?",
+    options: [
+      "Reduce exposure of the core team server",
+      "Increase the maximum payload size",
+      "Prevent any use of TLS",
+      "Make the implant run faster",
+    ],
+    correctAnswer: 0,
+    explanation: "Splitting roles limits what is exposed if a staging server is found.",
+  },
+  {
+    id: 41,
+    topic: "OPSEC",
+    question: "Sleep obfuscation helps by:",
+    options: [
+      "Masking or encrypting agent memory while idle",
+      "Disabling network encryption",
+      "Forcing the agent to run only as SYSTEM",
+      "Automatically deleting logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Sleep obfuscation reduces memory-based detection during idle periods.",
+  },
+  {
+    id: 42,
+    topic: "OPSEC",
+    question: "Why rotate C2 infrastructure regularly?",
+    options: [
+      "Limit exposure and reduce the impact of takedowns",
+      "Increase beacon frequency for faster response",
+      "Avoid the need for encryption",
+      "Ensure all agents use the same domain",
+    ],
+    correctAnswer: 0,
+    explanation: "Rotation reduces long-lived indicators and limits damage.",
+  },
+  {
+    id: 43,
+    topic: "Traffic Shaping",
+    question: "Traffic shaping in C2 refers to:",
+    options: [
+      "Adjusting timing and size to mimic normal traffic patterns",
+      "Blocking all outbound connections",
+      "Encrypting payloads with RSA",
+      "Using only peer-to-peer communication",
+    ],
+    correctAnswer: 0,
+    explanation: "Shaping helps C2 traffic blend into normal network noise.",
+  },
+  {
+    id: 44,
+    topic: "Evasion",
+    question: "Process injection is used to:",
+    options: [
+      "Run the agent inside a trusted process",
+      "Disable antivirus updates permanently",
+      "Rewrite system files on disk",
+      "Improve network throughput",
+    ],
+    correctAnswer: 0,
+    explanation: "Injection hides malicious code within legitimate processes.",
+  },
+  {
+    id: 45,
+    topic: "Evasion",
+    question: "Parent process spoofing attempts to:",
+    options: [
+      "Make the process tree look legitimate",
+      "Change file ownership on disk",
+      "Encrypt the C2 channel",
+      "Disable system auditing",
+    ],
+    correctAnswer: 0,
+    explanation: "Spoofing the parent process can reduce suspicious process trees.",
+  },
+  {
+    id: 46,
+    topic: "Evasion",
+    question: "Cobalt Strike's Artifact Kit is used to:",
+    options: [
+      "Customize payload artifacts to evade signatures",
+      "Scan for open ports",
+      "Generate phishing emails",
+      "Create database backups",
+    ],
+    correctAnswer: 0,
+    explanation: "Artifact Kit changes on-disk and in-memory artifacts for stealth.",
+  },
+  {
+    id: 47,
+    topic: "OPSEC",
+    question: "Which is a common OPSEC mistake in C2 operations?",
+    options: [
+      "Reusing default certificates and URIs",
+      "Using HTTPS with valid certificates",
+      "Setting a kill date",
+      "Using jitter on beacons",
+    ],
+    correctAnswer: 0,
+    explanation: "Default indicators are well-known to defenders.",
+  },
+  {
+    id: 48,
+    topic: "Detection",
+    question: "Which indicator is often associated with default Cobalt Strike?",
+    options: [
+      "Known URI patterns and JA3 fingerprints",
+      "Randomized domain generation",
+      "Zero network activity",
+      "Only local named pipe traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Default profiles have recognizable network fingerprints.",
+  },
+  {
+    id: 49,
+    topic: "Traffic Shaping",
+    question: "Why customize the User-Agent header?",
+    options: [
+      "To blend with the target environment's normal traffic",
+      "To disable TLS encryption",
+      "To increase payload size",
+      "To avoid using DNS",
+    ],
+    correctAnswer: 0,
+    explanation: "Custom User-Agent strings reduce obvious fingerprints.",
+  },
+  {
+    id: 50,
+    topic: "Evasion",
+    question: "Why is in-memory execution often preferred?",
+    options: [
+      "It reduces disk artifacts and AV detections",
+      "It guarantees persistence across reboots",
+      "It removes the need for encryption",
+      "It is required for HTTPS C2",
+    ],
+    correctAnswer: 0,
+    explanation: "Memory-only techniques leave fewer forensic traces on disk.",
+  },
+  {
+    id: 51,
+    topic: "Detection",
+    question: "A common way defenders detect C2 is by spotting:",
+    options: [
+      "Periodic beaconing and repetitive URIs",
+      "User logins during business hours",
+      "Large software updates from vendors",
+      "Regular backup traffic to NAS devices",
+    ],
+    correctAnswer: 0,
+    explanation: "Repeated, timed callbacks are a typical detection signal.",
+  },
+  {
+    id: 52,
+    topic: "Detection",
+    question: "JA3 fingerprints are used to:",
+    options: [
+      "Identify TLS client patterns in network traffic",
+      "Detect fileless malware on disk",
+      "Create DNS records for C2",
+      "Encrypt data at rest",
+    ],
+    correctAnswer: 0,
+    explanation: "JA3 hashes characterize TLS client handshakes.",
+  },
+  {
+    id: 53,
+    topic: "Detection",
+    question: "A common sign of DNS tunneling is:",
+    options: [
+      "Long, high-entropy subdomains and unusual query volumes",
+      "Only HTTP POST traffic",
+      "Local loopback connections",
+      "Short, human-readable hostnames",
+    ],
+    correctAnswer: 0,
+    explanation: "Encoded data often shows up as long, random-looking subdomains.",
+  },
+  {
+    id: 54,
+    topic: "Detection",
+    question: "Sinkholing a C2 domain means:",
+    options: [
+      "Redirecting traffic to a controlled server for analysis",
+      "Deleting the domain from DNS entirely",
+      "Blocking all internet access",
+      "Replacing TLS with HTTP",
+    ],
+    correctAnswer: 0,
+    explanation: "Sinkholes help observe infected systems and block real C2.",
+  },
+  {
+    id: 55,
+    topic: "Detection",
+    question: "Which log source is most useful for DNS C2 detection?",
+    options: [
+      "DNS query logs",
+      "Local application crash dumps",
+      "Keyboard input logs",
+      "USB device history",
+    ],
+    correctAnswer: 0,
+    explanation: "DNS logs reveal query patterns and suspicious domains.",
+  },
+  {
+    id: 56,
+    topic: "Infrastructure",
+    question: "C2 over cloud storage most closely resembles:",
+    options: [
+      "A dead drop using legitimate services",
+      "A kernel driver update",
+      "A local SMB named pipe",
+      "An air-gapped transfer",
+    ],
+    correctAnswer: 0,
+    explanation: "Cloud storage can be used to pass tasks and results indirectly.",
+  },
+  {
+    id: 57,
+    topic: "MITRE ATT&CK",
+    question: "Which MITRE tactic covers Command and Control?",
+    options: [
+      "TA0011 Command and Control",
+      "TA0003 Persistence",
+      "TA0007 Discovery",
+      "TA0010 Exfiltration",
+    ],
+    correctAnswer: 0,
+    explanation: "TA0011 is the MITRE ATT&CK tactic for C2.",
+  },
+  {
+    id: 58,
+    topic: "MITRE ATT&CK",
+    question: "Which MITRE technique covers proxy use?",
+    options: [
+      "T1090 Proxy",
+      "T1071 Application Layer Protocol",
+      "T1055 Process Injection",
+      "T1041 Exfiltration Over C2 Channel",
+    ],
+    correctAnswer: 0,
+    explanation: "T1090 describes proxying and multi-hop communications.",
+  },
+  {
+    id: 59,
+    topic: "MITRE ATT&CK",
+    question: "Exfiltration over a C2 channel maps to which technique?",
+    options: [
+      "T1041 Exfiltration Over C2 Channel",
+      "T1104 Multi-Stage Channels",
+      "T1219 Remote Access Software",
+      "T1567 Exfiltration Over Web Service",
+    ],
+    correctAnswer: 0,
+    explanation: "T1041 describes data exfiltration using the C2 channel.",
+  },
+  {
+    id: 60,
+    topic: "Beaconing",
+    question: "What does beacon jitter configuration do?",
+    options: [
+      "Randomizes sleep intervals by a percentage",
+      "Forces beacons to run every second",
+      "Disables network encryption",
+      "Locks agents to a single IP",
+    ],
+    correctAnswer: 0,
+    explanation: "Jitter varies timing to avoid fixed, easily detected intervals.",
+  },
+  {
+    id: 61,
+    topic: "OPSEC",
+    question: "Why use unique hostnames or domains per target?",
+    options: [
+      "To reduce correlation and blocklist impact",
+      "To increase payload size",
+      "To disable DNS caching",
+      "To prevent TLS from working",
+    ],
+    correctAnswer: 0,
+    explanation: "Unique infrastructure limits cross-target detection and blocking.",
+  },
+  {
+    id: 62,
+    topic: "Operations",
+    question: "Which component enables multi-operator collaboration?",
+    options: [
+      "Team server",
+      "Beacon sleep mask",
+      "Stager",
+      "Redirector",
+    ],
+    correctAnswer: 0,
+    explanation: "Team servers coordinate shared sessions and permissions.",
+  },
+  {
+    id: 63,
+    topic: "OPSEC",
+    question: "The OPSEC vs functionality tradeoff means:",
+    options: [
+      "More evasion can reduce reliability or visibility",
+      "Better OPSEC always increases bandwidth",
+      "Functionality eliminates the need for OPSEC",
+      "OPSEC only applies to payload encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Evasive techniques can add complexity or reduce stability.",
+  },
+  {
+    id: 64,
+    topic: "Operations",
+    question: "Why enforce role-based access on a team server?",
+    options: [
+      "Limit mistakes and improve auditing",
+      "Increase beacon frequency automatically",
+      "Allow any user to disable logging",
+      "Shorten TLS certificates",
+    ],
+    correctAnswer: 0,
+    explanation: "RBAC reduces accidental actions and helps accountability.",
+  },
+  {
+    id: 65,
+    topic: "OPSEC",
+    question: "A sleep mask is used to:",
+    options: [
+      "Hide or encrypt agent memory while idle",
+      "Force all traffic over DNS",
+      "Disable user authentication",
+      "Increase disk persistence",
+    ],
+    correctAnswer: 0,
+    explanation: "Sleep masks reduce memory-based detection during idle periods.",
+  },
+  {
+    id: 66,
+    topic: "OPSEC",
+    question: "Why use domains with realistic history and WHOIS data?",
+    options: [
+      "To avoid suspicion and reputation-based blocks",
+      "To improve file transfer speed",
+      "To bypass TLS encryption",
+      "To disable proxy logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Well-aged domains are less likely to be flagged as suspicious.",
+  },
+  {
+    id: 67,
+    topic: "Protocols",
+    question: "Lateral C2 inside a Windows network typically uses:",
+    options: [
+      "Internal protocols like SMB or named pipes",
+      "Public CDNs only",
+      "Bluetooth connections",
+      "Satellite links",
+    ],
+    correctAnswer: 0,
+    explanation: "Internal C2 often leverages SMB or named pipes for local reach.",
+  },
+  {
+    id: 68,
+    topic: "Payloads",
+    question: "When are stageless payloads preferred?",
+    options: [
+      "When staging is blocked or too risky",
+      "When bandwidth is unlimited",
+      "When the target lacks a filesystem",
+      "When DNS C2 is required",
+    ],
+    correctAnswer: 0,
+    explanation: "Stageless payloads avoid fetching a second stage over the network.",
+  },
+  {
+    id: 69,
+    topic: "OPSEC",
+    question: "Why avoid noisy enumeration commands on every host?",
+    options: [
+      "They trigger alerts and generate large logs",
+      "They reduce network throughput",
+      "They disable encryption",
+      "They prevent persistence",
+    ],
+    correctAnswer: 0,
+    explanation: "Noisy commands create suspicious artifacts and alerts.",
+  },
+  {
+    id: 70,
+    topic: "Core Concepts",
+    question: "A listener is most similar to:",
+    options: [
+      "A server endpoint receiving agent callbacks",
+      "A local keylogger",
+      "A password hash database",
+      "A backup archive",
+    ],
+    correctAnswer: 0,
+    explanation: "Listeners handle inbound communications from implants.",
+  },
+  {
+    id: 71,
+    topic: "Detection",
+    question: "Which is a sign of DNS tunneling?",
+    options: [
+      "Long, high-entropy subdomains",
+      "Only HTTP GET requests",
+      "No outbound DNS traffic",
+      "Short, human-readable hostnames",
+    ],
+    correctAnswer: 0,
+    explanation: "Encoded data often appears as long, random-looking subdomains.",
+  },
+  {
+    id: 72,
+    topic: "Traffic Shaping",
+    question: "Malleable profiles can change:",
+    options: [
+      "Headers, URIs, and timing behaviors",
+      "The Windows kernel version",
+      "The target's local admin passwords",
+      "Only the operator username",
+    ],
+    correctAnswer: 0,
+    explanation: "Profiles shape how HTTP requests and responses appear on the wire.",
+  },
+  {
+    id: 73,
+    topic: "Detection",
+    question: "Why are default C2 user agents risky?",
+    options: [
+      "They are known indicators used by defenders",
+      "They prevent TLS from working",
+      "They disable DNS resolution",
+      "They always cause crashes",
+    ],
+    correctAnswer: 0,
+    explanation: "Default user agents are common signatures for detection.",
+  },
+  {
+    id: 74,
+    topic: "Protocols",
+    question: "Staging over SMB helps when:",
+    options: [
+      "Internet egress is blocked but internal SMB is available",
+      "Only DNS is allowed",
+      "The target is a mobile device",
+      "The operator has no credentials",
+    ],
+    correctAnswer: 0,
+    explanation: "SMB staging is useful inside segmented networks without internet access.",
+  },
+  {
+    id: 75,
+    topic: "Detection",
+    question: "Which configuration increases detection risk?",
+    options: [
+      "Consistent beacon intervals with no jitter",
+      "Randomized intervals and varied URIs",
+      "Short-lived infrastructure",
+      "Valid TLS certificates",
+    ],
+    correctAnswer: 0,
+    explanation: "Fixed intervals make beaconing patterns easy to spot.",
+  },
+];
+
 // Code block component
 const CodeBlock = ({ children, language }: { children: string; language?: string }) => {
   const theme = useTheme();
@@ -904,21 +1888,15 @@ export default function C2FrameworksGuidePage() {
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Box
-          onClick={() => navigate("/learn")}
-          sx={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 1,
-            mb: 2,
-            cursor: "pointer",
-            color: "text.secondary",
-            "&:hover": { color: "primary.main" },
-          }}
-        >
-          <ArrowBackIcon fontSize="small" />
-          <Typography variant="body2">Back to Learning Hub</Typography>
-        </Box>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <Box
@@ -2605,6 +3583,40 @@ level: high
           </Paper>
         </Box>
       )}
+
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 4,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={QUIZ_ACCENT_COLOR}
+          title="C2 Frameworks Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

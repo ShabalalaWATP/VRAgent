@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Typography,
@@ -23,8 +24,9 @@ import {
   Card,
   CardContent,
   Tooltip,
+  Button,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ApiIcon from "@mui/icons-material/Api";
@@ -958,6 +960,621 @@ const tabSections = [
   { label: "Checklist", icon: <CheckCircleIcon />, color: "#ec4899" },
 ];
 
+const ACCENT_COLOR = "#3b82f6";
+const QUIZ_QUESTION_COUNT = 10;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Discovery",
+    question: "The primary goal of API discovery is to:",
+    options: [
+      "Map endpoints and attack surface",
+      "Exploit vulnerabilities immediately",
+      "Disable authentication",
+      "Generate the final report",
+    ],
+    correctAnswer: 0,
+    explanation: "Discovery identifies endpoints, versions, and technologies to guide testing.",
+  },
+  {
+    id: 2,
+    topic: "Discovery",
+    question: "A common OpenAPI specification file is:",
+    options: ["/openapi.json", "/robots.txt", "/manifest.json", "/favicon.ico"],
+    correctAnswer: 0,
+    explanation: "OpenAPI specs are often exposed at /openapi.json or similar paths.",
+  },
+  {
+    id: 3,
+    topic: "GraphQL",
+    question: "GraphQL introspection typically starts with:",
+    options: ["{ __schema {", "{ __types {", "{ query {", "{ introspect {"],
+    correctAnswer: 0,
+    explanation: "The __schema field is used to introspect GraphQL schemas.",
+  },
+  {
+    id: 4,
+    topic: "Authentication",
+    question: "API keys in URLs are risky because:",
+    options: ["They can leak in logs and referrers", "They are always hashed", "They enable MFA", "They rotate automatically"],
+    correctAnswer: 0,
+    explanation: "URLs are logged and shared, exposing keys.",
+  },
+  {
+    id: 5,
+    topic: "JWT",
+    question: "Setting JWT alg to none can lead to:",
+    options: ["Signature bypass", "Token encryption", "Token expiry", "CORS errors"],
+    correctAnswer: 0,
+    explanation: "alg=none can allow unsigned tokens if not validated.",
+  },
+  {
+    id: 6,
+    topic: "JWT",
+    question: "RS256 to HS256 confusion can allow:",
+    options: ["Signing with a public key", "Token expiration", "TLS downgrade", "CSRF"],
+    correctAnswer: 0,
+    explanation: "HS256 accepts a shared secret, which can be the public key if misused.",
+  },
+  {
+    id: 7,
+    topic: "OAuth",
+    question: "The OAuth state parameter protects against:",
+    options: ["CSRF", "SQL injection", "XSS", "Brute force"],
+    correctAnswer: 0,
+    explanation: "State binds the OAuth flow to a user session.",
+  },
+  {
+    id: 8,
+    topic: "OAuth",
+    question: "PKCE primarily protects against:",
+    options: ["Authorization code interception", "SSRF", "SQL injection", "XSS"],
+    correctAnswer: 0,
+    explanation: "PKCE prevents stolen auth codes from being redeemed.",
+  },
+  {
+    id: 9,
+    topic: "Authorization",
+    question: "BOLA/IDOR occurs when:",
+    options: ["Object access is not properly authorized", "Passwords are weak", "Tokens are short", "TLS is missing"],
+    correctAnswer: 0,
+    explanation: "BOLA allows access to other users' objects by changing IDs.",
+  },
+  {
+    id: 10,
+    topic: "Authorization",
+    question: "BFLA is:",
+    options: ["Accessing privileged functions without authorization", "Brute force login", "Missing HTTPS", "SQL injection"],
+    correctAnswer: 0,
+    explanation: "BFLA is broken function-level authorization.",
+  },
+  {
+    id: 11,
+    topic: "Authorization",
+    question: "BOPLA refers to:",
+    options: ["Unauthorized access to object properties", "Broken login flow", "Proxy configuration", "SSL errors"],
+    correctAnswer: 0,
+    explanation: "BOPLA is broken object property level authorization.",
+  },
+  {
+    id: 12,
+    topic: "Authorization",
+    question: "Mass assignment vulnerabilities allow:",
+    options: ["Setting unintended fields via APIs", "Faster queries", "Encrypted payloads", "Lower latency"],
+    correctAnswer: 0,
+    explanation: "Attackers can set properties not intended to be writable.",
+  },
+  {
+    id: 13,
+    topic: "Data Exposure",
+    question: "Excessive data exposure means:",
+    options: ["APIs return more fields than needed", "APIs have short responses", "Responses are cached", "TLS is used"],
+    correctAnswer: 0,
+    explanation: "Sensitive fields may be included in responses unnecessarily.",
+  },
+  {
+    id: 14,
+    topic: "Rate Limiting",
+    question: "Rate limiting should be enforced:",
+    options: ["Per user or token, not just IP", "Only for admins", "Only on GET", "Only in clients"],
+    correctAnswer: 0,
+    explanation: "Per-user limits reduce abuse from shared IPs.",
+  },
+  {
+    id: 15,
+    topic: "Resource Consumption",
+    question: "Unrestricted resource consumption includes:",
+    options: ["Large pagination or expensive queries", "Using HTTPS", "JSON responses", "TLS 1.3"],
+    correctAnswer: 0,
+    explanation: "Expensive queries can exhaust resources without limits.",
+  },
+  {
+    id: 16,
+    topic: "SSRF",
+    question: "SSRF commonly targets:",
+    options: ["Internal services and metadata endpoints", "User browsers", "Public CDNs", "DNS only"],
+    correctAnswer: 0,
+    explanation: "SSRF can reach internal hosts and metadata services.",
+  },
+  {
+    id: 17,
+    topic: "SSRF",
+    question: "The AWS metadata IP is:",
+    options: ["169.254.169.254", "127.0.0.1", "10.0.0.1", "8.8.8.8"],
+    correctAnswer: 0,
+    explanation: "Cloud metadata often lives at 169.254.169.254.",
+  },
+  {
+    id: 18,
+    topic: "CORS",
+    question: "The CORS header that controls allowed origins is:",
+    options: ["Access-Control-Allow-Origin", "Content-Security-Policy", "X-Frame-Options", "Strict-Transport-Security"],
+    correctAnswer: 0,
+    explanation: "Access-Control-Allow-Origin defines allowed origins.",
+  },
+  {
+    id: 19,
+    topic: "GraphQL",
+    question: "GraphQL depth limits help prevent:",
+    options: ["Resource exhaustion", "XSS", "CSRF", "SQL injection"],
+    correctAnswer: 0,
+    explanation: "Deep queries can be expensive without limits.",
+  },
+  {
+    id: 20,
+    topic: "GraphQL",
+    question: "In production, GraphQL introspection should be:",
+    options: ["Restricted or disabled", "Always enabled", "Exposed to all users", "Required for auth"],
+    correctAnswer: 0,
+    explanation: "Introspection can expose schema details.",
+  },
+  {
+    id: 21,
+    topic: "GraphQL",
+    question: "Batching abuse can allow:",
+    options: ["Bypassing rate limits", "Better caching", "Lower latency", "Stronger auth"],
+    correctAnswer: 0,
+    explanation: "Multiple operations in one request can evade limits.",
+  },
+  {
+    id: 22,
+    topic: "Injection",
+    question: "The best defense against SQL injection is:",
+    options: ["Parameterized queries", "Client-side validation", "String concatenation", "Hiding errors"],
+    correctAnswer: 0,
+    explanation: "Prepared statements prevent injection.",
+  },
+  {
+    id: 23,
+    topic: "Injection",
+    question: "A common NoSQL injection operator is:",
+    options: ["$ne", "UNION", "<script>", "../"],
+    correctAnswer: 0,
+    explanation: "Mongo operators like $ne can bypass filters.",
+  },
+  {
+    id: 24,
+    topic: "Injection",
+    question: "Command injection often uses separators like:",
+    options: ["; and &&", "? and &", "+ and -", "% and #"],
+    correctAnswer: 0,
+    explanation: "Shell separators chain commands.",
+  },
+  {
+    id: 25,
+    topic: "SSRF",
+    question: "A common SSRF mitigation is:",
+    options: ["Allowlist of hosts", "Blocking all HTTP", "Using GET only", "Disabling TLS"],
+    correctAnswer: 0,
+    explanation: "Allowlists restrict outbound destinations.",
+  },
+  {
+    id: 26,
+    topic: "Inventory",
+    question: "Improper inventory management results in:",
+    options: ["Undocumented or deprecated APIs exposed", "Strong authentication", "Automatic patching", "Fewer endpoints"],
+    correctAnswer: 0,
+    explanation: "Unknown endpoints are often unsecured.",
+  },
+  {
+    id: 27,
+    topic: "Supply Chain",
+    question: "Unsafe consumption of APIs means:",
+    options: ["Trusting upstream data without validation", "Always using HTTPS", "Enforcing MFA", "Using JSON"],
+    correctAnswer: 0,
+    explanation: "Upstream data should be validated and sanitized.",
+  },
+  {
+    id: 28,
+    topic: "Authentication",
+    question: "JWT validation should always check:",
+    options: ["Signature and expiration", "Only header", "Only payload", "Only issuer name"],
+    correctAnswer: 0,
+    explanation: "Signature and exp are critical for JWT security.",
+  },
+  {
+    id: 29,
+    topic: "Authentication",
+    question: "Tokens should be revoked on:",
+    options: ["Logout or password change", "Every request", "Page refresh", "DNS lookup"],
+    correctAnswer: 0,
+    explanation: "Revocation limits stolen token lifetimes.",
+  },
+  {
+    id: 30,
+    topic: "Authentication",
+    question: "API keys should be:",
+    options: ["Scoped and rotated", "Shared across apps", "Embedded in URLs", "Never revoked"],
+    correctAnswer: 0,
+    explanation: "Scope and rotation reduce key abuse.",
+  },
+  {
+    id: 31,
+    topic: "Logging",
+    question: "Sensitive data in logs should be:",
+    options: ["Masked or redacted", "Stored in plaintext", "Repeated in errors", "Printed to clients"],
+    correctAnswer: 0,
+    explanation: "Logs should avoid exposing secrets.",
+  },
+  {
+    id: 32,
+    topic: "Authentication",
+    question: "HTTP 401 means:",
+    options: ["Authentication required", "Forbidden", "Not found", "Server error"],
+    correctAnswer: 0,
+    explanation: "401 indicates missing or invalid authentication.",
+  },
+  {
+    id: 33,
+    topic: "Authorization",
+    question: "HTTP 403 means:",
+    options: ["Authenticated but forbidden", "Unauthenticated", "Bad request", "Not found"],
+    correctAnswer: 0,
+    explanation: "403 indicates the user lacks permission.",
+  },
+  {
+    id: 34,
+    topic: "Resource Consumption",
+    question: "A common mitigation for scraping is:",
+    options: ["Pagination limits", "Allow-all CORS", "Weak caching", "Removing auth"],
+    correctAnswer: 0,
+    explanation: "Pagination limits reduce data harvesting.",
+  },
+  {
+    id: 35,
+    topic: "Validation",
+    question: "Schema validation helps:",
+    options: ["Enforce types and required fields", "Encrypt data", "Speed up DNS", "Disable logging"],
+    correctAnswer: 0,
+    explanation: "Schema validation blocks unexpected input.",
+  },
+  {
+    id: 36,
+    topic: "Authorization",
+    question: "Least privilege for API scopes means:",
+    options: ["Grant only required permissions", "Grant admin to all", "No scopes at all", "Use shared keys"],
+    correctAnswer: 0,
+    explanation: "Scopes should match the minimum required access.",
+  },
+  {
+    id: 37,
+    topic: "Rate Limiting",
+    question: "X-RateLimit-Remaining indicates:",
+    options: ["Requests left in the window", "Total users", "Token expiry", "API version"],
+    correctAnswer: 0,
+    explanation: "It shows how many requests remain before limit is hit.",
+  },
+  {
+    id: 38,
+    topic: "Architecture",
+    question: "An API gateway helps by:",
+    options: ["Centralizing auth and rate limits", "Disabling TLS", "Removing logging", "Bypassing validation"],
+    correctAnswer: 0,
+    explanation: "Gateways standardize controls and monitoring.",
+  },
+  {
+    id: 39,
+    topic: "Replay",
+    question: "Replay attacks are reduced by:",
+    options: ["Nonces or idempotency keys", "Short URLs", "Large responses", "Disabling HTTPS"],
+    correctAnswer: 0,
+    explanation: "Unique tokens prevent request replays.",
+  },
+  {
+    id: 40,
+    topic: "Authentication",
+    question: "Mutual TLS provides:",
+    options: ["Client certificate authentication", "Faster DNS", "XSS protection", "SQLi protection"],
+    correctAnswer: 0,
+    explanation: "mTLS verifies both client and server identities.",
+  },
+  {
+    id: 41,
+    topic: "Transport",
+    question: "HSTS enforces:",
+    options: ["HTTPS-only access", "Token rotation", "CORS", "Session storage"],
+    correctAnswer: 0,
+    explanation: "HSTS tells browsers to always use HTTPS.",
+  },
+  {
+    id: 42,
+    topic: "Transport",
+    question: "Recommended TLS minimum is:",
+    options: ["TLS 1.2 or newer", "SSL 2.0", "SSL 3.0", "TLS 1.0"],
+    correctAnswer: 0,
+    explanation: "Older TLS/SSL versions are insecure.",
+  },
+  {
+    id: 43,
+    topic: "Errors",
+    question: "Verbose error messages can expose:",
+    options: ["Stack traces and internal details", "Stronger encryption", "Rate limits", "JWT expiry"],
+    correctAnswer: 0,
+    explanation: "Errors can leak sensitive implementation details.",
+  },
+  {
+    id: 44,
+    topic: "GraphQL",
+    question: "Field-level authorization is required to:",
+    options: ["Protect nested data access", "Enable CORS", "Disable introspection", "Fix TLS"],
+    correctAnswer: 0,
+    explanation: "GraphQL resolvers need auth checks at field level.",
+  },
+  {
+    id: 45,
+    topic: "Authorization",
+    question: "A common BOLA test is to:",
+    options: ["Change the object ID in a request", "Change User-Agent", "Disable TLS", "Remove headers"],
+    correctAnswer: 0,
+    explanation: "Swapping IDs reveals missing authorization checks.",
+  },
+  {
+    id: 46,
+    topic: "Authorization",
+    question: "A common BFLA test is to:",
+    options: ["Access admin endpoints as a normal user", "Rotate TLS keys", "Enable caching", "Use OPTIONS"],
+    correctAnswer: 0,
+    explanation: "BFLA often involves role-restricted functions.",
+  },
+  {
+    id: 47,
+    topic: "Rate Limiting",
+    question: "A risky CORS setup is:",
+    options: ["Reflecting any Origin with credentials", "Restricting to a single origin", "Disabling credentials", "Using preflight"],
+    correctAnswer: 0,
+    explanation: "Wildcard origins with credentials allow cross-site access.",
+  },
+  {
+    id: 48,
+    topic: "Detection",
+    question: "Timing differences can indicate:",
+    options: ["Blind injection or enumeration", "Stronger auth", "Better caching", "Lower latency"],
+    correctAnswer: 0,
+    explanation: "Response timing can reveal true/false conditions.",
+  },
+  {
+    id: 49,
+    topic: "Smuggling",
+    question: "HTTP request smuggling relies on:",
+    options: ["Parsing discrepancies between components", "Weak passwords", "Expired tokens", "Public buckets"],
+    correctAnswer: 0,
+    explanation: "Different parsers can desync requests.",
+  },
+  {
+    id: 50,
+    topic: "Smuggling",
+    question: "A likely impact of request smuggling is:",
+    options: ["Cache poisoning or auth bypass", "Better throughput", "Lower CPU usage", "Token refresh"],
+    correctAnswer: 0,
+    explanation: "Smuggling can poison caches or bypass auth.",
+  },
+  {
+    id: 51,
+    topic: "Authorization",
+    question: "Broken access control often leads to:",
+    options: ["Unauthorized data access", "Faster requests", "Better logging", "Lower costs"],
+    correctAnswer: 0,
+    explanation: "Missing checks expose data and functionality.",
+  },
+  {
+    id: 52,
+    topic: "Authentication",
+    question: "Default credentials are dangerous because:",
+    options: ["They are widely known and reused", "They are encrypted", "They rotate daily", "They require MFA"],
+    correctAnswer: 0,
+    explanation: "Default passwords are commonly guessed.",
+  },
+  {
+    id: 53,
+    topic: "Discovery",
+    question: "A common directory brute force tool is:",
+    options: ["ffuf", "tcpdump", "john", "aircrack-ng"],
+    correctAnswer: 0,
+    explanation: "ffuf is popular for content discovery.",
+  },
+  {
+    id: 54,
+    topic: "Discovery",
+    question: "Subdomain enumeration tools include:",
+    options: ["Amass or Subfinder", "Hashcat", "Wireshark", "Netcat"],
+    correctAnswer: 0,
+    explanation: "Amass and Subfinder enumerate subdomains.",
+  },
+  {
+    id: 55,
+    topic: "Authentication",
+    question: "MFA fatigue attacks target:",
+    options: ["Push notification prompts", "Password hashes", "TLS ciphers", "DNS records"],
+    correctAnswer: 0,
+    explanation: "Attackers spam push approvals.",
+  },
+  {
+    id: 56,
+    topic: "Tokens",
+    question: "Tokens in URLs can leak via:",
+    options: ["Referer headers and logs", "TLS handshakes", "DNS queries", "Cache keys"],
+    correctAnswer: 0,
+    explanation: "URLs are logged and sent as referrers.",
+  },
+  {
+    id: 57,
+    topic: "Sessions",
+    question: "Good session management includes:",
+    options: ["Idle and absolute timeouts", "No expiration", "Same session after logout", "URL tokens"],
+    correctAnswer: 0,
+    explanation: "Sessions should expire and be invalidated.",
+  },
+  {
+    id: 58,
+    topic: "Rate Limiting",
+    question: "Best rate limiting is enforced:",
+    options: ["Server-side", "Client-side only", "Only in docs", "Only on GET"],
+    correctAnswer: 0,
+    explanation: "Client-side limits can be bypassed.",
+  },
+  {
+    id: 59,
+    topic: "Authorization",
+    question: "A common IDOR test is to:",
+    options: ["Change an object ID in the request", "Change the User-Agent", "Clear cookies", "Switch HTTPS to HTTP"],
+    correctAnswer: 0,
+    explanation: "Swapping IDs reveals missing checks.",
+  },
+  {
+    id: 60,
+    topic: "Client Storage",
+    question: "Storing JWTs in localStorage increases risk of:",
+    options: ["XSS token theft", "SQL injection", "CSRF", "SSRF"],
+    correctAnswer: 0,
+    explanation: "XSS can read localStorage tokens.",
+  },
+  {
+    id: 61,
+    topic: "WAF",
+    question: "Common WAF bypass techniques include:",
+    options: ["Encoding and case variations", "Using HTTPS", "Shorter URLs", "Static content"],
+    correctAnswer: 0,
+    explanation: "Obfuscation can bypass naive filters.",
+  },
+  {
+    id: 62,
+    topic: "SSRF",
+    question: "SSRF filters are often bypassed with:",
+    options: ["DNS rebinding", "TLS 1.3", "Strong cookies", "CSP"],
+    correctAnswer: 0,
+    explanation: "DNS rebinding can evade IP-based checks.",
+  },
+  {
+    id: 63,
+    topic: "Injection",
+    question: "Input validation should be:",
+    options: ["Server-side and strict", "Client-side only", "Optional", "Disabled for APIs"],
+    correctAnswer: 0,
+    explanation: "Server-side validation is the authoritative control.",
+  },
+  {
+    id: 64,
+    topic: "Client",
+    question: "Exposed API keys in client apps are risky because:",
+    options: ["Anyone can reuse them", "They improve security", "They rotate automatically", "They require MFA"],
+    correctAnswer: 0,
+    explanation: "Client-side keys can be extracted and abused.",
+  },
+  {
+    id: 65,
+    topic: "CORS",
+    question: "When using credentials, Access-Control-Allow-Origin should:",
+    options: ["Be a specific origin", "Be *", "Be empty", "Match the Host header"],
+    correctAnswer: 0,
+    explanation: "Wildcard is invalid with credentials and unsafe.",
+  },
+  {
+    id: 66,
+    topic: "Business Logic",
+    question: "A business logic flaw example is:",
+    options: ["Manipulating price or quantity fields", "TLS downgrade", "SQLi", "Buffer overflow"],
+    correctAnswer: 0,
+    explanation: "Logic bugs abuse workflows and rules.",
+  },
+  {
+    id: 67,
+    topic: "Tokens",
+    question: "JWT kid header attacks attempt to:",
+    options: ["Load a malicious key", "Expire tokens", "Rotate secrets", "Improve caching"],
+    correctAnswer: 0,
+    explanation: "kid can be abused to select attacker-controlled keys.",
+  },
+  {
+    id: 68,
+    topic: "Sessions",
+    question: "Session IDs should be:",
+    options: ["Random and high entropy", "Sequential", "Usernames", "Timestamps"],
+    correctAnswer: 0,
+    explanation: "High entropy prevents guessing.",
+  },
+  {
+    id: 69,
+    topic: "Scope",
+    question: "Security testing should be performed on:",
+    options: ["Authorized, in-scope targets", "Any public IP", "Competitor APIs", "Unpatched systems"],
+    correctAnswer: 0,
+    explanation: "Testing must be authorized and scoped.",
+  },
+  {
+    id: 70,
+    topic: "Reporting",
+    question: "A good report should include:",
+    options: ["Impact, steps to reproduce, and remediation", "Only raw logs", "Only CVSS", "Only screenshots"],
+    correctAnswer: 0,
+    explanation: "Clear impact and remediation make reports actionable.",
+  },
+  {
+    id: 71,
+    topic: "Headers",
+    question: "The CSP directive to control framing is:",
+    options: ["frame-ancestors", "script-src", "img-src", "connect-src"],
+    correctAnswer: 0,
+    explanation: "frame-ancestors restricts framing sources.",
+  },
+  {
+    id: 72,
+    topic: "OAuth",
+    question: "Open redirect issues can lead to:",
+    options: ["Token leakage and phishing", "Better caching", "Stronger auth", "Improved UX"],
+    correctAnswer: 0,
+    explanation: "Redirects can send tokens to attacker domains.",
+  },
+  {
+    id: 73,
+    topic: "GraphQL",
+    question: "GraphQL errors can leak:",
+    options: ["Schema details and stack traces", "JWT secrets", "DNS records", "TLS keys"],
+    correctAnswer: 0,
+    explanation: "Errors may expose schema and internal details.",
+  },
+  {
+    id: 74,
+    topic: "TLS",
+    question: "Certificate validation prevents:",
+    options: ["Man-in-the-middle attacks", "SQL injection", "XSS", "CSRF"],
+    correctAnswer: 0,
+    explanation: "Validating certificates blocks MITM attacks.",
+  },
+  {
+    id: 75,
+    topic: "Monitoring",
+    question: "Monitoring should alert on:",
+    options: ["Authentication failures and anomalies", "All successful logins", "Static content", "Empty responses"],
+    correctAnswer: 0,
+    explanation: "Auth anomalies are strong indicators of abuse.",
+  },
+];
+
+
 function TopicAccordion({ topics }: { topics: TopicSection[] }) {
   const theme = useTheme();
 
@@ -1127,6 +1744,9 @@ export default function ApiSecurityPage() {
   const theme = useTheme();
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
+  const [quizPool] = useState<QuizQuestion[]>(() =>
+    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
+  );
 
   const pageContext = `This page provides a comprehensive guide to API security testing based on OWASP API Security Top 10. Topics include API discovery and enumeration, authentication testing (API keys, JWT attacks, OAuth vulnerabilities), authorization testing (BOLA/IDOR, BFLA), injection attacks (SQL, NoSQL, SSRF, command injection), data exposure and mass assignment, rate limiting bypass techniques, and GraphQL-specific security testing including introspection and query complexity attacks.`;
 
@@ -1134,9 +1754,15 @@ export default function ApiSecurityPage() {
     <LearnPageLayout pageTitle="API Security Testing" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
-      <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-        <ArrowBackIcon />
-      </IconButton>
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
 
       {/* Header */}
       <Box sx={{ mb: 5 }}>
@@ -1408,10 +2034,34 @@ export default function ApiSecurityPage() {
                   {resource.desc}
                 </Typography>
               </Paper>
+
+      {/* Quiz Section */}
+      <Box id="quiz" sx={{ mt: 5 }}>
+        <QuizSection
+          questions={quizPool}
+          accentColor={ACCENT_COLOR}
+          title="API Security Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Box>
+
             </Grid>
           ))}
         </Grid>
       </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

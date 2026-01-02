@@ -7,7 +7,7 @@ from backend.core.config import settings
 from backend.core.database import Base, engine
 from backend.core.exceptions import VRAgentError
 from backend.core.logging import get_logger
-from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering, learn_chat, social, chat_websocket, project_files
+from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering, learn_chat, social, chat_websocket, project_files, kanban
 from backend import models  # noqa: F401  # ensure models are registered
 
 logger = get_logger(__name__)
@@ -100,6 +100,7 @@ app.include_router(learn_chat.router, tags=["learn-chat"])
 app.include_router(social.router, tags=["social"])
 app.include_router(chat_websocket.router, tags=["chat-websocket"])
 app.include_router(project_files.router, tags=["project-files"])
+app.include_router(kanban.router, tags=["kanban"])
 
 # Serve uploaded chat files
 from starlette.staticfiles import StaticFiles

@@ -70,6 +70,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, AIInsights, AttackChain, AttackChainDiagram, ChatMessage, CodebaseFile, CodebaseFolder, CodebaseNode, CodebaseSummary, CodebaseDiagram, ExploitScenario, Finding, FileContent, DependencyGraph, ScanDiff, FileTrends, TodoScanResult, TodoItem, CodeSearchResult, CodeSearchMatch, CodeExplanation, SecretsScanResult, SecretItem, VulnerabilitySummary, CVEEntry, CWEEntry } from "../api/client";
 import { FindingNotesBadge } from "../components/FindingNotesPanel";
 import { MermaidDiagram } from "../components/MermaidDiagram";
+import ShareToConversationDialog from "../components/social/ShareToConversationDialog";
 
 // AI Icon for explanation feature
 const AIIcon = () => (
@@ -216,6 +217,12 @@ const CopyIcon = () => (
 const CheckIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+  </svg>
+);
+
+const ShareIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z" />
   </svg>
 );
 
@@ -4474,6 +4481,11 @@ export default function ReportDetailPage() {
   const [chatError, setChatError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Share dialog state
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareDialogFinding, setShareDialogFinding] = useState<Finding | null>(null);
+  const [shareSnackbar, setShareSnackbar] = useState(false);
+
   const reportQuery = useQuery({
     queryKey: ["report", id],
     queryFn: () => api.getReport(id),
@@ -5336,6 +5348,7 @@ export default function ReportDetailPage() {
                     <TableCell sx={{ fontWeight: 700 }}>Summary</TableCell>
                     <TableCell sx={{ fontWeight: 700, width: 100 }}>AI Insights</TableCell>
                     <TableCell sx={{ fontWeight: 700, width: 60 }}>Notes</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: 50 }}></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -5521,6 +5534,27 @@ export default function ReportDetailPage() {
                         </TableCell>
                         <TableCell>
                           <FindingNotesBadge findingId={finding.id} />
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title="Share to conversation">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShareDialogFinding(finding);
+                                setShareDialogOpen(true);
+                              }}
+                              sx={{
+                                color: "text.secondary",
+                                "&:hover": {
+                                  color: "primary.main",
+                                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                },
+                              }}
+                            >
+                              <ShareIcon />
+                            </IconButton>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
                     );
@@ -6295,6 +6329,43 @@ export default function ReportDetailPage() {
           </Collapse>
         </Paper>
       )}
+
+      {/* Share Finding Dialog */}
+      <ShareToConversationDialog
+        open={shareDialogOpen}
+        onClose={() => {
+          setShareDialogOpen(false);
+          setShareDialogFinding(null);
+        }}
+        shareType="finding"
+        itemId={shareDialogFinding?.id || 0}
+        itemTitle={shareDialogFinding?.type || 'Finding'}
+        itemSeverity={shareDialogFinding?.severity}
+        itemDetails={{
+          type: shareDialogFinding?.type,
+          filePath: shareDialogFinding?.file_path,
+          projectName: reportQuery.data?.title,
+        }}
+        onShareSuccess={() => {
+          setShareSnackbar(true);
+        }}
+      />
+
+      {/* Share Success Snackbar */}
+      <Snackbar
+        open={shareSnackbar}
+        autoHideDuration={4000}
+        onClose={() => setShareSnackbar(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert 
+          onClose={() => setShareSnackbar(false)} 
+          severity="success"
+          sx={{ fontWeight: 500 }}
+        >
+          Finding shared successfully! Check your Social Hub messages.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

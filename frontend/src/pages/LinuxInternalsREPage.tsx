@@ -1,5 +1,7 @@
 import React from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
+import { Link } from "react-router-dom";
 import {
   Box,
   Container,
@@ -49,6 +51,7 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import SpeedIcon from "@mui/icons-material/Speed";
 import SyncAltIcon from "@mui/icons-material/SyncAlt";
+import QuizIcon from "@mui/icons-material/Quiz";
 import { useNavigate } from "react-router-dom";
 
 // Outline sections for future expansion
@@ -183,6 +186,621 @@ const quickStats = [
   { value: "GDB", label: "Primary Debugger", color: "#8b5cf6" },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#f97316";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "ELF",
+    question: "What does ELF stand for?",
+    options: [
+      "Executable and Linkable Format",
+      "Extended Linux Framework",
+      "Encrypted Loadable File",
+      "Executable Logic File",
+    ],
+    correctAnswer: 0,
+    explanation: "ELF is the Executable and Linkable Format used on Linux.",
+  },
+  {
+    id: 2,
+    topic: "ELF",
+    question: "ELF magic bytes start with:",
+    options: ["0x7f 'E' 'L' 'F'", "0x7f 'M' 'Z' 'X'", "0x89 'P' 'N' 'G'", "0xCA 'F' 'E' 'E'"],
+    correctAnswer: 0,
+    explanation: "ELF files begin with 0x7f followed by the ASCII letters ELF.",
+  },
+  {
+    id: 3,
+    topic: "ELF",
+    question: "In ELF, sections are mainly for:",
+    options: [
+      "Link-time organization",
+      "Runtime memory mapping only",
+      "Kernel scheduling",
+      "Network configuration",
+    ],
+    correctAnswer: 0,
+    explanation: "Sections organize data for linkers and tools.",
+  },
+  {
+    id: 4,
+    topic: "ELF",
+    question: "Program headers describe:",
+    options: ["Runtime segments for the loader", "Only debug symbols", "Only source code paths", "Only kernel memory"],
+    correctAnswer: 0,
+    explanation: "Program headers define the segments mapped into memory.",
+  },
+  {
+    id: 5,
+    topic: "ELF",
+    question: "The .text section contains:",
+    options: ["Executable code", "Uninitialized data", "Debug symbols", "Heap metadata"],
+    correctAnswer: 0,
+    explanation: ".text is the code section.",
+  },
+  {
+    id: 6,
+    topic: "ELF",
+    question: "The .bss section contains:",
+    options: ["Uninitialized global data", "Executable code", "Relocation entries", "Stack frames"],
+    correctAnswer: 0,
+    explanation: ".bss holds zero-initialized or uninitialized global data.",
+  },
+  {
+    id: 7,
+    topic: "ELF",
+    question: "The ELF entry point is stored in:",
+    options: ["e_entry", "e_machine", "e_version", "e_flags"],
+    correctAnswer: 0,
+    explanation: "e_entry is the entry address in the ELF header.",
+  },
+  {
+    id: 8,
+    topic: "ELF",
+    question: "A symbol table is used to:",
+    options: ["Map names to addresses", "Randomize memory", "Encrypt binaries", "Compress sections"],
+    correctAnswer: 0,
+    explanation: "Symbol tables map symbol names to addresses.",
+  },
+  {
+    id: 9,
+    topic: "Dynamic Linking",
+    question: "PLT and GOT are used for:",
+    options: ["Dynamic function resolution", "Heap allocation", "Stack unwinding", "Kernel scheduling"],
+    correctAnswer: 0,
+    explanation: "PLT/GOT support lazy dynamic linking.",
+  },
+  {
+    id: 10,
+    topic: "Dynamic Linking",
+    question: "The GOT stores:",
+    options: ["Resolved addresses for external symbols", "Source code", "Kernel logs", "Stack canaries"],
+    correctAnswer: 0,
+    explanation: "GOT entries hold resolved addresses for dynamic symbols.",
+  },
+  {
+    id: 11,
+    topic: "Memory",
+    question: "ASLR provides:",
+    options: ["Randomized memory addresses", "Executable stack", "Disabled canaries", "Faster syscalls"],
+    correctAnswer: 0,
+    explanation: "ASLR randomizes address locations to hinder exploitation.",
+  },
+  {
+    id: 12,
+    topic: "Memory",
+    question: "PIE makes an executable:",
+    options: ["Position independent", "Always static", "Kernel-only", "Non-relocatable"],
+    correctAnswer: 0,
+    explanation: "PIE enables relocation like shared libraries.",
+  },
+  {
+    id: 13,
+    topic: "Protections",
+    question: "NX/DEP prevents:",
+    options: ["Executing code from data pages", "Heap allocation", "Symbol resolution", "Stack growth"],
+    correctAnswer: 0,
+    explanation: "NX marks data memory as non-executable.",
+  },
+  {
+    id: 14,
+    topic: "Protections",
+    question: "Stack canaries are used to:",
+    options: ["Detect stack smashing", "Encrypt symbols", "Disable ASLR", "Reduce heap use"],
+    correctAnswer: 0,
+    explanation: "Canaries detect overwrites of the stack frame.",
+  },
+  {
+    id: 15,
+    topic: "Protections",
+    question: "Full RELRO typically requires:",
+    options: ["-z relro -z now", "-fno-plt", "-fstack-protector", "-Wl,--strip-all"],
+    correctAnswer: 0,
+    explanation: "Full RELRO uses immediate binding with -z now.",
+  },
+  {
+    id: 16,
+    topic: "/proc",
+    question: "/proc/<pid>/maps shows:",
+    options: ["Memory mappings", "Open sockets", "Kernel modules", "CPU frequency"],
+    correctAnswer: 0,
+    explanation: "maps lists a process address space mappings.",
+  },
+  {
+    id: 17,
+    topic: "/proc",
+    question: "/proc/<pid>/fd contains:",
+    options: ["Open file descriptors", "Heap chunks", "Signal handlers", "Kernel threads"],
+    correctAnswer: 0,
+    explanation: "fd shows file descriptor links for a process.",
+  },
+  {
+    id: 18,
+    topic: "/proc",
+    question: "/proc/sys controls:",
+    options: ["Kernel parameters", "User passwords", "Shell aliases", "Package metadata"],
+    correctAnswer: 0,
+    explanation: "The /proc/sys hierarchy exposes kernel tunables.",
+  },
+  {
+    id: 19,
+    topic: "Syscalls",
+    question: "On x86-64, the syscall number is placed in:",
+    options: ["RAX", "RDI", "RSP", "RCX"],
+    correctAnswer: 0,
+    explanation: "RAX holds the syscall number for the syscall instruction.",
+  },
+  {
+    id: 20,
+    topic: "Syscalls",
+    question: "The first three syscall arguments on x86-64 are in:",
+    options: ["RDI, RSI, RDX", "RCX, R8, R9", "RAX, RBX, RCX", "RSP, RBP, RDI"],
+    correctAnswer: 0,
+    explanation: "Syscall args are passed in RDI, RSI, RDX, R10, R8, R9.",
+  },
+  {
+    id: 21,
+    topic: "Syscalls",
+    question: "Syscall return values are in:",
+    options: ["RAX", "RDI", "RSP", "RCX"],
+    correctAnswer: 0,
+    explanation: "Syscalls return values in RAX.",
+  },
+  {
+    id: 22,
+    topic: "Calling Conventions",
+    question: "SysV ABI function arguments on x86-64 start in:",
+    options: ["RDI, RSI, RDX, RCX, R8, R9", "RAX, RBX, RCX, RDX, RSI, RDI", "RSP, RBP, RDI, RSI, RDX, RCX", "R10, R11, R12, R13, R14, R15"],
+    correctAnswer: 0,
+    explanation: "The SysV ABI uses RDI, RSI, RDX, RCX, R8, R9 for args.",
+  },
+  {
+    id: 23,
+    topic: "Calling Conventions",
+    question: "The stack should be aligned to ____ bytes before a call:",
+    options: ["16", "8", "4", "32"],
+    correctAnswer: 0,
+    explanation: "SysV ABI requires 16-byte stack alignment.",
+  },
+  {
+    id: 24,
+    topic: "Signals",
+    question: "SIGSEGV indicates:",
+    options: ["Invalid memory access", "Child exit", "Alarm timeout", "Broken pipe"],
+    correctAnswer: 0,
+    explanation: "SIGSEGV is raised for invalid memory access.",
+  },
+  {
+    id: 25,
+    topic: "Signals",
+    question: "SIGTRAP is commonly used by:",
+    options: ["Debuggers and breakpoints", "Network drivers", "Log rotation", "Package managers"],
+    correctAnswer: 0,
+    explanation: "Breakpoints generate SIGTRAP for debuggers.",
+  },
+  {
+    id: 26,
+    topic: "ptrace",
+    question: "ptrace is used to:",
+    options: ["Control or trace another process", "Encrypt files", "Schedule threads", "Allocate heap memory"],
+    correctAnswer: 0,
+    explanation: "ptrace is a debugging and tracing API.",
+  },
+  {
+    id: 27,
+    topic: "ptrace",
+    question: "PTRACE_PEEKDATA allows you to:",
+    options: ["Read another process memory", "Modify kernel parameters", "Change file permissions", "Send network packets"],
+    correctAnswer: 0,
+    explanation: "PTRACE_PEEKDATA reads memory from a tracee.",
+  },
+  {
+    id: 28,
+    topic: "Debugging",
+    question: "strace shows:",
+    options: ["System call activity", "Only network packets", "Only source code", "Only heap stats"],
+    correctAnswer: 0,
+    explanation: "strace traces system calls and signals.",
+  },
+  {
+    id: 29,
+    topic: "Debugging",
+    question: "ltrace shows:",
+    options: ["Library call activity", "Disk sectors", "Kernel modules", "DNS cache"],
+    correctAnswer: 0,
+    explanation: "ltrace traces dynamic library calls.",
+  },
+  {
+    id: 30,
+    topic: "Debugging",
+    question: "Stripped binaries lack:",
+    options: ["Symbol names", "Executable code", "Program headers", "Data segments"],
+    correctAnswer: 0,
+    explanation: "Stripping removes symbols and debug info.",
+  },
+  {
+    id: 31,
+    topic: "Debugging",
+    question: "The -g flag enables:",
+    options: ["Debug symbols", "PIE", "RELRO", "Stack canaries"],
+    correctAnswer: 0,
+    explanation: "Compiling with -g adds debugging symbols.",
+  },
+  {
+    id: 32,
+    topic: "Tools",
+    question: "readelf -S displays:",
+    options: ["Section headers", "Only symbol names", "Only program headers", "Kernel config"],
+    correctAnswer: 0,
+    explanation: "readelf -S shows section headers.",
+  },
+  {
+    id: 33,
+    topic: "Tools",
+    question: "readelf -l displays:",
+    options: ["Program headers", "Only strings", "Only relocations", "CPU flags"],
+    correctAnswer: 0,
+    explanation: "readelf -l shows program headers (segments).",
+  },
+  {
+    id: 34,
+    topic: "Tools",
+    question: "objdump -d is used to:",
+    options: ["Disassemble code", "Edit binaries", "Change permissions", "Create archives"],
+    correctAnswer: 0,
+    explanation: "objdump -d disassembles executable code.",
+  },
+  {
+    id: 35,
+    topic: "Tools",
+    question: "nm is used to:",
+    options: ["List symbols", "Trace syscalls", "Patch files", "Mount disks"],
+    correctAnswer: 0,
+    explanation: "nm lists symbols in binaries and libraries.",
+  },
+  {
+    id: 36,
+    topic: "Tools",
+    question: "ldd shows:",
+    options: ["Shared library dependencies", "CPU usage", "Log files", "GDB breakpoints"],
+    correctAnswer: 0,
+    explanation: "ldd lists dynamic dependencies.",
+  },
+  {
+    id: 37,
+    topic: "Tools",
+    question: "strings is useful to:",
+    options: ["Extract printable strings", "Encrypt data", "Resolve symbols", "Compile code"],
+    correctAnswer: 0,
+    explanation: "strings extracts printable sequences for analysis.",
+  },
+  {
+    id: 38,
+    topic: "Memory",
+    question: "On x86-64, the stack typically grows:",
+    options: ["Downward toward lower addresses", "Upward toward higher addresses", "Only upward", "Only in fixed pages"],
+    correctAnswer: 0,
+    explanation: "The stack grows downward in memory.",
+  },
+  {
+    id: 39,
+    topic: "Memory",
+    question: "Heap allocation is usually managed by:",
+    options: ["malloc/free", "syscall only", "LD_PRELOAD only", "GDB only"],
+    correctAnswer: 0,
+    explanation: "malloc/free manage heap allocations in user space.",
+  },
+  {
+    id: 40,
+    topic: "Memory",
+    question: "brk/sbrk are used to:",
+    options: ["Adjust the heap end", "Install signals", "Swap registers", "Patch ELF headers"],
+    correctAnswer: 0,
+    explanation: "brk/sbrk move the program break for heap growth.",
+  },
+  {
+    id: 41,
+    topic: "Memory",
+    question: "mmap is used to:",
+    options: ["Map memory regions", "List symbols", "Disable ASLR", "Set stack canaries"],
+    correctAnswer: 0,
+    explanation: "mmap maps files or anonymous memory into a process.",
+  },
+  {
+    id: 42,
+    topic: "Memory",
+    question: "mprotect changes:",
+    options: ["Page protections", "File ownership", "Process UID", "Kernel modules"],
+    correctAnswer: 0,
+    explanation: "mprotect adjusts page permissions like RX or RW.",
+  },
+  {
+    id: 43,
+    topic: "Dynamic Linking",
+    question: "DT_NEEDED entries specify:",
+    options: ["Required shared libraries", "User IDs", "Thread count", "Kernel modules"],
+    correctAnswer: 0,
+    explanation: "DT_NEEDED lists required shared libraries.",
+  },
+  {
+    id: 44,
+    topic: "Dynamic Linking",
+    question: "LD_PRELOAD is used to:",
+    options: ["Inject shared libraries before others", "Disable logs", "Lock memory", "Start a debugger"],
+    correctAnswer: 0,
+    explanation: "LD_PRELOAD loads a library ahead of others.",
+  },
+  {
+    id: 45,
+    topic: "Dynamic Linking",
+    question: "RPATH/RUNPATH influence:",
+    options: ["Library search paths", "Stack size", "CPU flags", "Kernel parameters"],
+    correctAnswer: 0,
+    explanation: "RPATH/RUNPATH change where the loader searches for libraries.",
+  },
+  {
+    id: 46,
+    topic: "Kernel",
+    question: "Kernel modules typically use the extension:",
+    options: [".ko", ".so", ".elf", ".mod"],
+    correctAnswer: 0,
+    explanation: "Kernel modules are typically .ko files.",
+  },
+  {
+    id: 47,
+    topic: "Kernel",
+    question: "lsmod shows:",
+    options: ["Loaded kernel modules", "Open files", "Network sockets", "System calls"],
+    correctAnswer: 0,
+    explanation: "lsmod lists loaded kernel modules.",
+  },
+  {
+    id: 48,
+    topic: "Kernel",
+    question: "dmesg shows:",
+    options: ["Kernel log messages", "User shell history", "Package installs", "GDB outputs"],
+    correctAnswer: 0,
+    explanation: "dmesg prints kernel ring buffer messages.",
+  },
+  {
+    id: 49,
+    topic: "/proc",
+    question: "/proc/self/exe points to:",
+    options: ["The current executable", "Kernel source", "Shell config", "Bootloader"],
+    correctAnswer: 0,
+    explanation: "/proc/self/exe is a symlink to the running binary.",
+  },
+  {
+    id: 50,
+    topic: "/proc",
+    question: "smaps differs from maps by providing:",
+    options: ["Per-region memory statistics", "Only heap data", "Only stack data", "Only symbols"],
+    correctAnswer: 0,
+    explanation: "smaps includes detailed per-mapping stats.",
+  },
+  {
+    id: 51,
+    topic: "Protections",
+    question: "PIE plus ASLR results in:",
+    options: ["Randomized code addresses", "Executable stack", "Disabled canaries", "No relocations"],
+    correctAnswer: 0,
+    explanation: "PIE allows the main binary to be randomized by ASLR.",
+  },
+  {
+    id: 52,
+    topic: "Protections",
+    question: "ET_EXEC binaries are usually:",
+    options: ["Non-PIE fixed addresses", "Always PIE", "Kernel-only", "Interpreted scripts"],
+    correctAnswer: 0,
+    explanation: "ET_EXEC is a non-PIE executable type.",
+  },
+  {
+    id: 53,
+    topic: "Protections",
+    question: "ET_DYN is used for:",
+    options: ["Shared objects and PIE", "Only kernel modules", "Only static binaries", "Only scripts"],
+    correctAnswer: 0,
+    explanation: "ET_DYN indicates shared objects and PIE executables.",
+  },
+  {
+    id: 54,
+    topic: "Syscalls",
+    question: "The syscall instruction replaces:",
+    options: ["int 0x80 on x86-64", "jmp", "call", "ret"],
+    correctAnswer: 0,
+    explanation: "syscall is the fast system call mechanism on x86-64.",
+  },
+  {
+    id: 55,
+    topic: "Syscalls",
+    question: "int 0x80 is primarily used on:",
+    options: ["Legacy x86 32-bit", "ARM64", "RISC-V", "MIPS64"],
+    correctAnswer: 0,
+    explanation: "int 0x80 is the legacy 32-bit syscall mechanism.",
+  },
+  {
+    id: 56,
+    topic: "Memory",
+    question: "The vDSO provides:",
+    options: ["Fast user-space access to some kernel helpers", "Only heap metadata", "Only stack frames", "Only debug symbols"],
+    correctAnswer: 0,
+    explanation: "vDSO exposes certain kernel routines to user space.",
+  },
+  {
+    id: 57,
+    topic: "Tools",
+    question: "checksec reports:",
+    options: ["Binary mitigation status", "Network throughput", "System uptime", "CPU temperature"],
+    correctAnswer: 0,
+    explanation: "checksec reports protections like NX, PIE, and RELRO.",
+  },
+  {
+    id: 58,
+    topic: "Exploitation",
+    question: "ret2libc typically reuses:",
+    options: ["libc functions like system()", "Kernel modules", "Python bytecode", "Only shell scripts"],
+    correctAnswer: 0,
+    explanation: "ret2libc reuses existing libc code for execution.",
+  },
+  {
+    id: 59,
+    topic: "Exploitation",
+    question: "ROP chains are built from:",
+    options: ["Gadgets ending in ret", "Only inline assembly", "Only syscalls", "Only kernel code"],
+    correctAnswer: 0,
+    explanation: "ROP uses short gadgets ending in ret.",
+  },
+  {
+    id: 60,
+    topic: "Debugging",
+    question: "GDB breakpoints are commonly implemented with:",
+    options: ["int3 traps", "SIGKILL", "Process forks", "Kernel panics"],
+    correctAnswer: 0,
+    explanation: "Breakpoints use int3 to trigger SIGTRAP.",
+  },
+  {
+    id: 61,
+    topic: "Tools",
+    question: "The file command is useful for:",
+    options: ["Identifying binary type and architecture", "Listing syscalls", "Changing permissions", "Encrypting data"],
+    correctAnswer: 0,
+    explanation: "file inspects binary signatures and formats.",
+  },
+  {
+    id: 62,
+    topic: "Dynamic Linking",
+    question: "The dynamic loader on Linux is:",
+    options: ["ld.so", "gcc", "bash", "init"],
+    correctAnswer: 0,
+    explanation: "ld.so is the runtime dynamic loader.",
+  },
+  {
+    id: 63,
+    topic: "/proc",
+    question: "/proc/<pid>/status includes:",
+    options: ["Process state and IDs", "Only network sockets", "Only heap maps", "Only loaded modules"],
+    correctAnswer: 0,
+    explanation: "status includes UID/GID, state, and memory stats.",
+  },
+  {
+    id: 64,
+    topic: "Memory",
+    question: "The heap is typically used for:",
+    options: ["Dynamic allocations", "Instruction storage only", "Register storage", "Kernel scheduling"],
+    correctAnswer: 0,
+    explanation: "The heap stores dynamically allocated objects.",
+  },
+  {
+    id: 65,
+    topic: "Memory",
+    question: "The stack is typically used for:",
+    options: ["Function frames and local variables", "Kernel modules", "Network buffers only", "Only shared libraries"],
+    correctAnswer: 0,
+    explanation: "The stack holds call frames and local data.",
+  },
+  {
+    id: 66,
+    topic: "Dynamic Linking",
+    question: "Lazy binding resolves symbols:",
+    options: ["On first call", "At compile time only", "Never", "Only at link time"],
+    correctAnswer: 0,
+    explanation: "Lazy binding resolves symbols when first used.",
+  },
+  {
+    id: 67,
+    topic: "Protections",
+    question: "Stack canaries are usually inserted by:",
+    options: ["-fstack-protector", "-fno-plt", "-Wl,-z,now", "-O0"],
+    correctAnswer: 0,
+    explanation: "Compilers insert canaries with -fstack-protector.",
+  },
+  {
+    id: 68,
+    topic: "Kernel",
+    question: "Module insertion is commonly done with:",
+    options: ["insmod", "chmod", "ldd", "nm"],
+    correctAnswer: 0,
+    explanation: "insmod loads kernel modules.",
+  },
+  {
+    id: 69,
+    topic: "Kernel",
+    question: "Module removal is commonly done with:",
+    options: ["rmmod", "gcc", "strace", "grep"],
+    correctAnswer: 0,
+    explanation: "rmmod removes loaded kernel modules.",
+  },
+  {
+    id: 70,
+    topic: "Tools",
+    question: "objdump -x provides:",
+    options: ["Headers and relocation info", "Only strings", "Only symbols", "Only syscalls"],
+    correctAnswer: 0,
+    explanation: "objdump -x includes headers, symbols, and relocations.",
+  },
+  {
+    id: 71,
+    topic: "Memory",
+    question: "ASLR can be tuned via:",
+    options: ["/proc/sys/kernel/randomize_va_space", "/proc/sys/net/ipv4", "/proc/self/fd", "/etc/hosts"],
+    correctAnswer: 0,
+    explanation: "randomize_va_space controls ASLR settings.",
+  },
+  {
+    id: 72,
+    topic: "Dynamic Linking",
+    question: "LD_LIBRARY_PATH affects:",
+    options: ["Library search order", "Stack size", "CPU cache", "Syscall table"],
+    correctAnswer: 0,
+    explanation: "LD_LIBRARY_PATH adds directories to the loader search path.",
+  },
+  {
+    id: 73,
+    topic: "Signals",
+    question: "Signal handlers are typically installed with:",
+    options: ["sigaction", "mmap", "fork", "waitpid"],
+    correctAnswer: 0,
+    explanation: "sigaction configures signal handlers.",
+  },
+  {
+    id: 74,
+    topic: "Tools",
+    question: "A common Linux RE tool for disassembly is:",
+    options: ["objdump", "tar", "curl", "systemctl"],
+    correctAnswer: 0,
+    explanation: "objdump is commonly used for disassembly.",
+  },
+  {
+    id: 75,
+    topic: "Exploitation",
+    question: "A common Linux exploitation pattern is:",
+    options: ["Stack overflow to hijack return address", "Kernel compile", "Package update", "DNS cache flush"],
+    correctAnswer: 0,
+    explanation: "Stack overflows can redirect control flow.",
+  },
+];
+
 export default function LinuxInternalsREPage() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -193,13 +811,15 @@ export default function LinuxInternalsREPage() {
     <LearnPageLayout pageTitle="Linux Internals for Reverse Engineering" pageContext={pageContext}>
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Back Button */}
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3 }}
-        >
-          Back to Learning Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 3 }}
+        />
 
         {/* Hero Banner */}
         <Paper
@@ -2973,6 +3593,28 @@ ONGOING: CTF Competitions
             </Grid>
           ))}
         </Grid>
+
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Linux Internals for RE Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
 
         {/* Back to Learning Hub Button */}
         <Box sx={{ display: "flex", justifyContent: "center", mt: 6 }}>

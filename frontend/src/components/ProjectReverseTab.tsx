@@ -86,18 +86,22 @@ const ProjectReverseTab: React.FC<ProjectReverseTabProps> = ({
       description: "Analyze Android applications - permissions, components, certificates, attack surface, and obfuscation detection",
       icon: <AndroidIcon sx={{ fontSize: 32 }} />,
       color: "#22c55e",
+      tabIndex: 1,
     },
     {
       title: "Binary Analysis",
       description: "Analyze PE (Windows) and ELF (Linux) executables - strings, imports, Rich headers, AI-powered insights",
       icon: <MemoryIcon sx={{ fontSize: 32 }} />,
       color: "#f59e0b",
+      tabIndex: 0,
     },
     {
-      title: "Docker Layer Analysis",
-      description: "Inspect Docker images layer by layer - find secrets, reconstruct Dockerfile, supply chain analysis",
+      title: "Docker Inspector",
+      description: "Container security analysis - escape vectors, privilege escalation, secrets in layers, supply chain risks, AI threat assessment",
       icon: <LayersIcon sx={{ fontSize: 32 }} />,
       color: "#06b6d4",
+      tabIndex: 2,
+      badge: "🔴 Offensive",
     },
   ];
 
@@ -169,7 +173,7 @@ const ProjectReverseTab: React.FC<ProjectReverseTabProps> = ({
                   border: `1px solid ${alpha(tool.color, 0.4)}`,
                 },
               }}
-              onClick={() => navigate(`/reverse?projectId=${projectId}&projectName=${encodeURIComponent(projectName)}`)}
+              onClick={() => navigate(`/reverse?projectId=${projectId}&projectName=${encodeURIComponent(projectName)}&tab=${tool.tabIndex}`)}
             >
               <CardContent sx={{ p: 3, height: "100%", display: "flex", flexDirection: "column" }}>
                 <Box
@@ -187,9 +191,24 @@ const ProjectReverseTab: React.FC<ProjectReverseTabProps> = ({
                 >
                   {tool.icon}
                 </Box>
-                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-                  {tool.title}
-                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                  <Typography variant="h6" fontWeight={700}>
+                    {tool.title}
+                  </Typography>
+                  {tool.badge && (
+                    <Chip
+                      label={tool.badge}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha("#ef4444", 0.15),
+                        color: "#ef4444",
+                        fontWeight: 600,
+                        fontSize: "0.7rem",
+                        height: 22,
+                      }}
+                    />
+                  )}
+                </Box>
                 <Typography variant="body2" color="text.secondary" sx={{ flex: 1, mb: 2 }}>
                   {tool.description}
                 </Typography>

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -25,6 +26,7 @@ import {
   TableRow,
   IconButton,
   Tooltip,
+  alpha,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -36,7 +38,8 @@ import BuildIcon from "@mui/icons-material/Build";
 import SearchIcon from "@mui/icons-material/Search";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WarningIcon from "@mui/icons-material/Warning";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -100,6 +103,987 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
     </Paper>
   );
 };
+
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#3b82f6";
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Basics",
+    question: "What is persistence in a security context?",
+    options: [
+      "Maintaining access after reboots or logoffs",
+      "Escalating privileges on the same host",
+      "Encrypting files for exfiltration",
+      "Blocking all outbound traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Persistence ensures access remains after system restarts or user logoffs.",
+  },
+  {
+    id: 2,
+    topic: "Registry",
+    question: "Which registry key runs programs at user logon?",
+    options: [
+      "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "HKLM\\System\\CurrentControlSet\\Services",
+      "HKLM\\Software\\Classes",
+      "HKCU\\Software\\Policies",
+    ],
+    correctAnswer: 0,
+    explanation: "HKCU Run executes for the current user at logon.",
+  },
+  {
+    id: 3,
+    topic: "Registry",
+    question: "Which registry key runs programs for all users at logon?",
+    options: [
+      "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce",
+      "HKLM\\Software\\Classes\\CLSID",
+      "HKCU\\Environment",
+    ],
+    correctAnswer: 0,
+    explanation: "HKLM Run applies to all users on the system.",
+  },
+  {
+    id: 4,
+    topic: "Registry",
+    question: "RunOnce entries are typically used to:",
+    options: [
+      "Execute a command one time at next logon",
+      "Run at every boot forever",
+      "Disable Windows updates",
+      "Set network firewall rules",
+    ],
+    correctAnswer: 0,
+    explanation: "RunOnce keys trigger a single execution.",
+  },
+  {
+    id: 5,
+    topic: "Tasks",
+    question: "Which mechanism schedules execution on a timer or trigger?",
+    options: [
+      "Scheduled Tasks",
+      "Startup Folder",
+      "Winlogon Shell",
+      "AppInit_DLLs",
+    ],
+    correctAnswer: 0,
+    explanation: "Scheduled Tasks can execute programs based on triggers.",
+  },
+  {
+    id: 6,
+    topic: "Tasks",
+    question: "Which Security event ID indicates a scheduled task was created?",
+    options: [
+      "4698",
+      "4688",
+      "4624",
+      "4776",
+    ],
+    correctAnswer: 0,
+    explanation: "Event 4698 records scheduled task creation.",
+  },
+  {
+    id: 7,
+    topic: "Services",
+    question: "Why are Windows services a common persistence method?",
+    options: [
+      "They can start automatically with SYSTEM privileges",
+      "They only run once and then exit",
+      "They cannot be detected by logging",
+      "They require no configuration",
+    ],
+    correctAnswer: 0,
+    explanation: "Services can run at boot with high privileges.",
+  },
+  {
+    id: 8,
+    topic: "Services",
+    question: "Which event ID indicates a new service was installed?",
+    options: [
+      "4697",
+      "4625",
+      "4720",
+      "1102",
+    ],
+    correctAnswer: 0,
+    explanation: "Event 4697 logs service installation.",
+  },
+  {
+    id: 9,
+    topic: "Services",
+    question: "Which event ID indicates a service was created on the system log?",
+    options: [
+      "7045",
+      "4624",
+      "4688",
+      "5156",
+    ],
+    correctAnswer: 0,
+    explanation: "Event 7045 records service creation in System logs.",
+  },
+  {
+    id: 10,
+    topic: "Startup",
+    question: "The Startup folder is used to:",
+    options: [
+      "Run programs when a user logs in",
+      "Run processes only during shutdown",
+      "Store system drivers",
+      "Control Windows Update settings",
+    ],
+    correctAnswer: 0,
+    explanation: "Startup folder items execute at user logon.",
+  },
+  {
+    id: 11,
+    topic: "WMI",
+    question: "WMI Event Subscriptions consist of:",
+    options: [
+      "EventFilter, EventConsumer, and FilterToConsumerBinding",
+      "Registry Run and RunOnce keys",
+      "Services and Drivers only",
+      "Startup folders and shortcuts",
+    ],
+    correctAnswer: 0,
+    explanation: "WMI persistence uses filters, consumers, and bindings.",
+  },
+  {
+    id: 12,
+    topic: "WMI",
+    question: "Why is WMI persistence considered stealthy?",
+    options: [
+      "It can be fileless and stored in the WMI repository",
+      "It disables all system logging",
+      "It always runs as SYSTEM without traces",
+      "It cannot be enumerated",
+    ],
+    correctAnswer: 0,
+    explanation: "WMI persistence often avoids obvious files on disk.",
+  },
+  {
+    id: 13,
+    topic: "Winlogon",
+    question: "Which registry location controls Winlogon shell settings?",
+    options: [
+      "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon",
+      "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "HKLM\\System\\CurrentControlSet\\Services",
+      "HKCU\\Control Panel\\Desktop",
+    ],
+    correctAnswer: 0,
+    explanation: "Winlogon settings live under the Windows NT Winlogon key.",
+  },
+  {
+    id: 14,
+    topic: "Winlogon",
+    question: "The default Userinit value typically includes:",
+    options: [
+      "userinit.exe",
+      "svchost.exe",
+      "explorer.exe",
+      "lsass.exe",
+    ],
+    correctAnswer: 0,
+    explanation: "Userinit should normally point to userinit.exe.",
+  },
+  {
+    id: 15,
+    topic: "LSA",
+    question: "LSA persistence commonly involves modifying:",
+    options: [
+      "Authentication packages or security providers",
+      "Firewall rules only",
+      "Windows Update settings",
+      "DNS server configuration",
+    ],
+    correctAnswer: 0,
+    explanation: "LSA settings can load authentication packages at boot.",
+  },
+  {
+    id: 16,
+    topic: "AppInit",
+    question: "AppInit_DLLs persistence relies on:",
+    options: [
+      "Loading DLLs into user-mode processes on startup",
+      "Creating a new Windows service",
+      "Running a task once at logon",
+      "Disabling UAC prompts",
+    ],
+    correctAnswer: 0,
+    explanation: "AppInit_DLLs can load DLLs into many processes.",
+  },
+  {
+    id: 17,
+    topic: "IFEO",
+    question: "Image File Execution Options (IFEO) can be abused by:",
+    options: [
+      "Setting a debugger for a target executable",
+      "Enabling full disk encryption",
+      "Creating new local users",
+      "Disabling Windows Defender",
+    ],
+    correctAnswer: 0,
+    explanation: "IFEO allows specifying a debugger executable to run instead.",
+  },
+  {
+    id: 18,
+    topic: "GPO",
+    question: "Why can logon scripts via GPO be used for persistence?",
+    options: [
+      "They run at user logon across many systems",
+      "They only run once and delete themselves",
+      "They cannot be modified by admins",
+      "They disable logging automatically",
+    ],
+    correctAnswer: 0,
+    explanation: "GPO scripts can run on many systems at logon.",
+  },
+  {
+    id: 19,
+    topic: "Detection",
+    question: "Which event ID captures process creation in Windows Security logs?",
+    options: [
+      "4688",
+      "4698",
+      "4672",
+      "4771",
+    ],
+    correctAnswer: 0,
+    explanation: "Event 4688 logs process creation.",
+  },
+  {
+    id: 20,
+    topic: "Detection",
+    question: "Sysmon Event ID 13 records:",
+    options: [
+      "Registry value set events",
+      "Process creation",
+      "Network connections",
+      "Driver loading",
+    ],
+    correctAnswer: 0,
+    explanation: "Sysmon 13 captures registry modifications.",
+  },
+  {
+    id: 21,
+    topic: "Detection",
+    question: "Which tool is commonly used to enumerate persistence points?",
+    options: [
+      "Autoruns",
+      "ipconfig",
+      "nslookup",
+      "taskkill",
+    ],
+    correctAnswer: 0,
+    explanation: "Autoruns lists startup entries, services, tasks, and more.",
+  },
+  {
+    id: 22,
+    topic: "Tasks",
+    question: "Which command lists scheduled tasks from the CLI?",
+    options: [
+      "schtasks /query",
+      "sc query",
+      "net use",
+      "whoami /priv",
+    ],
+    correctAnswer: 0,
+    explanation: "schtasks /query enumerates scheduled tasks.",
+  },
+  {
+    id: 23,
+    topic: "Services",
+    question: "Which command lists services from the CLI?",
+    options: [
+      "sc query",
+      "net user",
+      "reg query",
+      "driverquery",
+    ],
+    correctAnswer: 0,
+    explanation: "sc query enumerates service status and configuration.",
+  },
+  {
+    id: 24,
+    topic: "Registry",
+    question: "Why are per-user Run keys attractive to attackers?",
+    options: [
+      "They often require no admin privileges",
+      "They run only on server editions",
+      "They disable antivirus",
+      "They always trigger SYSTEM privileges",
+    ],
+    correctAnswer: 0,
+    explanation: "HKCU Run can be modified by the user without elevation.",
+  },
+  {
+    id: 25,
+    topic: "Registry",
+    question: "Why are HKLM Run keys higher impact?",
+    options: [
+      "They affect all users on the system",
+      "They are hidden from admins",
+      "They only run once",
+      "They are required for OS updates",
+    ],
+    correctAnswer: 0,
+    explanation: "HKLM Run applies to every user that logs in.",
+  },
+  {
+    id: 26,
+    topic: "Tasks",
+    question: "Which is a suspicious scheduled task behavior?",
+    options: [
+      "A task running from a temp directory",
+      "A task created by IT for updates",
+      "A task signed by Microsoft",
+      "A task aligned with normal patch windows",
+    ],
+    correctAnswer: 0,
+    explanation: "Tasks running from temp or user-writable paths are suspicious.",
+  },
+  {
+    id: 27,
+    topic: "Services",
+    question: "Why are services pointing to user-writable paths risky?",
+    options: [
+      "Attackers can replace the service binary",
+      "They disable event logging",
+      "They prevent restarts",
+      "They are required for updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Writable paths enable binary replacement for persistence.",
+  },
+  {
+    id: 28,
+    topic: "Startup",
+    question: "Which file type is commonly used in Startup folders?",
+    options: [
+      "Shortcut (.lnk)",
+      "Kernel driver (.sys)",
+      "Registry hive (.dat)",
+      "Event log (.evtx)",
+    ],
+    correctAnswer: 0,
+    explanation: "Shortcuts are typical in Startup folders.",
+  },
+  {
+    id: 29,
+    topic: "WMI",
+    question: "Which area should be checked for WMI persistence?",
+    options: [
+      "ROOT\\Subscription namespace",
+      "HKCU\\Run",
+      "Task Scheduler Library only",
+      "Startup folder only",
+    ],
+    correctAnswer: 0,
+    explanation: "WMI subscriptions are stored in ROOT\\Subscription.",
+  },
+  {
+    id: 30,
+    topic: "AppInit",
+    question: "What setting must often be enabled for AppInit_DLLs to load?",
+    options: [
+      "LoadAppInit_DLLs",
+      "SafeDllSearchMode",
+      "EnableLUA",
+      "DisableCMD",
+    ],
+    correctAnswer: 0,
+    explanation: "LoadAppInit_DLLs controls whether AppInit DLLs load.",
+  },
+  {
+    id: 31,
+    topic: "IFEO",
+    question: "IFEO persistence typically affects:",
+    options: [
+      "Specific targeted executables",
+      "All system services at boot",
+      "All user logons",
+      "Only kernel drivers",
+    ],
+    correctAnswer: 0,
+    explanation: "IFEO applies to specific named executables.",
+  },
+  {
+    id: 32,
+    topic: "Detection",
+    question: "Which Sysmon event is useful for image load monitoring?",
+    options: [
+      "Event ID 7",
+      "Event ID 1",
+      "Event ID 3",
+      "Event ID 13",
+    ],
+    correctAnswer: 0,
+    explanation: "Sysmon 7 captures DLL and image loads.",
+  },
+  {
+    id: 33,
+    topic: "Detection",
+    question: "Which tool can validate file signatures on Windows?",
+    options: [
+      "sigcheck",
+      "nslookup",
+      "netsh",
+      "fsutil",
+    ],
+    correctAnswer: 0,
+    explanation: "sigcheck verifies signatures and file metadata.",
+  },
+  {
+    id: 34,
+    topic: "GPO",
+    question: "Why is SYSVOL relevant to persistence?",
+    options: [
+      "GPO scripts are stored and distributed from SYSVOL",
+      "It stores local user passwords",
+      "It disables auditing",
+      "It contains OS binaries",
+    ],
+    correctAnswer: 0,
+    explanation: "GPO scripts in SYSVOL can run across systems.",
+  },
+  {
+    id: 35,
+    topic: "Hardening",
+    question: "What is a key hardening step for persistence?",
+    options: [
+      "Restrict write permissions to Run keys and task folders",
+      "Disable all event logs",
+      "Allow unsigned drivers",
+      "Remove UAC completely",
+    ],
+    correctAnswer: 0,
+    explanation: "Tight permissions reduce the ability to plant persistence.",
+  },
+  {
+    id: 36,
+    topic: "Hardening",
+    question: "Why enforce least privilege?",
+    options: [
+      "It limits who can create services and tasks",
+      "It increases patch frequency",
+      "It disables all scripts",
+      "It removes network segmentation",
+    ],
+    correctAnswer: 0,
+    explanation: "Least privilege reduces who can create persistence.",
+  },
+  {
+    id: 37,
+    topic: "Hardening",
+    question: "Why baseline autorun entries?",
+    options: [
+      "To detect new or unexpected persistence",
+      "To disable all autoruns",
+      "To prevent reboots",
+      "To increase CPU usage",
+    ],
+    correctAnswer: 0,
+    explanation: "Baselines make change detection easier.",
+  },
+  {
+    id: 38,
+    topic: "Hardening",
+    question: "Why enable command-line logging?",
+    options: [
+      "It captures arguments used to create persistence",
+      "It prevents process creation",
+      "It disables scripts",
+      "It removes registry entries",
+    ],
+    correctAnswer: 0,
+    explanation: "Command lines show how persistence was configured.",
+  },
+  {
+    id: 39,
+    topic: "Registry",
+    question: "COM hijacking typically abuses:",
+    options: [
+      "HKCU\\Software\\Classes\\CLSID entries",
+      "HKLM\\System\\CurrentControlSet\\Services",
+      "Startup folders",
+      "Task Scheduler history",
+    ],
+    correctAnswer: 0,
+    explanation: "COM registrations can be hijacked in user or system hives.",
+  },
+  {
+    id: 40,
+    topic: "Tasks",
+    question: "Why are tasks set to run as SYSTEM high risk?",
+    options: [
+      "They execute with elevated privileges",
+      "They cannot be deleted",
+      "They run only once",
+      "They have no logs",
+    ],
+    correctAnswer: 0,
+    explanation: "SYSTEM tasks run with the highest local privileges.",
+  },
+  {
+    id: 41,
+    topic: "Services",
+    question: "A suspicious service ImagePath often points to:",
+    options: [
+      "User-writable or temp locations",
+      "C:\\Windows\\System32",
+      "Program Files with signed binaries",
+      "DriverStore",
+    ],
+    correctAnswer: 0,
+    explanation: "Unusual paths are common in malicious services.",
+  },
+  {
+    id: 42,
+    topic: "WMI",
+    question: "How can WMI persistence be detected?",
+    options: [
+      "Querying WMI subscriptions and auditing WMI events",
+      "Only checking Startup folders",
+      "Disabling Sysmon",
+      "Removing all scheduled tasks",
+    ],
+    correctAnswer: 0,
+    explanation: "WMI subscriptions can be enumerated and monitored.",
+  },
+  {
+    id: 43,
+    topic: "Detection",
+    question: "Why monitor registry key changes under Run and RunOnce?",
+    options: [
+      "They are common persistence locations",
+      "They only store benign settings",
+      "They are unrelated to persistence",
+      "They contain system passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Run keys are frequently abused for persistence.",
+  },
+  {
+    id: 44,
+    topic: "Detection",
+    question: "Which log helps identify task execution and changes?",
+    options: [
+      "Microsoft-Windows-TaskScheduler/Operational",
+      "DNS Server logs",
+      "Print Service logs",
+      "Boot Configuration logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Task Scheduler logs record creation and execution.",
+  },
+  {
+    id: 45,
+    topic: "Detection",
+    question: "Why are unsigned binaries in autoruns suspicious?",
+    options: [
+      "They may indicate untrusted or tampered executables",
+      "They are required for Windows updates",
+      "They are always benign",
+      "They prevent booting",
+    ],
+    correctAnswer: 0,
+    explanation: "Unsigned binaries deserve review for legitimacy.",
+  },
+  {
+    id: 46,
+    topic: "Registry",
+    question: "Which command-line tool can add or edit Run keys?",
+    options: [
+      "reg add",
+      "net use",
+      "arp",
+      "route",
+    ],
+    correctAnswer: 0,
+    explanation: "reg add modifies registry values from the CLI.",
+  },
+  {
+    id: 47,
+    topic: "Tasks",
+    question: "Which command-line tool can create scheduled tasks?",
+    options: [
+      "schtasks /create",
+      "sc stop",
+      "wmic qfe",
+      "ipconfig",
+    ],
+    correctAnswer: 0,
+    explanation: "schtasks /create defines a new scheduled task.",
+  },
+  {
+    id: 48,
+    topic: "Services",
+    question: "Which command-line tool can create services?",
+    options: [
+      "sc create",
+      "tasklist",
+      "whoami",
+      "netstat",
+    ],
+    correctAnswer: 0,
+    explanation: "sc create registers a new service.",
+  },
+  {
+    id: 49,
+    topic: "Startup",
+    question: "Why check both per-user and all-user Startup folders?",
+    options: [
+      "Persistence can be placed in either location",
+      "Only per-user folders exist",
+      "Only all-user folders exist",
+      "Startup folders are unused",
+    ],
+    correctAnswer: 0,
+    explanation: "Both locations can contain startup items.",
+  },
+  {
+    id: 50,
+    topic: "Winlogon",
+    question: "What is suspicious about Winlogon shell changes?",
+    options: [
+      "The shell should normally be explorer.exe",
+      "Winlogon shell is always empty",
+      "Shell changes are required for updates",
+      "Shell changes disable logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Winlogon shell changes can launch malicious programs.",
+  },
+  {
+    id: 51,
+    topic: "LSA",
+    question: "Why are unexpected LSA packages suspicious?",
+    options: [
+      "They can load at boot and capture credentials",
+      "They are required for DNS resolution",
+      "They are always signed by Microsoft",
+      "They only run after shutdown",
+    ],
+    correctAnswer: 0,
+    explanation: "LSA packages can intercept authentication data.",
+  },
+  {
+    id: 52,
+    topic: "Registry",
+    question: "Which key is often used for legacy logon scripts?",
+    options: [
+      "UserInitMprLogonScript",
+      "SafeBoot",
+      "Winlogon\\Shell",
+      "Services\\Parameters",
+    ],
+    correctAnswer: 0,
+    explanation: "UserInitMprLogonScript can run scripts at logon.",
+  },
+  {
+    id: 53,
+    topic: "Hardening",
+    question: "Why should scheduled task creation be restricted?",
+    options: [
+      "It reduces the number of users who can set persistence",
+      "It disables Windows Update",
+      "It prevents antivirus from running",
+      "It increases memory usage",
+    ],
+    correctAnswer: 0,
+    explanation: "Restricting task creation reduces persistence opportunities.",
+  },
+  {
+    id: 54,
+    topic: "Hardening",
+    question: "Why is code signing policy helpful?",
+    options: [
+      "It helps ensure only trusted code runs",
+      "It disables all PowerShell",
+      "It blocks all registry writes",
+      "It eliminates the need for monitoring",
+    ],
+    correctAnswer: 0,
+    explanation: "Signing policies can block unknown or tampered code.",
+  },
+  {
+    id: 55,
+    topic: "Detection",
+    question: "Which indicator suggests malicious persistence?",
+    options: [
+      "Randomized task or service names with odd paths",
+      "Well-documented vendor services",
+      "Signed Microsoft binaries",
+      "Tasks created by IT change windows",
+    ],
+    correctAnswer: 0,
+    explanation: "Random names and unusual paths often indicate malware.",
+  },
+  {
+    id: 56,
+    topic: "Detection",
+    question: "Why monitor for registry writes to Winlogon?",
+    options: [
+      "It is a critical persistence location",
+      "It only stores display settings",
+      "It is unrelated to logon behavior",
+      "It contains Wi-Fi passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Winlogon settings can control logon behaviors.",
+  },
+  {
+    id: 57,
+    topic: "Tasks",
+    question: "A task that triggers at logon is used to:",
+    options: [
+      "Run a program whenever a user signs in",
+      "Run only once during installation",
+      "Run only at shutdown",
+      "Disable system updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Logon triggers execute whenever a user logs in.",
+  },
+  {
+    id: 58,
+    topic: "Services",
+    question: "Why should service accounts be least privilege?",
+    options: [
+      "To reduce impact if the service is abused for persistence",
+      "To stop the service from running",
+      "To remove event logging",
+      "To avoid patching",
+    ],
+    correctAnswer: 0,
+    explanation: "Least privilege limits damage if the service is compromised.",
+  },
+  {
+    id: 59,
+    topic: "Detection",
+    question: "Which log source helps detect registry persistence?",
+    options: [
+      "Sysmon with registry auditing",
+      "DNS server logs only",
+      "Printer logs only",
+      "BIOS logs only",
+    ],
+    correctAnswer: 0,
+    explanation: "Registry auditing captures changes to Run keys and other locations.",
+  },
+  {
+    id: 60,
+    topic: "Basics",
+    question: "Which of the following is NOT a common persistence method?",
+    options: [
+      "Changing desktop wallpaper",
+      "Scheduled Tasks",
+      "Run keys",
+      "Services",
+    ],
+    correctAnswer: 0,
+    explanation: "Wallpaper changes are not persistence mechanisms.",
+  },
+  {
+    id: 61,
+    topic: "Hardening",
+    question: "Why enable tamper protection and EDR alerts?",
+    options: [
+      "To detect changes to persistence locations",
+      "To remove all user accounts",
+      "To disable update checks",
+      "To increase download speeds",
+    ],
+    correctAnswer: 0,
+    explanation: "EDR can monitor and alert on persistence behaviors.",
+  },
+  {
+    id: 62,
+    topic: "Hardening",
+    question: "Why review startup entries during incident response?",
+    options: [
+      "Persistence may remain after initial cleanup",
+      "Startup entries are always benign",
+      "They have no impact on systems",
+      "They prevent updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Persistence often survives unless explicitly removed.",
+  },
+  {
+    id: 63,
+    topic: "Registry",
+    question: "Which tool is useful for reading registry persistence keys?",
+    options: [
+      "reg query",
+      "ipconfig",
+      "tracert",
+      "route",
+    ],
+    correctAnswer: 0,
+    explanation: "reg query reads registry keys from the CLI.",
+  },
+  {
+    id: 64,
+    topic: "Detection",
+    question: "What is a red flag for persistence review?",
+    options: [
+      "Startup entries pointing to user temp folders",
+      "Signed vendor update tasks",
+      "Services under Program Files",
+      "Known security agent tasks",
+    ],
+    correctAnswer: 0,
+    explanation: "Temp folder paths are common for malicious persistence.",
+  },
+  {
+    id: 65,
+    topic: "Basics",
+    question: "Why is persistence important for attackers?",
+    options: [
+      "It allows long-term access and reentry",
+      "It guarantees zero detection",
+      "It automatically provides domain admin",
+      "It bypasses patching",
+    ],
+    correctAnswer: 0,
+    explanation: "Persistence enables long-term access to a target.",
+  },
+  {
+    id: 66,
+    topic: "Registry",
+    question: "What is a key risk with writable Run keys?",
+    options: [
+      "Attackers can add executables for logon execution",
+      "They increase system boot time only",
+      "They prevent logon entirely",
+      "They disable antivirus",
+    ],
+    correctAnswer: 0,
+    explanation: "Writable Run keys enable stealthy autostart.",
+  },
+  {
+    id: 67,
+    topic: "WMI",
+    question: "Which tool can enumerate WMI subscriptions?",
+    options: [
+      "PowerShell WMI cmdlets",
+      "nslookup",
+      "arp",
+      "ping",
+    ],
+    correctAnswer: 0,
+    explanation: "WMI cmdlets can query EventFilter and Consumer objects.",
+  },
+  {
+    id: 68,
+    topic: "Services",
+    question: "Why is service recovery configuration relevant?",
+    options: [
+      "It can restart a malicious service automatically",
+      "It disables all services",
+      "It encrypts service binaries",
+      "It updates Windows Defender",
+    ],
+    correctAnswer: 0,
+    explanation: "Recovery actions can keep a malicious service running.",
+  },
+  {
+    id: 69,
+    topic: "Detection",
+    question: "Which data helps confirm suspicious persistence?",
+    options: [
+      "Command-line arguments and file hashes",
+      "Only user full names",
+      "Only system uptime",
+      "Only DNS records",
+    ],
+    correctAnswer: 0,
+    explanation: "Command lines and hashes help validate suspicious entries.",
+  },
+  {
+    id: 70,
+    topic: "Hardening",
+    question: "Why should administrators review new services and tasks?",
+    options: [
+      "To catch unauthorized persistence quickly",
+      "To speed up boots",
+      "To reduce logging",
+      "To disable backups",
+    ],
+    correctAnswer: 0,
+    explanation: "Rapid review shortens dwell time for persistence.",
+  },
+  {
+    id: 71,
+    topic: "Basics",
+    question: "Which category is an example of persistence?",
+    options: [
+      "Creating a scheduled task at logon",
+      "Running a one-time command in PowerShell",
+      "Performing a ping sweep",
+      "Viewing event logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Scheduled tasks at logon provide repeat execution.",
+  },
+  {
+    id: 72,
+    topic: "Detection",
+    question: "Why check the startup approved registry keys?",
+    options: [
+      "They indicate whether startup items are enabled",
+      "They store password hashes",
+      "They track network routes",
+      "They control DNS settings",
+    ],
+    correctAnswer: 0,
+    explanation: "Startup approved keys show enabled startup entries.",
+  },
+  {
+    id: 73,
+    topic: "Hardening",
+    question: "Why remove stale admin accounts?",
+    options: [
+      "They can be used to create persistence unchecked",
+      "They speed up logon",
+      "They improve network throughput",
+      "They enable automatic backups",
+    ],
+    correctAnswer: 0,
+    explanation: "Unused admin accounts can be abused to maintain persistence.",
+  },
+  {
+    id: 74,
+    topic: "Registry",
+    question: "What is the risk of a modified Winlogon Userinit value?",
+    options: [
+      "It can execute malware at logon",
+      "It only changes wallpaper",
+      "It disables updates",
+      "It affects DNS settings only",
+    ],
+    correctAnswer: 0,
+    explanation: "Userinit modifications can run malicious programs at logon.",
+  },
+  {
+    id: 75,
+    topic: "Hardening",
+    question: "What is a strong response action for persistence?",
+    options: [
+      "Remove the entry and remediate the root cause",
+      "Ignore and monitor only",
+      "Disable all logs",
+      "Reboot and assume it is gone",
+    ],
+    correctAnswer: 0,
+    explanation: "Persistence must be removed and the cause fixed.",
+  },
+];
 
 const WindowsPersistenceMechanismsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -279,9 +1263,15 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
     <LearnPageLayout pageTitle="Windows Persistence Mechanisms" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
       <Container maxWidth="lg">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learn Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <AutorenewIcon sx={{ fontSize: 42, color: "#3b82f6" }} />
@@ -678,6 +1668,28 @@ Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer`}
           </TabPanel>
         </Paper>
 
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Windows Persistence Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
@@ -685,7 +1697,7 @@ Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer`}
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#3b82f6", color: "#3b82f6" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

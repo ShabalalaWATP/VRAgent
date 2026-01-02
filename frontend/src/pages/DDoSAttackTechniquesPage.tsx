@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -31,6 +31,7 @@ import {
   Divider,
   AlertTitle,
   Button,
+  Avatar,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -55,6 +56,13 @@ import HttpIcon from "@mui/icons-material/Http";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import SearchIcon from "@mui/icons-material/Search";
 import AnalyticsIcon from "@mui/icons-material/Analytics";
+import SchoolIcon from "@mui/icons-material/School";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import QuizIcon from "@mui/icons-material/Quiz";
+import ScienceIcon from "@mui/icons-material/Science";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
+import TimelineIcon from "@mui/icons-material/Timeline";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 interface TabPanelProps {
@@ -99,6 +107,529 @@ const CodeBlock = ({ children, language }: { children: string; language?: string
 // DATA ARRAYS
 // =============================================================================
 
+// =============================================================================
+// PART 1: DDOS FUNDAMENTALS FOR BEGINNERS
+// =============================================================================
+
+const ddosFundamentals = {
+  whatIsDDoS: {
+    title: "What is a DDoS Attack?",
+    icon: "🎯",
+    beginnerExplanation: `Imagine you're trying to call a pizza place, but 10,000 people are also calling at the exact same time. 
+The phone lines get jammed, and nobody can get through - including you with your legitimate order. 
+That's essentially what a DDoS attack does to websites and online services.
+
+DDoS stands for "Distributed Denial of Service". Let's break that down:
+• DISTRIBUTED = The attack comes from many different computers at once
+• DENIAL = The goal is to DENY access to legitimate users  
+• SERVICE = The target is a service (website, game server, etc.)
+
+The "distributed" part is what makes these attacks so dangerous. If 1,000 computers each send 1,000 requests 
+per second, that's 1 MILLION requests per second hitting the target!`,
+    technicalDetails: `A DDoS attack exploits the fundamental nature of how the internet works - servers must respond to requests.
+By overwhelming the target with more requests than it can handle, attackers cause:
+• Bandwidth exhaustion (network pipe is full)
+• State table exhaustion (too many connections to track)
+• CPU/Memory exhaustion (too much work to process)
+• Application resource exhaustion (database connections, etc.)`,
+    realWorldAnalogy: "Restaurant Analogy",
+    analogyExplanation: `Think of a popular restaurant:
+• Normal day: 100 customers/hour, kitchen handles it fine
+• Flash mob attack: 10,000 people show up demanding service
+• Result: Real customers can't get in, staff overwhelmed, chaos
+
+The restaurant isn't "broken" - it's just overwhelmed. Same with DDoS targets.`,
+    keyPoints: [
+      "DDoS doesn't 'hack' into systems - it overwhelms them with traffic",
+      "Attacks come from thousands or millions of sources simultaneously",
+      "The goal is to make services unavailable, not to steal data",
+      "Even the biggest companies can be affected (AWS, Google, Microsoft have been hit)",
+      "Attacks can cost businesses $40,000+ per hour of downtime"
+    ]
+  },
+  howInternetWorks: {
+    title: "How the Internet Works (Simplified)",
+    icon: "🌐",
+    beginnerExplanation: `Before understanding DDoS, you need to understand the basics of how the internet works.
+
+When you type "google.com" in your browser, here's what happens:
+1. YOUR COMPUTER asks "Where is google.com?" (DNS lookup)
+2. DNS server responds with an IP address (like 142.250.80.46)
+3. Your computer sends a REQUEST to that IP address
+4. Google's server sends back a RESPONSE (the webpage)
+5. Your browser displays the page
+
+This process involves PACKETS - small chunks of data that travel across networks.
+Every web request involves multiple packets going back and forth.`,
+    technicalDetails: `The internet uses a layered communication model:
+• Layer 7 (Application): HTTP, HTTPS, DNS - what apps use
+• Layer 4 (Transport): TCP, UDP - how data is delivered reliably
+• Layer 3 (Network): IP - how packets find their destination
+
+DDoS attacks can target ANY of these layers:
+• Layer 7 attacks: Flood with HTTP requests (looks like real users)
+• Layer 4 attacks: Flood with TCP/UDP packets (exhaust connections)
+• Layer 3 attacks: Flood with raw packets (saturate bandwidth)`,
+    keyPoints: [
+      "Every internet interaction involves packets traveling between computers",
+      "Servers have limited resources (bandwidth, memory, CPU, connections)",
+      "When these limits are exceeded, the server can't serve legitimate users",
+      "DDoS attacks work by exceeding these limits with fake traffic"
+    ]
+  },
+  bandwidth: {
+    title: "Understanding Bandwidth",
+    icon: "📊",
+    beginnerExplanation: `Bandwidth is like the width of a highway. A wider highway can handle more cars.
+Internet bandwidth is measured in bits per second (bps):
+• Kbps = 1,000 bits per second (kilobits)
+• Mbps = 1,000,000 bits per second (megabits)
+• Gbps = 1,000,000,000 bits per second (gigabits)
+• Tbps = 1,000,000,000,000 bits per second (terabits)
+
+Your home internet might be 100 Mbps. A typical web server might have 1 Gbps.
+Large DDoS attacks can generate 1+ Tbps - that's 1000x more than most servers can handle!`,
+    technicalDetails: `Bandwidth capacity vs actual usage:
+• Provisioned bandwidth: What you pay for (e.g., 10 Gbps link)
+• Baseline usage: Normal traffic (maybe 2 Gbps)
+• Headroom: Available capacity (8 Gbps buffer)
+• Attack threshold: Where problems start (>10 Gbps = saturated)
+
+DDoS attacks fill up this "pipe" so legitimate traffic can't get through.
+It's like a 4-lane highway where 100 cars try to merge at once.`,
+    keyPoints: [
+      "Bandwidth is the 'width of the pipe' for internet traffic",
+      "Measured in bits per second (Mbps, Gbps, Tbps)",
+      "Volumetric DDoS attacks try to fill up all available bandwidth",
+      "Even 100 Mbps of attack traffic can overwhelm small servers"
+    ]
+  },
+  packetsAndConnections: {
+    title: "Packets and Connections",
+    icon: "📦",
+    beginnerExplanation: `Data on the internet travels in PACKETS - small chunks of information.
+Think of packets like letters in the mail:
+• Each packet has a source address (where it came from)
+• Each packet has a destination address (where it's going)
+• Each packet carries a small piece of data (payload)
+
+A simple web page might require 50-100 packets to load.
+A video stream might use thousands of packets per second.`,
+    technicalDetails: `TCP Connections require a "handshake":
+1. Client sends SYN ("Hello, I want to connect")
+2. Server responds SYN-ACK ("Hello, I hear you, go ahead")
+3. Client sends ACK ("Great, let's talk")
+4. Connection is now "established"
+
+The server must remember EACH connection in a "state table".
+This table has LIMITED SIZE. If attackers fill it with fake half-open connections,
+legitimate users can't connect. This is how SYN flood attacks work!`,
+    keyPoints: [
+      "Packets are small chunks of data with source/destination addresses",
+      "TCP connections require a 3-way handshake",
+      "Servers track connections in state tables (limited memory)",
+      "Protocol attacks try to exhaust connection tracking resources"
+    ]
+  },
+  dosVsDDoS: {
+    title: "DoS vs DDoS: What's the Difference?",
+    icon: "⚔️",
+    beginnerExplanation: `DoS (Denial of Service) comes from ONE source.
+DDoS (Distributed Denial of Service) comes from MANY sources.
+
+Why does this matter?
+• DoS from 1 IP: Easy to block that IP address
+• DDoS from 100,000 IPs: Can't block them all without blocking real users!
+
+It's like the difference between:
+• One person crank-calling you repeatedly (DoS) - just block their number
+• 10,000 different people calling you (DDoS) - how do you know who's real?`,
+    technicalDetails: `Technical comparison:
+DoS Attack:
+• Single source IP address
+• Limited attack bandwidth (attacker's connection)
+• Easy to identify and filter
+• Example: Single machine running LOIC
+
+DDoS Attack:
+• Thousands to millions of source IPs
+• Combined bandwidth of entire botnet
+• Hard to filter without affecting legitimate traffic
+• Example: Mirai botnet with 400,000+ infected devices`,
+    keyPoints: [
+      "DoS = one attacker, DDoS = many attackers (distributed)",
+      "Single-source attacks are easy to block",
+      "Distributed attacks are much harder to mitigate",
+      "Most modern attacks are DDoS using botnets"
+    ]
+  },
+  attackMetrics: {
+    title: "How DDoS Attacks Are Measured",
+    icon: "📈",
+    beginnerExplanation: `DDoS attacks are measured in three main ways:
+
+1. BANDWIDTH (bps) - How much data per second
+   • "A 100 Gbps attack" = 100 billion bits of traffic per second
+   • Used for volumetric attacks that flood the network pipe
+
+2. PACKETS (pps) - How many packets per second
+   • "A 50 Mpps attack" = 50 million packets per second
+   • Used for protocol attacks that exhaust state tables
+
+3. REQUESTS (rps) - How many application requests per second
+   • "A 10 Mrps attack" = 10 million HTTP requests per second
+   • Used for application layer attacks`,
+    technicalDetails: `Why different metrics matter:
+• bps (bits per second): Measures link saturation
+  - High bps = your internet connection is full
+  - Mitigated by more bandwidth or upstream filtering
+
+• pps (packets per second): Measures device processing
+  - High pps = routers/firewalls can't keep up
+  - Mitigated by hardware rate limiting
+
+• rps (requests per second): Measures application load
+  - High rps = web servers/databases overwhelmed
+  - Mitigated by caching, WAF, rate limiting`,
+    keyPoints: [
+      "bps measures raw bandwidth consumption",
+      "pps measures network device processing load",
+      "rps measures application-level request load",
+      "Different attack types optimize for different metrics"
+    ]
+  }
+};
+
+const expandedGlossary: Record<string, { term: string; definition: string; example: string; relatedTerms: string[]; difficulty: 'beginner' | 'intermediate' | 'advanced' }> = {
+  ddos: {
+    term: "DDoS (Distributed Denial of Service)",
+    definition: "An attack where many computers flood a target with traffic simultaneously, making it unavailable to legitimate users.",
+    example: "A botnet of 100,000 infected computers all sending traffic to amazon.com at once, causing the site to slow down or become unreachable.",
+    relatedTerms: ["DoS", "Botnet", "Flood attack"],
+    difficulty: "beginner"
+  },
+  botnet: {
+    term: "Botnet",
+    definition: "A network of computers infected with malware that can be remotely controlled to perform attacks without the owners' knowledge.",
+    example: "The Mirai botnet consisted of 400,000+ infected IoT devices (cameras, routers) that were used to launch the 1.1 Tbps attack on OVH.",
+    relatedTerms: ["Bot", "Zombie", "C2", "Malware"],
+    difficulty: "beginner"
+  },
+  amplification: {
+    term: "Amplification",
+    definition: "A technique where attackers send small requests to servers that respond with much larger replies, multiplying the attack traffic.",
+    example: "A 100-byte DNS query can generate a 3000-byte response (30x amplification). Memcached can amplify up to 51,000x!",
+    relatedTerms: ["Reflection", "DNS amplification", "NTP amplification"],
+    difficulty: "intermediate"
+  },
+  reflection: {
+    term: "Reflection",
+    definition: "Using third-party servers to bounce attack traffic to the victim by spoofing the source IP address.",
+    example: "Attacker sends DNS query with victim's IP as source. DNS server sends large response to victim, not attacker.",
+    relatedTerms: ["Amplification", "IP spoofing", "Open resolver"],
+    difficulty: "intermediate"
+  },
+  synFlood: {
+    term: "SYN Flood",
+    definition: "An attack that exploits the TCP handshake by sending many SYN packets but never completing connections, exhausting server resources.",
+    example: "Attacker sends 1 million SYN packets/sec with random source IPs. Server waits for ACKs that never come, filling connection table.",
+    relatedTerms: ["TCP handshake", "SYN-ACK", "Connection table"],
+    difficulty: "intermediate"
+  },
+  volumetric: {
+    term: "Volumetric Attack",
+    definition: "DDoS attacks that aim to saturate the target's bandwidth with massive amounts of traffic.",
+    example: "UDP flood sending 500 Gbps of traffic to overwhelm a target with only 10 Gbps bandwidth capacity.",
+    relatedTerms: ["Bandwidth", "UDP flood", "ICMP flood"],
+    difficulty: "beginner"
+  },
+  layer7: {
+    term: "Layer 7 / Application Layer",
+    definition: "The top layer of the network stack where user applications operate (HTTP, HTTPS, DNS). Layer 7 attacks target application logic.",
+    example: "HTTP flood sending millions of legitimate-looking web requests to exhaust web server resources.",
+    relatedTerms: ["HTTP flood", "Slowloris", "OSI model"],
+    difficulty: "intermediate"
+  },
+  scrubbing: {
+    term: "Scrubbing Center",
+    definition: "Specialized facilities that filter DDoS traffic by analyzing and separating malicious packets from legitimate traffic.",
+    example: "During an attack, traffic is routed through Cloudflare's scrubbing center, which drops attack packets and forwards clean traffic.",
+    relatedTerms: ["Traffic cleaning", "Mitigation", "CDN"],
+    difficulty: "intermediate"
+  },
+  anycast: {
+    term: "Anycast",
+    definition: "A network routing method where the same IP address is announced from multiple locations, distributing traffic globally.",
+    example: "Cloudflare announces the same IP from 200+ data centers. Attack traffic is automatically spread across all locations.",
+    relatedTerms: ["BGP", "Load balancing", "CDN"],
+    difficulty: "advanced"
+  },
+  rateLimit: {
+    term: "Rate Limiting",
+    definition: "Restricting the number of requests a single source can make in a given time period.",
+    example: "API allows 100 requests per minute per IP. The 101st request gets blocked with '429 Too Many Requests'.",
+    relatedTerms: ["Throttling", "WAF", "Traffic shaping"],
+    difficulty: "beginner"
+  },
+  c2: {
+    term: "C2 / Command and Control",
+    definition: "The infrastructure attackers use to control their botnet and coordinate attacks.",
+    example: "Bot-infected devices connect to a C2 server via IRC, HTTP, or P2P to receive attack commands and targets.",
+    relatedTerms: ["Botnet", "Bot herder", "Malware"],
+    difficulty: "intermediate"
+  },
+  blackhole: {
+    term: "Black Hole Routing",
+    definition: "Discarding all traffic destined to a specific IP address to protect the rest of the network during an attack.",
+    example: "ISP null-routes victim's IP during massive attack. Victim goes offline but rest of ISP's customers are protected.",
+    relatedTerms: ["Null routing", "RTBH", "BGP"],
+    difficulty: "advanced"
+  },
+  slowloris: {
+    term: "Slowloris",
+    definition: "An application-layer attack that opens many connections to a web server and keeps them open by sending partial HTTP requests very slowly.",
+    example: "Attacker opens 10,000 connections, each sending 1 byte every 10 seconds. Server waits for complete requests that never finish.",
+    relatedTerms: ["HTTP flood", "Connection exhaustion", "Layer 7"],
+    difficulty: "intermediate"
+  },
+  synCookies: {
+    term: "SYN Cookies",
+    definition: "A defense technique where servers encode connection state in the TCP sequence number instead of storing it, preventing SYN flood attacks.",
+    example: "Instead of storing 100,000 half-open connections, server encodes state in sequence number and only stores completed connections.",
+    relatedTerms: ["SYN flood", "TCP handshake", "Connection table"],
+    difficulty: "advanced"
+  },
+  pps: {
+    term: "PPS (Packets Per Second)",
+    definition: "A metric measuring how many network packets are being transmitted per second. High PPS can overwhelm network devices.",
+    example: "A 50 Mpps attack sends 50 million packets per second, potentially overwhelming router CPU regardless of bandwidth.",
+    relatedTerms: ["Bandwidth", "bps", "rps"],
+    difficulty: "intermediate"
+  }
+};
+
+const visualLearningAids = {
+  ddosVsDosDiagram: `
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        DoS vs DDoS Comparison                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   DoS (Single Source)              DDoS (Distributed)                        │
+│                                                                              │
+│       ┌─────────┐                     ┌─────┐ ┌─────┐ ┌─────┐               │
+│       │Attacker │                     │Bot 1│ │Bot 2│ │Bot 3│               │
+│       └────┬────┘                     └──┬──┘ └──┬──┘ └──┬──┘               │
+│            │                             │       │       │                   │
+│            │ Traffic                     │       │       │                   │
+│            │                             └───────┼───────┘                   │
+│            │                                     │ Combined                  │
+│            │                                     │ Traffic                   │
+│            ▼                                     ▼                           │
+│       ┌─────────┐                          ┌─────────┐                       │
+│       │ Target  │                          │ Target  │                       │
+│       └─────────┘                          └─────────┘                       │
+│                                                                              │
+│   • Easy to block (1 IP)               • Hard to block (1000s of IPs)        │
+│   • Limited bandwidth                  • Massive combined bandwidth          │
+│   • Simple to trace                    • Complex to investigate              │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘`,
+  bandwidthPipeDiagram: `
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Bandwidth as a Pipe (Visual)                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   NORMAL TRAFFIC:                                                            │
+│   ╔═══════════════════════════════════════════════════════════════════════╗ │
+│   ║ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ║ │
+│   ║ ░░░░ LEGITIMATE TRAFFIC (30%) ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ║ │
+│   ║ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ║ │
+│   ╚═══════════════════════════════════════════════════════════════════════╝ │
+│   [====================                                    ] 30% Used        │
+│   Plenty of room for more traffic ✓                                          │
+│                                                                              │
+│   DURING DDOS ATTACK:                                                        │
+│   ╔═══════════════════════════════════════════════════════════════════════╗ │
+│   ║ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ║ │
+│   ║ ▓▓▓▓ ATTACK TRAFFIC (95%) ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ LEGIT (5%) ░░ ║ │
+│   ║ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ║ │
+│   ╚═══════════════════════════════════════════════════════════════════════╝ │
+│   [════════════════════════════════════════════════════════] 100% SATURATED │
+│   Legitimate traffic gets dropped! ✗                                         │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘`,
+  tcpHandshakeDiagram: `
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    TCP 3-Way Handshake Explained                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   Normal TCP Connection:           SYN Flood Attack:                         │
+│                                                                              │
+│   Client         Server            Attacker         Server                   │
+│     │              │                  │               │                      │
+│     │──── SYN ────►│  "Can I         │──── SYN ────►│  Spoofed IP            │
+│     │              │   connect?"     │──── SYN ────►│  Spoofed IP            │
+│     │◄─ SYN-ACK ──│  "Yes, go       │──── SYN ────►│  Spoofed IP            │
+│     │              │   ahead!"       │    ...       │  (thousands)           │
+│     │──── ACK ────►│  "Great,        │              │                        │
+│     │              │   connected!"   │              │                        │
+│     │◄──  Data  ──►│                 │              ▼                        │
+│     │              │                 │         ╔═══════════╗                 │
+│                                      │         ║ Server    ║                 │
+│   Connection Table:                  │         ║ waiting   ║                 │
+│   [Slot 1: Connected]                │         ║ for ACKs  ║                 │
+│   [Slot 2: Available]                │         ║ that will ║                 │
+│   [Slot 3: Available]                │         ║ never     ║                 │
+│                                      │         ║ come...   ║                 │
+│   ✓ Works normally                   │         ╚═══════════╝                 │
+│                                      │         Connection table FULL!        │
+│                                      │         ✗ Legitimate users blocked    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘`
+};
+
+const realWorldIncidents = [
+  {
+    name: "GitHub (2018)",
+    target: "GitHub.com",
+    attackSize: "1.35 Tbps",
+    duration: "~20 minutes",
+    attackType: "Memcached Amplification",
+    description: "The largest DDoS attack recorded at the time. Attackers used misconfigured Memcached servers to amplify traffic 51,000x. GitHub's DDoS protection automatically routed traffic through scrubbing centers.",
+    outcome: "GitHub was intermittently unavailable for about 10 minutes. Their DDoS protection worked as designed.",
+    lessonsLearned: [
+      "Memcached UDP should be disabled or firewalled",
+      "Automatic DDoS mitigation is essential for high-profile targets",
+      "Amplification attacks can generate enormous traffic from minimal resources"
+    ],
+    difficulty: "intermediate"
+  },
+  {
+    name: "Dyn DNS (2016)",
+    target: "Dyn DNS infrastructure",
+    attackSize: "1.2 Tbps",
+    duration: "Most of the day",
+    attackType: "Mirai Botnet",
+    description: "The Mirai botnet, consisting of 100,000+ compromised IoT devices, attacked Dyn's DNS servers. This caused major websites (Twitter, Netflix, Reddit, CNN) to become unreachable for millions of users.",
+    outcome: "Major internet outage affecting East Coast US. Highlighted the vulnerability of DNS infrastructure.",
+    lessonsLearned: [
+      "IoT devices are a massive security risk due to default credentials",
+      "DNS is a critical single point of failure for many services",
+      "Multi-provider DNS strategies are essential"
+    ],
+    difficulty: "beginner"
+  },
+  {
+    name: "AWS (2020)",
+    target: "AWS customer",
+    attackSize: "2.3 Tbps",
+    duration: "3 days",
+    attackType: "CLDAP Reflection",
+    description: "The largest DDoS attack ever recorded at the time. Attackers used CLDAP (Connectionless LDAP) reflection to generate massive traffic volumes targeting an AWS customer.",
+    outcome: "AWS Shield mitigated the attack. Customer experienced minimal impact due to AWS's infrastructure.",
+    lessonsLearned: [
+      "Cloud providers have massive capacity to absorb attacks",
+      "CLDAP servers should not be exposed to the internet",
+      "Investment in DDoS protection pays off"
+    ],
+    difficulty: "intermediate"
+  },
+  {
+    name: "Cloudflare (2023)",
+    target: "Cloudflare customer",
+    attackSize: "71 Million RPS",
+    duration: "~1 hour",
+    attackType: "HTTP/2 Rapid Reset",
+    description: "Exploited a zero-day vulnerability in HTTP/2 (CVE-2023-44487) where attackers rapidly open and reset streams, overwhelming servers. This was a new attack technique that bypassed traditional rate limiting.",
+    outcome: "Cloudflare automatically mitigated the attack. The incident led to industry-wide patches for HTTP/2 implementations.",
+    lessonsLearned: [
+      "New attack techniques can bypass existing protections",
+      "Protocol-level vulnerabilities can be devastating",
+      "Coordinated disclosure is essential for new attack types"
+    ],
+    difficulty: "advanced"
+  },
+  {
+    name: "Spamhaus (2013)",
+    target: "Spamhaus anti-spam organization",
+    attackSize: "300 Gbps",
+    duration: "Over a week",
+    attackType: "DNS Amplification",
+    description: "Cyberbunker, upset at being blacklisted, launched one of the largest attacks of its time against Spamhaus. The attack was so large it caused collateral slowdowns across the internet.",
+    outcome: "Cloudflare helped mitigate. Several people were arrested. Highlighted the need for DDoS protection.",
+    lessonsLearned: [
+      "Open DNS resolvers are dangerous amplification vectors",
+      "Even anti-spam organizations can be DDoS targets",
+      "Law enforcement can trace and prosecute attackers"
+    ],
+    difficulty: "beginner"
+  }
+];
+
+const beginnerQuiz = [
+  {
+    question: "What does the 'D' in DDoS stand for?",
+    options: ["Dangerous", "Distributed", "Direct", "Dynamic"],
+    correctIndex: 1,
+    explanation: "DDoS stands for Distributed Denial of Service. 'Distributed' means the attack comes from many different computers simultaneously."
+  },
+  {
+    question: "Why are DDoS attacks harder to stop than regular DoS attacks?",
+    options: [
+      "They use stronger computers",
+      "They come from many different IP addresses",
+      "They use encryption",
+      "They are faster"
+    ],
+    correctIndex: 1,
+    explanation: "DDoS attacks come from thousands or millions of different IP addresses, making it impossible to simply block the attacker's IP."
+  },
+  {
+    question: "What is a botnet?",
+    options: [
+      "A type of firewall",
+      "A network of infected computers controlled by an attacker",
+      "A security tool for detecting attacks",
+      "A type of web server"
+    ],
+    correctIndex: 1,
+    explanation: "A botnet is a network of compromised computers (bots) that can be remotely controlled to launch DDoS attacks."
+  },
+  {
+    question: "What does 'amplification' mean in DDoS attacks?",
+    options: [
+      "Making the attack louder",
+      "Using bigger computers",
+      "Small requests generating much larger responses",
+      "Attacking multiple targets at once"
+    ],
+    correctIndex: 2,
+    explanation: "Amplification means sending small requests to servers that respond with much larger replies, multiplying the attack traffic."
+  },
+  {
+    question: "Which layer do 'volumetric' DDoS attacks target?",
+    options: [
+      "Application layer (Layer 7)",
+      "Network layer (Layer 3/4) - bandwidth",
+      "Physical layer (Layer 1)",
+      "Database layer"
+    ],
+    correctIndex: 1,
+    explanation: "Volumetric attacks target the network layer, trying to saturate bandwidth with massive amounts of traffic."
+  },
+  {
+    question: "What is a SYN flood attack?",
+    options: [
+      "Flooding with water damage",
+      "Sending fake connection requests that never complete",
+      "Sending too many DNS requests",
+      "Overwhelming with HTTP requests"
+    ],
+    correctIndex: 1,
+    explanation: "A SYN flood sends many TCP connection requests (SYN packets) but never completes the handshake, exhausting server connection tables."
+  }
+];
+
 const attackCategories = [
   {
     name: "Volumetric Attacks",
@@ -137,6 +668,550 @@ const attackCategories = [
       { name: "DNS Query Flood", description: "Floods DNS servers with valid but random subdomain queries that can't be cached" },
     ],
   },
+];
+
+// =============================================================================
+// PART 2: ATTACK TYPE DEEP DIVES
+// =============================================================================
+
+const attackTypeDeepDives: Record<string, {
+  name: string;
+  category: 'volumetric' | 'protocol' | 'application';
+  icon: string;
+  difficultyToExecute: 'easy' | 'medium' | 'hard';
+  difficultyToDefend: 'easy' | 'medium' | 'hard';
+  beginnerExplanation: string;
+  howItWorks: string;
+  technicalDetails: string;
+  packetStructure?: string;
+  attackTimeline: string;
+  realWorldExample: { name: string; date: string; description: string };
+  indicators: string[];
+  defenses: string[];
+  codeExample?: string;
+  bandwidth?: string;
+}> = {
+  udpFlood: {
+    name: "UDP Flood",
+    category: "volumetric",
+    icon: "🌊",
+    difficultyToExecute: "easy",
+    difficultyToDefend: "medium",
+    beginnerExplanation: `Imagine someone sending you millions of letters, but none of them have a return address 
+and none of them make sense. You have to open each one to see if it's important, but they're all garbage.
+That's a UDP flood - overwhelming you with useless traffic that you still have to process.
+
+UDP (User Datagram Protocol) doesn't require a "handshake" like TCP - you can just start sending packets.
+This makes it perfect for flooding attacks because there's no overhead.`,
+    howItWorks: `1. Attacker sends massive amounts of UDP packets to random ports
+2. Target server receives each packet and checks if any application is listening on that port
+3. If no application is listening, server responds with ICMP "Destination Unreachable"
+4. This consumes both bandwidth AND CPU cycles
+5. Legitimate traffic gets dropped because resources are exhausted`,
+    technicalDetails: `Protocol: UDP (Layer 4)
+Typical Packet Size: 512-1500 bytes
+Attack Bandwidth: 1 Gbps - 1+ Tbps
+Spoofing: Source IP can be easily spoofed
+
+Why UDP is easy to abuse:
+- Connectionless: No handshake required, just send packets
+- No flow control: Can send at maximum rate
+- Spoofable: Source IP not verified
+- Processing required: Server must check each packet`,
+    packetStructure: `
+┌───────────────────────────────────────────────────────┐
+│                    UDP Flood Packet                    │
+├───────────────────────────────────────────────────────┤
+│ IP Header (20 bytes)                                  │
+│   Source IP: [SPOOFED - Random or specific]           │
+│   Dest IP: [VICTIM IP]                                │
+│   Protocol: 17 (UDP)                                  │
+├───────────────────────────────────────────────────────┤
+│ UDP Header (8 bytes)                                  │
+│   Source Port: [Random high port]                     │
+│   Dest Port: [Random - often 53, 80, 443]            │
+│   Length: [Size of UDP packet]                        │
+│   Checksum: [Often 0 or invalid]                      │
+├───────────────────────────────────────────────────────┤
+│ Payload (variable)                                    │
+│   [Random data or zeros - just to fill bandwidth]     │
+└───────────────────────────────────────────────────────┘`,
+    attackTimeline: `
+Time 0:00 - Attack begins
+  └─ Botnet starts sending UDP packets
+  └─ Target receives 100,000 pps
+
+Time 0:30 - Resource exhaustion begins
+  └─ Bandwidth utilization reaches 80%
+  └─ Server CPU spikes processing packets
+
+Time 1:00 - Service degradation
+  └─ Legitimate users experience slowdowns
+  └─ Packet loss increases
+
+Time 2:00 - Service failure
+  └─ Bandwidth saturated at 100%
+  └─ Server stops responding to legitimate traffic`,
+    realWorldExample: {
+      name: "Spamhaus Attack (2013)",
+      date: "March 2013",
+      description: "Attackers used UDP floods combined with DNS amplification to generate 300 Gbps of traffic against Spamhaus, causing noticeable slowdowns across Europe."
+    },
+    indicators: [
+      "Sudden spike in UDP traffic",
+      "High volume of ICMP Destination Unreachable messages",
+      "Traffic to random high ports",
+      "Network interface saturation",
+      "Uniform packet sizes in attack traffic"
+    ],
+    defenses: [
+      "Rate limit UDP traffic per source IP",
+      "Use hardware-based packet filtering",
+      "Implement upstream black hole routing",
+      "Deploy anycast network distribution",
+      "Use cloud-based DDoS mitigation services"
+    ],
+    codeExample: `# Detection with tcpdump
+tcpdump -i eth0 'udp and not port 53 and not port 123' -c 1000
+
+# Count UDP packets per second
+watch -n 1 'netstat -su | grep "packets received"'
+
+# Iptables rate limiting (defense)
+iptables -A INPUT -p udp -m limit --limit 100/s --limit-burst 200 -j ACCEPT
+iptables -A INPUT -p udp -j DROP`,
+    bandwidth: "Can generate 100 Gbps - 1+ Tbps with botnets"
+  },
+  synFlood: {
+    name: "SYN Flood",
+    category: "protocol",
+    icon: "🤝",
+    difficultyToExecute: "easy",
+    difficultyToDefend: "medium",
+    beginnerExplanation: `When you visit a website, your computer and the server do a "handshake":
+1. You: "Hi, can I connect?" (SYN)
+2. Server: "Sure, I'm ready!" (SYN-ACK)
+3. You: "Great, let's go!" (ACK)
+
+A SYN flood sends millions of "Hi, can I connect?" messages but NEVER responds with "Great, let's go!"
+The server sits there waiting for responses that never come, eventually running out of memory to track all these incomplete connections.`,
+    howItWorks: `1. Attacker sends thousands of SYN packets with spoofed source IPs
+2. Server allocates memory for each "half-open" connection
+3. Server sends SYN-ACK to spoofed IPs (which don't respond)
+4. Server waits (typically 75 seconds) for ACK that never comes
+5. Connection table fills up - no room for legitimate users!`,
+    technicalDetails: `Protocol: TCP (Layer 4)
+Attack Type: State exhaustion
+Target: TCP connection table (backlog queue)
+Typical Rate: 10,000 - 1,000,000+ SYN packets/second
+
+TCP Connection States:
+- LISTEN: Server waiting for connections
+- SYN_RECEIVED: Half-open connection (attack target!)
+- ESTABLISHED: Fully connected (legitimate users)
+
+The Problem:
+Server has LIMITED slots for half-open connections (backlog).
+Default Linux backlog: 128-1024 connections.
+Once full, ALL new connections are rejected!`,
+    packetStructure: `
+┌───────────────────────────────────────────────────────┐
+│                    SYN Flood Packet                    │
+├───────────────────────────────────────────────────────┤
+│ IP Header (20 bytes)                                  │
+│   Source IP: [SPOOFED - Random address]               │
+│   Dest IP: [VICTIM IP]                                │
+│   Protocol: 6 (TCP)                                   │
+├───────────────────────────────────────────────────────┤
+│ TCP Header (20+ bytes)                                │
+│   Source Port: [Random high port]                     │
+│   Dest Port: [80, 443, or target service]            │
+│   Sequence Number: [Random]                           │
+│   Flags: SYN (0x02) ← Only SYN flag set!             │
+│   Window Size: [Usually 65535]                        │
+│   Options: [MSS, Window Scale, etc.]                  │
+├───────────────────────────────────────────────────────┤
+│ Payload                                               │
+│   [Empty - SYN packets have no data]                  │
+└───────────────────────────────────────────────────────┘`,
+    attackTimeline: `
+Time 0:00 - Attack begins
+  └─ Attacker sends 50,000 SYN packets/second
+  └─ Server starts allocating memory for connections
+
+Time 0:10 - Backlog filling
+  └─ Half-open connections: 1,000 (backlog: 1,024)
+  └─ Server still accepting some connections
+
+Time 0:15 - Backlog full!
+  └─ Half-open connections: 1,024/1,024
+  └─ New legitimate connections REJECTED
+
+Time 0:15+ - Sustained attack
+  └─ Server periodically times out old connections
+  └─ New SYN packets immediately fill freed slots
+  └─ Legitimate users cannot connect`,
+    realWorldExample: {
+      name: "Panix ISP Attack (1996)",
+      date: "September 1996",
+      description: "One of the first documented SYN flood attacks. Panix, a New York ISP, was knocked offline for several days. This attack led to the development of SYN cookies."
+    },
+    indicators: [
+      "Large number of SYN_RECEIVED connections (netstat -an)",
+      "Connections from diverse/suspicious IP ranges",
+      "No corresponding ACK packets",
+      "High rate of new connections with low completion rate",
+      "Server logs showing connection timeouts"
+    ],
+    defenses: [
+      "Enable SYN cookies (kernel-level defense)",
+      "Increase TCP backlog queue size",
+      "Reduce SYN-ACK retries",
+      "Use hardware SYN proxy/firewall",
+      "Deploy cloud-based scrubbing"
+    ],
+    codeExample: `# Enable SYN cookies (CRITICAL defense!)
+echo 1 > /proc/sys/net/ipv4/tcp_syncookies
+# Or permanently: sysctl -w net.ipv4.tcp_syncookies=1
+
+# Check for SYN flood (count SYN_RECV connections)
+netstat -ant | grep SYN_RECV | wc -l
+
+# Watch half-open connections in real-time
+watch -n 1 'ss -s | grep "synrecv"'
+
+# Increase backlog
+echo 4096 > /proc/sys/net/core/somaxconn
+echo 4096 > /proc/sys/net/ipv4/tcp_max_syn_backlog
+
+# Reduce SYN-ACK retries (faster timeout)
+echo 2 > /proc/sys/net/ipv4/tcp_synack_retries`
+  },
+  httpFlood: {
+    name: "HTTP Flood",
+    category: "application",
+    icon: "🌐",
+    difficultyToExecute: "medium",
+    difficultyToDefend: "hard",
+    beginnerExplanation: `An HTTP flood is like sending thousands of real customers into a store, 
+each asking complex questions that take the staff time to answer.
+
+Unlike other attacks that just flood with garbage, HTTP floods send what look like REAL web requests.
+This makes them incredibly hard to block - how do you tell a malicious request from a real user?`,
+    howItWorks: `1. Attacker (via botnet) sends valid HTTP requests
+2. Requests are indistinguishable from legitimate traffic
+3. Each request requires server resources to process:
+   - CPU to parse request
+   - Database queries to fetch data
+   - Memory to build response
+4. Server becomes overwhelmed processing fake requests
+5. Legitimate users experience timeouts or errors`,
+    technicalDetails: `Protocol: HTTP/HTTPS (Layer 7)
+Attack Type: Application resource exhaustion
+Target: Web servers, application servers, databases
+Measurement: Requests per second (RPS)
+Modern attacks: 1M - 100M+ RPS
+
+Attack Variants:
+- GET flood: Requests for static or dynamic pages
+- POST flood: Submits form data (heavier on server)
+- Randomized URLs: Bypass caching, hit database
+- Slowloris: Keep connections open with slow requests
+- Cache bypass: Add random parameters (?rand=12345)
+
+Why L7 is Hard to Defend:
+- Traffic looks legitimate
+- Uses valid HTTP protocol
+- Can't just block by IP (bots rotate)
+- Rate limiting hurts real users too`,
+    attackTimeline: `
+Time 0:00 - Attack begins
+  └─ Botnet sends 100,000 HTTP requests/second
+  └─ Requests target expensive endpoints
+
+Time 0:30 - Resource consumption rises
+  └─ Database connection pool exhausted
+  └─ CPU usage: 95%
+  └─ Response times increasing
+
+Time 1:00 - Degradation visible
+  └─ 50% of requests timing out
+  └─ Cache miss rate increasing
+  └─ Backend services struggling
+
+Time 2:00 - Service failure
+  └─ Application crashes or stops responding
+  └─ Database overwhelmed
+  └─ Legitimate users get 503 errors`,
+    realWorldExample: {
+      name: "Cloudflare 71M RPS Attack",
+      date: "February 2023",
+      description: "Used HTTP/2 Rapid Reset vulnerability (CVE-2023-44487) to generate 71 million requests per second - the largest HTTP flood ever recorded."
+    },
+    indicators: [
+      "Spike in requests per second",
+      "Unusual request patterns (same URL, no referer)",
+      "Requests from unusual geographic locations",
+      "High rate of requests from few user agents",
+      "Requests bypassing cache (random query params)",
+      "Abnormal request/session ratios"
+    ],
+    defenses: [
+      "Web Application Firewall (WAF)",
+      "Rate limiting per IP/session",
+      "CAPTCHA challenges for suspicious traffic",
+      "Bot detection and fingerprinting",
+      "Caching to reduce origin load",
+      "Challenge-response cookies"
+    ],
+    codeExample: `# Nginx rate limiting
+limit_req_zone $binary_remote_addr zone=flood:10m rate=10r/s;
+
+server {
+    location / {
+        limit_req zone=flood burst=20 nodelay;
+        limit_req_status 429;
+    }
+}
+
+# Detect HTTP flood with Apache logs
+# Look for high request rate from single IP
+cat access.log | awk '{print $1}' | sort | uniq -c | sort -rn | head -20
+
+# Real-time monitoring
+tail -f access.log | awk '{print $1}' | uniq -c`
+  },
+  slowloris: {
+    name: "Slowloris",
+    category: "application",
+    icon: "🦥",
+    difficultyToExecute: "easy",
+    difficultyToDefend: "medium",
+    beginnerExplanation: `Imagine you're at a restaurant and 1000 people each order food but then say 
+"hold on, I'm still deciding" and never finish ordering. The waiters are stuck waiting, 
+and no new customers can be served!
+
+Slowloris works the same way - it opens many connections to a web server and keeps them open 
+by sending partial HTTP requests VERY slowly. The server waits patiently for each request 
+to complete, but they never do.`,
+    howItWorks: `1. Attacker opens many HTTP connections to the target
+2. Sends partial HTTP headers (doesn't complete the request)
+3. Periodically sends additional header bytes to keep connection alive
+4. Server waits for complete request (it's being patient!)
+5. All connection slots fill up with "waiting" connections
+6. No room left for legitimate users`,
+    technicalDetails: `Protocol: HTTP (Layer 7)
+Attack Type: Connection/thread exhaustion
+Target: Web servers with limited max connections
+Packets Required: Very few (low bandwidth attack!)
+Vulnerable: Apache (default config), some others
+
+How Partial Requests Work:
+Normal HTTP request:
+GET / HTTP/1.1\\r\\n
+Host: example.com\\r\\n
+\\r\\n  ← This blank line signals END of headers
+
+Slowloris sends:
+GET / HTTP/1.1\\r\\n
+Host: example.com\\r\\n
+X-header: value\\r\\n    ← Never sends final \\r\\n\\r\\n
+                          Server keeps waiting...
+
+Why It's Devastating:
+- Requires minimal attacker bandwidth
+- Single computer can take down a server
+- Hard to detect (looks like slow users)
+- Keeps connections in "receiving headers" state`,
+    packetStructure: `
+┌───────────────────────────────────────────────────────┐
+│               Slowloris Request Pattern                │
+├───────────────────────────────────────────────────────┤
+│ Initial Request (sent immediately):                   │
+│   "GET / HTTP/1.1\\r\\n"                               │
+│   "Host: target.com\\r\\n"                             │
+│                                                        │
+│ Keep-alive headers (sent every 10-15 seconds):        │
+│   "X-a: b\\r\\n"  ← Random header, keeps conn alive    │
+│   "X-c: d\\r\\n"                                       │
+│   "X-e: f\\r\\n"                                       │
+│                                                        │
+│ ⚠️ NEVER sends final "\\r\\n" to complete request!     │
+│                                                        │
+│ Result: Server keeps waiting... and waiting...        │
+└───────────────────────────────────────────────────────┘`,
+    attackTimeline: `
+Time 0:00 - Attack begins
+  └─ Attacker opens 500 connections
+  └─ Sends partial HTTP headers to each
+
+Time 0:30 - Connections accumulating
+  └─ Server has 500 "waiting" connections
+  └─ Normal users still connecting fine
+
+Time 1:00 - Max connections reached
+  └─ Server MaxClients/workers exhausted
+  └─ Apache default: 256 connections
+
+Time 1:00+ - Denial of service achieved
+  └─ New connections refused
+  └─ Legitimate users get "connection refused"
+  └─ Attacker maintains with ~10 bytes/conn every 15 sec`,
+    realWorldExample: {
+      name: "Iranian Election Protests (2009)",
+      date: "June 2009",
+      description: "Slowloris was used to attack Iranian government websites during the election protests. A single attacker could take down servers due to the low resource requirements."
+    },
+    indicators: [
+      "Many connections in 'reading headers' state",
+      "Connections staying open for very long periods",
+      "Low bandwidth but high connection count",
+      "Incomplete HTTP requests in logs",
+      "MaxClients/workers exhausted"
+    ],
+    defenses: [
+      "Set aggressive connection timeouts",
+      "Limit connections per IP address",
+      "Use reverse proxy (nginx handles this better)",
+      "Increase MaxClients with req_timeout module",
+      "Use mod_reqtimeout (Apache)",
+      "Deploy CDN/load balancer in front"
+    ],
+    codeExample: `# Apache mod_reqtimeout (defense)
+RequestReadTimeout header=20-40,MinRate=500
+
+# Nginx is naturally resistant - configure:
+client_header_timeout 10s;
+client_body_timeout 10s;
+keepalive_timeout 65s;
+
+# Detect Slowloris - look for incomplete requests
+netstat -ant | grep ESTABLISHED | wc -l
+
+# Check Apache status for hanging connections
+apachectl status | grep "Reading Request"`
+  },
+  dnsAmplification: {
+    name: "DNS Amplification",
+    category: "volumetric",
+    icon: "📡",
+    difficultyToExecute: "medium",
+    difficultyToDefend: "medium",
+    beginnerExplanation: `Imagine you could write a postcard asking for a phone book, and someone would mail 
+a HUGE phone book to whoever's address you wrote on the card - even if it wasn't yours!
+
+DNS amplification works like this:
+1. Attacker sends tiny DNS query (50 bytes)
+2. Uses VICTIM's IP address as the "return address"  
+3. DNS server sends HUGE response (3000+ bytes) to victim
+4. 60x more traffic hits the victim than the attacker sent!`,
+    howItWorks: `1. Attacker finds "open DNS resolvers" (misconfigured servers)
+2. Sends DNS queries with spoofed source IP (victim's IP)
+3. Uses special query types that generate large responses:
+   - ANY: Returns all records for a domain
+   - TXT: Can contain large text records  
+   - DNSSEC: Includes large signatures
+4. DNS servers send huge responses to the victim
+5. Victim receives 28-54x more traffic than attacker sent`,
+    technicalDetails: `Protocol: DNS/UDP (Port 53)
+Amplification Factor: 28-54x (ANY queries)
+Query Size: ~50 bytes
+Response Size: ~3000 bytes
+Required: Open recursive DNS resolvers + IP spoofing
+
+Query Types for Maximum Amplification:
+- ANY: Requests ALL record types
+- TXT: Large text records
+- DNSKEY: DNSSEC public keys
+- RRSIG: DNSSEC signatures
+
+Why Open Resolvers Exist:
+- Misconfigured DNS servers
+- Default "allow recursion" settings
+- ISPs not implementing BCP38 (egress filtering)`,
+    packetStructure: `
+┌───────────────────────────────────────────────────────┐
+│              DNS Amplification Attack Flow             │
+├───────────────────────────────────────────────────────┤
+│                                                        │
+│  Attacker          Open Resolvers          Victim      │
+│     │                    │                    │        │
+│     │── Query (50B) ────►│                    │        │
+│     │   src: VICTIM_IP   │                    │        │
+│     │   query: ANY       │                    │        │
+│     │                    │                    │        │
+│     │                    │── Response ───────►│        │
+│     │                    │   (3000B = 60x!)   │        │
+│     │                    │                    │        │
+│     │── Query (50B) ────►│                    │        │
+│     │     × 100,000      │── Response ×100K ─►│        │
+│                          │                    │        │
+│                          │                    ▼        │
+│                                        ┌────────────┐  │
+│                                        │  VICTIM    │  │
+│                                        │ Overwhelmed│  │
+│                                        └────────────┘  │
+│                                                        │
+└───────────────────────────────────────────────────────┘`,
+    attackTimeline: `
+Time 0:00 - Attack begins
+  └─ Attacker sends queries to 10,000 open resolvers
+  └─ Each query is 50 bytes, spoofed with victim's IP
+
+Time 0:01 - Amplified traffic arrives
+  └─ Each resolver sends ~3000 byte response to victim
+  └─ 10,000 resolvers × 3000 bytes = 30 MB in 1 second!
+
+Time 0:05 - Attack scales up
+  └─ Attacker sending 100 Mbps of queries
+  └─ Victim receiving 5+ Gbps of responses!
+
+Time 0:10 - Target overwhelmed
+  └─ Victim's bandwidth saturated
+  └─ All services unreachable`,
+    realWorldExample: {
+      name: "Spamhaus Attack",
+      date: "March 2013",
+      description: "Attackers used DNS amplification to generate 300 Gbps against Spamhaus, one of the largest attacks at that time. The attack was so large it caused collateral slowdowns across the internet."
+    },
+    indicators: [
+      "Large spike in inbound DNS responses",
+      "UDP port 53 traffic from many sources",
+      "Traffic from known open resolver IPs",
+      "Large DNS packet sizes (>512 bytes)",
+      "DNS responses without corresponding queries"
+    ],
+    defenses: [
+      "Close open recursive resolvers",
+      "Implement Response Rate Limiting (RRL)",
+      "Use BCP38 egress filtering",
+      "Deploy anycast DNS infrastructure",
+      "Use upstream DDoS mitigation"
+    ],
+    codeExample: `# Check if your server is an open resolver
+dig +short test.openresolver.com TXT @your.server.ip
+# If it responds, you're open!
+
+# BIND9 - Disable open recursion
+options {
+    allow-recursion { localhost; 192.168.0.0/16; };
+    rate-limit {
+        responses-per-second 10;
+    };
+};
+
+# Detect DNS amplification
+tcpdump -i eth0 'udp port 53 and udp[10] & 0x80 = 0x80' -c 100`
+  }
+};
+
+const attackComparison = [
+  { attack: "UDP Flood", layer: "3/4", measurement: "Gbps", difficulty: "Easy", defense: "Rate limiting, filtering" },
+  { attack: "SYN Flood", layer: "4", measurement: "PPS", difficulty: "Easy", defense: "SYN cookies, timeouts" },
+  { attack: "HTTP Flood", layer: "7", measurement: "RPS", difficulty: "Medium", defense: "WAF, CAPTCHA, bot detection" },
+  { attack: "Slowloris", layer: "7", measurement: "Connections", difficulty: "Easy", defense: "Timeouts, reverse proxy" },
+  { attack: "DNS Amp", layer: "3/4", measurement: "Gbps", difficulty: "Medium", defense: "Close resolvers, BCP38" },
+  { attack: "Memcached Amp", layer: "3/4", measurement: "Gbps", difficulty: "Medium", defense: "Disable UDP, firewall" },
 ];
 
 const amplificationVectors = [
@@ -242,6 +1317,788 @@ const botnets = [
     description: "Uses hijacked virtual machines and servers rather than IoT devices for more powerful attacks.",
     notableAttacks: ["Cloudflare (26M RPS HTTP flood)"],
   },
+];
+
+// =============================================================================
+// PART 3: DETECTION METHODOLOGY & LAB EXERCISES
+// =============================================================================
+
+const detectionMethodologyDetailed = {
+  networkMonitoring: {
+    title: "Network Traffic Monitoring",
+    icon: "📡",
+    description: "Monitor network traffic patterns to identify DDoS attacks in real-time",
+    difficulty: "intermediate",
+    timeToImplement: "1-4 hours",
+    approach: `Network monitoring is your first line of defense. By establishing baselines and watching for 
+anomalies, you can detect attacks before they cause significant damage.
+
+The key is to know what "normal" looks like for YOUR network. This varies dramatically between 
+organizations - a gaming company and a bank have very different traffic patterns.`,
+    steps: [
+      {
+        step: 1,
+        title: "Establish Traffic Baselines",
+        description: "Record normal traffic patterns over 2-4 weeks",
+        commands: `# Capture baseline metrics with vnStat
+vnstat -l -i eth0
+
+# Record hourly traffic patterns
+vnstat -h
+
+# Export to CSV for analysis
+vnstat --exportdb > baseline.db`,
+        tips: ["Capture during peak and off-peak hours", "Note day-of-week patterns", "Record special events (sales, launches)"]
+      },
+      {
+        step: 2,
+        title: "Configure Real-Time Monitoring",
+        description: "Set up tools to watch traffic continuously",
+        commands: `# Real-time bandwidth monitoring
+iftop -i eth0 -B
+
+# Packet rate monitoring
+tcpdump -i eth0 -c 1000 -w sample.pcap
+
+# Connection state monitoring
+watch -n 1 'netstat -s | grep -E "active|passive|failed"'
+
+# Using nload for visual bandwidth
+nload eth0`,
+        tips: ["Use multiple vantage points", "Monitor both ingress and egress", "Set up automatic data collection"]
+      },
+      {
+        step: 3,
+        title: "Configure Alerting",
+        description: "Set thresholds for automatic alert generation",
+        commands: `# Example Prometheus alerting rule
+groups:
+- name: ddos_alerts
+  rules:
+  - alert: HighPacketRate
+    expr: rate(node_network_receive_packets_total[1m]) > 100000
+    for: 30s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Possible DDoS attack detected"`,
+        tips: ["Start with conservative thresholds", "Tune to reduce false positives", "Have escalation procedures ready"]
+      },
+      {
+        step: 4,
+        title: "Analyze Traffic Patterns",
+        description: "Look for DDoS indicators in collected data",
+        commands: `# Identify top talkers
+tcpdump -nn -c 10000 -i eth0 | \\
+  awk '{print $3}' | cut -d. -f1-4 | \\
+  sort | uniq -c | sort -rn | head -20
+
+# Check packet size distribution
+tcpdump -nn -c 1000 -i eth0 -l | \\
+  awk '{print length}' | sort | uniq -c
+
+# Protocol distribution
+tshark -i eth0 -c 10000 -q -z io,phs`,
+        tips: ["Look for uniform packet sizes", "Check for unusual protocols", "Identify traffic from unusual ASNs"]
+      }
+    ],
+    indicators: [
+      "Traffic volume 2-10x above baseline",
+      "Single protocol dominating traffic mix",
+      "Requests from unusual geographic regions",
+      "Packet sizes unusually uniform",
+      "Source IP addresses rotating or spoofed"
+    ],
+    tools: ["Wireshark", "tcpdump", "ntopng", "Prometheus + Grafana", "Elastic Stack"]
+  },
+  logAnalysis: {
+    title: "Log-Based Detection",
+    icon: "📋",
+    description: "Analyze server and application logs to identify attack patterns",
+    difficulty: "beginner",
+    timeToImplement: "30 minutes - 2 hours",
+    approach: `Server logs contain a wealth of information about incoming requests. During a DDoS attack, 
+log analysis can reveal attack patterns, help identify malicious IPs, and guide mitigation efforts.
+
+The challenge is processing logs fast enough during an attack - you need automation!`,
+    steps: [
+      {
+        step: 1,
+        title: "Configure Comprehensive Logging",
+        description: "Ensure all relevant data is being captured",
+        commands: `# Nginx logging with timing and request details
+log_format ddos '$remote_addr - $request_time - $status '
+                '"$request" $body_bytes_sent '
+                '"$http_referer" "$http_user_agent"';
+
+# Apache combined + timing
+LogFormat "%h %l %u %t \\"%r\\" %>s %b \\"%{Referer}i\\" \\"%{User-Agent}i\\" %D" combined_timing
+
+# Enable verbose firewall logging
+iptables -A INPUT -j LOG --log-prefix "iptables: " --log-level 4`,
+        tips: ["Include response times in logs", "Log User-Agent strings", "Capture client IP even behind proxies"]
+      },
+      {
+        step: 2,
+        title: "Identify Attack Patterns",
+        description: "Analyze logs for DDoS indicators",
+        commands: `# Top IPs by request count
+awk '{print $1}' access.log | sort | uniq -c | sort -rn | head -20
+
+# Requests per second over time
+awk '{print $4}' access.log | cut -d: -f1-3 | uniq -c
+
+# Top requested URLs (L7 attack detection)
+awk '{print $7}' access.log | sort | uniq -c | sort -rn | head -20
+
+# User-Agent analysis (bot detection)
+awk -F'"' '{print $6}' access.log | sort | uniq -c | sort -rn | head -20`,
+        tips: ["Compare current vs historical patterns", "Look for missing referers", "Check for suspicious user agents"]
+      },
+      {
+        step: 3,
+        title: "Detect HTTP Flood Patterns",
+        description: "Look for application-layer attack signatures",
+        commands: `# Find IPs making too many requests
+awk '{print $1}' access.log | sort | uniq -c | \\
+  awk '$1 > 1000 {print $2}' > suspicious_ips.txt
+
+# Check for cache bypass attacks (random query strings)
+grep '\\?' access.log | awk '{print $7}' | \\
+  cut -d'?' -f1 | sort | uniq -c | sort -rn
+
+# Detect Slowloris (long request times)
+awk '$2 > 30 {print $0}' access.log | head -100`,
+        tips: ["Look for requests to expensive endpoints", "Check POST vs GET ratios", "Monitor error rates by endpoint"]
+      },
+      {
+        step: 4,
+        title: "Set Up Automated Analysis",
+        description: "Use tools to process logs in real-time",
+        commands: `# GoAccess for real-time log analysis
+goaccess access.log -o report.html --real-time-html
+
+# Fail2ban for automatic blocking
+[Definition]
+failregex = ^<HOST> .* "(GET|POST|HEAD).*
+maxretry = 100
+findtime = 60
+
+# Log shipping to central SIEM
+filebeat -e -c filebeat.yml`,
+        tips: ["Use log aggregation (ELK, Splunk)", "Create dashboards for quick assessment", "Automate IP blocking based on patterns"]
+      }
+    ],
+    indicators: [
+      "Single IP making 100+ requests/minute",
+      "Requests with no or fake referer headers",
+      "Unusual user agent strings or missing UA",
+      "High 4xx/5xx error rates",
+      "Requests targeting expensive endpoints"
+    ],
+    tools: ["GoAccess", "AWStats", "Fail2ban", "ELK Stack", "Splunk"]
+  },
+  threatHunting: {
+    title: "Proactive Threat Hunting",
+    icon: "🔍",
+    description: "Actively search for DDoS indicators before attacks cause damage",
+    difficulty: "advanced",
+    timeToImplement: "Ongoing process",
+    approach: `Threat hunting goes beyond passive monitoring - you actively look for signs of attack 
+preparation or ongoing low-level attacks. This can help you detect attacks before they reach 
+full intensity.
+
+Key areas to hunt: unusual traffic patterns, scanning activity, botnet beacons, and infrastructure probing.`,
+    steps: [
+      {
+        step: 1,
+        title: "Hunt for Reconnaissance",
+        description: "Look for attackers mapping your infrastructure",
+        commands: `# Detect port scanning
+grep -E "SYN|SCAN" /var/log/messages | \\
+  awk '{print $NF}' | sort | uniq -c | sort -rn
+
+# Find DNS enumeration attempts
+grep -E "NXDOMAIN|SERVFAIL" /var/log/named/query.log | \\
+  awk '{print $6}' | sort | uniq -c | sort -rn
+
+# Detect vulnerability scanning
+grep -E "wp-admin|phpmyadmin|.env|.git" access.log`,
+        tips: ["Monitor for increased DNS queries", "Watch for ICMP probes", "Check for HTTP fingerprinting"]
+      },
+      {
+        step: 2,
+        title: "Monitor for Botnet Activity",
+        description: "Identify compromised hosts in your network",
+        commands: `# Look for C2 communication patterns
+tcpdump -i eth0 -nn 'udp and port != 53 and port != 123' -c 1000
+
+# Detect beaconing behavior
+zeek -r traffic.pcap local
+cat conn.log | awk '{print $3, $5}' | sort | uniq -c | sort -rn
+
+# Check for unusual outbound connections
+netstat -an | grep ESTABLISHED | \\
+  awk '{print $5}' | cut -d: -f1 | sort | uniq -c`,
+        tips: ["Look for regular interval connections", "Check for connections to known bad IPs", "Monitor unusual port usage"]
+      },
+      {
+        step: 3,
+        title: "Analyze Traffic Anomalies",
+        description: "Deep dive into suspicious traffic patterns",
+        commands: `# Entropy analysis for DDoS detection
+tshark -r capture.pcap -T fields -e ip.src | \\
+  sort | uniq -c | sort -rn > ip_distribution.txt
+
+# Protocol ratio analysis
+tshark -r capture.pcap -q -z io,phs
+
+# Packet timing analysis
+tshark -r capture.pcap -T fields -e frame.time_delta | \\
+  awk '{sum+=$1; count++} END {print sum/count}'`,
+        tips: ["Compare with historical baselines", "Look for protocol anomalies", "Check packet timing regularity"]
+      },
+      {
+        step: 4,
+        title: "Correlate Threat Intelligence",
+        description: "Use external data to identify known threats",
+        commands: `# Check IPs against threat feeds
+for ip in $(cat suspicious_ips.txt); do
+  curl -s "https://api.abuseipdb.com/api/v2/check?ipAddress=$ip" \\
+    -H "Key: YOUR_API_KEY"
+done
+
+# Shodan lookup for infrastructure
+shodan host <IP_ADDRESS>
+
+# Check ASN reputation
+whois -h whois.radb.net -- "-i origin AS12345"`,
+        tips: ["Maintain updated threat feeds", "Correlate with global attack trends", "Share intel with peers/ISACs"]
+      }
+    ],
+    indicators: [
+      "Increased port scanning from multiple sources",
+      "DNS queries for random subdomains (DGA detection)",
+      "Connections to known C2 infrastructure",
+      "Traffic patterns matching known attack tools",
+      "Unusual geographic distribution of traffic"
+    ],
+    tools: ["Zeek (Bro)", "RITA", "Suricata", "Threat intelligence platforms", "MISP"]
+  }
+};
+
+const labExercisesDetailed = [
+  {
+    id: 1,
+    title: "DDoS Traffic Analysis Lab",
+    icon: "📊",
+    difficulty: "beginner",
+    duration: "45-60 minutes",
+    description: "Learn to identify DDoS attack patterns by analyzing packet captures from real attacks.",
+    objectives: [
+      "Identify volumetric attack patterns in packet captures",
+      "Calculate attack bandwidth and packet rates",
+      "Distinguish between legitimate traffic and attack traffic",
+      "Document findings in a structured format"
+    ],
+    prerequisites: [
+      "Basic understanding of TCP/IP",
+      "Wireshark or tshark installed",
+      "Familiarity with command line"
+    ],
+    labEnvironment: `This lab uses publicly available DDoS packet captures for analysis.
+You will NOT generate any attack traffic - this is purely defensive analysis.
+
+Required tools:
+- Wireshark (GUI) or tshark (CLI)
+- tcpdump (optional)
+- Python (for scripting analysis)`,
+    steps: [
+      {
+        step: 1,
+        title: "Obtain Sample DDoS Captures",
+        description: "Download legitimate DDoS research captures",
+        commands: `# Download from public DDoS dataset
+# (Use datasets from universities/research institutions)
+wget https://example.com/ddos-samples/syn-flood.pcap
+wget https://example.com/ddos-samples/udp-flood.pcap
+
+# Or capture your own LEGITIMATE traffic for baseline
+tcpdump -i eth0 -w baseline.pcap -c 10000`,
+        expectedOutput: "Downloaded capture files ready for analysis",
+        tips: ["Only use captures you have permission to analyze", "Start with smaller captures (100MB or less)"]
+      },
+      {
+        step: 2,
+        title: "Analyze Traffic Statistics",
+        description: "Get an overview of the capture contents",
+        commands: `# Basic capture statistics
+capinfos syn-flood.pcap
+
+# Protocol hierarchy
+tshark -r syn-flood.pcap -q -z io,phs
+
+# Conversation statistics
+tshark -r syn-flood.pcap -q -z conv,ip
+
+# Top talkers
+tshark -r syn-flood.pcap -T fields -e ip.src | \\
+  sort | uniq -c | sort -rn | head -20`,
+        expectedOutput: "Summary showing packet counts, protocols, and traffic distribution",
+        tips: ["Note the total packets and time span", "Calculate packets/second"]
+      },
+      {
+        step: 3,
+        title: "Identify Attack Patterns",
+        description: "Look for indicators of DDoS attack traffic",
+        commands: `# Check for SYN flood (lots of SYN, few ACK)
+tshark -r syn-flood.pcap -Y "tcp.flags.syn==1 && tcp.flags.ack==0" | wc -l
+
+# Check TCP flag distribution
+tshark -r syn-flood.pcap -q -z io,stat,1,"tcp.flags.syn==1","tcp.flags.ack==1"
+
+# Look for spoofed sources (random source IPs)
+tshark -r syn-flood.pcap -T fields -e ip.src | \\
+  sort -u | wc -l  # High number = likely spoofed
+
+# Check packet size distribution
+tshark -r syn-flood.pcap -T fields -e frame.len | \\
+  sort | uniq -c | head -20`,
+        expectedOutput: "Evidence of attack patterns (high SYN count, many unique IPs, uniform packet sizes)",
+        tips: ["SYN floods have SYN >> ACK ratio", "Spoofed attacks have very high unique IP count"]
+      },
+      {
+        step: 4,
+        title: "Calculate Attack Metrics",
+        description: "Quantify the attack intensity",
+        commands: `# Calculate bandwidth (requires Python)
+python3 << 'EOF'
+import subprocess
+import re
+
+# Get capture duration
+result = subprocess.run(['capinfos', 'syn-flood.pcap'], capture_output=True, text=True)
+duration = float(re.search(r'Capture duration:\\s+(\\d+\\.?\\d*)', result.stdout).group(1))
+bytes_val = int(re.search(r'File size:\\s+(\\d+)', result.stdout).group(1))
+packets = int(re.search(r'Number of packets:\\s+(\\d+)', result.stdout).group(1))
+
+print(f"Duration: {duration:.2f} seconds")
+print(f"Packets/second: {packets/duration:.0f} pps")
+print(f"Bandwidth: {(bytes_val*8/duration/1000000):.2f} Mbps")
+EOF`,
+        expectedOutput: "Calculated attack metrics (pps, Mbps)",
+        tips: ["Compare with your baseline metrics", "Consider peak vs average rates"]
+      },
+      {
+        step: 5,
+        title: "Document Your Findings",
+        description: "Create a structured analysis report",
+        commands: `# Create analysis report
+cat << 'EOF' > analysis_report.md
+# DDoS Traffic Analysis Report
+
+## Capture Information
+- File: syn-flood.pcap
+- Duration: [X] seconds
+- Total packets: [X]
+
+## Attack Classification
+- Type: [SYN Flood / UDP Flood / etc.]
+- Layer: [3/4 / 7]
+- Estimated bandwidth: [X] Mbps
+- Packet rate: [X] pps
+
+## Indicators Observed
+1. [Indicator 1]
+2. [Indicator 2]
+
+## Recommended Mitigations
+1. [Mitigation 1]
+2. [Mitigation 2]
+EOF`,
+        expectedOutput: "Completed analysis report",
+        tips: ["Include timestamps and evidence", "Recommend specific mitigations"]
+      }
+    ],
+    quiz: [
+      {
+        question: "What TCP flag pattern indicates a SYN flood attack?",
+        options: ["Many ACK packets", "Many SYN packets with few ACK responses", "Many FIN packets", "Many RST packets"],
+        correctIndex: 1,
+        explanation: "SYN floods send many SYN packets but never complete the handshake with ACK."
+      },
+      {
+        question: "A capture shows 50,000 unique source IPs in 30 seconds. What does this suggest?",
+        options: ["Normal web traffic", "Legitimate traffic spike", "Likely IP spoofing", "Load balancer traffic"],
+        correctIndex: 2,
+        explanation: "50,000 unique IPs in 30 seconds is extremely high and suggests spoofed source addresses."
+      }
+    ]
+  },
+  {
+    id: 2,
+    title: "SYN Cookie Defense Lab",
+    icon: "🍪",
+    difficulty: "intermediate",
+    duration: "30-45 minutes",
+    description: "Understand and implement SYN cookie protection against SYN flood attacks.",
+    objectives: [
+      "Understand how SYN cookies work",
+      "Configure Linux kernel for SYN flood protection",
+      "Test and verify SYN cookie effectiveness",
+      "Tune TCP parameters for optimal protection"
+    ],
+    prerequisites: [
+      "Linux system with root access (VM recommended)",
+      "Basic understanding of TCP handshake",
+      "Familiarity with sysctl"
+    ],
+    labEnvironment: `This lab requires a Linux system where you can modify kernel parameters.
+Use a virtual machine - do not test on production systems!
+
+Required:
+- Linux VM (Ubuntu/Debian/CentOS)
+- Root/sudo access
+- hping3 (for testing with safe traffic)`,
+    steps: [
+      {
+        step: 1,
+        title: "Understand Current TCP Settings",
+        description: "Check existing TCP configuration",
+        commands: `# Check if SYN cookies are enabled
+sysctl net.ipv4.tcp_syncookies
+
+# Check current backlog sizes
+sysctl net.ipv4.tcp_max_syn_backlog
+sysctl net.core.somaxconn
+
+# Check SYN-ACK retries
+sysctl net.ipv4.tcp_synack_retries
+
+# View current connection states
+ss -s
+netstat -s | grep -i syn`,
+        expectedOutput: "Current TCP parameters and connection statistics",
+        tips: ["Note default values before changing", "Understanding defaults helps with troubleshooting"]
+      },
+      {
+        step: 2,
+        title: "Configure SYN Cookie Protection",
+        description: "Enable and tune SYN cookies",
+        commands: `# Enable SYN cookies (most important!)
+sudo sysctl -w net.ipv4.tcp_syncookies=1
+
+# Increase backlog queue
+sudo sysctl -w net.ipv4.tcp_max_syn_backlog=4096
+sudo sysctl -w net.core.somaxconn=4096
+
+# Reduce SYN-ACK retries (faster timeout)
+sudo sysctl -w net.ipv4.tcp_synack_retries=2
+
+# Make changes permanent
+sudo tee -a /etc/sysctl.conf << EOF
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_max_syn_backlog = 4096
+net.core.somaxconn = 4096
+net.ipv4.tcp_synack_retries = 2
+EOF`,
+        expectedOutput: "Parameters set successfully",
+        tips: ["Always enable tcp_syncookies on internet-facing servers", "Test changes in staging first"]
+      },
+      {
+        step: 3,
+        title: "Test SYN Cookie Activation",
+        description: "Verify SYN cookies activate under load",
+        commands: `# Start a simple listener (in terminal 1)
+nc -l 8080
+
+# Monitor SYN_RECV connections (in terminal 2)
+watch -n 0.5 'ss -s; echo "---"; netstat -ant | grep SYN_RECV | wc -l'
+
+# Generate LEGITIMATE test connections (in terminal 3)
+# This simulates high connection rate, not an attack
+for i in {1..100}; do
+  (echo "test" | nc -w 1 localhost 8080 &)
+done
+
+# Check if SYN cookies were used
+dmesg | grep -i "syn"`,
+        expectedOutput: "System handles high connection rate without exhausting backlog",
+        tips: ["With SYN cookies, server doesn't store state until handshake completes", "Watch for 'possible SYN flooding' in dmesg"]
+      },
+      {
+        step: 4,
+        title: "Compare With and Without Protection",
+        description: "Understand the difference SYN cookies make",
+        commands: `# Create test script
+cat << 'EOF' > test_syn_protection.sh
+#!/bin/bash
+echo "Testing TCP connection handling..."
+
+# Check current settings
+echo "SYN Cookies: $(sysctl -n net.ipv4.tcp_syncookies)"
+echo "Backlog: $(sysctl -n net.ipv4.tcp_max_syn_backlog)"
+
+# Before: Count starting SYN_RECV
+start_syn=$(netstat -ant 2>/dev/null | grep SYN_RECV | wc -l)
+echo "Starting SYN_RECV count: $start_syn"
+
+# After high load test
+echo "Results help understand protection level"
+EOF
+
+chmod +x test_syn_protection.sh
+./test_syn_protection.sh`,
+        expectedOutput: "Comparison showing protection effectiveness",
+        tips: ["Without SYN cookies, backlog fills quickly", "With SYN cookies, connections complete normally"]
+      },
+      {
+        step: 5,
+        title: "Document Best Practice Configuration",
+        description: "Create a hardened configuration template",
+        commands: `# Create recommended sysctl.conf for DDoS protection
+cat << 'EOF' > ddos_protection_sysctl.conf
+# SYN Flood Protection
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_max_syn_backlog = 4096
+net.core.somaxconn = 4096
+net.ipv4.tcp_synack_retries = 2
+
+# Additional hardening
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_keepalive_time = 300
+net.ipv4.tcp_keepalive_probes = 3
+net.ipv4.tcp_keepalive_intvl = 15
+
+# ICMP hardening
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+
+# Spoofing protection
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+EOF
+
+echo "Save this as /etc/sysctl.d/99-ddos-protection.conf"`,
+        expectedOutput: "Complete DDoS protection sysctl configuration",
+        tips: ["Test each setting before deploying to production", "Monitor system performance after changes"]
+      }
+    ],
+    quiz: [
+      {
+        question: "How do SYN cookies prevent SYN flood attacks?",
+        options: [
+          "By blocking all SYN packets",
+          "By encoding connection state in the sequence number instead of storing it",
+          "By rate limiting SYN packets",
+          "By requiring client certificates"
+        ],
+        correctIndex: 1,
+        explanation: "SYN cookies encode state in the initial sequence number, so the server doesn't need to store half-open connections."
+      }
+    ]
+  },
+  {
+    id: 3,
+    title: "Rate Limiting Implementation Lab",
+    icon: "🚦",
+    difficulty: "intermediate",
+    duration: "45-60 minutes",
+    description: "Implement and test rate limiting at multiple layers to protect against DDoS.",
+    objectives: [
+      "Configure iptables rate limiting for L3/L4 protection",
+      "Implement nginx rate limiting for L7 protection",
+      "Test rate limiting effectiveness",
+      "Understand rate limiting trade-offs"
+    ],
+    prerequisites: [
+      "Linux server with nginx installed",
+      "Root/sudo access",
+      "Basic understanding of iptables"
+    ],
+    labEnvironment: `This lab configures rate limiting on a test server.
+Use a VM or test environment - not production!
+
+Required:
+- Linux VM with nginx
+- iptables
+- Apache Bench (ab) or hey for testing`,
+    steps: [
+      {
+        step: 1,
+        title: "Implement iptables Rate Limiting",
+        description: "Configure network-layer rate limiting",
+        commands: `# Rate limit new connections (per source IP)
+sudo iptables -A INPUT -p tcp --syn -m connlimit --connlimit-above 50 -j DROP
+
+# Rate limit packets per second
+sudo iptables -A INPUT -p icmp --icmp-type echo-request -m limit --limit 1/s --limit-burst 4 -j ACCEPT
+sudo iptables -A INPUT -p icmp --icmp-type echo-request -j DROP
+
+# Rate limit new TCP connections
+sudo iptables -A INPUT -p tcp --dport 80 -m state --state NEW -m limit --limit 50/s --limit-burst 100 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 80 -m state --state NEW -j DROP
+
+# View rules
+sudo iptables -L -v -n`,
+        expectedOutput: "iptables rules configured for rate limiting",
+        tips: ["Start with conservative limits", "Monitor dropped packets", "Have a way to remove rules quickly"]
+      },
+      {
+        step: 2,
+        title: "Configure nginx Rate Limiting",
+        description: "Add application-layer rate limiting",
+        commands: `# Edit nginx.conf
+sudo cat << 'EOF' > /etc/nginx/conf.d/rate_limit.conf
+# Define rate limit zones
+limit_req_zone $binary_remote_addr zone=req_limit:10m rate=10r/s;
+limit_conn_zone $binary_remote_addr zone=conn_limit:10m;
+
+server {
+    listen 80;
+    server_name localhost;
+    
+    # Apply rate limiting
+    location / {
+        limit_req zone=req_limit burst=20 nodelay;
+        limit_req_status 429;
+        
+        limit_conn conn_limit 20;
+        limit_conn_status 429;
+        
+        root /var/www/html;
+        index index.html;
+    }
+    
+    # Stricter limits for expensive endpoints
+    location /api/ {
+        limit_req zone=req_limit burst=5 nodelay;
+        limit_conn conn_limit 10;
+        
+        proxy_pass http://backend;
+    }
+}
+EOF
+
+# Test configuration and reload
+sudo nginx -t && sudo systemctl reload nginx`,
+        expectedOutput: "nginx configured with rate limiting",
+        tips: ["Different endpoints may need different limits", "Monitor 429 responses in access logs"]
+      },
+      {
+        step: 3,
+        title: "Test Rate Limiting",
+        description: "Verify rate limits are working",
+        commands: `# Test with Apache Bench
+ab -n 1000 -c 50 http://localhost/
+
+# Or use hey (better for testing)
+hey -n 1000 -c 50 http://localhost/
+
+# Watch nginx logs for 429 responses
+tail -f /var/log/nginx/access.log | grep "429"
+
+# Check iptables packet counts
+sudo iptables -L -v -n | grep -E "DROP|REJECT"
+
+# Monitor in real-time
+watch -n 1 'sudo iptables -L -v -n | grep "limit"'`,
+        expectedOutput: "Rate limiting blocking excess requests (429 responses)",
+        tips: ["Verify legitimate traffic still works", "Check both accepted and dropped counts"]
+      },
+      {
+        step: 4,
+        title: "Fine-Tune Rate Limits",
+        description: "Adjust limits based on testing",
+        commands: `# Analyze current traffic patterns
+awk '{print $1}' /var/log/nginx/access.log | \\
+  sort | uniq -c | sort -rn | head -20
+
+# Calculate requests per IP per minute
+awk '{print $1, $4}' /var/log/nginx/access.log | \\
+  cut -d: -f1-2 | sort | uniq -c | \\
+  awk '$1 > 60 {print}'  # More than 1/sec
+
+# Adjust rate limit based on findings
+# If legitimate users need more:
+# limit_req zone=req_limit burst=50 nodelay;
+
+# Create allowlist for known good IPs
+cat << 'EOF' >> /etc/nginx/conf.d/rate_limit.conf
+geo $rate_limit {
+    default 1;
+    10.0.0.0/8 0;      # Internal network
+    192.168.0.0/16 0;  # Internal network
+}
+
+map $rate_limit $limit_key {
+    0 "";
+    1 $binary_remote_addr;
+}
+
+limit_req_zone $limit_key zone=req_limit:10m rate=10r/s;
+EOF`,
+        expectedOutput: "Fine-tuned rate limiting configuration",
+        tips: ["Balance security with user experience", "Create allowlists for legitimate high-volume sources"]
+      },
+      {
+        step: 5,
+        title: "Document Rate Limiting Strategy",
+        description: "Create operational documentation",
+        commands: `cat << 'EOF' > rate_limiting_runbook.md
+# Rate Limiting Runbook
+
+## Current Configuration
+- L3/L4: iptables limiting new connections to 50/s per IP
+- L7: nginx limiting to 10 req/s per IP (burst 20)
+
+## Emergency Procedures
+
+### To tighten limits during attack:
+\`\`\`bash
+# Reduce nginx limit
+sed -i 's/rate=10r/rate=5r/' /etc/nginx/conf.d/rate_limit.conf
+nginx -s reload
+\`\`\`
+
+### To disable rate limiting:
+\`\`\`bash
+# nginx
+mv /etc/nginx/conf.d/rate_limit.conf /tmp/
+nginx -s reload
+
+# iptables
+iptables -F
+\`\`\`
+
+## Monitoring
+- Watch: tail -f /var/log/nginx/access.log | grep 429
+- Dashboard: http://grafana:3000/d/rate-limits
+EOF`,
+        expectedOutput: "Complete rate limiting documentation",
+        tips: ["Document how to adjust limits quickly", "Include rollback procedures"]
+      }
+    ],
+    quiz: [
+      {
+        question: "What HTTP status code indicates rate limiting?",
+        options: ["403 Forbidden", "429 Too Many Requests", "503 Service Unavailable", "504 Gateway Timeout"],
+        correctIndex: 1,
+        explanation: "429 Too Many Requests is the standard response for rate limiting."
+      },
+      {
+        question: "Why use both iptables AND nginx rate limiting?",
+        options: [
+          "They do the same thing",
+          "Defense in depth - iptables stops L3/L4, nginx stops L7",
+          "One is for inbound, one for outbound",
+          "iptables is faster"
+        ],
+        correctIndex: 1,
+        explanation: "Defense in depth: iptables filters at network layer before packets reach nginx, while nginx can make application-aware decisions."
+      }
+    ]
+  }
 ];
 
 const detectionIndicators = [
@@ -476,6 +2333,7 @@ const dataHandlingGuidelines = [
 // =============================================================================
 
 const DDoSAttackTechniquesPage: React.FC = () => {
+  const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -519,18 +2377,461 @@ const DDoSAttackTechniquesPage: React.FC = () => {
           variant="scrollable"
           scrollButtons="auto"
         >
+          <Tab icon={<SchoolIcon />} label="Fundamentals" />
           <Tab icon={<WarningIcon />} label="Overview" />
           <Tab icon={<CloudIcon />} label="Attack Types" />
           <Tab icon={<SpeedIcon />} label="Amplification" />
           <Tab icon={<RouterIcon />} label="Botnets" />
           <Tab icon={<ShieldIcon />} label="Mitigation" />
           <Tab icon={<NetworkCheckIcon />} label="Detection" />
+          <Tab icon={<ScienceIcon />} label="Safe Lab" />
           <Tab icon={<GavelIcon />} label="Legal & Ethics" />
         </Tabs>
       </Paper>
 
-      {/* Tab 0: Overview */}
+      {/* Tab 0: Fundamentals */}
       <TabPanel value={tabValue} index={0}>
+        <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <SchoolIcon color="primary" />
+          DDoS Fundamentals for Beginners
+        </Typography>
+
+        <Alert severity="success" sx={{ mb: 3 }}>
+          <AlertTitle>Start Here If You're New!</AlertTitle>
+          This section explains DDoS concepts from the ground up. No prior networking knowledge required.
+          Work through each section in order for the best learning experience.
+        </Alert>
+
+        {/* What is DDoS */}
+        <Accordion defaultExpanded sx={{ mb: 2, border: '2px solid', borderColor: 'primary.main' }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'primary.dark' }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography variant="h4">{ddosFundamentals.whatIsDDoS.icon}</Typography>
+              <Box>
+                <Typography variant="h6" color="white">{ddosFundamentals.whatIsDDoS.title}</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.7)">Essential • 5 min read</Typography>
+              </Box>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <AlertTitle>Beginner-Friendly Explanation</AlertTitle>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {ddosFundamentals.whatIsDDoS.beginnerExplanation}
+              </Typography>
+            </Alert>
+
+            <Paper sx={{ p: 2, mb: 2, bgcolor: 'success.dark' }}>
+              <Typography variant="subtitle1" fontWeight="bold" color="white" gutterBottom>
+                🍕 {ddosFundamentals.whatIsDDoS.realWorldAnalogy}
+              </Typography>
+              <Typography variant="body2" color="rgba(255,255,255,0.9)" sx={{ whiteSpace: 'pre-line' }}>
+                {ddosFundamentals.whatIsDDoS.analogyExplanation}
+              </Typography>
+            </Paper>
+
+            <Accordion sx={{ mb: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography fontWeight="bold">🔧 Technical Details (Advanced)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+                  {ddosFundamentals.whatIsDDoS.technicalDetails}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
+            <List dense>
+              {ddosFundamentals.whatIsDDoS.keyPoints.map((point, idx) => (
+                <ListItem key={idx}>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary={point} />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* How Internet Works */}
+        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'info.main' }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'info.dark' }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography variant="h4">{ddosFundamentals.howInternetWorks.icon}</Typography>
+              <Box>
+                <Typography variant="h6" color="white">{ddosFundamentals.howInternetWorks.title}</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.7)">Background Knowledge • 4 min read</Typography>
+              </Box>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <AlertTitle>Understanding the Basics</AlertTitle>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {ddosFundamentals.howInternetWorks.beginnerExplanation}
+              </Typography>
+            </Alert>
+
+            <Accordion sx={{ mb: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography fontWeight="bold">🔧 Technical Details (Network Layers)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+                  {ddosFundamentals.howInternetWorks.technicalDetails}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
+            <List dense>
+              {ddosFundamentals.howInternetWorks.keyPoints.map((point, idx) => (
+                <ListItem key={idx}>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary={point} />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Bandwidth */}
+        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'warning.main' }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'warning.dark' }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography variant="h4">{ddosFundamentals.bandwidth.icon}</Typography>
+              <Box>
+                <Typography variant="h6" color="white">{ddosFundamentals.bandwidth.title}</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.7)">Core Concept • 3 min read</Typography>
+              </Box>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <AlertTitle>The Highway Analogy</AlertTitle>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {ddosFundamentals.bandwidth.beginnerExplanation}
+              </Typography>
+            </Alert>
+
+            <CodeBlock language="diagram">{visualLearningAids.bandwidthPipeDiagram}</CodeBlock>
+
+            <Accordion sx={{ mb: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography fontWeight="bold">🔧 Technical Details</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+                  {ddosFundamentals.bandwidth.technicalDetails}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
+            <List dense>
+              {ddosFundamentals.bandwidth.keyPoints.map((point, idx) => (
+                <ListItem key={idx}>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary={point} />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Packets and Connections */}
+        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'secondary.main' }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'secondary.dark' }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography variant="h4">{ddosFundamentals.packetsAndConnections.icon}</Typography>
+              <Box>
+                <Typography variant="h6" color="white">{ddosFundamentals.packetsAndConnections.title}</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.7)">Core Concept • 4 min read</Typography>
+              </Box>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <AlertTitle>Data Travels in Packets</AlertTitle>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {ddosFundamentals.packetsAndConnections.beginnerExplanation}
+              </Typography>
+            </Alert>
+
+            <CodeBlock language="diagram">{visualLearningAids.tcpHandshakeDiagram}</CodeBlock>
+
+            <Accordion sx={{ mb: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography fontWeight="bold">🔧 Technical Details (TCP Handshake)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+                  {ddosFundamentals.packetsAndConnections.technicalDetails}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
+            <List dense>
+              {ddosFundamentals.packetsAndConnections.keyPoints.map((point, idx) => (
+                <ListItem key={idx}>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary={point} />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* DoS vs DDoS */}
+        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'error.main' }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'error.dark' }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography variant="h4">{ddosFundamentals.dosVsDDoS.icon}</Typography>
+              <Box>
+                <Typography variant="h6" color="white">{ddosFundamentals.dosVsDDoS.title}</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.7)">Key Distinction • 3 min read</Typography>
+              </Box>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <AlertTitle>The Critical Difference</AlertTitle>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {ddosFundamentals.dosVsDDoS.beginnerExplanation}
+              </Typography>
+            </Alert>
+
+            <CodeBlock language="diagram">{visualLearningAids.ddosVsDosDiagram}</CodeBlock>
+
+            <Accordion sx={{ mb: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography fontWeight="bold">🔧 Technical Comparison</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+                  {ddosFundamentals.dosVsDDoS.technicalDetails}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
+            <List dense>
+              {ddosFundamentals.dosVsDDoS.keyPoints.map((point, idx) => (
+                <ListItem key={idx}>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary={point} />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Attack Metrics */}
+        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'success.main' }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'success.dark' }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography variant="h4">{ddosFundamentals.attackMetrics.icon}</Typography>
+              <Box>
+                <Typography variant="h6" color="white">{ddosFundamentals.attackMetrics.title}</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.7)">Understanding Scale • 4 min read</Typography>
+              </Box>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <AlertTitle>Three Ways to Measure Attacks</AlertTitle>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {ddosFundamentals.attackMetrics.beginnerExplanation}
+              </Typography>
+            </Alert>
+
+            <Accordion sx={{ mb: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography fontWeight="bold">🔧 Why Different Metrics Matter</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+                  {ddosFundamentals.attackMetrics.technicalDetails}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
+            <List dense>
+              {ddosFundamentals.attackMetrics.keyPoints.map((point, idx) => (
+                <ListItem key={idx}>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary={point} />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+
+        <Divider sx={{ my: 4 }} />
+
+        {/* Expanded Glossary */}
+        <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <MenuBookIcon color="primary" />
+          DDoS Glossary
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Key terms you'll encounter when learning about DDoS attacks. Click to expand each term for a detailed explanation.
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {Object.entries(expandedGlossary).map(([key, term]) => (
+            <Grid item xs={12} md={6} key={key}>
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, width: "100%" }}>
+                    <Typography fontWeight="bold">{term.term}</Typography>
+                    <Chip 
+                      label={term.difficulty} 
+                      size="small" 
+                      color={term.difficulty === 'beginner' ? 'success' : term.difficulty === 'intermediate' ? 'warning' : 'error'}
+                      sx={{ ml: 'auto' }}
+                    />
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography paragraph>{term.definition}</Typography>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <AlertTitle>Example</AlertTitle>
+                    {term.example}
+                  </Alert>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                    <Typography variant="caption" color="text.secondary">Related:</Typography>
+                    {term.relatedTerms.map((related) => (
+                      <Chip key={related} label={related} size="small" variant="outlined" />
+                    ))}
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+            </Grid>
+          ))}
+        </Grid>
+
+        <Divider sx={{ my: 4 }} />
+
+        {/* Real-World Incidents */}
+        <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <TimelineIcon color="error" />
+          Notable DDoS Incidents
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Learn from real attacks that made headlines. Understanding what happened helps you defend against future attacks.
+        </Typography>
+
+        {realWorldIncidents.map((incident) => (
+          <Accordion key={incident.name} sx={{ mb: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                <Typography variant="h6">{incident.name}</Typography>
+                <Chip label={incident.attackSize} color="error" size="small" />
+                <Chip label={incident.attackType} size="small" sx={{ ml: "auto" }} />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={8}>
+                  <Typography paragraph>{incident.description}</Typography>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <AlertTitle>Outcome</AlertTitle>
+                    {incident.outcome}
+                  </Alert>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2, bgcolor: "action.hover" }}>
+                    <Typography variant="subtitle2" fontWeight="bold">Attack Details</Typography>
+                    <List dense>
+                      <ListItem>
+                        <ListItemText primary="Target" secondary={incident.target} />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText primary="Size" secondary={incident.attackSize} />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText primary="Duration" secondary={incident.duration} />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText primary="Type" secondary={incident.attackType} />
+                      </ListItem>
+                    </List>
+                  </Paper>
+                </Grid>
+              </Grid>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
+                Lessons Learned:
+              </Typography>
+              <List dense>
+                {incident.lessonsLearned.map((lesson, idx) => (
+                  <ListItem key={idx}>
+                    <ListItemIcon><LightbulbIcon color="warning" /></ListItemIcon>
+                    <ListItemText primary={lesson} />
+                  </ListItem>
+                ))}
+              </List>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+
+        <Divider sx={{ my: 4 }} />
+
+        {/* Knowledge Check Quiz */}
+        <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <QuizIcon color="secondary" />
+          Knowledge Check
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Test your understanding of DDoS fundamentals. Click on an answer to check if you're right!
+        </Typography>
+
+        {beginnerQuiz.map((q, qIdx) => (
+          <Accordion key={qIdx} sx={{ mb: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography fontWeight="bold">Question {qIdx + 1}: {q.question}</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={1}>
+                {q.options.map((option, oIdx) => (
+                  <Grid item xs={12} sm={6} key={oIdx}>
+                    <Paper 
+                      sx={{ 
+                        p: 2, 
+                        cursor: "pointer",
+                        border: "2px solid",
+                        borderColor: oIdx === q.correctIndex ? "success.main" : "divider",
+                        bgcolor: oIdx === q.correctIndex ? "success.dark" : "background.paper",
+                        "&:hover": { borderColor: "primary.main" }
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        {oIdx === q.correctIndex ? (
+                          <CheckCircleIcon color="success" />
+                        ) : (
+                          <CancelIcon color="disabled" />
+                        )}
+                        <Typography color={oIdx === q.correctIndex ? "white" : "text.primary"}>
+                          {option}
+                        </Typography>
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+              <Alert severity="success" sx={{ mt: 2 }}>
+                <AlertTitle>Explanation</AlertTitle>
+                {q.explanation}
+              </Alert>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+      </TabPanel>
+
+      {/* Tab 1: Overview */}
+      <TabPanel value={tabValue} index={1}>
         <Typography variant="h5" gutterBottom>What is a DDoS Attack?</Typography>
         
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -720,8 +3021,8 @@ const DDoSAttackTechniquesPage: React.FC = () => {
         </Grid>
       </TabPanel>
 
-      {/* Tab 1: Attack Types */}
-      <TabPanel value={tabValue} index={1}>
+      {/* Tab 2: Attack Types */}
+      <TabPanel value={tabValue} index={2}>
         <Typography variant="h5" gutterBottom>Attack Categories</Typography>
         
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -771,9 +3072,200 @@ const DDoSAttackTechniquesPage: React.FC = () => {
             </Card>
           </Grid>
         </Grid>
+
+        <Typography variant="h6" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          <MenuBookIcon color="primary" />
+          Attack Comparison Matrix
+        </Typography>
+        <TableContainer component={Paper} sx={{ mb: 4 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: "primary.dark" }}>
+                <TableCell sx={{ color: "white" }}><strong>Attack Type</strong></TableCell>
+                <TableCell sx={{ color: "white" }}><strong>Layer</strong></TableCell>
+                <TableCell sx={{ color: "white" }}><strong>Measurement</strong></TableCell>
+                <TableCell sx={{ color: "white" }}><strong>Difficulty</strong></TableCell>
+                <TableCell sx={{ color: "white" }}><strong>Primary Defense</strong></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {attackComparison.map((row) => (
+                <TableRow key={row.attack}>
+                  <TableCell><strong>{row.attack}</strong></TableCell>
+                  <TableCell><Chip label={`Layer ${row.layer}`} size="small" /></TableCell>
+                  <TableCell>{row.measurement}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={row.difficulty} 
+                      size="small" 
+                      color={row.difficulty === 'Easy' ? 'success' : row.difficulty === 'Medium' ? 'warning' : 'error'} 
+                    />
+                  </TableCell>
+                  <TableCell><Typography variant="body2">{row.defense}</Typography></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        
+        <Typography variant="h5" gutterBottom sx={{ mt: 4, display: "flex", alignItems: "center", gap: 1 }}>
+          <BugReportIcon color="error" />
+          Attack Deep Dives
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Click on each attack type to learn how it works, see packet structures, and understand detection and defense.
+        </Typography>
+
+        {Object.entries(attackTypeDeepDives).map(([key, attack]) => (
+          <Accordion key={key} sx={{ mb: 2, border: '2px solid', borderColor: attack.category === 'volumetric' ? 'error.main' : attack.category === 'protocol' ? 'warning.main' : 'info.main' }}>
+            <AccordionSummary 
+              expandIcon={<ExpandMoreIcon />}
+              sx={{ bgcolor: attack.category === 'volumetric' ? 'error.dark' : attack.category === 'protocol' ? 'warning.dark' : 'info.dark' }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                <Typography variant="h5">{attack.icon}</Typography>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6" color="white">{attack.name}</Typography>
+                  <Typography variant="caption" color="rgba(255,255,255,0.7)">
+                    {attack.category.toUpperCase()} • Execute: {attack.difficultyToExecute} • Defend: {attack.difficultyToDefend}
+                  </Typography>
+                </Box>
+                <Chip 
+                  label={attack.category} 
+                  size="small" 
+                  sx={{ 
+                    bgcolor: 'rgba(255,255,255,0.2)', 
+                    color: 'white',
+                    textTransform: 'uppercase'
+                  }} 
+                />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              {/* Beginner Explanation */}
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>🎓 Beginner Explanation</AlertTitle>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                  {attack.beginnerExplanation}
+                </Typography>
+              </Alert>
+
+              {/* How It Works */}
+              <Paper sx={{ p: 2, mb: 3, bgcolor: 'action.hover' }}>
+                <Typography variant="h6" gutterBottom>How It Works</Typography>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                  {attack.howItWorks}
+                </Typography>
+              </Paper>
+
+              {/* Technical Details */}
+              <Accordion sx={{ mb: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography fontWeight="bold">🔧 Technical Details</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+                    {attack.technicalDetails}
+                  </Typography>
+                </AccordionDetails>
+              </Accordion>
+
+              {/* Packet Structure */}
+              {attack.packetStructure && (
+                <Accordion sx={{ mb: 2 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">📦 Packet Structure</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <CodeBlock language="diagram">{attack.packetStructure}</CodeBlock>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Attack Timeline */}
+              <Accordion sx={{ mb: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography fontWeight="bold">⏱️ Attack Timeline</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <CodeBlock language="timeline">{attack.attackTimeline}</CodeBlock>
+                </AccordionDetails>
+              </Accordion>
+
+              {/* Real World Example */}
+              <Paper sx={{ p: 2, mb: 3, bgcolor: 'error.dark' }}>
+                <Typography variant="h6" color="white" gutterBottom>
+                  🌍 Real-World Example: {attack.realWorldExample.name}
+                </Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.7)">
+                  {attack.realWorldExample.date}
+                </Typography>
+                <Typography variant="body2" color="rgba(255,255,255,0.9)" sx={{ mt: 1 }}>
+                  {attack.realWorldExample.description}
+                </Typography>
+              </Paper>
+
+              <Grid container spacing={2}>
+                {/* Indicators */}
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                        <SearchIcon sx={{ verticalAlign: "middle", mr: 1 }} />
+                        Detection Indicators
+                      </Typography>
+                      <List dense>
+                        {attack.indicators.map((indicator, idx) => (
+                          <ListItem key={idx}>
+                            <ListItemIcon><WarningIcon color="warning" fontSize="small" /></ListItemIcon>
+                            <ListItemText primary={indicator} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Defenses */}
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                        <ShieldIcon sx={{ verticalAlign: "middle", mr: 1 }} />
+                        Defenses
+                      </Typography>
+                      <List dense>
+                        {attack.defenses.map((defense, idx) => (
+                          <ListItem key={idx}>
+                            <ListItemIcon><CheckCircleIcon color="success" fontSize="small" /></ListItemIcon>
+                            <ListItemText primary={defense} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+
+              {/* Code Example */}
+              {attack.codeExample && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                    💻 Detection & Defense Commands
+                  </Typography>
+                  <CodeBlock language="bash">{attack.codeExample}</CodeBlock>
+                </Box>
+              )}
+            </AccordionDetails>
+          </Accordion>
+        ))}
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant="h5" gutterBottom>Original Attack Categories</Typography>
         
         {attackCategories.map((category) => (
-          <Accordion key={category.name} defaultExpanded>
+          <Accordion key={category.name}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 {category.icon}
@@ -897,8 +3389,8 @@ Client    Server               Attacker   Server
         </CodeBlock>
       </TabPanel>
 
-      {/* Tab 2: Amplification */}
-      <TabPanel value={tabValue} index={2}>
+      {/* Tab 3: Amplification */}
+      <TabPanel value={tabValue} index={3}>
         <Typography variant="h5" gutterBottom>Amplification Attacks</Typography>
         
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -1055,8 +3547,8 @@ tcpdump -i eth0 'udp port 53 and udp[10:2] > 512'`}
         </CodeBlock>
       </TabPanel>
 
-      {/* Tab 3: Botnets */}
-      <TabPanel value={tabValue} index={3}>
+      {/* Tab 4: Botnets */}
+      <TabPanel value={tabValue} index={4}>
         <Typography variant="h5" gutterBottom>Botnets & Attack Infrastructure</Typography>
         
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -1237,8 +3729,8 @@ tcpdump -i eth0 'udp port 53 and udp[10:2] > 512'`}
         </Grid>
       </TabPanel>
 
-      {/* Tab 4: Mitigation */}
-      <TabPanel value={tabValue} index={4}>
+      {/* Tab 5: Mitigation */}
+      <TabPanel value={tabValue} index={5}>
         <Typography variant="h5" gutterBottom>Mitigation Strategies</Typography>
         
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -1411,8 +3903,8 @@ limit_conn addr 100;`}
         </Paper>
       </TabPanel>
 
-      {/* Tab 5: Detection */}
-      <TabPanel value={tabValue} index={5}>
+      {/* Tab 6: Detection */}
+      <TabPanel value={tabValue} index={6}>
         <Typography variant="h5" gutterBottom>Detection & Monitoring</Typography>
         
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -1591,8 +4083,342 @@ tcpdump -tnn -c 10000 -i eth0 | \\
         </CodeBlock>
       </TabPanel>
 
-      {/* Tab 6: Legal & Ethics */}
-      <TabPanel value={tabValue} index={6}>
+      {/* Tab 7: Safe Lab */}
+      <TabPanel value={tabValue} index={7}>
+        <Typography variant="h5" gutterBottom>🧪 DDoS Defense Lab Environment</Typography>
+        
+        <Alert severity="info" sx={{ mb: 3 }}>
+          <AlertTitle>Safe Practice Environment</AlertTitle>
+          These labs are designed to be run in isolated virtual environments or containers.
+          <strong> NEVER test DDoS techniques on production systems or networks you don't own!</strong>
+          All exercises use safe, controlled traffic generation within your own lab.
+        </Alert>
+
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h6" gutterBottom color="primary">
+            <MenuBookIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+            Hands-On Lab Exercises
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Complete these labs in order to build your DDoS defense skills progressively.
+          </Typography>
+        </Box>
+
+        {/* Lab Exercises */}
+        {labExercisesDetailed.map((lab, labIndex) => (
+          <Accordion key={lab.id} sx={{ mb: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
+                <Avatar sx={{ 
+                  bgcolor: lab.difficulty === 'beginner' ? 'success.main' : 
+                           lab.difficulty === 'intermediate' ? 'warning.main' : 'error.main',
+                  width: 40, height: 40
+                }}>
+                  {labIndex + 1}
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h6">{lab.title}</Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                    <Chip 
+                      size="small" 
+                      label={lab.difficulty}
+                      color={lab.difficulty === 'beginner' ? 'success' : 
+                             lab.difficulty === 'intermediate' ? 'warning' : 'error'}
+                    />
+                    <Chip size="small" label={lab.duration} icon={<TimelineIcon />} variant="outlined" />
+                  </Box>
+                </Box>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              {/* Description */}
+              <Typography variant="body1" sx={{ mb: 3 }}>{lab.description}</Typography>
+
+              {/* Objectives */}
+              <Paper sx={{ p: 2, mb: 3, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.200' }}>
+                <Typography variant="subtitle1" fontWeight="bold" color="success.dark" gutterBottom>
+                  🎯 Learning Objectives
+                </Typography>
+                <List dense>
+                  {lab.objectives.map((obj, i) => (
+                    <ListItem key={i}>
+                      <ListItemIcon><CheckCircleIcon color="success" fontSize="small" /></ListItemIcon>
+                      <ListItemText primary={obj} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              {/* Prerequisites */}
+              <Paper sx={{ p: 2, mb: 3, bgcolor: 'warning.50', border: '1px solid', borderColor: 'warning.200' }}>
+                <Typography variant="subtitle1" fontWeight="bold" color="warning.dark" gutterBottom>
+                  📋 Prerequisites
+                </Typography>
+                <List dense>
+                  {lab.prerequisites.map((prereq, i) => (
+                    <ListItem key={i}>
+                      <ListItemIcon><SecurityIcon color="warning" fontSize="small" /></ListItemIcon>
+                      <ListItemText primary={prereq} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              {/* Lab Environment */}
+              <Paper sx={{ p: 2, mb: 3, bgcolor: 'info.50', border: '1px solid', borderColor: 'info.200' }}>
+                <Typography variant="subtitle1" fontWeight="bold" color="info.dark" gutterBottom>
+                  🖥️ Lab Environment Setup
+                </Typography>
+                <CodeBlock language="text">
+                  {lab.labEnvironment}
+                </CodeBlock>
+              </Paper>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Steps */}
+              <Typography variant="h6" gutterBottom color="primary">
+                📝 Step-by-Step Instructions
+              </Typography>
+              
+              {lab.steps.map((step) => (
+                <Paper key={step.step} sx={{ p: 2, mb: 2, border: '1px solid', borderColor: 'divider' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                    <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: '0.9rem' }}>
+                      {step.step}
+                    </Avatar>
+                    <Typography variant="subtitle1" fontWeight="bold">{step.title}</Typography>
+                  </Box>
+                  
+                  <Typography variant="body2" sx={{ mb: 2 }}>{step.description}</Typography>
+                  
+                  {step.commands && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="caption" color="text.secondary">Commands:</Typography>
+                      <CodeBlock language="bash">
+                        {step.commands}
+                      </CodeBlock>
+                    </Box>
+                  )}
+                  
+                  {step.expectedOutput && (
+                    <Accordion sx={{ bgcolor: 'grey.50' }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="body2" color="text.secondary">
+                          👁️ Expected Output
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <CodeBlock language="text">
+                          {step.expectedOutput}
+                        </CodeBlock>
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
+                  
+                  {step.tips && step.tips.length > 0 && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      <AlertTitle>💡 Tips</AlertTitle>
+                      <ul style={{ margin: 0, paddingLeft: 20 }}>
+                        {step.tips.map((tip, i) => (
+                          <li key={i}><Typography variant="body2">{tip}</Typography></li>
+                        ))}
+                      </ul>
+                    </Alert>
+                  )}
+                </Paper>
+              ))}
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Quiz Section */}
+              <Paper sx={{ p: 3, bgcolor: 'secondary.50', border: '2px solid', borderColor: 'secondary.200' }}>
+                <Typography variant="h6" gutterBottom color="secondary.dark">
+                  <QuizIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Lab Knowledge Check
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Test your understanding of the concepts covered in this lab.
+                </Typography>
+                
+                {lab.quiz.map((q, qIndex) => (
+                  <Accordion key={qIndex} sx={{ mb: 1 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="body1">
+                        <strong>Q{qIndex + 1}:</strong> {q.question}
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ mb: 2 }}>
+                        {q.options.map((option, optIdx) => (
+                          <Chip 
+                            key={optIdx}
+                            label={option}
+                            color={optIdx === q.correctIndex ? 'success' : 'default'}
+                            variant={optIdx === q.correctIndex ? 'filled' : 'outlined'}
+                            sx={{ m: 0.5 }}
+                            icon={optIdx === q.correctIndex ? <CheckCircleIcon /> : undefined}
+                          />
+                        ))}
+                      </Box>
+                      <Alert severity="success">
+                        <AlertTitle>Correct Answer</AlertTitle>
+                        {q.options[q.correctIndex]}
+                      </Alert>
+                      {q.explanation && (
+                        <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+                          <strong>Explanation:</strong> {q.explanation}
+                        </Typography>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </Paper>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+
+        {/* Detection Methodology Deep Dives */}
+        <Box sx={{ mt: 5, mb: 4 }}>
+          <Typography variant="h6" gutterBottom color="primary">
+            <AnalyticsIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+            Detection Methodology Deep Dives
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Advanced techniques for identifying and analyzing DDoS attacks.
+          </Typography>
+        </Box>
+
+        {Object.entries(detectionMethodologyDetailed).map(([key, methodology]) => (
+          <Accordion key={key} sx={{ mb: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: 'error.main' }}>
+                  {methodology.icon === '📡' ? <NetworkCheckIcon /> : 
+                   methodology.icon === '📋' ? <StorageIcon /> : <SearchIcon />}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6">{methodology.title}</Typography>
+                  <Typography variant="body2" color="text.secondary">{methodology.description}</Typography>
+                </Box>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              {/* Approach Overview */}
+              {methodology.approach && (
+                <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+                  <Typography variant="body2" style={{ whiteSpace: 'pre-line' }}>
+                    {methodology.approach}
+                  </Typography>
+                </Paper>
+              )}
+
+              {/* Steps */}
+              {methodology.steps.map((step, stepIndex) => (
+                <Paper key={stepIndex} sx={{ p: 2, mb: 2, border: '1px solid', borderColor: 'divider' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                    <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: '0.9rem' }}>
+                      {step.step}
+                    </Avatar>
+                    <Typography variant="subtitle1" fontWeight="bold">{step.title}</Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ mb: 2 }}>{step.description}</Typography>
+                  
+                  {step.commands && (
+                    <Box sx={{ mb: 2 }}>
+                      <CodeBlock language="bash">
+                        {step.commands}
+                      </CodeBlock>
+                    </Box>
+                  )}
+                  
+                  {step.tips && step.tips.length > 0 && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      <ul style={{ margin: 0, paddingLeft: 20 }}>
+                        {step.tips.map((tip, i) => (
+                          <li key={i}><Typography variant="body2">{tip}</Typography></li>
+                        ))}
+                      </ul>
+                    </Alert>
+                  )}
+                </Paper>
+              ))}
+
+              {/* Indicators */}
+              {methodology.indicators && methodology.indicators.length > 0 && (
+                <Paper sx={{ p: 2, mb: 2, bgcolor: 'error.50', border: '1px solid', borderColor: 'error.200' }}>
+                  <Typography variant="subtitle1" fontWeight="bold" color="error.dark" gutterBottom>
+                    🚨 Key Indicators
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {methodology.indicators.map((indicator: string, i: number) => (
+                      <Chip key={i} label={indicator} size="small" color="error" variant="outlined" />
+                    ))}
+                  </Box>
+                </Paper>
+              )}
+
+              {/* Tools */}
+              {methodology.tools && methodology.tools.length > 0 && (
+                <Paper sx={{ p: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.200' }}>
+                  <Typography variant="subtitle1" fontWeight="bold" color="primary.dark" gutterBottom>
+                    🛠️ Recommended Tools
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {methodology.tools.map((tool: string, i: number) => (
+                      <Chip key={i} label={tool} size="small" color="primary" variant="outlined" />
+                    ))}
+                  </Box>
+                </Paper>
+              )}
+            </AccordionDetails>
+          </Accordion>
+        ))}
+
+        {/* Lab Completion Checklist */}
+        <Paper sx={{ p: 3, mt: 4, bgcolor: 'success.50', border: '2px solid', borderColor: 'success.300' }}>
+          <Typography variant="h6" gutterBottom color="success.dark">
+            ✅ Skills Acquired After Completing All Labs
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <List dense>
+                <ListItem>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary="Analyze DDoS attack traffic with Wireshark and tshark" />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary="Configure SYN cookies and kernel-level defenses" />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary="Implement rate limiting with iptables" />
+                </ListItem>
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <List dense>
+                <ListItem>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary="Configure nginx for connection rate limiting" />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary="Identify attack patterns from network metrics" />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                  <ListItemText primary="Apply detection methodologies in real scenarios" />
+                </ListItem>
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
+      </TabPanel>
+
+      {/* Tab 8: Legal & Ethics */}
+      <TabPanel value={tabValue} index={8}>
         <Typography variant="h5" gutterBottom>Legal & Ethical Considerations</Typography>
         
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -1765,6 +4591,18 @@ tcpdump -tnn -c 10000 -i eth0 | \\
           </Grid>
         </Grid>
       </TabPanel>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Box>
     </LearnPageLayout>
   );

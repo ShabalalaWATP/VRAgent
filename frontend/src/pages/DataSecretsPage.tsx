@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Typography,
@@ -29,8 +30,9 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Button,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -59,6 +61,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import KeyIcon from "@mui/icons-material/Key";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import DangerousIcon from "@mui/icons-material/Dangerous";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -979,6 +982,981 @@ up to 4% of annual revenue."
   },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#ef4444";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "Data and secrets security focuses on:",
+    options: [
+      "Protecting sensitive data and credentials across their lifecycle",
+      "Only encrypting hard drives",
+      "Only scanning for malware",
+      "Only managing passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "The goal is to protect data and secrets wherever they are stored, processed, or transmitted.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "PII stands for:",
+    options: ["Personally Identifiable Information", "Public Internet Identifier", "Private Internal Index", "Primary Identity Indicator"],
+    correctAnswer: 0,
+    explanation: "PII includes data that can identify an individual.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "Least privilege means:",
+    options: [
+      "Users get only the access they need",
+      "Everyone is an admin",
+      "Permissions never change",
+      "Only the security team has access",
+    ],
+    correctAnswer: 0,
+    explanation: "Limiting access reduces the blast radius of compromise.",
+  },
+  {
+    id: 4,
+    topic: "Fundamentals",
+    question: "Data minimization means:",
+    options: [
+      "Collecting and storing only what is necessary",
+      "Keeping all data forever",
+      "Encrypting every file",
+      "Allowing all uploads",
+    ],
+    correctAnswer: 0,
+    explanation: "Minimization reduces exposure and compliance risk.",
+  },
+  {
+    id: 5,
+    topic: "Fundamentals",
+    question: "Exfiltration refers to:",
+    options: [
+      "Unauthorized transfer of data out of an environment",
+      "Applying system updates",
+      "Encrypting backups",
+      "Creating user accounts",
+    ],
+    correctAnswer: 0,
+    explanation: "Exfiltration is the unauthorized movement of data to an attacker.",
+  },
+  {
+    id: 6,
+    topic: "Fundamentals",
+    question: "The safest place to store secrets is:",
+    options: [
+      "A dedicated secrets manager",
+      "Client-side code",
+      "A shared document",
+      "Source control comments",
+    ],
+    correctAnswer: 0,
+    explanation: "Secrets managers provide controlled access and auditing.",
+  },
+  {
+    id: 7,
+    topic: "Fundamentals",
+    question: "Hardcoding secrets in code is risky because:",
+    options: [
+      "They can be exposed through repos or client bundles",
+      "They are encrypted automatically",
+      "They improve performance",
+      "They are always private",
+    ],
+    correctAnswer: 0,
+    explanation: "Hardcoded secrets are easy to leak and hard to rotate.",
+  },
+  {
+    id: 8,
+    topic: "Fundamentals",
+    question: "Why should secrets be masked in logs?",
+    options: [
+      "Logs are often broadly accessible and long-lived",
+      "It makes logs faster",
+      "It disables monitoring",
+      "It removes audit trails",
+    ],
+    correctAnswer: 0,
+    explanation: "Logs can be accessed by many systems and people.",
+  },
+  {
+    id: 9,
+    topic: "Fundamentals",
+    question: "Defense in depth for data protection includes:",
+    options: [
+      "Access control, encryption, and monitoring",
+      "Only backups",
+      "Only antivirus",
+      "Only strong passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Layered controls reduce single points of failure.",
+  },
+  {
+    id: 10,
+    topic: "Fundamentals",
+    question: "Credential rotation helps by:",
+    options: [
+      "Limiting the impact of leaked secrets",
+      "Disabling encryption",
+      "Reducing audit logs",
+      "Making secrets permanent",
+    ],
+    correctAnswer: 0,
+    explanation: "Rotation shortens the window of exposure.",
+  },
+  {
+    id: 11,
+    topic: "Classification",
+    question: "Data classification labels are used to:",
+    options: [
+      "Define handling, storage, and access requirements",
+      "Increase storage costs",
+      "Hide data from audits",
+      "Avoid encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Classification guides how data must be protected.",
+  },
+  {
+    id: 12,
+    topic: "Classification",
+    question: "Confidential data should be:",
+    options: [
+      "Encrypted at rest and in transit",
+      "Stored in public buckets",
+      "Shared without restrictions",
+      "Kept in client-side storage",
+    ],
+    correctAnswer: 0,
+    explanation: "Encryption protects sensitive data in storage and transit.",
+  },
+  {
+    id: 13,
+    topic: "Classification",
+    question: "A data owner is responsible for:",
+    options: [
+      "Defining classification and access requirements",
+      "Running antivirus scans",
+      "Rotating logs",
+      "Updating firmware",
+    ],
+    correctAnswer: 0,
+    explanation: "Owners define how data should be handled and accessed.",
+  },
+  {
+    id: 14,
+    topic: "Classification",
+    question: "Retention policies ensure:",
+    options: [
+      "Data is kept only as long as needed",
+      "All data is stored forever",
+      "Backups are never deleted",
+      "Logs are disabled",
+    ],
+    correctAnswer: 0,
+    explanation: "Retention reduces exposure and supports compliance.",
+  },
+  {
+    id: 15,
+    topic: "Classification",
+    question: "Pseudonymization means:",
+    options: [
+      "Replacing identifiers while keeping a reversible mapping",
+      "Removing all identifiers permanently",
+      "Encrypting data with a public key",
+      "Deleting logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Pseudonymization can be reversed with a mapping.",
+  },
+  {
+    id: 16,
+    topic: "Classification",
+    question: "Tokenization is:",
+    options: [
+      "Replacing sensitive values with non-sensitive tokens",
+      "Encrypting with a static key",
+      "Compressing logs",
+      "Duplicating data",
+    ],
+    correctAnswer: 0,
+    explanation: "Tokens reduce exposure while preserving structure.",
+  },
+  {
+    id: 17,
+    topic: "Classification",
+    question: "Redaction means:",
+    options: [
+      "Masking or removing sensitive portions of data",
+      "Encrypting files",
+      "Exporting full records",
+      "Increasing log verbosity",
+    ],
+    correctAnswer: 0,
+    explanation: "Redaction hides sensitive data while keeping context.",
+  },
+  {
+    id: 18,
+    topic: "Classification",
+    question: "Data residency refers to:",
+    options: [
+      "Where data is stored and processed geographically",
+      "How data is encrypted",
+      "Who owns the data",
+      "How data is backed up",
+    ],
+    correctAnswer: 0,
+    explanation: "Residency affects compliance and legal requirements.",
+  },
+  {
+    id: 19,
+    topic: "Classification",
+    question: "Need-to-know access means:",
+    options: [
+      "Only authorized users can access data for their role",
+      "All employees can access all data",
+      "Only vendors can access data",
+      "Data is stored in public folders",
+    ],
+    correctAnswer: 0,
+    explanation: "Access should be limited to what is required for the job.",
+  },
+  {
+    id: 20,
+    topic: "Classification",
+    question: "Non-production environments should use:",
+    options: [
+      "Masked or synthetic data",
+      "Full customer datasets",
+      "Public buckets only",
+      "No access controls",
+    ],
+    correctAnswer: 0,
+    explanation: "Using masked data reduces exposure during testing.",
+  },
+  {
+    id: 21,
+    topic: "File Uploads",
+    question: "A common file upload risk is:",
+    options: [
+      "Uploading executable or script files",
+      "Using large monitors",
+      "Updating packages",
+      "Logging in with MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Executable uploads can lead to code execution.",
+  },
+  {
+    id: 22,
+    topic: "File Uploads",
+    question: "Validating the Content-Type header alone is unsafe because:",
+    options: [
+      "It can be spoofed by an attacker",
+      "It is encrypted",
+      "It only works on Linux",
+      "It increases bandwidth",
+    ],
+    correctAnswer: 0,
+    explanation: "Attackers can send any Content-Type header.",
+  },
+  {
+    id: 23,
+    topic: "File Uploads",
+    question: "A safe upload practice is to:",
+    options: [
+      "Store uploads outside the web root",
+      "Execute uploads directly",
+      "Disable validation",
+      "Use predictable filenames",
+    ],
+    correctAnswer: 0,
+    explanation: "Keeping uploads outside web roots reduces execution risk.",
+  },
+  {
+    id: 24,
+    topic: "File Uploads",
+    question: "Randomizing upload filenames helps prevent:",
+    options: [
+      "Guessing and overwriting existing files",
+      "Encryption",
+      "Database indexing",
+      "SIEM logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Random names reduce enumeration and overwrite risks.",
+  },
+  {
+    id: 25,
+    topic: "File Uploads",
+    question: "Scanning uploads with AV is used to:",
+    options: [
+      "Detect known malicious files",
+      "Replace server-side validation",
+      "Block all PDFs",
+      "Disable monitoring",
+    ],
+    correctAnswer: 0,
+    explanation: "AV scanning is one layer and should not replace validation.",
+  },
+  {
+    id: 26,
+    topic: "File Uploads",
+    question: "Zip slip vulnerabilities allow attackers to:",
+    options: [
+      "Write files outside the intended extraction path",
+      "Encrypt backups",
+      "Bypass MFA",
+      "Reset passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Path traversal in archives can write to arbitrary locations.",
+  },
+  {
+    id: 27,
+    topic: "File Uploads",
+    question: "CSV injection is a risk when:",
+    options: [
+      "Spreadsheet formulas execute from untrusted fields",
+      "Logs are encrypted",
+      "Files are compressed",
+      "Headers are missing",
+    ],
+    correctAnswer: 0,
+    explanation: "Spreadsheet formulas can execute commands or exfiltrate data.",
+  },
+  {
+    id: 28,
+    topic: "File Uploads",
+    question: "File size limits help mitigate:",
+    options: [
+      "Resource exhaustion and denial of service",
+      "MFA bypass",
+      "SQL injection",
+      "DNS tunneling",
+    ],
+    correctAnswer: 0,
+    explanation: "Large files can exhaust storage or processing capacity.",
+  },
+  {
+    id: 29,
+    topic: "File Uploads",
+    question: "Path traversal in downloads occurs when:",
+    options: [
+      "User input is used to build file paths without validation",
+      "Files are encrypted",
+      "Backups are rotated",
+      "Users reset passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Unvalidated paths can allow access to arbitrary files.",
+  },
+  {
+    id: 30,
+    topic: "File Uploads",
+    question: "Presigned URLs should:",
+    options: [
+      "Expire after a short time",
+      "Last indefinitely",
+      "Be shared publicly",
+      "Bypass access controls",
+    ],
+    correctAnswer: 0,
+    explanation: "Short expiry limits unauthorized access.",
+  },
+  {
+    id: 31,
+    topic: "Storage",
+    question: "Secrets in client-side code are risky because:",
+    options: [
+      "They are visible to any user who can inspect the client",
+      "They are automatically rotated",
+      "They increase performance",
+      "They are always encrypted",
+    ],
+    correctAnswer: 0,
+    explanation: "Client-side code can be inspected and secrets extracted.",
+  },
+  {
+    id: 32,
+    topic: "Storage",
+    question: "A safe storage approach is to:",
+    options: [
+      "Separate public and private data buckets",
+      "Store everything in a public bucket",
+      "Disable access controls",
+      "Allow public listing by default",
+    ],
+    correctAnswer: 0,
+    explanation: "Separation reduces accidental exposure.",
+  },
+  {
+    id: 33,
+    topic: "File Uploads",
+    question: "Best practice for file types is to:",
+    options: [
+      "Allowlist extensions and validate content",
+      "Allow any extension",
+      "Trust client-side checks only",
+      "Disable validation",
+    ],
+    correctAnswer: 0,
+    explanation: "Allowlists and content checks reduce risk.",
+  },
+  {
+    id: 34,
+    topic: "File Uploads",
+    question: "Server-side validation is required because:",
+    options: [
+      "Client-side checks can be bypassed",
+      "It slows uploads",
+      "It breaks encryption",
+      "It disables logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Attackers can bypass client-side checks easily.",
+  },
+  {
+    id: 35,
+    topic: "Logging",
+    question: "Logging full secrets is risky because:",
+    options: [
+      "Logs are widely accessible and retained",
+      "It improves troubleshooting",
+      "It reduces storage",
+      "It guarantees security",
+    ],
+    correctAnswer: 0,
+    explanation: "Logs often have broad access and long retention.",
+  },
+  {
+    id: 36,
+    topic: "Storage",
+    question: "Uploads should be stored with:",
+    options: [
+      "Restricted permissions and no public access",
+      "Public read access by default",
+      "No access controls",
+      "Shared global credentials",
+    ],
+    correctAnswer: 0,
+    explanation: "Restrictive permissions prevent accidental exposure.",
+  },
+  {
+    id: 37,
+    topic: "Secrets",
+    question: "A secrets manager provides:",
+    options: [
+      "Centralized storage, access control, and auditing",
+      "Public sharing links",
+      "Unlimited access for all users",
+      "Client-side storage",
+    ],
+    correctAnswer: 0,
+    explanation: "Secrets managers control access and track usage.",
+  },
+  {
+    id: 38,
+    topic: "Secrets",
+    question: "Secrets should never be stored in:",
+    options: [
+      "Source control repositories",
+      "A secrets manager",
+      "Environment injection at runtime",
+      "KMS encrypted stores",
+    ],
+    correctAnswer: 0,
+    explanation: "Source control is a common leak vector.",
+  },
+  {
+    id: 39,
+    topic: "Secrets",
+    question: "API keys should be:",
+    options: [
+      "Scoped to only the required permissions",
+      "Full admin access by default",
+      "Shared across teams",
+      "Embedded in client apps",
+    ],
+    correctAnswer: 0,
+    explanation: "Scoped keys limit damage if exposed.",
+  },
+  {
+    id: 40,
+    topic: "Secrets",
+    question: "Short-lived tokens reduce risk because:",
+    options: [
+      "Stolen tokens expire quickly",
+      "They never expire",
+      "They disable encryption",
+      "They remove audits",
+    ],
+    correctAnswer: 0,
+    explanation: "Short lifetimes limit exposure if tokens leak.",
+  },
+  {
+    id: 41,
+    topic: "Secrets",
+    question: "After a secret is exposed, you should:",
+    options: [
+      "Rotate it immediately and invalidate old tokens",
+      "Ignore it",
+      "Share it with vendors",
+      "Disable logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Rotation and invalidation reduce continued abuse.",
+  },
+  {
+    id: 42,
+    topic: "Secrets",
+    question: "KMS or HSM usage helps by:",
+    options: [
+      "Protecting and auditing cryptographic keys",
+      "Disabling encryption",
+      "Storing passwords in plain text",
+      "Reducing access controls",
+    ],
+    correctAnswer: 0,
+    explanation: "KMS/HSM provide secure key storage and controls.",
+  },
+  {
+    id: 43,
+    topic: "Secrets",
+    question: "Separating key management from data access:",
+    options: [
+      "Reduces the chance of single point compromise",
+      "Increases exposure",
+      "Removes auditing",
+      "Disables encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Separation of duties reduces compromise impact.",
+  },
+  {
+    id: 44,
+    topic: "Secrets",
+    question: "Secret scanning in CI helps:",
+    options: [
+      "Detect accidental secret commits early",
+      "Hide secrets",
+      "Disable alerts",
+      "Increase log noise",
+    ],
+    correctAnswer: 0,
+    explanation: "Scanning prevents secrets from entering repositories.",
+  },
+  {
+    id: 45,
+    topic: "Secrets",
+    question: "Sharing secrets in tickets or chat is risky because:",
+    options: [
+      "They may be stored and accessible long term",
+      "It improves collaboration",
+      "It increases encryption",
+      "It reduces audit needs",
+    ],
+    correctAnswer: 0,
+    explanation: "Tickets and chats are often retained and widely accessible.",
+  },
+  {
+    id: 46,
+    topic: "Secrets",
+    question: "Per-service accounts are preferred because:",
+    options: [
+      "They improve accountability and limit blast radius",
+      "They are faster",
+      "They are always public",
+      "They prevent auditing",
+    ],
+    correctAnswer: 0,
+    explanation: "Separate accounts reduce shared exposure.",
+  },
+  {
+    id: 47,
+    topic: "Access Control",
+    question: "RBAC stands for:",
+    options: [
+      "Role-Based Access Control",
+      "Rule-Based Access Cache",
+      "Remote Backup Access Control",
+      "Rapid Breach Access Control",
+    ],
+    correctAnswer: 0,
+    explanation: "RBAC assigns permissions based on roles.",
+  },
+  {
+    id: 48,
+    topic: "Access Control",
+    question: "ABAC stands for:",
+    options: [
+      "Attribute-Based Access Control",
+      "Application Backup Access Control",
+      "Automated Breach Alert Control",
+      "Admin Blocklist Access Control",
+    ],
+    correctAnswer: 0,
+    explanation: "ABAC uses attributes like department or region.",
+  },
+  {
+    id: 49,
+    topic: "Access Control",
+    question: "Row-level security is used to:",
+    options: [
+      "Restrict data access to specific rows per user",
+      "Encrypt entire disks",
+      "Handle uploads",
+      "Rotate logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Row-level security enforces per-record access controls.",
+  },
+  {
+    id: 50,
+    topic: "Access Control",
+    question: "Multi-tenant systems should always enforce:",
+    options: [
+      "Tenant scoping on every query",
+      "Public read access",
+      "Shared admin accounts",
+      "No authentication",
+    ],
+    correctAnswer: 0,
+    explanation: "Tenant scoping prevents cross-tenant data exposure.",
+  },
+  {
+    id: 51,
+    topic: "Access Control",
+    question: "IDOR vulnerabilities allow:",
+    options: [
+      "Access to another user's data by changing an ID",
+      "Faster queries",
+      "Automatic encryption",
+      "Improved backups",
+    ],
+    correctAnswer: 0,
+    explanation: "IDOR occurs when access checks are missing or weak.",
+  },
+  {
+    id: 52,
+    topic: "Access Control",
+    question: "Default deny means:",
+    options: [
+      "Access is blocked unless explicitly allowed",
+      "All access is allowed",
+      "Only admins can log in",
+      "Logs are disabled",
+    ],
+    correctAnswer: 0,
+    explanation: "Default deny reduces unintended access.",
+  },
+  {
+    id: 53,
+    topic: "Access Control",
+    question: "Admin access should require:",
+    options: [
+      "Strong authentication such as MFA",
+      "No authentication",
+      "Shared passwords",
+      "Public links",
+    ],
+    correctAnswer: 0,
+    explanation: "MFA reduces account compromise risk.",
+  },
+  {
+    id: 54,
+    topic: "Access Control",
+    question: "Access logs should record:",
+    options: [
+      "Who accessed data and when",
+      "Only file sizes",
+      "Only hostnames",
+      "Only error codes",
+    ],
+    correctAnswer: 0,
+    explanation: "Audit trails are critical for investigations.",
+  },
+  {
+    id: 55,
+    topic: "Access Control",
+    question: "Service accounts should have:",
+    options: [
+      "Only the permissions required for their job",
+      "Full admin access",
+      "No logging",
+      "Public credentials",
+    ],
+    correctAnswer: 0,
+    explanation: "Minimize privileges to reduce impact of compromise.",
+  },
+  {
+    id: 56,
+    topic: "Access Control",
+    question: "Public bucket listing should be:",
+    options: [
+      "Disabled unless explicitly required",
+      "Enabled by default",
+      "Required for backups",
+      "Used for secrets",
+    ],
+    correctAnswer: 0,
+    explanation: "Listing can expose sensitive files unintentionally.",
+  },
+  {
+    id: 57,
+    topic: "Backups",
+    question: "Backups should be:",
+    options: [
+      "Encrypted and access controlled",
+      "Publicly accessible",
+      "Stored without testing",
+      "Ignored",
+    ],
+    correctAnswer: 0,
+    explanation: "Backups contain sensitive data and must be protected.",
+  },
+  {
+    id: 58,
+    topic: "Backups",
+    question: "Restore testing is important because:",
+    options: [
+      "Backups can be corrupted or incomplete",
+      "It reduces encryption",
+      "It disables logging",
+      "It replaces access control",
+    ],
+    correctAnswer: 0,
+    explanation: "Untested backups may fail during incidents.",
+  },
+  {
+    id: 59,
+    topic: "Backups",
+    question: "Bucket versioning helps by:",
+    options: [
+      "Allowing recovery from accidental deletions",
+      "Disabling encryption",
+      "Removing logs",
+      "Speeding up uploads only",
+    ],
+    correctAnswer: 0,
+    explanation: "Versioning preserves previous file states.",
+  },
+  {
+    id: 60,
+    topic: "Backups",
+    question: "Lifecycle policies are used to:",
+    options: [
+      "Automatically expire or archive old data",
+      "Disable access control",
+      "Create user accounts",
+      "Bypass logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Lifecycle rules manage retention and cost.",
+  },
+  {
+    id: 61,
+    topic: "Detection",
+    question: "DLP tools are used to:",
+    options: [
+      "Detect and prevent sensitive data leakage",
+      "Run backups",
+      "Rotate keys",
+      "Encrypt passwords only",
+    ],
+    correctAnswer: 0,
+    explanation: "DLP monitors and blocks data loss channels.",
+  },
+  {
+    id: 62,
+    topic: "Detection",
+    question: "Monitoring large downloads helps detect:",
+    options: [
+      "Potential data exfiltration",
+      "Disk errors",
+      "Printer outages",
+      "UI bugs",
+    ],
+    correctAnswer: 0,
+    explanation: "Large downloads can indicate data theft.",
+  },
+  {
+    id: 63,
+    topic: "Detection",
+    question: "Alerting on unusual query volume helps identify:",
+    options: [
+      "Automated scraping or data dumping",
+      "Normal browsing",
+      "User onboarding",
+      "Patch deployment",
+    ],
+    correctAnswer: 0,
+    explanation: "Spikes can indicate automated exfiltration.",
+  },
+  {
+    id: 64,
+    topic: "Detection",
+    question: "Canary tokens are used to:",
+    options: [
+      "Detect unauthorized access to sensitive assets",
+      "Encrypt data",
+      "Block uploads",
+      "Remove logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Canaries trigger alerts when accessed.",
+  },
+  {
+    id: 65,
+    topic: "Response",
+    question: "During an incident, you should first:",
+    options: [
+      "Preserve evidence before cleanup",
+      "Delete logs",
+      "Rotate all passwords without context",
+      "Disable monitoring",
+    ],
+    correctAnswer: 0,
+    explanation: "Evidence collection is critical for root cause analysis.",
+  },
+  {
+    id: 66,
+    topic: "Response",
+    question: "Regulatory notification should involve:",
+    options: [
+      "Legal and compliance teams",
+      "Only engineering",
+      "Only marketing",
+      "Only vendors",
+    ],
+    correctAnswer: 0,
+    explanation: "Legal guidance ensures proper reporting and timelines.",
+  },
+  {
+    id: 67,
+    topic: "Response",
+    question: "After a leak, you should:",
+    options: [
+      "Rotate exposed keys and invalidate sessions",
+      "Ignore the exposure",
+      "Disable all logging",
+      "Publish the data",
+    ],
+    correctAnswer: 0,
+    explanation: "Rotation reduces ongoing abuse of exposed credentials.",
+  },
+  {
+    id: 68,
+    topic: "Response",
+    question: "Regression tests help by:",
+    options: [
+      "Ensuring data exposure fixes do not return",
+      "Removing access controls",
+      "Disabling alerts",
+      "Reducing audit trails",
+    ],
+    correctAnswer: 0,
+    explanation: "Tests prevent regressions in sensitive areas.",
+  },
+  {
+    id: 69,
+    topic: "Response",
+    question: "Read-only database accounts are best for:",
+    options: [
+      "Reporting and analytics workloads",
+      "Admin tooling",
+      "Schema changes",
+      "User management",
+    ],
+    correctAnswer: 0,
+    explanation: "Read-only access reduces risk in reporting paths.",
+  },
+  {
+    id: 70,
+    topic: "Response",
+    question: "Access logging should capture:",
+    options: [
+      "User, resource, action, and timestamp",
+      "Only hostnames",
+      "Only file size",
+      "Only error codes",
+    ],
+    correctAnswer: 0,
+    explanation: "Full context supports audits and investigations.",
+  },
+  {
+    id: 71,
+    topic: "Response",
+    question: "Periodic access reviews help ensure:",
+    options: [
+      "Permissions remain appropriate over time",
+      "Logs are deleted",
+      "Backups are disabled",
+      "Encryption is removed",
+    ],
+    correctAnswer: 0,
+    explanation: "Reviews catch privilege creep and stale access.",
+  },
+  {
+    id: 72,
+    topic: "Response",
+    question: "Secure deletion is difficult because:",
+    options: [
+      "Backups and replicas may retain data",
+      "It is always instant",
+      "It requires no tooling",
+      "It is the same as archiving",
+    ],
+    correctAnswer: 0,
+    explanation: "Data can persist in backups and replicated storage.",
+  },
+  {
+    id: 73,
+    topic: "Response",
+    question: "Third-party data risk should be managed by:",
+    options: [
+      "Vendor assessments and contractual controls",
+      "Sharing all secrets",
+      "Disabling monitoring",
+      "Publicly exposing data",
+    ],
+    correctAnswer: 0,
+    explanation: "Vendors must meet security requirements for data handling.",
+  },
+  {
+    id: 74,
+    topic: "Response",
+    question: "Security testing on data sources should:",
+    options: [
+      "Be authorized and scoped in writing",
+      "Be done on production without notice",
+      "Ignore legal requirements",
+      "Skip documentation",
+    ],
+    correctAnswer: 0,
+    explanation: "Authorization and scope are required for safe testing.",
+  },
+  {
+    id: 75,
+    topic: "Response",
+    question: "Chain of custody is important because:",
+    options: [
+      "It documents evidence handling for legal defensibility",
+      "It replaces backups",
+      "It hides findings",
+      "It removes audit logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Evidence handling must be documented and defensible.",
+  },
+];
+
 export default function DataSecretsPage() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -1111,9 +2089,15 @@ export default function DataSecretsPage() {
     <LearnPageLayout pageTitle="Data & Secrets" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
-      <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-        <ArrowBackIcon />
-      </IconButton>
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
 
       {/* Header */}
       <Box sx={{ mb: 5 }}>
@@ -1318,6 +2302,41 @@ export default function DataSecretsPage() {
           ))}
         </Grid>
       </Paper>
+
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 4,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          bgcolor: alpha(QUIZ_ACCENT_COLOR, 0.03),
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={QUIZ_ACCENT_COLOR}
+          title="Data and Secrets Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

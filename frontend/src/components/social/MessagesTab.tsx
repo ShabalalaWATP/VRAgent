@@ -66,6 +66,11 @@ import {
   Bookmark as BookmarkIcon,
   BookmarkBorder as BookmarkOutlineIcon,
   History as HistoryIcon,
+  People as PeopleIcon,
+  BugReport as BugReportIcon,
+  Assessment as AssessmentIcon,
+  Forum as ThreadIcon,
+  Edit as DraftIcon,
   // File type icons
   PictureAsPdf as PdfIcon,
   Description as DocIcon,
@@ -94,6 +99,7 @@ import {
   PollResponse,
   MessageSearchResult,
   MuteStatusResponse,
+  Friend,
 } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChatWebSocket, ConnectionStatus, TypingUser, QueuedMessage } from '../../hooks/useChatWebSocket';
@@ -108,6 +114,8 @@ import { BookmarksDialog } from './BookmarksDialog';
 import { EditHistoryDialog } from './EditHistoryDialog';
 import { ImageGallery } from './ImageGallery';
 import { OfflineQueueIndicator } from './OfflineQueueIndicator';
+import { ThreadViewDialog } from './ThreadViewDialog';
+import { useMessageDraft, getAllDraftConversations, formatDraftPreview } from '../../hooks/useMessageDraft';
 
 interface MessagesTabProps {
   unreadCounts: UnreadCountResponse | null;
@@ -249,10 +257,49 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
     message: '',
     severity: 'success',
   });
+  // State for thread view
+  const [showThreadView, setShowThreadView] = useState(false);
+  // State for new DM dialog
+  const [showNewChatDialog, setShowNewChatDialog] = useState(false);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [creatingConversation, setCreatingConversation] = useState(false);
+  const [threadParentMessage, setThreadParentMessage] = useState<SocialMessage | null>(null);
+  // Draft conversations for indicators
+  const [draftConversationIds, setDraftConversationIds] = useState<number[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Message draft hook
+  const { draft, hasDraft, saveDraft, clearDraft } = useMessageDraft(selectedConversation?.id);
+
+  // Load draft conversations on mount
+  useEffect(() => {
+    setDraftConversationIds(getAllDraftConversations());
+  }, []);
+
+  // Restore draft when conversation changes
+  useEffect(() => {
+    if (draft && selectedConversation) {
+      setNewMessage(draft.content);
+      if (draft.replyToId && draft.replyToUsername) {
+        // Try to find the message in current conversation
+        const replyMsg = selectedConversation.messages.find(m => m.id === draft.replyToId);
+        if (replyMsg) {
+          setReplyingTo(replyMsg);
+        }
+      }
+    }
+  }, [draft, selectedConversation?.id]);
+
+  // Save draft when message changes
+  useEffect(() => {
+    if (selectedConversation?.id) {
+      saveDraft(newMessage, replyingTo?.id, replyingTo?.sender_username);
+    }
+  }, [newMessage, replyingTo, selectedConversation?.id, saveDraft]);
 
   // WebSocket connection
   const {
@@ -399,6 +446,40 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
       setLoading(false);
     }
   }, []);
+
+  // Load friends for new chat dialog
+  const loadFriends = useCallback(async () => {
+    setLoadingFriends(true);
+    try {
+      const result = await socialApi.getFriends();
+      setFriends(result.friends);
+    } catch (err) {
+      console.error('Failed to load friends:', err);
+    } finally {
+      setLoadingFriends(false);
+    }
+  }, []);
+
+  // Start new DM conversation
+  const handleStartNewChat = async (friend: Friend) => {
+    setCreatingConversation(true);
+    try {
+      const conv = await socialApi.createConversation(friend.user_id);
+      setShowNewChatDialog(false);
+      await loadConversations();
+      await openConversation(conv.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start conversation');
+    } finally {
+      setCreatingConversation(false);
+    }
+  };
+
+  // Open new chat dialog
+  const handleOpenNewChatDialog = () => {
+    setShowNewChatDialog(true);
+    loadFriends();
+  };
 
   // Load pinned messages when conversation changes
   const loadPinnedMessages = useCallback(async (conversationId: number) => {
@@ -754,6 +835,7 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
     setSending(true);
     const messageText = newMessage.trim();
     setNewMessage('');
+    clearDraft(); // Clear draft after sending
     const replyToMsg = replyingTo;
     setReplyingTo(null);
     
@@ -941,22 +1023,35 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
 
   // Conversation List View
   if (!selectedConversation) {
+    // Separate conversations into DMs and Groups
+    const directMessages = conversations.filter(c => !c.is_group);
+    const groupChats = conversations.filter(c => c.is_group);
+    
     return (
       <Box sx={{ px: 3 }}>
-        {/* Create Group Button */}
+        {/* Action Buttons */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Tooltip title="View Bookmarks">
             <IconButton onClick={() => setShowBookmarksDialog(true)} color="primary">
               <BookmarkIcon />
             </IconButton>
           </Tooltip>
-          <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={() => setShowCreateGroup(true)}
-          >
-            New Group
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="contained"
+              startIcon={<ChatIcon />}
+              onClick={handleOpenNewChatDialog}
+            >
+              New Chat
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<GroupIcon />}
+              onClick={() => setShowCreateGroup(true)}
+            >
+              New Group
+            </Button>
+          </Box>
         </Box>
 
         {error && (
@@ -973,101 +1068,252 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <ChatIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
             <Typography color="text.secondary">
-              No conversations yet. Start chatting with your friends!
+              No conversations yet. Start chatting with your contacts!
             </Typography>
           </Box>
         ) : (
-          <List>
-            {conversations.map((conv) => {
-              const other = getOtherParticipant(conv);
-              const unread = unreadCounts?.by_conversation[conv.id] || 0;
-              
-              return (
-                <ListItem
-                  key={conv.id}
-                  onClick={() => openConversation(conv.id)}
-                  sx={{
-                    border: '1px solid',
-                    borderColor: unread > 0 ? 'primary.main' : 'divider',
-                    borderRadius: 1,
-                    mb: 1,
-                    cursor: 'pointer',
-                    bgcolor: unread > 0 ? 'action.hover' : 'transparent',
-                    '&:hover': { bgcolor: 'action.selected' },
-                  }}
-                >
-                  <ListItemAvatar>
-                    <Badge badgeContent={unread} color="primary" max={99}>
-                      {conv.is_group ? (
-                        <Avatar sx={{ bgcolor: 'secondary.main' }}>
-                          <GroupIcon />
-                        </Avatar>
-                      ) : (
-                        <Avatar src={getConversationAvatar(conv)} sx={{ bgcolor: 'primary.main' }}>
-                          {other?.username?.charAt(0).toUpperCase() || '?'}
-                        </Avatar>
-                      )}
-                    </Badge>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="subtitle1" fontWeight={unread > 0 ? 600 : 400}>
-                            {getConversationName(conv)}
-                          </Typography>
-                          {conv.is_group && (
-                            <Chip 
-                              label={`${conv.participant_count} members`} 
-                              size="small" 
-                              variant="outlined"
-                              sx={{ height: 20, fontSize: '0.7rem' }}
-                            />
-                          )}
-                        </Box>
-                        {conv.last_message_at && (
-                          <Typography variant="caption" color="text.secondary">
-                            {formatTime(conv.last_message_at)}
-                          </Typography>
-                        )}
-                      </Box>
-                    }
-                    secondary={
-                      conv.last_message_preview ? (
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{
-                            fontWeight: unread > 0 ? 500 : 400,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {conv.last_message_sender === user?.username ? 'You: ' : 
-                           conv.is_group ? `${conv.last_message_sender}: ` : ''}
-                          {conv.last_message_preview}
-                        </Typography>
-                      ) : (
-                        <Typography variant="body2" color="text.disabled">
-                          No messages yet
-                        </Typography>
-                      )
-                    }
+          <>
+            {/* Direct Messages Section */}
+            {directMessages.length > 0 && (
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                  <PeopleIcon sx={{ color: 'primary.main', fontSize: 20 }} />
+                  <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+                    DIRECT MESSAGES
+                  </Typography>
+                  <Chip 
+                    label={directMessages.length} 
+                    size="small" 
+                    sx={{ height: 18, fontSize: '0.7rem', bgcolor: 'primary.main', color: 'white' }}
                   />
-                  <ListItemSecondaryAction>
-                    <IconButton
-                      edge="end"
-                      size="small"
-                      onClick={(e) => handleConversationMenu(e, conv)}
-                    >
-                      <MoreIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              );
-            })}
-          </List>
+                </Box>
+                <List disablePadding>
+                  {directMessages.map((conv) => {
+                    const other = getOtherParticipant(conv);
+                    const unread = unreadCounts?.by_conversation[conv.id] || 0;
+                    const otherUserId = other?.user_id;
+                    const otherOnline = otherUserId ? isUserOnline(otherUserId) : false;
+                    
+                    return (
+                      <ListItem
+                        key={conv.id}
+                        onClick={() => openConversation(conv.id)}
+                        sx={{
+                          border: '1px solid',
+                          borderColor: unread > 0 ? 'primary.main' : 'divider',
+                          borderRadius: 1,
+                          mb: 1,
+                          cursor: 'pointer',
+                          bgcolor: unread > 0 ? 'action.hover' : 'transparent',
+                          '&:hover': { bgcolor: 'action.selected' },
+                        }}
+                      >
+                        <ListItemAvatar>
+                          <Badge 
+                            badgeContent={unread} 
+                            color="primary" 
+                            max={99}
+                            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                          >
+                            <Badge
+                              overlap="circular"
+                              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                              variant="dot"
+                              sx={{
+                                '& .MuiBadge-badge': {
+                                  bgcolor: otherOnline ? 'success.main' : 'grey.500',
+                                  boxShadow: theme => `0 0 0 2px ${theme.palette.background.paper}`,
+                                },
+                              }}
+                            >
+                              <Avatar src={getConversationAvatar(conv)} sx={{ bgcolor: 'primary.main' }}>
+                                {other?.username?.charAt(0).toUpperCase() || '?'}
+                              </Avatar>
+                            </Badge>
+                          </Badge>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="subtitle1" fontWeight={unread > 0 ? 600 : 400}>
+                                  {other?.username || 'Unknown'}
+                                </Typography>
+                                {other?.first_name && (
+                                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                    {other.first_name} {other.last_name}
+                                  </Typography>
+                                )}
+                                {otherOnline && (
+                                  <Chip 
+                                    label="Online" 
+                                    size="small" 
+                                    color="success" 
+                                    variant="outlined"
+                                    sx={{ height: 18, fontSize: '0.65rem' }}
+                                  />
+                                )}
+                              </Box>
+                              {conv.last_message_at && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatTime(conv.last_message_at)}
+                                </Typography>
+                              )}
+                            </Box>
+                          }
+                          secondary={
+                            draftConversationIds.includes(conv.id) ? (
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  color: 'warning.main',
+                                  fontStyle: 'italic',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 0.5,
+                                }}
+                              >
+                                <DraftIcon sx={{ fontSize: 14 }} />
+                                Draft
+                              </Typography>
+                            ) : conv.last_message_preview ? (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{
+                                  fontWeight: unread > 0 ? 500 : 400,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {conv.last_message_sender === user?.username ? 'You: ' : ''}
+                                {conv.last_message_preview}
+                              </Typography>
+                            ) : (
+                              <Typography variant="body2" color="text.disabled">
+                                No messages yet - say hello!
+                              </Typography>
+                            )
+                          }
+                        />
+                        <ListItemSecondaryAction>
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={(e) => handleConversationMenu(e, conv)}
+                          >
+                            <MoreIcon />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              </Box>
+            )}
+
+            {/* Groups Section */}
+            {groupChats.length > 0 && (
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                  <GroupIcon sx={{ color: 'secondary.main', fontSize: 20 }} />
+                  <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+                    GROUP CHATS
+                  </Typography>
+                  <Chip 
+                    label={groupChats.length} 
+                    size="small" 
+                    sx={{ height: 18, fontSize: '0.7rem', bgcolor: 'secondary.main', color: 'white' }}
+                  />
+                </Box>
+                <List disablePadding>
+                  {groupChats.map((conv) => {
+                    const unread = unreadCounts?.by_conversation[conv.id] || 0;
+                    
+                    return (
+                      <ListItem
+                        key={conv.id}
+                        onClick={() => openConversation(conv.id)}
+                        sx={{
+                          border: '1px solid',
+                          borderColor: unread > 0 ? 'primary.main' : 'divider',
+                          borderRadius: 1,
+                          mb: 1,
+                          cursor: 'pointer',
+                          bgcolor: unread > 0 ? 'action.hover' : 'transparent',
+                          '&:hover': { bgcolor: 'action.selected' },
+                        }}
+                      >
+                        <ListItemAvatar>
+                          <Badge badgeContent={unread} color="primary" max={99}>
+                            <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                              <GroupIcon />
+                            </Avatar>
+                          </Badge>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="subtitle1" fontWeight={unread > 0 ? 600 : 400}>
+                                  {conv.name || 'Group Chat'}
+                                </Typography>
+                                <Chip 
+                                  label={`${conv.participant_count} members`} 
+                                  size="small" 
+                                  variant="outlined"
+                                  sx={{ height: 20, fontSize: '0.7rem' }}
+                                />
+                              </Box>
+                              {conv.last_message_at && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatTime(conv.last_message_at)}
+                                </Typography>
+                              )}
+                            </Box>
+                          }
+                          secondary={
+                            conv.last_message_preview ? (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{
+                                  fontWeight: unread > 0 ? 500 : 400,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {conv.last_message_sender === user?.username ? 'You: ' : `${conv.last_message_sender}: `}
+                                {conv.last_message_preview}
+                              </Typography>
+                            ) : (
+                              <Typography variant="body2" color="text.disabled">
+                                No messages yet
+                              </Typography>
+                            )
+                          }
+                        />
+                        <ListItemSecondaryAction>
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={(e) => handleConversationMenu(e, conv)}
+                          >
+                            <MoreIcon />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              </Box>
+            )}
+          </>
         )}
 
         {/* Conversation Context Menu */}
@@ -1141,6 +1387,102 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
           onClose={() => setShowBookmarksDialog(false)}
           onNavigateToMessage={handleNavigateToBookmark}
         />
+
+        {/* New Chat Dialog */}
+        <Dialog
+          open={showNewChatDialog}
+          onClose={() => setShowNewChatDialog(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ChatIcon color="primary" />
+              Start New Conversation
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Select a contact to start a direct message conversation.
+            </Typography>
+            {loadingFriends ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : friends.length === 0 ? (
+              <Alert severity="info">
+                No contacts yet. Add contacts from the Contacts tab to start chatting!
+              </Alert>
+            ) : (
+              <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+                {friends.map((friend) => {
+                  // Check if already have a conversation with this friend
+                  const existingConv = conversations.find(
+                    c => !c.is_group && c.participants.some(p => p.user_id === friend.user_id)
+                  );
+                  
+                  return (
+                    <ListItem
+                      key={friend.user_id}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        mb: 1,
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
+                      onClick={() => {
+                        if (existingConv) {
+                          setShowNewChatDialog(false);
+                          openConversation(existingConv.id);
+                        } else {
+                          handleStartNewChat(friend);
+                        }
+                      }}
+                      disabled={creatingConversation}
+                    >
+                      <ListItemAvatar>
+                        <Avatar src={friend.avatar_url} sx={{ bgcolor: 'primary.main' }}>
+                          {friend.username.charAt(0).toUpperCase()}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="subtitle1" fontWeight={500}>
+                              {friend.username}
+                            </Typography>
+                            {friend.first_name && (
+                              <Typography variant="body2" color="text.secondary">
+                                ({friend.first_name} {friend.last_name})
+                              </Typography>
+                            )}
+                          </Box>
+                        }
+                        secondary={existingConv ? 'Continue existing conversation' : 'Start new conversation'}
+                      />
+                      {existingConv && (
+                        <Chip 
+                          label="Existing" 
+                          size="small" 
+                          color="primary" 
+                          variant="outlined"
+                          sx={{ ml: 1 }}
+                        />
+                      )}
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowNewChatDialog(false)} disabled={creatingConversation}>
+              Cancel
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     );
   }
@@ -1228,13 +1570,39 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
           </>
         ) : (
           <>
-            <Avatar src={other?.avatar_url} sx={{ bgcolor: 'primary.main' }}>
-              {other?.username?.charAt(0).toUpperCase() || '?'}
-            </Avatar>
+            <Badge
+              overlap="circular"
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              variant="dot"
+              sx={{
+                '& .MuiBadge-badge': {
+                  bgcolor: other?.user_id && isUserOnline(other.user_id) ? 'success.main' : 'grey.500',
+                  boxShadow: theme => `0 0 0 2px ${theme.palette.background.paper}`,
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                },
+              }}
+            >
+              <Avatar src={other?.avatar_url} sx={{ bgcolor: 'primary.main', width: 44, height: 44 }}>
+                {other?.username?.charAt(0).toUpperCase() || '?'}
+              </Avatar>
+            </Badge>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle1" fontWeight={500}>
-                {other?.username || 'Unknown'}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="subtitle1" fontWeight={500}>
+                  {other?.username || 'Unknown'}
+                </Typography>
+                {other?.user_id && isUserOnline(other.user_id) && (
+                  <Chip 
+                    label="Online" 
+                    size="small" 
+                    color="success" 
+                    variant="outlined"
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                )}
+              </Box>
               {other?.first_name && (
                 <Typography variant="caption" color="text.secondary">
                   {other.first_name} {other.last_name}
@@ -1376,6 +1744,10 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
               onBookmark={() => handleBookmarkMessage(msg.id)}
               onViewEditHistory={() => handleViewEditHistory(msg)}
               onImageClick={() => handleImageClick(msg.id)}
+              onViewThread={() => {
+                setThreadParentMessage(msg);
+                setShowThreadView(true);
+              }}
               isPinned={pinnedMessages.some(p => p.message_id === msg.id)}
               readBy={getReadByForMessage(msg.id)}
               currentUserId={user?.id}
@@ -1770,6 +2142,116 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
           {queueSnackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Thread View Dialog */}
+      {selectedConversation && threadParentMessage && (
+        <ThreadViewDialog
+          open={showThreadView}
+          onClose={() => {
+            setShowThreadView(false);
+            setThreadParentMessage(null);
+          }}
+          conversationId={selectedConversation.id}
+          parentMessage={threadParentMessage}
+          currentUserId={user?.id}
+        />
+      )}
+
+      {/* New Chat Dialog */}
+      <Dialog
+        open={showNewChatDialog}
+        onClose={() => setShowNewChatDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ChatIcon color="primary" />
+            Start New Conversation
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select a contact to start a direct message conversation.
+          </Typography>
+          {loadingFriends ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : friends.length === 0 ? (
+            <Alert severity="info">
+              No contacts yet. Add contacts from the Contacts tab to start chatting!
+            </Alert>
+          ) : (
+            <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+              {friends.map((friend) => {
+                // Check if already have a conversation with this friend
+                const existingConv = conversations.find(
+                  c => !c.is_group && c.participants.some(p => p.user_id === friend.user_id)
+                );
+                
+                return (
+                  <ListItem
+                    key={friend.user_id}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      mb: 1,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'action.hover' },
+                    }}
+                    onClick={() => {
+                      if (existingConv) {
+                        setShowNewChatDialog(false);
+                        openConversation(existingConv.id);
+                      } else {
+                        handleStartNewChat(friend);
+                      }
+                    }}
+                    disabled={creatingConversation}
+                  >
+                    <ListItemAvatar>
+                      <Avatar src={friend.avatar_url} sx={{ bgcolor: 'primary.main' }}>
+                        {friend.username.charAt(0).toUpperCase()}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="subtitle1" fontWeight={500}>
+                            {friend.username}
+                          </Typography>
+                          {friend.first_name && (
+                            <Typography variant="body2" color="text.secondary">
+                              ({friend.first_name} {friend.last_name})
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                      secondary={existingConv ? 'Continue existing conversation' : 'Start new conversation'}
+                    />
+                    {existingConv && (
+                      <Chip 
+                        label="Existing" 
+                        size="small" 
+                        color="primary" 
+                        variant="outlined"
+                        sx={{ ml: 1 }}
+                      />
+                    )}
+                  </ListItem>
+                );
+              })}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowNewChatDialog(false)} disabled={creatingConversation}>
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -1785,6 +2267,7 @@ function MessageBubble({
   onBookmark,
   onViewEditHistory,
   onImageClick,
+  onViewThread,
   isPinned,
   readBy,
   currentUserId,
@@ -1800,6 +2283,7 @@ function MessageBubble({
   onBookmark: () => void;
   onViewEditHistory: () => void;
   onImageClick: () => void;
+  onViewThread: () => void;
   isPinned: boolean;
   readBy: ReadReceiptInfo[];
   currentUserId?: number;
@@ -2000,6 +2484,22 @@ function MessageBubble({
               </Box>
             )}
 
+            {/* Shared Finding Display */}
+            {message.message_type === 'finding_share' && message.attachment_data && !message.is_deleted && (
+              <SharedFindingCard 
+                data={message.attachment_data as any} 
+                isOwn={isOwn}
+              />
+            )}
+
+            {/* Shared Report Display */}
+            {message.message_type === 'report_share' && message.attachment_data && !message.is_deleted && (
+              <SharedReportCard 
+                data={message.attachment_data as any}
+                isOwn={isOwn}
+              />
+            )}
+
             {/* Poll Display */}
             {message.message_type === 'poll' && poll && !message.is_deleted && (
               <Box sx={{ mt: 1 }}>
@@ -2007,8 +2507,8 @@ function MessageBubble({
               </Box>
             )}
 
-            {/* Message Content with Markdown - skip for polls with poll data */}
-            {(message.message_type !== 'file' && message.message_type !== 'poll' || message.is_deleted || (message.message_type === 'poll' && !poll)) && (
+            {/* Message Content with Markdown - skip for files, polls, shared findings/reports */}
+            {(message.message_type !== 'file' && message.message_type !== 'poll' && message.message_type !== 'finding_share' && message.message_type !== 'report_share' || message.is_deleted || (message.message_type === 'poll' && !poll)) && (
               <Box sx={{ '& > span': { wordBreak: 'break-word' } }}>
                 <MarkdownRenderer 
                   content={message.content}
@@ -2091,6 +2591,15 @@ function MessageBubble({
                   <ReplyIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+              {(message.reply_count && message.reply_count > 0) && (
+                <Tooltip title={`View Thread (${message.reply_count} ${message.reply_count === 1 ? 'reply' : 'replies'})`}>
+                  <IconButton size="small" onClick={onViewThread}>
+                    <Badge badgeContent={message.reply_count} color="primary" max={99}>
+                      <ThreadIcon fontSize="small" />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title={isPinned ? "Unpin" : "Pin"}>
                 <IconButton size="small" onClick={onPin}>
                   {isPinned ? <PinIcon fontSize="small" color="primary" /> : <PinOutlinedIcon fontSize="small" />}
@@ -2181,6 +2690,201 @@ function MessageBubble({
           ))}
         </Box>
       )}
+    </Box>
+  );
+}
+
+// Shared Finding Card Component
+function SharedFindingCard({ data, isOwn }: { data: any; isOwn: boolean }) {
+  const getSeverityColor = (severity: string) => {
+    switch (severity?.toLowerCase()) {
+      case 'critical': return '#d32f2f';
+      case 'high': return '#f57c00';
+      case 'medium': return '#1976d2';
+      case 'low': return '#388e3c';
+      default: return '#757575';
+    }
+  };
+
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        mb: 1,
+        bgcolor: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)',
+        border: '1px solid',
+        borderColor: isOwn ? 'rgba(255,255,255,0.2)' : 'divider',
+        borderLeft: 4,
+        borderLeftColor: getSeverityColor(data.severity),
+        borderRadius: 1,
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
+        <BugReportIcon sx={{ color: getSeverityColor(data.severity), fontSize: 20 }} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Chip
+              label={data.severity?.toUpperCase()}
+              size="small"
+              sx={{
+                bgcolor: getSeverityColor(data.severity),
+                color: 'white',
+                fontWeight: 600,
+                height: 20,
+                fontSize: '0.65rem',
+              }}
+            />
+            <Chip
+              label={data.type}
+              size="small"
+              variant="outlined"
+              sx={{ height: 20, fontSize: '0.65rem' }}
+            />
+          </Box>
+          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+            {data.summary?.length > 100 ? `${data.summary.slice(0, 100)}...` : data.summary}
+          </Typography>
+        </Box>
+      </Box>
+      
+      {data.file_path && (
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            display: 'block',
+            fontFamily: 'monospace', 
+            opacity: 0.8,
+            bgcolor: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+            px: 1,
+            py: 0.5,
+            borderRadius: 0.5,
+            mb: 0.5,
+          }}
+        >
+          {data.file_path}
+          {data.start_line && `:${data.start_line}`}
+          {data.end_line && data.end_line !== data.start_line && `-${data.end_line}`}
+        </Typography>
+      )}
+      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="caption" sx={{ opacity: 0.7 }}>
+          📁 {data.project_name}
+        </Typography>
+        <Typography 
+          component="a"
+          href={`/projects/${data.project_id}`}
+          variant="caption"
+          sx={{ 
+            color: isOwn ? 'inherit' : 'primary.main',
+            textDecoration: 'none',
+            '&:hover': { textDecoration: 'underline' },
+          }}
+        >
+          View Project →
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
+// Shared Report Card Component
+function SharedReportCard({ data, isOwn }: { data: any; isOwn: boolean }) {
+  const getRiskColor = (score: number) => {
+    if (score >= 70) return '#d32f2f';
+    if (score >= 50) return '#f57c00';
+    if (score >= 25) return '#1976d2';
+    return '#388e3c';
+  };
+
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        mb: 1,
+        bgcolor: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)',
+        border: '1px solid',
+        borderColor: isOwn ? 'rgba(255,255,255,0.2)' : 'divider',
+        borderRadius: 1,
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
+        <AssessmentIcon sx={{ color: 'primary.main', fontSize: 20 }} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+            {data.title}
+          </Typography>
+          {data.summary && (
+            <Typography variant="caption" sx={{ display: 'block', opacity: 0.8, mb: 1 }}>
+              {data.summary.length > 150 ? `${data.summary.slice(0, 150)}...` : data.summary}
+            </Typography>
+          )}
+        </Box>
+      </Box>
+      
+      {/* Risk Score & Finding Counts */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 1 }}>
+        {data.risk_score !== null && data.risk_score !== undefined && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" sx={{ opacity: 0.7 }}>Risk:</Typography>
+            <Chip
+              label={`${data.risk_score.toFixed(0)}/100`}
+              size="small"
+              sx={{
+                bgcolor: getRiskColor(data.risk_score),
+                color: 'white',
+                fontWeight: 600,
+                height: 20,
+                fontSize: '0.65rem',
+              }}
+            />
+          </Box>
+        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography variant="caption" sx={{ opacity: 0.7 }}>Findings:</Typography>
+          <Typography variant="caption" fontWeight={500}>
+            {data.finding_count || 0}
+          </Typography>
+        </Box>
+      </Box>
+      
+      {/* Severity Breakdown */}
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+        {data.critical_count > 0 && (
+          <Chip label={`${data.critical_count} Critical`} size="small" 
+            sx={{ bgcolor: '#d32f2f', color: 'white', height: 18, fontSize: '0.6rem' }} />
+        )}
+        {data.high_count > 0 && (
+          <Chip label={`${data.high_count} High`} size="small" 
+            sx={{ bgcolor: '#f57c00', color: 'white', height: 18, fontSize: '0.6rem' }} />
+        )}
+        {data.medium_count > 0 && (
+          <Chip label={`${data.medium_count} Medium`} size="small" 
+            sx={{ bgcolor: '#1976d2', color: 'white', height: 18, fontSize: '0.6rem' }} />
+        )}
+        {data.low_count > 0 && (
+          <Chip label={`${data.low_count} Low`} size="small" 
+            sx={{ bgcolor: '#388e3c', color: 'white', height: 18, fontSize: '0.6rem' }} />
+        )}
+      </Box>
+      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="caption" sx={{ opacity: 0.7 }}>
+          📁 {data.project_name}
+        </Typography>
+        <Typography 
+          component="a"
+          href={`/projects/${data.project_id}`}
+          variant="caption"
+          sx={{ 
+            color: isOwn ? 'inherit' : 'primary.main',
+            textDecoration: 'none',
+            '&:hover': { textDecoration: 'underline' },
+          }}
+        >
+          View Report →
+        </Typography>
+      </Box>
     </Box>
   );
 }

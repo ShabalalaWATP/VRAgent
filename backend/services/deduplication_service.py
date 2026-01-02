@@ -240,7 +240,9 @@ def _create_fingerprint(
     start_line: int,
     end_line: Optional[int],
     category: str,
-    code_hash: Optional[str] = None
+    code_hash: Optional[str] = None,
+    external_id: Optional[str] = None,
+    dependency_name: Optional[str] = None
 ) -> str:
     """
     Create a unique fingerprint for a finding.
@@ -250,6 +252,7 @@ def _create_fingerprint(
     - Line range (with some tolerance)
     - Vulnerability category
     - Optional code hash for exact matching
+    - For dependency_vuln: CVE ID and package name (Fix #1: prevent CVE collapse)
     """
     # Normalize file path
     normalized_path = file_path.replace("\\", "/").lower()
@@ -259,7 +262,15 @@ def _create_fingerprint(
     
     # Create fingerprint
     fp_parts = [normalized_path, str(line_bucket), category]
-    if code_hash:
+    
+    # Fix #1: For dependency vulnerabilities, include CVE and package to keep distinct
+    # This prevents all CVEs from collapsing into one finding
+    if category == "dependency_vulnerability":
+        if external_id:
+            fp_parts.append(external_id.upper())  # CVE-2023-12345
+        if dependency_name:
+            fp_parts.append(dependency_name.lower())  # requests, lodash, etc.
+    elif code_hash:
         fp_parts.append(code_hash[:16])
     
     fp_string = "|".join(fp_parts)
@@ -481,12 +492,21 @@ def deduplicate_findings(findings: List[Any]) -> Tuple[List[Any], Dict[str, Any]
         category = _get_vulnerability_category(finding)
         code_hash = _extract_code_hash(finding)
         
+        # Fix #1: Extract CVE ID and dependency name for dependency_vuln findings
+        external_id = None
+        dependency_name = None
+        if category == "dependency_vulnerability" and finding.details:
+            external_id = finding.details.get("external_id") or finding.details.get("cve_id")
+            dependency_name = finding.details.get("dependency") or finding.details.get("package_name")
+        
         fingerprint = _create_fingerprint(
             file_path=finding.file_path or "",
             start_line=finding.start_line or 0,
             end_line=finding.end_line,
             category=category,
-            code_hash=code_hash
+            code_hash=code_hash,
+            external_id=external_id,
+            dependency_name=dependency_name
         )
         
         fingerprint_groups[fingerprint].append(finding)
@@ -495,6 +515,7 @@ def deduplicate_findings(findings: List[Any]) -> Tuple[List[Any], Dict[str, Any]
     deduplicated = []
     multi_scanner_count = 0
     category_counts: Dict[str, int] = defaultdict(int)
+    merged_ids: List[int] = []  # Fix #2: Track IDs of merged (duplicate) findings
     
     for fingerprint, group in fingerprint_groups.items():
         if len(group) == 1:
@@ -539,6 +560,11 @@ def deduplicate_findings(findings: List[Any]) -> Tuple[List[Any], Dict[str, Any]
             
             deduplicated.append(primary)
             
+            # Fix #2: Track merged finding IDs for DB update
+            for merged_finding in merged:
+                if hasattr(merged_finding, 'id') and merged_finding.id:
+                    merged_ids.append(merged_finding.id)
+            
             logger.debug(
                 f"Merged {len(group)} findings into one: {primary.summary[:50]}... "
                 f"(scanners: {[_get_scanner_name(f) for f in group]})"
@@ -550,9 +576,11 @@ def deduplicate_findings(findings: List[Any]) -> Tuple[List[Any], Dict[str, Any]
         "original_count": len(findings),
         "deduplicated_count": len(deduplicated),
         "duplicates_removed": duplicates_removed,
+        "duplicates_merged": duplicates_removed,  # Alias for clarity
         "reduction_percent": round(duplicates_removed / len(findings) * 100, 1) if findings else 0,
         "multi_scanner_findings": multi_scanner_count,
         "by_category": dict(category_counts),
+        "merged_finding_ids": merged_ids,  # Fix #2: IDs of findings that were merged (duplicates)
     }
     
     logger.info(

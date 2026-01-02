@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import {
   Typography,
   Paper,
@@ -11,8 +12,17 @@ import {
   alpha,
   Button,
   Container,
+  Divider,
+  Fab,
+  Drawer,
+  IconButton,
+  Tooltip,
+  useMediaQuery,
+  useTheme,
+  LinearProgress,
 } from "@mui/material";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import StorageIcon from "@mui/icons-material/Storage";
 import FunctionsIcon from "@mui/icons-material/Functions";
@@ -39,7 +49,11 @@ import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import SchoolIcon from "@mui/icons-material/School";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useNavigate } from "react-router-dom";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 const outlineSections = [
   {
@@ -212,22 +226,1001 @@ const outlineSections = [
   },
 ];
 
+const ACCENT_COLOR = "#8b5cf6";
+const QUIZ_QUESTION_COUNT = 10;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "AI is best described as:",
+    options: [
+      "Systems that perform tasks requiring human intelligence",
+      "Only robotics",
+      "Only data storage",
+      "Only rule-based scripts",
+    ],
+    correctAnswer: 0,
+    explanation: "AI covers systems that can perform tasks requiring intelligence.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "Machine learning is:",
+    options: [
+      "A subset of AI that learns from data",
+      "A type of database",
+      "A network protocol",
+      "Only hand-written rules",
+    ],
+    correctAnswer: 0,
+    explanation: "ML is a subset of AI focused on learning from data.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "Deep learning refers to:",
+    options: [
+      "Neural networks with many layers",
+      "Any statistical test",
+      "A single decision tree",
+      "Manual feature coding only",
+    ],
+    correctAnswer: 0,
+    explanation: "Deep learning uses multi-layer neural networks.",
+  },
+  {
+    id: 4,
+    topic: "Learning Types",
+    question: "Supervised learning uses:",
+    options: ["Labeled data", "No data", "Only reinforcement signals", "Only random outputs"],
+    correctAnswer: 0,
+    explanation: "Supervised learning learns from labeled examples.",
+  },
+  {
+    id: 5,
+    topic: "Learning Types",
+    question: "Unsupervised learning aims to:",
+    options: ["Find patterns without labels", "Predict labels from labeled data", "Receive rewards", "Encrypt data"],
+    correctAnswer: 0,
+    explanation: "Unsupervised learning discovers structure in unlabeled data.",
+  },
+  {
+    id: 6,
+    topic: "Learning Types",
+    question: "Reinforcement learning learns by:",
+    options: ["Maximizing rewards through actions", "Reading labeled files", "Clustering text", "Copying outputs"],
+    correctAnswer: 0,
+    explanation: "RL learns through actions and reward signals.",
+  },
+  {
+    id: 7,
+    topic: "Data",
+    question: "The test set is primarily used to:",
+    options: ["Evaluate final model performance", "Tune hyperparameters", "Train the model", "Store backups"],
+    correctAnswer: 0,
+    explanation: "The test set provides a final unbiased evaluation.",
+  },
+  {
+    id: 8,
+    topic: "Fundamentals",
+    question: "Overfitting occurs when a model:",
+    options: [
+      "Performs well on training data but poorly on new data",
+      "Performs poorly on training data only",
+      "Is too simple",
+      "Has no features",
+    ],
+    correctAnswer: 0,
+    explanation: "Overfitting hurts generalization to new data.",
+  },
+  {
+    id: 9,
+    topic: "Fundamentals",
+    question: "Underfitting occurs when a model:",
+    options: [
+      "Is too simple and performs poorly on both train and test",
+      "Memorizes training data",
+      "Has too many layers",
+      "Uses too much data",
+    ],
+    correctAnswer: 0,
+    explanation: "Underfitting means the model is too simple to learn patterns.",
+  },
+  {
+    id: 10,
+    topic: "Data",
+    question: "A feature is:",
+    options: ["An input variable used by the model", "The model output", "The loss value", "A training epoch"],
+    correctAnswer: 0,
+    explanation: "Features are the input variables used for prediction.",
+  },
+  {
+    id: 11,
+    topic: "Data",
+    question: "A label is:",
+    options: ["The target output for supervised learning", "An input feature", "A hyperparameter", "A GPU setting"],
+    correctAnswer: 0,
+    explanation: "Labels are the ground-truth outputs in supervised learning.",
+  },
+  {
+    id: 12,
+    topic: "Training",
+    question: "A hyperparameter is:",
+    options: ["A setting chosen before training", "A weight learned during training", "An output label", "A data record"],
+    correctAnswer: 0,
+    explanation: "Hyperparameters are set before training begins.",
+  },
+  {
+    id: 13,
+    topic: "Training",
+    question: "A loss function:",
+    options: ["Measures model error to minimize", "Stores data", "Encrypts inputs", "Schedules jobs"],
+    correctAnswer: 0,
+    explanation: "Loss quantifies error that training minimizes.",
+  },
+  {
+    id: 14,
+    topic: "Training",
+    question: "Gradient descent is:",
+    options: ["An optimization method to minimize loss", "A data storage format", "A logging tool", "A database index"],
+    correctAnswer: 0,
+    explanation: "Gradient descent updates parameters to reduce loss.",
+  },
+  {
+    id: 15,
+    topic: "Training",
+    question: "Regularization helps by:",
+    options: ["Reducing overfitting", "Increasing label noise", "Deleting data", "Guaranteeing accuracy"],
+    correctAnswer: 0,
+    explanation: "Regularization discourages overly complex models.",
+  },
+  {
+    id: 16,
+    topic: "Training",
+    question: "Cross-validation is used to:",
+    options: ["Estimate performance more reliably", "Increase training data size only", "Replace test sets", "Avoid evaluation"],
+    correctAnswer: 0,
+    explanation: "Cross-validation provides a more robust performance estimate.",
+  },
+  {
+    id: 17,
+    topic: "Metrics",
+    question: "Which metric focuses on catching positives and reducing false negatives?",
+    options: ["Recall", "Precision", "Accuracy", "Specificity"],
+    correctAnswer: 0,
+    explanation: "Recall measures how many true positives are captured.",
+  },
+  {
+    id: 18,
+    topic: "Metrics",
+    question: "Which metric focuses on reducing false positives?",
+    options: ["Precision", "Recall", "Accuracy", "RMSE"],
+    correctAnswer: 0,
+    explanation: "Precision improves when false positives are reduced.",
+  },
+  {
+    id: 19,
+    topic: "Metrics",
+    question: "F1 score is:",
+    options: ["The harmonic mean of precision and recall", "Average of accuracy and loss", "Only recall", "Only precision"],
+    correctAnswer: 0,
+    explanation: "F1 balances precision and recall.",
+  },
+  {
+    id: 20,
+    topic: "Metrics",
+    question: "A confusion matrix counts:",
+    options: ["True/false positives and negatives", "CPU usage", "Model size", "Token lengths"],
+    correctAnswer: 0,
+    explanation: "Confusion matrices summarize classification outcomes.",
+  },
+  {
+    id: 21,
+    topic: "Models",
+    question: "Classification models output:",
+    options: ["Categories or class labels", "Continuous values only", "Random strings", "Disk usage"],
+    correctAnswer: 0,
+    explanation: "Classification predicts discrete classes.",
+  },
+  {
+    id: 22,
+    topic: "Models",
+    question: "Linear regression is used to:",
+    options: ["Predict continuous values", "Cluster data", "Sort arrays only", "Encrypt messages"],
+    correctAnswer: 0,
+    explanation: "Linear regression predicts continuous targets.",
+  },
+  {
+    id: 23,
+    topic: "Models",
+    question: "Logistic regression is commonly used for:",
+    options: ["Binary classification", "Time synchronization", "Image compression", "Backup scheduling"],
+    correctAnswer: 0,
+    explanation: "Logistic regression models class probabilities.",
+  },
+  {
+    id: 24,
+    topic: "Models",
+    question: "Decision trees work by:",
+    options: ["Splitting data based on feature tests", "Performing matrix inversion only", "Randomly guessing outputs", "Encrypting features"],
+    correctAnswer: 0,
+    explanation: "Decision trees split on features to make decisions.",
+  },
+  {
+    id: 25,
+    topic: "Models",
+    question: "Random forests are:",
+    options: ["Ensembles of decision trees", "Single large tree", "Neural networks", "Clustering algorithms"],
+    correctAnswer: 0,
+    explanation: "Random forests combine many trees for robustness.",
+  },
+  {
+    id: 26,
+    topic: "Models",
+    question: "kNN predicts by:",
+    options: ["Looking at the nearest neighbors", "Maximizing reward", "Applying gradient descent directly", "Generating random labels"],
+    correctAnswer: 0,
+    explanation: "kNN uses the closest points to classify or regress.",
+  },
+  {
+    id: 27,
+    topic: "Models",
+    question: "SVM aims to:",
+    options: ["Find the maximum-margin separating hyperplane", "Minimize disk usage", "Encode images", "Balance network load"],
+    correctAnswer: 0,
+    explanation: "SVMs maximize the margin between classes.",
+  },
+  {
+    id: 28,
+    topic: "Models",
+    question: "K-means is used for:",
+    options: ["Clustering unlabeled data", "Supervised classification", "Sequence prediction", "Model serving"],
+    correctAnswer: 0,
+    explanation: "K-means groups data into clusters.",
+  },
+  {
+    id: 29,
+    topic: "Models",
+    question: "PCA is primarily used for:",
+    options: ["Dimensionality reduction", "Label encoding", "Data encryption", "Web scraping"],
+    correctAnswer: 0,
+    explanation: "PCA reduces dimensionality while preserving variance.",
+  },
+  {
+    id: 30,
+    topic: "Deep Learning",
+    question: "CNNs are well suited for:",
+    options: ["Image and spatial data", "Database indexing", "Time sync", "Disk backups"],
+    correctAnswer: 0,
+    explanation: "CNNs exploit spatial structure in images.",
+  },
+  {
+    id: 31,
+    topic: "Deep Learning",
+    question: "RNNs are well suited for:",
+    options: ["Sequences and time series", "Static images only", "Sorting logs", "Firewall rules"],
+    correctAnswer: 0,
+    explanation: "RNNs model sequential dependencies.",
+  },
+  {
+    id: 32,
+    topic: "Deep Learning",
+    question: "LSTMs help with:",
+    options: ["Long-range dependencies in sequences", "Disk encryption", "Vector search", "OS scheduling"],
+    correctAnswer: 0,
+    explanation: "LSTMs mitigate vanishing gradients in sequences.",
+  },
+  {
+    id: 33,
+    topic: "Deep Learning",
+    question: "Transformers are built around:",
+    options: ["Self-attention mechanisms", "Decision trees", "K-means clustering", "Only recurrence"],
+    correctAnswer: 0,
+    explanation: "Transformers use self-attention to model context.",
+  },
+  {
+    id: 34,
+    topic: "Deep Learning",
+    question: "Attention lets a model:",
+    options: ["Weight relevant tokens differently", "Skip training", "Ignore input order entirely", "Use only the last token"],
+    correctAnswer: 0,
+    explanation: "Attention focuses on the most relevant parts of the input.",
+  },
+  {
+    id: 35,
+    topic: "NLP",
+    question: "An embedding is:",
+    options: ["A dense vector representation of data", "A raw text string", "A backup file", "A cache miss"],
+    correctAnswer: 0,
+    explanation: "Embeddings encode data into vectors for ML.",
+  },
+  {
+    id: 36,
+    topic: "NLP",
+    question: "Tokenization is:",
+    options: ["Splitting text into smaller units", "Encrypting text", "Compressing images", "Normalizing data by label"],
+    correctAnswer: 0,
+    explanation: "Tokenization breaks text into tokens.",
+  },
+  {
+    id: 37,
+    topic: "NLP",
+    question: "NER stands for and does what?",
+    options: [
+      "Named Entity Recognition identifies entities in text",
+      "Neural Error Reduction compresses models",
+      "Network Endpoint Routing forwards packets",
+      "New Embedding Registry stores models",
+    ],
+    correctAnswer: 0,
+    explanation: "NER labels entities like names, places, and organizations.",
+  },
+  {
+    id: 38,
+    topic: "NLP",
+    question: "A language model primarily predicts:",
+    options: ["Next token in a sequence", "Only sentiment", "Image labels", "Database rows"],
+    correctAnswer: 0,
+    explanation: "Language models are trained to predict the next token.",
+  },
+  {
+    id: 39,
+    topic: "LLMs",
+    question: "Pretraining typically uses:",
+    options: ["Large general datasets", "Only labeled task data", "No data", "Only test sets"],
+    correctAnswer: 0,
+    explanation: "Pretraining uses large-scale data to learn general patterns.",
+  },
+  {
+    id: 40,
+    topic: "LLMs",
+    question: "Fine-tuning is:",
+    options: ["Adapting a pretrained model to a specific task", "Training from scratch", "Only evaluation", "Only compressing model"],
+    correctAnswer: 0,
+    explanation: "Fine-tuning adapts a model to a target task or domain.",
+  },
+  {
+    id: 41,
+    topic: "LLMs",
+    question: "RLHF is used to:",
+    options: ["Align model behavior with human feedback", "Speed up GPUs", "Encrypt datasets", "Reduce tokenization"],
+    correctAnswer: 0,
+    explanation: "RLHF aligns outputs to human preferences and safety goals.",
+  },
+  {
+    id: 42,
+    topic: "LLMs",
+    question: "Prompt engineering is:",
+    options: ["Crafting inputs to guide model outputs", "Compiling code", "Creating datasets only", "Replacing training"],
+    correctAnswer: 0,
+    explanation: "Prompting shapes how models respond to inputs.",
+  },
+  {
+    id: 43,
+    topic: "LLMs",
+    question: "Temperature controls:",
+    options: ["Randomness in generation", "Training dataset size", "GPU clock speed", "Number of parameters"],
+    correctAnswer: 0,
+    explanation: "Higher temperature increases output randomness.",
+  },
+  {
+    id: 44,
+    topic: "LLMs",
+    question: "Top-k sampling means:",
+    options: ["Sampling from the top k probable tokens", "Using top k datasets", "Keeping k layers only", "Top k metrics only"],
+    correctAnswer: 0,
+    explanation: "Top-k sampling limits choices to the k most likely tokens.",
+  },
+  {
+    id: 45,
+    topic: "RAG",
+    question: "RAG is best described as:",
+    options: ["Retrieval augmented generation combining search with generation", "A database backup tool", "A training optimizer", "A GPU driver"],
+    correctAnswer: 0,
+    explanation: "RAG retrieves relevant context before generating responses.",
+  },
+  {
+    id: 46,
+    topic: "RAG",
+    question: "A vector database stores:",
+    options: ["Embeddings for similarity search", "Only text logs", "Only SQL tables", "Only backups"],
+    correctAnswer: 0,
+    explanation: "Vector databases store embeddings for nearest-neighbor search.",
+  },
+  {
+    id: 47,
+    topic: "MLOps",
+    question: "Model drift occurs when:",
+    options: ["Input data distribution changes over time", "Model size increases", "Logs rotate", "GPU overheats"],
+    correctAnswer: 0,
+    explanation: "Drift happens when data changes and performance degrades.",
+  },
+  {
+    id: 48,
+    topic: "MLOps",
+    question: "Data leakage means:",
+    options: ["Training data contains information from the test set", "Model is too small", "Data is encrypted", "GPU is idle"],
+    correctAnswer: 0,
+    explanation: "Leakage makes evaluation overly optimistic.",
+  },
+  {
+    id: 49,
+    topic: "MLOps",
+    question: "MLOps typically includes:",
+    options: ["CI/CD for models and pipelines", "Only model research", "Only data labeling", "Only UI design"],
+    correctAnswer: 0,
+    explanation: "MLOps operationalizes models with CI/CD and monitoring.",
+  },
+  {
+    id: 50,
+    topic: "MLOps",
+    question: "Model monitoring is used to:",
+    options: ["Track performance and detect issues in production", "Train models", "Label data", "Store passwords"],
+    correctAnswer: 0,
+    explanation: "Monitoring detects drift and performance regressions.",
+  },
+  {
+    id: 51,
+    topic: "MLOps",
+    question: "A/B testing is used to:",
+    options: ["Compare two model versions", "Encrypt datasets", "Reduce training time", "Pick hardware"],
+    correctAnswer: 0,
+    explanation: "A/B tests compare model variants in production.",
+  },
+  {
+    id: 52,
+    topic: "Security",
+    question: "An adversarial example is:",
+    options: ["An input modified to fool the model", "A normal training sample", "A data backup", "A network scan"],
+    correctAnswer: 0,
+    explanation: "Adversarial examples intentionally mislead models.",
+  },
+  {
+    id: 53,
+    topic: "Security",
+    question: "Data poisoning is:",
+    options: ["Maliciously altering training data", "Encrypting datasets", "Reducing batch size", "Cleaning logs"],
+    correctAnswer: 0,
+    explanation: "Poisoning injects malicious data to manipulate training.",
+  },
+  {
+    id: 54,
+    topic: "Security",
+    question: "Prompt injection is:",
+    options: ["Input designed to override model instructions", "A GPU driver update", "A dataset split", "A logging format"],
+    correctAnswer: 0,
+    explanation: "Prompt injection tries to bypass or alter instructions.",
+  },
+  {
+    id: 55,
+    topic: "Privacy",
+    question: "Model memorization risk refers to:",
+    options: ["Leaking training data from outputs", "Slow inference", "Low accuracy", "High latency"],
+    correctAnswer: 0,
+    explanation: "Models can unintentionally reveal training data.",
+  },
+  {
+    id: 56,
+    topic: "Privacy",
+    question: "Differential privacy works by:",
+    options: ["Adding noise to protect individuals", "Encrypting all data", "Removing all features", "Only using public data"],
+    correctAnswer: 0,
+    explanation: "Differential privacy adds noise to limit individual exposure.",
+  },
+  {
+    id: 57,
+    topic: "Ethics",
+    question: "Bias in datasets can lead to:",
+    options: ["Unfair or discriminatory outcomes", "Higher storage use only", "Faster training", "Better privacy by default"],
+    correctAnswer: 0,
+    explanation: "Biased data can cause unfair model behavior.",
+  },
+  {
+    id: 58,
+    topic: "Explainability",
+    question: "Explainability methods help to:",
+    options: ["Understand model decisions", "Increase GPU speed", "Replace labels", "Avoid testing"],
+    correctAnswer: 0,
+    explanation: "Explainability improves transparency and trust.",
+  },
+  {
+    id: 59,
+    topic: "Deployment",
+    question: "Inference latency matters most for:",
+    options: ["Real-time applications", "Offline batch jobs", "Data labeling", "Model training"],
+    correctAnswer: 0,
+    explanation: "Real-time use cases require low latency.",
+  },
+  {
+    id: 60,
+    topic: "Deployment",
+    question: "Batch inference is best for:",
+    options: ["Offline processing of large datasets", "Real-time chat", "Interactive search", "Streaming control"],
+    correctAnswer: 0,
+    explanation: "Batch inference suits offline, high-volume jobs.",
+  },
+  {
+    id: 61,
+    topic: "Compute",
+    question: "GPUs are useful because they:",
+    options: ["Perform parallel computations efficiently", "Store databases", "Run DNS services", "Replace CPUs"],
+    correctAnswer: 0,
+    explanation: "GPUs accelerate parallel ML workloads.",
+  },
+  {
+    id: 62,
+    topic: "Compute",
+    question: "TPUs are designed for:",
+    options: ["Tensor operations in ML workloads", "File storage", "Network routing", "Audio playback"],
+    correctAnswer: 0,
+    explanation: "TPUs are specialized hardware for tensor math.",
+  },
+  {
+    id: 63,
+    topic: "Training",
+    question: "Grid search is used for:",
+    options: ["Hyperparameter tuning", "Data encryption", "Vector search", "Database indexing"],
+    correctAnswer: 0,
+    explanation: "Grid search tries combinations of hyperparameters.",
+  },
+  {
+    id: 64,
+    topic: "Training",
+    question: "Early stopping helps to:",
+    options: ["Prevent overfitting", "Increase model size", "Avoid validation", "Skip deployment"],
+    correctAnswer: 0,
+    explanation: "Early stopping halts training when validation degrades.",
+  },
+  {
+    id: 65,
+    topic: "Training",
+    question: "Dropout works by:",
+    options: ["Randomly disabling neurons during training", "Adding more layers", "Duplicating data", "Changing labels"],
+    correctAnswer: 0,
+    explanation: "Dropout reduces overfitting by random neuron removal.",
+  },
+  {
+    id: 66,
+    topic: "Training",
+    question: "Batch size refers to:",
+    options: ["Number of samples per training update", "Total number of features", "Training epochs", "Number of GPUs"],
+    correctAnswer: 0,
+    explanation: "Batch size controls how many samples update weights at once.",
+  },
+  {
+    id: 67,
+    topic: "Training",
+    question: "An epoch is:",
+    options: ["One full pass through the training data", "A single batch", "A data label", "A deployment"],
+    correctAnswer: 0,
+    explanation: "An epoch is one complete pass through the dataset.",
+  },
+  {
+    id: 68,
+    topic: "Training",
+    question: "Learning rate controls:",
+    options: ["Step size of parameter updates", "Number of layers", "Dataset size", "Label quality"],
+    correctAnswer: 0,
+    explanation: "Learning rate sets update step sizes during training.",
+  },
+  {
+    id: 69,
+    topic: "Metrics",
+    question: "For imbalanced classes, a good metric is:",
+    options: ["F1 score", "Accuracy", "MSE", "MAE"],
+    correctAnswer: 0,
+    explanation: "F1 balances precision and recall for imbalanced data.",
+  },
+  {
+    id: 70,
+    topic: "Metrics",
+    question: "To reduce false positives, you usually optimize for:",
+    options: ["Higher precision", "Higher recall", "Higher loss", "Higher variance"],
+    correctAnswer: 0,
+    explanation: "Precision improves when false positives drop.",
+  },
+  {
+    id: 71,
+    topic: "Metrics",
+    question: "ROC-AUC measures:",
+    options: ["Ranking performance across thresholds", "Training speed", "Memory usage", "Token count"],
+    correctAnswer: 0,
+    explanation: "ROC-AUC summarizes ranking quality over thresholds.",
+  },
+  {
+    id: 72,
+    topic: "Metrics",
+    question: "Calibration means:",
+    options: ["Predicted probabilities match observed outcomes", "Predictions are random", "Loss is zero", "Data is encrypted"],
+    correctAnswer: 0,
+    explanation: "Calibration aligns predicted probabilities with reality.",
+  },
+  {
+    id: 73,
+    topic: "Transfer Learning",
+    question: "Transfer learning means:",
+    options: ["Reusing a pretrained model for a new task", "Training from scratch always", "Only using unlabeled data", "Ignoring prior knowledge"],
+    correctAnswer: 0,
+    explanation: "Transfer learning reuses learned representations.",
+  },
+  {
+    id: 74,
+    topic: "Transfer Learning",
+    question: "Zero-shot learning means:",
+    options: ["Performing a task without task-specific training examples", "Training with 1000 examples", "Only using labeled data", "Only using images"],
+    correctAnswer: 0,
+    explanation: "Zero-shot performs tasks without labeled examples for that task.",
+  },
+  {
+    id: 75,
+    topic: "Transfer Learning",
+    question: "Few-shot learning means:",
+    options: ["Using a small number of examples to adapt", "Never using examples", "Only training on millions of samples", "Only using unsupervised data"],
+    correctAnswer: 0,
+    explanation: "Few-shot adapts with a small set of examples.",
+  },
+];
+
+
 export default function ArtificialIntelligencePage() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
+  
+  const [quizPool] = useState<QuizQuestion[]>(() =>
+    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
+  );
+
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+
+  // Module navigation items
+  const moduleNavItems = [
+    { id: "outline", label: "Course Outline", icon: "📚" },
+    { id: "foundations", label: "Foundations", icon: "🧠" },
+    { id: "data", label: "Data", icon: "📊" },
+    { id: "maths-theory", label: "Maths & Theory", icon: "📐" },
+    { id: "programming-compute", label: "Programming", icon: "💻" },
+    { id: "core-ml", label: "Core ML", icon: "🎯" },
+    { id: "classical-ml", label: "Classical ML", icon: "📊" },
+    { id: "deep-learning", label: "Deep Learning", icon: "🧬" },
+    { id: "nlp", label: "NLP", icon: "📝" },
+    { id: "llm-agents", label: "LLMs & Agents", icon: "🤖" },
+    { id: "computer-vision", label: "Computer Vision", icon: "👁️" },
+    { id: "speech-audio", label: "Speech & Audio", icon: "🎤" },
+    { id: "generative-ai", label: "Generative AI", icon: "✨" },
+    { id: "evaluation-testing", label: "Evaluation", icon: "📈" },
+    { id: "mlops-deployment", label: "MLOps", icon: "🚀" },
+    { id: "platforms-infra", label: "Platforms", icon: "☁️" },
+    { id: "ai-security", label: "AI Security", icon: "🔒" },
+    { id: "ai-cyber-defence", label: "AI Defence", icon: "🛡️" },
+    { id: "ai-offensive-security", label: "AI Offensive", icon: "🐛" },
+    { id: "ai-secure-dev", label: "AI Secure Dev", icon: "🔧" },
+    { id: "ethics-governance", label: "Ethics", icon: "⚖️" },
+    { id: "product-practice", label: "Practice", icon: "💼" },
+    { id: "quiz", label: "Quiz", icon: "❓" },
+  ];
+
+  // Scroll to section
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  // Track active section on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = moduleNavItems.map(item => item.id);
+      let currentSection = "";
+      
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll(); // Initial check
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Scroll to top helper
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // Calculate progress based on active section
+  const currentIndex = moduleNavItems.findIndex(item => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / moduleNavItems.length) * 100 : 0;
+
+  // Desktop sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(ACCENT_COLOR, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(ACCENT_COLOR, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: ACCENT_COLOR, display: "flex", alignItems: "center", gap: 1 }}>
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Progress</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: ACCENT_COLOR }}>{Math.round(progressPercent)}%</Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(ACCENT_COLOR, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: ACCENT_COLOR,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {moduleNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(ACCENT_COLOR, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? ACCENT_COLOR : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout
       pageTitle="Artificial Intelligence"
       pageContext="This is the Artificial Intelligence learning page covering AI/ML fundamentals, deep learning, NLP, computer vision, LLMs, MLOps, AI security, and AI applications in cybersecurity. Help users understand AI concepts, techniques, and practical applications."
     >
-      <Box sx={{ maxWidth: 1200, mx: "auto", p: { xs: 2, md: 4 } }}>
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: ACCENT_COLOR,
+            "&:hover": { bgcolor: "#7c3aed" },
+            boxShadow: `0 4px 20px ${alpha(ACCENT_COLOR, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(ACCENT_COLOR, 0.15),
+            color: ACCENT_COLOR,
+            "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: ACCENT_COLOR }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(ACCENT_COLOR, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: ACCENT_COLOR }}>{Math.round(progressPercent)}%</Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(ACCENT_COLOR, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: ACCENT_COLOR,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {moduleNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(ACCENT_COLOR, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? ACCENT_COLOR : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(ACCENT_COLOR, 0.2),
+                      color: ACCENT_COLOR,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(ACCENT_COLOR, 0.3), color: ACCENT_COLOR }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(ACCENT_COLOR, 0.3), color: ACCENT_COLOR }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {/* Desktop Sidebar */}
+        {sidebarNav}
+
+        {/* Main Content */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
         {/* Header */}
         <Box sx={{ mb: 4, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
           <Chip
+            component={Link}
+            to="/learn"
             icon={<ArrowBackIcon />}
             label="Back to Learning Hub"
-            onClick={() => navigate("/learn")}
-            sx={{ cursor: "pointer" }}
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2 }}
           />
           <Chip
             icon={<SchoolIcon />}
@@ -244,46 +1237,81 @@ export default function ArtificialIntelligencePage() {
           From fundamentals to frontier: understanding and applying AI/ML in the real world
         </Typography>
 
-        {/* Quick Navigation */}
-        <Paper sx={{ p: 2, mb: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.1)}` }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "#8b5cf6" }}>
-            Quick Navigation
+        {/* ==================== COURSE OUTLINE (Moved to top) ==================== */}
+        <Box id="outline" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, scrollMarginTop: 80 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>
+            📚 Course Outline
           </Typography>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {[
-              { label: "Foundations", id: "foundations" },
-              { label: "Data", id: "data" },
-              { label: "Maths & Theory", id: "maths-theory" },
-              { label: "Programming", id: "programming-compute" },
-              { label: "Core ML", id: "core-ml" },
-              { label: "Classical ML", id: "classical-ml" },
-              { label: "Deep Learning", id: "deep-learning" },
-              { label: "NLP", id: "nlp" },
-              { label: "LLMs & Agents", id: "llm-agents" },
-              { label: "Computer Vision", id: "computer-vision" },
-              { label: "Speech & Audio", id: "speech-audio" },
-              { label: "Generative AI", id: "generative-ai" },
-              { label: "Evaluation", id: "evaluation-testing" },
-              { label: "MLOps", id: "mlops-deployment" },
-              { label: "Platforms", id: "platforms-infra" },
-              { label: "AI Security", id: "ai-security" },
-              { label: "AI Defence", id: "ai-cyber-defence" },
-              { label: "AI Offensive", id: "ai-offensive-security" },
-              { label: "AI Secure Dev", id: "ai-secure-dev" },
-              { label: "Ethics", id: "ethics-governance" },
-              { label: "Practice", id: "product-practice" },
-              { label: "Course Outline", id: "outline" },
-            ].map((nav) => (
-              <Chip
-                key={nav.id}
-                label={nav.label}
-                size="small"
-                onClick={() => document.getElementById(nav.id)?.scrollIntoView({ behavior: "smooth" })}
-                sx={{ cursor: "pointer", "&:hover": { bgcolor: alpha("#8b5cf6", 0.1) } }}
-              />
-            ))}
-          </Box>
-        </Paper>
+          <Chip label={`${outlineSections.length} Sections`} size="small" color="primary" variant="outlined" />
+        </Box>
+
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {outlineSections.map((section, index) => (
+            <Grid item xs={12} sm={6} md={4} key={section.id}>
+              <Paper
+                sx={{
+                  p: 2,
+                  borderRadius: 3,
+                  border: `1px solid ${alpha(section.color, 0.2)}`,
+                  cursor: section.status === "Complete" ? "pointer" : "default",
+                  transition: "all 0.2s",
+                  "&:hover": section.status === "Complete" ? {
+                    borderColor: section.color,
+                    transform: "translateY(-2px)",
+                    boxShadow: `0 4px 12px ${alpha(section.color, 0.15)}`,
+                  } : {},
+                }}
+                onClick={() => {
+                  if (section.status === "Complete") {
+                    document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
+                  <Box sx={{ 
+                    p: 1, 
+                    borderRadius: 2, 
+                    bgcolor: alpha(section.color, 0.1),
+                    color: section.color,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    {section.icon}
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                        {String(index + 1).padStart(2, "0")}
+                      </Typography>
+                      <Chip
+                        label={section.status}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.65rem",
+                          bgcolor: section.status === "Complete" ? alpha("#22c55e", 0.1) : alpha("#f59e0b", 0.1),
+                          color: section.status === "Complete" ? "#22c55e" : "#f59e0b",
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                      {section.title}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ 
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}>
+                      {section.description}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
 
         {/* ==================== SECTION 1: FOUNDATIONS ==================== */}
         <Typography id="foundations" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
@@ -1710,6 +2738,972 @@ export default function ArtificialIntelligencePage() {
               </Grid>
             ))}
           </Grid>
+        </Paper>
+
+        {/* LLM History Timeline */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>📜 LLM History & Evolution</Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#6366f1", 0.03), border: `1px solid ${alpha("#6366f1", 0.15)}` }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            The rapid evolution from statistical models to trillion-parameter reasoning systems
+          </Typography>
+          <Box sx={{ position: "relative", pl: 3, borderLeft: `3px solid ${alpha("#6366f1", 0.3)}` }}>
+            {[
+              { year: "2017", event: "Attention Is All You Need", desc: "Google introduces the Transformer architecture, replacing RNNs with self-attention. Foundation of modern LLMs.", color: "#ef4444" },
+              { year: "2018", event: "GPT-1 & BERT", desc: "OpenAI's GPT-1 (117M params) shows generative pretraining works. Google's BERT revolutionises NLU with bidirectional attention.", color: "#f59e0b" },
+              { year: "2019", event: "GPT-2", desc: "1.5B parameters. 'Too dangerous to release' — first viral AI safety moment. Zero-shot capabilities emerge.", color: "#22c55e" },
+              { year: "2020", event: "GPT-3 & Scaling Laws", desc: "175B parameters. Few-shot learning, emergent abilities. Kaplan scaling laws published. API-first business model.", color: "#3b82f6" },
+              { year: "2021", event: "Codex & GitHub Copilot", desc: "Code-trained models. InstructGPT introduces RLHF alignment. Anthropic founded (Constitutional AI).", color: "#8b5cf6" },
+              { year: "2022", event: "ChatGPT & Diffusion", desc: "ChatGPT reaches 100M users in 2 months. Stable Diffusion open-sourced. AI winter ends definitively.", color: "#ec4899" },
+              { year: "2023", event: "GPT-4 & Open Source Surge", desc: "Multimodal GPT-4. LLaMA leaked, spawning Alpaca, Vicuna, etc. Claude 2, Gemini announced. Mixtral MoE.", color: "#06b6d4" },
+              { year: "2024", event: "Reasoning & Agents", desc: "Claude 3/3.5, GPT-4o, Gemini 1.5 (1M context). o1/o3 reasoning models. Open weights: LLaMA 3, Qwen 2.5. MCP protocol.", color: "#10b981" },
+              { year: "2025", event: "GPT-5 & Gemini 3 Era", desc: "GPT-5.x series, Claude Opus 4.5, Gemini 3 Pro/Flash. Grok 4, DeepSeek V3.2. 400K-1M contexts standard. Chinese models surge.", color: "#a855f7" },
+            ].map((item, idx) => (
+              <Box key={idx} sx={{ mb: 2.5, position: "relative" }}>
+                <Box sx={{ position: "absolute", left: -19, top: 4, width: 12, height: 12, borderRadius: "50%", bgcolor: item.color, border: "2px solid white" }} />
+                <Box sx={{ display: "flex", alignItems: "baseline", gap: 1.5, mb: 0.5 }}>
+                  <Chip label={item.year} size="small" sx={{ bgcolor: alpha(item.color, 0.15), color: item.color, fontWeight: 700, fontSize: "0.7rem", height: 20 }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.event}</Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+              </Box>
+            ))}
+          </Box>
+        </Paper>
+
+        {/* Transformer Architecture Deep Dive */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🔬 The Transformer Architecture</Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.15)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+            The <strong>Transformer</strong> (Vaswani et al., 2017) replaced recurrence with <strong>self-attention</strong>, 
+            enabling parallel processing and capturing long-range dependencies. Every modern LLM is built on this foundation.
+          </Typography>
+          
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#0ea5e9", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0ea5e9", mb: 1 }}>🧩 Core Components</Typography>
+                <List dense>
+                  {[
+                    { name: "Token Embeddings", desc: "Convert tokens to dense vectors (d=4096+)" },
+                    { name: "Positional Encoding", desc: "Inject sequence order (sinusoidal or learned, RoPE)" },
+                    { name: "Multi-Head Attention", desc: "Parallel attention heads capture different relationships" },
+                    { name: "Feed-Forward Network", desc: "Two linear layers with activation (usually SwiGLU now)" },
+                    { name: "Layer Normalization", desc: "Stabilise training (Pre-LN is now standard)" },
+                    { name: "Residual Connections", desc: "Skip connections enable deep networks" },
+                  ].map((item) => (
+                    <ListItem key={item.name} sx={{ py: 0.3, px: 0 }}>
+                      <ListItemText 
+                        primary={item.name}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>⚡ Self-Attention Mechanism</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  Attention(Q, K, V) = softmax(QK<sup>T</sup> / √d<sub>k</sub>) × V
+                </Typography>
+                <List dense>
+                  {[
+                    { name: "Query (Q)", desc: "What am I looking for?" },
+                    { name: "Key (K)", desc: "What do I contain?" },
+                    { name: "Value (V)", desc: "What information do I provide?" },
+                    { name: "Scaling (√d)", desc: "Prevent softmax saturation" },
+                    { name: "Causal Mask", desc: "Decoder-only: can't see future tokens" },
+                  ].map((item) => (
+                    <ListItem key={item.name} sx={{ py: 0.3, px: 0 }}>
+                      <ListItemText 
+                        primary={item.name}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={2}>
+            {[
+              { variant: "Encoder-Only", desc: "Bidirectional attention. BERT, RoBERTa. Best for classification, NER, embeddings.", color: "#3b82f6" },
+              { variant: "Decoder-Only", desc: "Causal (left-to-right) attention. GPT, LLaMA, Claude. Best for generation.", color: "#a855f7" },
+              { variant: "Encoder-Decoder", desc: "Cross-attention between encoder/decoder. T5, BART. Best for translation, summarisation.", color: "#f59e0b" },
+              { variant: "Mixture of Experts (MoE)", desc: "Sparse activation — route tokens to subset of experts. Mixtral, GPT-4(?). More params, same compute.", color: "#ef4444" },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.variant}>
+                <Paper sx={{ p: 1.5, borderRadius: 2, height: "100%", border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: item.color, display: "block", mb: 0.5 }}>{item.variant}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Pre-training Deep Dive */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>📊 Pre-training: Building the Foundation</Typography>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>📚 Training Data</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                LLMs are trained on <strong>trillions of tokens</strong> from diverse sources. Data quality dramatically impacts model capability.
+              </Typography>
+              <List dense>
+                {[
+                  { source: "Common Crawl", desc: "Web scrapes. ~60% of training data. Heavy filtering needed." },
+                  { source: "Books & Academic", desc: "Books3, PubMed, arXiv. Higher quality, structured knowledge." },
+                  { source: "Code", desc: "GitHub, Stack Overflow. Enables code generation, structured reasoning." },
+                  { source: "Wikipedia", desc: "Factual, well-structured. Often upweighted." },
+                  { source: "Curated/Synthetic", desc: "Human-written, AI-generated. Quality over quantity trend." },
+                ].map((item) => (
+                  <ListItem key={item.source} sx={{ py: 0.3, px: 0 }}>
+                    <ListItemText 
+                      primary={item.source}
+                      secondary={item.desc}
+                      primaryTypographyProps={{ variant: "subtitle2", fontWeight: 600, fontSize: "0.75rem" }}
+                      secondaryTypographyProps={{ variant: "caption" }}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+              <Box sx={{ mt: 2, p: 1.5, bgcolor: alpha("#f59e0b", 0.08), borderRadius: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Data Processing Pipeline:</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  Crawl → Dedupe → Filter (quality, safety) → Tokenize → Shuffle → Train
+                </Typography>
+              </Box>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>🔤 Tokenization</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Convert text to integer sequences. Tokenizer choice significantly impacts model behaviour and efficiency.
+              </Typography>
+              <List dense>
+                {[
+                  { method: "BPE (Byte-Pair Encoding)", desc: "GPT series. Iteratively merge frequent pairs. ~50k vocab." },
+                  { method: "WordPiece", desc: "BERT. Similar to BPE, likelihood-based merging." },
+                  { method: "SentencePiece", desc: "Language-agnostic. Treats text as raw bytes. LLaMA, T5." },
+                  { method: "Tiktoken", desc: "OpenAI's fast BPE. cl100k_base for GPT-4." },
+                ].map((item) => (
+                  <ListItem key={item.method} sx={{ py: 0.3, px: 0 }}>
+                    <ListItemText 
+                      primary={item.method}
+                      secondary={item.desc}
+                      primaryTypographyProps={{ variant: "subtitle2", fontWeight: 600, fontSize: "0.75rem" }}
+                      secondaryTypographyProps={{ variant: "caption" }}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+              <Box sx={{ mt: 2, p: 1.5, bgcolor: alpha("#8b5cf6", 0.08), borderRadius: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Token Economics:</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  1 token ≈ 4 chars (English) ≈ 0.75 words. Code/math use more tokens.
+                </Typography>
+              </Box>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        {/* Scaling Laws & Compute */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#ef4444", 0.03), border: `1px solid ${alpha("#ef4444", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>📈 Scaling Laws & Compute</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            <strong>Chinchilla scaling laws</strong> (Hoffmann et al., 2022) showed optimal compute allocation: train smaller models on more data. 
+            For compute budget C, optimal model size N and data D scale as: N ∝ C<sup>0.5</sup>, D ∝ C<sup>0.5</sup>
+          </Typography>
+          <Grid container spacing={2}>
+            {[
+              { metric: "GPT-3", params: "175B", tokens: "300B", compute: "~3.6×10²³ FLOPs", note: "Undertrained by Chinchilla standards" },
+              { metric: "Chinchilla", params: "70B", tokens: "1.4T", compute: "~5×10²³ FLOPs", note: "Optimal ratio: 20 tokens/param" },
+              { metric: "LLaMA 2 70B", params: "70B", tokens: "2T", compute: "~10²⁴ FLOPs", note: "Overtrained for inference efficiency" },
+              { metric: "GPT-4 (est.)", params: "~1.8T MoE", tokens: "~13T", compute: "~10²⁵ FLOPs", note: "Mixture of Experts architecture" },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.metric}>
+                <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha("#ef4444", 0.05), textAlign: "center" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>{item.metric}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{item.params} params</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{item.tokens} tokens</Typography>
+                  <Typography variant="caption" sx={{ fontSize: "0.6rem", color: "#ef4444" }}>{item.note}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+          <Box sx={{ mt: 3, p: 2, bgcolor: alpha("#ef4444", 0.08), borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>💰 Training Cost Estimates (2024)</Typography>
+            <Grid container spacing={2}>
+              {[
+                { model: "7B model", cost: "$100K - $500K", gpus: "64-256 A100s, 1-2 weeks" },
+                { model: "70B model", cost: "$2M - $10M", gpus: "512-2048 A100s, 2-4 weeks" },
+                { model: "GPT-4 class", cost: "$50M - $100M+", gpus: "25,000+ A100s/H100s, months" },
+              ].map((item) => (
+                <Grid item xs={12} sm={4} key={item.model}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>{item.model}</Typography>
+                  <Typography variant="caption" color="text.secondary">{item.cost}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: "0.6rem" }}>{item.gpus}</Typography>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </Paper>
+
+        {/* Pre-training Objectives */}
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {[
+            { objective: "Causal LM (CLM)", desc: "Predict next token. GPT-style. Autoregressive generation. Most common for chat/generation models.", color: "#a855f7" },
+            { objective: "Masked LM (MLM)", desc: "Predict masked tokens bidirectionally. BERT-style. Better for understanding/embeddings.", color: "#3b82f6" },
+            { objective: "Prefix LM", desc: "Bidirectional on prefix, autoregressive on rest. T5, PaLM. Good for conditional generation.", color: "#22c55e" },
+            { objective: "Denoising", desc: "Reconstruct corrupted input. BART, T5. Span corruption, sentence permutation.", color: "#f59e0b" },
+            { objective: "Contrastive", desc: "Learn by comparing similar/dissimilar pairs. Used in embedding models (E5, BGE).", color: "#ec4899" },
+            { objective: "Multimodal", desc: "Align text with images/audio. CLIP, LLaVA, Whisper. Cross-modal understanding.", color: "#06b6d4" },
+          ].map((item) => (
+            <Grid item xs={12} sm={6} md={4} key={item.objective}>
+              <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color, mb: 0.5 }}>{item.objective}</Typography>
+                <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Post-Training & Alignment */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🎯 Post-Training: Alignment & Fine-Tuning</Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+            <strong>Post-training</strong> transforms a raw pretrained model into a helpful assistant. This multi-stage 
+            process aligns the model with human preferences, teaches instruction-following, and adds safety guardrails.
+          </Typography>
+          
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.05), height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>1️⃣ Supervised Fine-Tuning (SFT)</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  Train on high-quality (instruction, response) pairs. Human-written demonstrations of ideal behaviour.
+                </Typography>
+                <List dense>
+                  {[
+                    "10K-100K curated examples",
+                    "Diverse tasks & formats",
+                    "Quality >> quantity",
+                    "Often contractor-written",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 16 }}>
+                        <CheckCircleIcon sx={{ fontSize: 10, color: "#3b82f6" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.05), height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>2️⃣ RLHF (Reinforcement Learning from Human Feedback)</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  Train reward model on human preferences, then optimise policy via PPO.
+                </Typography>
+                <List dense>
+                  {[
+                    "Collect comparison data (A vs B)",
+                    "Train reward model",
+                    "PPO to maximise reward",
+                    "KL penalty prevents drift",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 16 }}>
+                        <CheckCircleIcon sx={{ fontSize: 10, color: "#f59e0b" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#a855f7", 0.05), height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#a855f7", mb: 1 }}>3️⃣ DPO (Direct Preference Optimization)</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  Skip reward model — directly optimise on preferences. Simpler, often comparable results.
+                </Typography>
+                <List dense>
+                  {[
+                    "No separate reward model",
+                    "Single-stage training",
+                    "More stable than PPO",
+                    "Used by LLaMA 2, Zephyr",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 16 }}>
+                        <CheckCircleIcon sx={{ fontSize: 10, color: "#a855f7" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={2}>
+            {[
+              { method: "Constitutional AI", desc: "Self-critique against principles. Claude's approach. AI feedback at scale.", color: "#ec4899" },
+              { method: "RLAIF", desc: "RL from AI Feedback. Use stronger model to label preferences. Scales better than humans.", color: "#06b6d4" },
+              { method: "Rejection Sampling", desc: "Generate many responses, keep best. Simple but effective. Used in LLaMA 2.", color: "#22c55e" },
+              { method: "Iterative DPO", desc: "Multiple rounds of DPO with fresh preferences. Continuous improvement.", color: "#f97316" },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.method}>
+                <Paper sx={{ p: 1.5, borderRadius: 2, height: "100%", border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: item.color, display: "block", mb: 0.5 }}>{item.method}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Thinking/Reasoning Models */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🧠 Thinking Models & Reasoning</Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#d946ef", 0.03), border: `1px solid ${alpha("#d946ef", 0.15)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+            <strong>Reasoning models</strong> (like OpenAI's o1, o3) represent a paradigm shift: instead of generating answers 
+            immediately, they perform extended "thinking" — exploring solution paths, backtracking, and verifying before 
+            responding. This trades latency and compute for dramatically improved performance on complex tasks.
+          </Typography>
+          
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#d946ef", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#d946ef", mb: 1 }}>⚙️ How Thinking Models Work</Typography>
+                <List dense>
+                  {[
+                    { step: "Extended Generation", desc: "Model generates long chain-of-thought (often hidden from user)" },
+                    { step: "Search & Backtrack", desc: "Explore multiple reasoning paths, abandon dead ends" },
+                    { step: "Self-Verification", desc: "Check intermediate steps, catch errors before output" },
+                    { step: "Test-Time Compute", desc: "More thinking = better answers (within limits)" },
+                    { step: "Reinforcement Learning", desc: "Trained to produce correct final answers via RL" },
+                  ].map((item) => (
+                    <ListItem key={item.step} sx={{ py: 0.3, px: 0 }}>
+                      <ListItemText 
+                        primary={item.step}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#10b981", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>📊 When to Use Thinking Models</Typography>
+                <List dense>
+                  {[
+                    { use: "✅ Math & Logic", desc: "Competition math, proofs, puzzles" },
+                    { use: "✅ Code & Debugging", desc: "Complex algorithms, finding subtle bugs" },
+                    { use: "✅ Science Problems", desc: "Physics, chemistry, research questions" },
+                    { use: "✅ Multi-step Planning", desc: "Strategy, complex analysis" },
+                    { use: "❌ Simple Q&A", desc: "Overkill for basic questions" },
+                    { use: "❌ Creative Writing", desc: "Standard models often better" },
+                  ].map((item) => (
+                    <ListItem key={item.use} sx={{ py: 0.3, px: 0 }}>
+                      <ListItemText 
+                        primary={item.use}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ p: 2, bgcolor: alpha("#d946ef", 0.08), borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>🏆 Reasoning & Thinking Models (December 2025)</Typography>
+            <Grid container spacing={2}>
+              {[
+                { model: "OpenAI o3", status: "Released", notes: "Latest reasoning model. Strong ARC-AGI scores. Intelligence Index 65." },
+                { model: "Kimi K2 Thinking", status: "Released", notes: "Chinese reasoning model. 256K context. Ultra-low 0.64s latency." },
+                { model: "Claude Opus 4.5", status: "Released", notes: "Anthropic's flagship. Extended thinking. Top-tier code/analysis." },
+                { model: "Gemini 3 Flash Thinking", status: "Released", notes: "Google's fast reasoning. 1M context. 219 tok/s speed." },
+                { model: "DeepSeek V3.2", status: "Released", notes: "Open weights. $0.32/1M tokens. Competitive intelligence." },
+                { model: "GPT-5.1 Codex", status: "Released", notes: "Specialised reasoning for code. 246 tok/s. Intelligence 67." },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} md={4} key={item.model}>
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{item.model}</Typography>
+                      <Chip label={item.status} size="small" sx={{ fontSize: "0.55rem", height: 16, bgcolor: item.status === "Released" ? alpha("#22c55e", 0.2) : alpha("#f59e0b", 0.2) }} />
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6rem" }}>{item.notes}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </Paper>
+
+        {/* Benchmarking & Evaluation */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>📏 Benchmarking & Model Evaluation</Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.15)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+            Evaluating LLMs is notoriously difficult. Models can "teach to the test" via data contamination, benchmarks 
+            saturate quickly, and real-world usefulness doesn't always correlate with scores. Multiple evaluation 
+            approaches are essential for understanding model capabilities.
+          </Typography>
+          
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>📊 Key Benchmarks</Typography>
+                <List dense>
+                  {[
+                    { name: "MMLU", desc: "57 subjects, high school to expert. General knowledge." },
+                    { name: "HumanEval / MBPP", desc: "Code generation. Function completion from docstring." },
+                    { name: "GSM8K / MATH", desc: "Grade school to competition math. Reasoning required." },
+                    { name: "HellaSwag / ARC", desc: "Common sense reasoning. Physical world understanding." },
+                    { name: "TruthfulQA", desc: "Resistance to common misconceptions." },
+                    { name: "MT-Bench", desc: "Multi-turn conversation quality. GPT-4 as judge." },
+                    { name: "GPQA", desc: "Graduate-level science questions. Expert-written." },
+                    { name: "ARC-AGI", desc: "Abstract reasoning. Pattern completion puzzles." },
+                  ].map((item) => (
+                    <ListItem key={item.name} sx={{ py: 0.2, px: 0 }}>
+                      <ListItemText 
+                        primary={item.name}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.6rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>🏟️ Leaderboards & Arenas</Typography>
+                <List dense>
+                  {[
+                    { name: "LMSYS Chatbot Arena", desc: "Blind human preference voting. ELO ratings. Gold standard." },
+                    { name: "Artificial Analysis", desc: "Speed, cost, quality comparisons. API pricing tracker." },
+                    { name: "Open LLM Leaderboard", desc: "HuggingFace hosted. Open models benchmarked consistently." },
+                    { name: "LiveBench", desc: "Continuously updated. Avoids data contamination." },
+                    { name: "AlpacaEval", desc: "Automated evaluation. GPT-4 as judge. Win rate vs GPT-4." },
+                    { name: "Big Code Models", desc: "Code-specific leaderboard. Multiple coding benchmarks." },
+                  ].map((item) => (
+                    <ListItem key={item.name} sx={{ py: 0.2, px: 0 }}>
+                      <ListItemText 
+                        primary={item.name}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.6rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ p: 2, bgcolor: alpha("#ef4444", 0.08), borderRadius: 2, mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>⚠️ Benchmark Pitfalls</Typography>
+            <Grid container spacing={2}>
+              {[
+                { issue: "Data Contamination", desc: "Test data leaked into training. Inflated scores." },
+                { issue: "Teaching to Test", desc: "Models optimised for specific benchmarks, not general capability." },
+                { issue: "Saturation", desc: "Benchmarks become too easy. Need harder tests constantly." },
+                { issue: "Vibes vs Scores", desc: "High benchmark ≠ good UX. Real usage differs." },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} md={3} key={item.issue}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>{item.issue}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6rem" }}>{item.desc}</Typography>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+
+          <Typography variant="caption" color="text.secondary">
+            <strong>Pro tip:</strong> Check LMSYS Arena for real human preferences, Artificial Analysis for pricing/speed, 
+            and run your own evals on tasks that match your use case. Don't trust any single benchmark.
+          </Typography>
+        </Paper>
+
+        {/* Model Comparison Table */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🏆 Frontier Model Comparison (December 2025)</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Data from Artificial Analysis — Intelligence Index measures general capability, but <strong>domain-specific performance varies significantly</strong>
+        </Typography>
+        
+        {/* Domain Leaders Callout */}
+        <Paper sx={{ p: 2, mb: 3, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.08), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "#d97706" }}>⚠️ Important: General Benchmarks Don't Tell The Whole Story</Typography>
+          <Grid container spacing={2}>
+            {[
+              { domain: "Coding & Agentic Work", leader: "Claude Opus 4.5", note: "Ranked #4 on Intelligence Index but widely considered the best for complex coding, tool use, and agentic tasks. The 'vibe' leader." },
+              { domain: "Reasoning & Math", leader: "o3 / GPT-5.1 Codex", note: "OpenAI's reasoning models excel at competition math, logic puzzles, and multi-step problem solving." },
+              { domain: "Long Context", leader: "Gemini 3 Pro/Flash", note: "1M+ token context. Best for analysing large codebases, long documents, or entire repos." },
+              { domain: "Speed & Cost", leader: "MiMo-V2-Flash / DeepSeek V3.2", note: "Open models at fraction of the cost. MiMo at $0.15/1M, DeepSeek at $0.32/1M tokens." },
+              { domain: "Real-time Data", leader: "Grok 4", note: "xAI's model with live X/Twitter integration. 2M context on Grok 4.1 Fast." },
+              { domain: "Enterprise/EU", leader: "Claude 4.5 Sonnet", note: "Balance of capability, safety, and compliance. 1M context at $6/1M tokens." },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={4} key={item.domain}>
+                <Box>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "#d97706", display: "block" }}>{item.domain}</Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>{item.leader}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6rem" }}>{item.note}</Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        <Paper sx={{ p: 2, mb: 4, borderRadius: 3, overflow: "auto" }}>
+          <Box sx={{ minWidth: 900 }}>
+            <Grid container sx={{ bgcolor: alpha("#6366f1", 0.1), p: 1, borderRadius: 1, mb: 1 }}>
+              <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 700 }}>Model</Typography></Grid>
+              <Grid item xs={1.1}><Typography variant="caption" sx={{ fontWeight: 700 }}>Provider</Typography></Grid>
+              <Grid item xs={0.8}><Typography variant="caption" sx={{ fontWeight: 700 }}>Context</Typography></Grid>
+              <Grid item xs={0.9}><Typography variant="caption" sx={{ fontWeight: 700 }}>Intel.</Typography></Grid>
+              <Grid item xs={1}><Typography variant="caption" sx={{ fontWeight: 700 }}>Price/1M</Typography></Grid>
+              <Grid item xs={0.8}><Typography variant="caption" sx={{ fontWeight: 700 }}>Speed</Typography></Grid>
+              <Grid item xs={0.8}><Typography variant="caption" sx={{ fontWeight: 700 }}>Latency</Typography></Grid>
+              <Grid item xs={2.1}><Typography variant="caption" sx={{ fontWeight: 700 }}>Domain Strength</Typography></Grid>
+              <Grid item xs={0.7}><Typography variant="caption" sx={{ fontWeight: 700 }}>Open?</Typography></Grid>
+            </Grid>
+            {[
+              { model: "Gemini 3 Pro Preview", provider: "Google", context: "1M", intelligence: 73, price: "$4.50", speed: "129", latency: "32.6s", domain: "Long context, multimodal", open: "No" },
+              { model: "GPT-5.2 (xhigh)", provider: "OpenAI", context: "400K", intelligence: 73, price: "$4.81", speed: "101", latency: "33.4s", domain: "General frontier", open: "No" },
+              { model: "Gemini 3 Flash", provider: "Google", context: "1M", intelligence: 71, price: "$1.13", speed: "219", latency: "11.9s", domain: "Fast + long context", open: "No" },
+              { model: "Claude Opus 4.5", provider: "Anthropic", context: "200K", intelligence: 70, price: "$10.00", speed: "57", latency: "1.7s", domain: "🏆 CODING & AGENTS", open: "No" },
+              { model: "GPT-5.1 (high)", provider: "OpenAI", context: "400K", intelligence: 70, price: "$3.44", speed: "182", latency: "22.8s", domain: "General, balanced", open: "No" },
+              { model: "GLM-4.7", provider: "Zhipu AI", context: "200K", intelligence: 68, price: "$0.88", speed: "95", latency: "0.75s", domain: "Chinese, low latency", open: "No" },
+              { model: "Kimi K2 Thinking", provider: "Kimi", context: "256K", intelligence: 67, price: "$1.07", speed: "100", latency: "0.64s", domain: "Reasoning, ultra-fast", open: "No" },
+              { model: "GPT-5.1 Codex (high)", provider: "OpenAI", context: "400K", intelligence: 67, price: "$3.44", speed: "246", latency: "10.0s", domain: "Code generation", open: "No" },
+              { model: "MiMo-V2-Flash", provider: "Xiaomi", context: "256K", intelligence: 66, price: "$0.15", speed: "134", latency: "2.0s", domain: "🏆 ULTRA BUDGET", open: "Yes" },
+              { model: "DeepSeek V3.2", provider: "DeepSeek", context: "128K", intelligence: 66, price: "$0.32", speed: "30", latency: "1.3s", domain: "Open, affordable", open: "Yes" },
+              { model: "o3", provider: "OpenAI", context: "200K", intelligence: 65, price: "$3.50", speed: "331", latency: "9.2s", domain: "🏆 HARD REASONING", open: "No" },
+              { model: "Grok 4", provider: "xAI", context: "256K", intelligence: 65, price: "$6.00", speed: "45", latency: "7.3s", domain: "Real-time X data", open: "No" },
+              { model: "Gemini 3 Pro (low)", provider: "Google", context: "1M", intelligence: 65, price: "$4.50", speed: "131", latency: "4.1s", domain: "Cost-effective Pro", open: "No" },
+              { model: "GPT-5 mini (high)", provider: "OpenAI", context: "400K", intelligence: 64, price: "$0.69", speed: "67", latency: "110.8s", domain: "Budget GPT-5", open: "No" },
+              { model: "Grok 4.1 Fast", provider: "xAI", context: "2M", intelligence: 64, price: "$0.28", speed: "146", latency: "5.1s", domain: "🏆 2M CONTEXT", open: "No" },
+              { model: "MiniMax-M2.1", provider: "MiniMax", context: "205K", intelligence: 64, price: "$0.53", speed: "84", latency: "1.5s", domain: "Chinese, balanced", open: "No" },
+              { model: "KAT-Coder-Pro V1", provider: "KwaiKAT", context: "256K", intelligence: 64, price: "FREE", speed: "65", latency: "1.0s", domain: "Free code model", open: "Yes" },
+              { model: "Claude 4.5 Sonnet", provider: "Anthropic", context: "1M", intelligence: 63, price: "$6.00", speed: "63", latency: "1.9s", domain: "Enterprise, safe", open: "No" },
+              { model: "Nova 2.0 Pro Preview", provider: "Amazon", context: "256K", intelligence: 62, price: "$3.44", speed: "132", latency: "21.7s", domain: "AWS ecosystem", open: "No" },
+              { model: "GPT-5.1 Codex mini", provider: "OpenAI", context: "400K", intelligence: 62, price: "$0.69", speed: "158", latency: "7.9s", domain: "Budget code", open: "No" },
+              { model: "gpt-o55-120B", provider: "OpenAI", context: "131K", intelligence: 61, price: "$0.26", speed: "342", latency: "0.41s", domain: "🏆 FASTEST", open: "No" },
+              { model: "Grok 4 Fast", provider: "xAI", context: "2M", intelligence: 60, price: "$0.28", speed: "182", latency: "5.0s", domain: "Fast + huge context", open: "No" },
+            ].map((item) => (
+              <Grid container key={item.model} sx={{ p: 0.8, borderBottom: `1px solid ${alpha("#000", 0.05)}`, "&:hover": { bgcolor: alpha("#6366f1", 0.03) } }}>
+                <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, fontSize: "0.7rem" }}>{item.model}</Typography></Grid>
+                <Grid item xs={1.1}><Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>{item.provider}</Typography></Grid>
+                <Grid item xs={0.8}><Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>{item.context}</Typography></Grid>
+                <Grid item xs={0.9}>
+                  <Chip 
+                    label={item.intelligence} 
+                    size="small" 
+                    sx={{ 
+                      fontSize: "0.55rem", 
+                      height: 16, 
+                      fontWeight: 700,
+                      bgcolor: item.intelligence >= 70 ? alpha("#22c55e", 0.2) : item.intelligence >= 65 ? alpha("#3b82f6", 0.15) : alpha("#f59e0b", 0.15),
+                      color: item.intelligence >= 70 ? "#16a34a" : item.intelligence >= 65 ? "#2563eb" : "#d97706"
+                    }} 
+                  />
+                </Grid>
+                <Grid item xs={1}><Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>{item.price}</Typography></Grid>
+                <Grid item xs={0.8}><Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6rem" }}>{item.speed} t/s</Typography></Grid>
+                <Grid item xs={0.8}><Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6rem" }}>{item.latency}</Typography></Grid>
+                <Grid item xs={2.1}>
+                  <Typography 
+                    variant="caption" 
+                    sx={{ 
+                      fontSize: "0.58rem", 
+                      fontWeight: item.domain.includes("🏆") ? 700 : 400,
+                      color: item.domain.includes("🏆") ? "#d97706" : "text.secondary"
+                    }}
+                  >
+                    {item.domain}
+                  </Typography>
+                </Grid>
+                <Grid item xs={0.7}><Chip label={item.open} size="small" sx={{ fontSize: "0.45rem", height: 14, bgcolor: item.open === "Yes" ? alpha("#22c55e", 0.2) : alpha("#ef4444", 0.1) }} /></Grid>
+              </Grid>
+            ))}
+          </Box>
+          <Box sx={{ mt: 2, p: 1.5, bgcolor: alpha("#6366f1", 0.05), borderRadius: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              <strong>Intelligence:</strong> Artificial Analysis composite score • 
+              <strong> Price:</strong> Blended USD/1M tokens • 
+              <strong> Speed:</strong> Median tok/s • 
+              <strong> Latency:</strong> Time to first chunk •
+              <strong> 🏆:</strong> Domain leader
+            </Typography>
+          </Box>
+        </Paper>
+
+        {/* Local LLMs & Self-Hosting */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🏠 Local LLMs & Self-Hosting</Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#10b981", 0.03), border: `1px solid ${alpha("#10b981", 0.15)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+            Run <strong>open-weight models locally</strong> for privacy, cost savings, customisation, and offline use. 
+            Modern quantisation techniques (GGUF, AWQ, GPTQ) enable running 70B+ models on consumer hardware.
+          </Typography>
+          
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#10b981", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>🔧 Local LLM Infrastructure</Typography>
+                <List dense>
+                  {[
+                    { tool: "Ollama", desc: "One-line install. Pull models like Docker images. REST API. Best for beginners.", url: "ollama.ai" },
+                    { tool: "LM Studio", desc: "GUI app. Browse/download models. Chat interface. GGUF format.", url: "lmstudio.ai" },
+                    { tool: "llama.cpp", desc: "C++ inference. Maximum performance. CLI and server modes.", url: "github" },
+                    { tool: "vLLM", desc: "High-throughput serving. PagedAttention. Production deployments.", url: "vllm.ai" },
+                    { tool: "text-generation-webui", desc: "Full-featured web UI. Multiple backends. Extensions.", url: "oobabooga" },
+                    { tool: "LocalAI", desc: "OpenAI-compatible API. Drop-in replacement. Docker-based.", url: "localai.io" },
+                  ].map((item) => (
+                    <ListItem key={item.tool} sx={{ py: 0.3, px: 0 }}>
+                      <ListItemText 
+                        primary={item.tool}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>🖥️ Open WebUI</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+                  ChatGPT-like interface for local models. Feature-rich, extensible, Docker-based.
+                </Typography>
+                <List dense>
+                  {[
+                    "Multi-model support (Ollama, OpenAI, etc.)",
+                    "RAG with document upload",
+                    "Web search integration",
+                    "User management & auth",
+                    "Custom model presets",
+                    "Voice input/output",
+                    "Image generation (SD)",
+                    "Plugin/function system",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 16 }}>
+                        <CheckCircleIcon sx={{ fontSize: 10, color: "#3b82f6" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }} />
+                    </ListItem>
+                  ))}
+                </List>
+                <Box sx={{ mt: 1, p: 1, bgcolor: alpha("#3b82f6", 0.1), borderRadius: 1, fontFamily: "monospace" }}>
+                  <Typography variant="caption" sx={{ fontSize: "0.6rem" }}>
+                    docker run -d -p 3000:8080 --add-host=host.docker.internal:host-gateway -v open-webui:/app/backend/data --name open-webui ghcr.io/open-webui/open-webui:main
+                  </Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.08), borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>💻 Hardware Requirements (Rough Guide)</Typography>
+            <Grid container spacing={2}>
+              {[
+                { size: "7B (Q4)", ram: "8GB+ VRAM", hw: "RTX 3060 12GB, M1 Mac 16GB", speed: "~30 tok/s" },
+                { size: "13B (Q4)", ram: "12GB+ VRAM", hw: "RTX 3080/4070, M2 Pro 32GB", speed: "~20 tok/s" },
+                { size: "34B (Q4)", ram: "24GB+ VRAM", hw: "RTX 4090, M2 Max 64GB", speed: "~15 tok/s" },
+                { size: "70B (Q4)", ram: "48GB+ VRAM", hw: "2x RTX 4090, M3 Max 128GB", speed: "~8 tok/s" },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} md={3} key={item.size}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, display: "block" }}>{item.size}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: "0.6rem" }}>{item.ram}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: "0.6rem" }}>{item.hw}</Typography>
+                  <Typography variant="caption" sx={{ color: "#10b981", fontSize: "0.6rem" }}>{item.speed}</Typography>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </Paper>
+
+        {/* n8n Workflow Automation */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>⚡ n8n: AI Workflow Automation</Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#ff6d5a", 0.03), border: `1px solid ${alpha("#ff6d5a", 0.15)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+            <strong>n8n</strong> is an open-source workflow automation platform with powerful AI capabilities. Build 
+            complex LLM pipelines visually — connect models, tools, databases, and APIs without code.
+          </Typography>
+          
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#ff6d5a", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ff6d5a", mb: 1 }}>🤖 AI Features in n8n</Typography>
+                <List dense>
+                  {[
+                    "AI Agent node — ReAct-style tool use",
+                    "RAG with vector stores (Pinecone, Qdrant, etc.)",
+                    "LLM nodes for OpenAI, Anthropic, Ollama, etc.",
+                    "Document loaders (PDF, CSV, web scraping)",
+                    "Memory for multi-turn conversations",
+                    "Chain nodes for complex pipelines",
+                    "Code execution for custom logic",
+                    "400+ integrations (Slack, Gmail, DB, APIs)",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 16 }}>
+                        <CheckCircleIcon sx={{ fontSize: 10, color: "#ff6d5a" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#8b5cf6", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>🛠️ Example Use Cases</Typography>
+                <List dense>
+                  {[
+                    { use: "Email Assistant", desc: "Auto-categorise, draft responses, extract action items" },
+                    { use: "Content Pipeline", desc: "Research → Write → Edit → Post to CMS/social" },
+                    { use: "Support Bot", desc: "RAG over docs, escalate to human, log tickets" },
+                    { use: "Data Enrichment", desc: "Scrape → Extract → Validate → Store" },
+                    { use: "Code Review", desc: "PR webhook → AI review → Post comments" },
+                  ].map((item) => (
+                    <ListItem key={item.use} sx={{ py: 0.3, px: 0 }}>
+                      <ListItemText 
+                        primary={item.use}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+                <Box sx={{ mt: 1, p: 1, bgcolor: alpha("#8b5cf6", 0.1), borderRadius: 1, fontFamily: "monospace" }}>
+                  <Typography variant="caption" sx={{ fontSize: "0.6rem" }}>
+                    docker run -it --rm -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n
+                  </Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* MCP (Model Context Protocol) */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🔌 MCP: Model Context Protocol</Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#06b6d4", 0.03), border: `1px solid ${alpha("#06b6d4", 0.15)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+            <strong>MCP (Model Context Protocol)</strong> is an open standard for connecting AI models to external 
+            tools and data sources. Developed by Anthropic, it standardises how LLMs interact with the world — 
+            like USB-C for AI tools.
+          </Typography>
+          
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#06b6d4", 0.05), height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>🎯 What MCP Provides</Typography>
+                <List dense>
+                  {[
+                    "Standardised tool definitions",
+                    "Resources (files, DB, APIs)",
+                    "Prompts (reusable templates)",
+                    "Two-way communication",
+                    "Local & remote servers",
+                    "Security boundaries",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 16 }}>
+                        <CheckCircleIcon sx={{ fontSize: 10, color: "#06b6d4" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "caption", fontSize: "0.65rem" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.05), height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>🧩 MCP Servers (Examples)</Typography>
+                <List dense>
+                  {[
+                    { name: "Filesystem", desc: "Read/write local files" },
+                    { name: "GitHub", desc: "PRs, issues, code search" },
+                    { name: "Postgres/SQLite", desc: "Query databases" },
+                    { name: "Brave Search", desc: "Web search" },
+                    { name: "Puppeteer", desc: "Browser automation" },
+                    { name: "Slack", desc: "Messages, channels" },
+                  ].map((item) => (
+                    <ListItem key={item.name} sx={{ py: 0.2, px: 0 }}>
+                      <ListItemText 
+                        primary={item.name}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600, fontSize: "0.65rem" }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.6rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.05), height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>💡 Supported Clients</Typography>
+                <List dense>
+                  {[
+                    { client: "Claude Desktop", status: "Native support" },
+                    { client: "VS Code (Copilot)", status: "Via extension" },
+                    { client: "Cursor", status: "Native support" },
+                    { client: "Cline", status: "Native support" },
+                    { client: "Continue.dev", status: "Native support" },
+                    { client: "Zed", status: "Native support" },
+                  ].map((item) => (
+                    <ListItem key={item.client} sx={{ py: 0.2, px: 0 }}>
+                      <ListItemText 
+                        primary={item.client}
+                        secondary={item.status}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600, fontSize: "0.65rem" }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.6rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ p: 2, bgcolor: alpha("#06b6d4", 0.08), borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>🔧 MCP vs Function Calling</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: "#06b6d4", display: "block" }}>MCP</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>
+                  Open standard • Reusable across clients • Persistent servers • Rich resource model • 
+                  Two-way communication • Growing ecosystem
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: "#a855f7", display: "block" }}>Function Calling</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>
+                  Provider-specific • Per-request definitions • One-shot execution • Simpler mental model • 
+                  Wider LLM support • More mature
+                </Typography>
+              </Grid>
+            </Grid>
+          </Box>
+        </Paper>
+
+        {/* Agentic AI Patterns */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>🤖 Agentic AI & Advanced Patterns</Typography>
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#a855f7", 0.03), border: `1px solid ${alpha("#a855f7", 0.15)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+            <strong>AI Agents</strong> combine LLMs with planning, memory, and tool use to autonomously accomplish 
+            complex tasks. From simple ReAct loops to multi-agent systems, agentic AI is the frontier of practical AI.
+          </Typography>
+          
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { pattern: "ReAct", desc: "Reason + Act interleaved. Think → Tool → Observe → Think. Foundation of most agents.", color: "#ef4444" },
+              { pattern: "Plan-and-Execute", desc: "Create full plan first, then execute steps. Better for complex multi-step tasks.", color: "#f59e0b" },
+              { pattern: "Reflection", desc: "Agent critiques own output, improves iteratively. Self-debugging code agents.", color: "#22c55e" },
+              { pattern: "Multi-Agent", desc: "Specialised agents collaborate. Researcher + Writer + Critic. CrewAI, AutoGen.", color: "#3b82f6" },
+              { pattern: "Hierarchical", desc: "Manager agent delegates to worker agents. Complex project decomposition.", color: "#8b5cf6" },
+              { pattern: "Tool-Use", desc: "LLM decides when/how to call functions. Code execution, search, APIs.", color: "#ec4899" },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={4} key={item.pattern}>
+                <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color, mb: 0.5 }}>{item.pattern}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#6366f1", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#6366f1", mb: 1 }}>🛠️ Agent Frameworks</Typography>
+                <List dense>
+                  {[
+                    { name: "LangChain/LangGraph", desc: "Most popular. Graph-based workflows. Extensive integrations." },
+                    { name: "LlamaIndex", desc: "RAG-focused. Data connectors. Query engines." },
+                    { name: "AutoGen", desc: "Microsoft. Multi-agent conversations. Code execution." },
+                    { name: "CrewAI", desc: "Role-based agents. Simple multi-agent setup." },
+                    { name: "Semantic Kernel", desc: "Microsoft. Enterprise-focused. .NET/Python." },
+                    { name: "Haystack", desc: "deepset. Production RAG. Pipeline architecture." },
+                  ].map((item) => (
+                    <ListItem key={item.name} sx={{ py: 0.2, px: 0 }}>
+                      <ListItemText 
+                        primary={item.name}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.6rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#10b981", 0.05) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>🧠 Memory & State</Typography>
+                <List dense>
+                  {[
+                    { type: "Short-term (Context)", desc: "Conversation history in prompt. Limited by context window." },
+                    { type: "Working Memory", desc: "Scratchpad for current task. Plans, intermediate results." },
+                    { type: "Long-term (Vector DB)", desc: "Persistent knowledge. RAG retrieval. Embeddings." },
+                    { type: "Episodic", desc: "Past interactions. Learn from experience. Personalisation." },
+                    { type: "Procedural", desc: "Learned skills. Successful tool sequences. Cached strategies." },
+                  ].map((item) => (
+                    <ListItem key={item.type} sx={{ py: 0.2, px: 0 }}>
+                      <ListItemText 
+                        primary={item.type}
+                        secondary={item.desc}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption", fontSize: "0.6rem" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ p: 2, bgcolor: alpha("#ef4444", 0.08), borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>⚠️ Agent Challenges</Typography>
+            <Grid container spacing={2}>
+              {[
+                { issue: "Reliability", desc: "Agents fail silently, loop infinitely, or hallucinate tool calls." },
+                { issue: "Cost", desc: "Multi-step reasoning uses many tokens. Can be 10-100x single call." },
+                { issue: "Latency", desc: "Sequential tool calls add up. User waits for each step." },
+                { issue: "Debugging", desc: "Complex traces hard to follow. Non-deterministic behaviour." },
+                { issue: "Security", desc: "Tool access = attack surface. Prompt injection risks." },
+                { issue: "Evaluation", desc: "Hard to measure. Success criteria often fuzzy." },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} md={4} key={item.issue}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>{item.issue}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6rem" }}>{item.desc}</Typography>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
         </Paper>
 
         {/* ==================== SECTION 10: COMPUTER VISION ==================== */}
@@ -3267,378 +5261,16 @@ export default function ArtificialIntelligencePage() {
           </Grid>
         </Paper>
 
-        {/* ==================== COURSE OUTLINE ==================== */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Typography id="outline" variant="h4" sx={{ fontWeight: 800, scrollMarginTop: 180 }}>
-            📚 Course Outline
-          </Typography>
-          <Chip label={`${outlineSections.length} Sections`} size="small" color="primary" variant="outlined" />
+        {/* Quiz Section */}
+        <Box id="quiz" sx={{ mt: 5 }}>
+          <QuizSection
+            questions={quizPool}
+            accentColor={ACCENT_COLOR}
+            title="Artificial Intelligence Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
         </Box>
-
-        <Grid container spacing={2}>
-          {outlineSections.map((section, index) => (
-            <Grid item xs={12} sm={6} md={4} key={section.id}>
-              <Paper
-                sx={{
-                  p: 2,
-                  borderRadius: 3,
-                  border: `1px solid ${alpha(section.color, 0.2)}`,
-                  cursor: section.status === "Complete" ? "pointer" : "default",
-                  transition: "all 0.2s",
-                  "&:hover": section.status === "Complete" ? {
-                    borderColor: section.color,
-                    transform: "translateY(-2px)",
-                    boxShadow: `0 4px 12px ${alpha(section.color, 0.15)}`,
-                  } : {},
-                }}
-                onClick={() => {
-                  if (section.status === "Complete") {
-                    document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth" });
-                  }
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
-                  <Box sx={{ 
-                    p: 1, 
-                    borderRadius: 2, 
-                    bgcolor: alpha(section.color, 0.1),
-                    color: section.color,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    {section.icon}
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
-                        {String(index + 1).padStart(2, "0")}
-                      </Typography>
-                      <Chip
-                        label={section.status}
-                        size="small"
-                        sx={{
-                          height: 18,
-                          fontSize: "0.65rem",
-                          bgcolor: section.status === "Complete" ? alpha("#22c55e", 0.1) : alpha("#f59e0b", 0.1),
-                          color: section.status === "Complete" ? "#22c55e" : "#f59e0b",
-                        }}
-                      />
-                    </Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                      {section.title}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ 
-                      display: "-webkit-box",
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }}>
-                      {section.description}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Detailed Section Outlines */}
-        <Typography variant="h5" sx={{ fontWeight: 800, mt: 6, mb: 3 }}>
-          📋 Detailed Section Topics
-        </Typography>
-
-        {/* Data Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <StorageIcon sx={{ color: "#3b82f6" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#3b82f6" }}>Data</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Data collection and labelling", "Data quality and governance", "Cleaning and preprocessing", 
-              "Feature engineering", "Data augmentation", "Dataset bias and representativeness"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Maths and Theory Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#ef4444", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <FunctionsIcon sx={{ color: "#ef4444" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#ef4444" }}>Maths and Theory</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Statistics for AI", "Linear algebra for AI", "Probability basics", "Calculus basics",
-              "Optimisation (gradient descent, loss landscapes)", "Information theory basics"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Programming and Compute Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <CodeIcon sx={{ color: "#f59e0b" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#f59e0b" }}>Programming and Compute</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Python for AI (notebooks, packages, testing)", "Version control and reproducibility",
-              "Compute fundamentals (CPU/GPU/TPU)", "Performance basics (latency, throughput, memory)"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Core Machine Learning Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <AccountTreeIcon sx={{ color: "#22c55e" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#22c55e" }}>Core Machine Learning</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Supervised learning", "Unsupervised learning", "Semi-supervised learning", "Self-supervised learning",
-              "Reinforcement learning", "Online learning and streaming ML", "Active learning"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Classical ML Models Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#06b6d4", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <CategoryIcon sx={{ color: "#06b6d4" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#06b6d4" }}>Classical ML Models and Techniques</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Linear and logistic regression", "Decision trees and ensembles (random forest, boosting)",
-              "SVM, kNN, Naive Bayes", "Time series forecasting", "Anomaly detection", "Recommender systems",
-              "Causal inference and causal ML", "Graph machine learning (GNNs, link prediction)"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Deep Learning Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#ec4899", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <LayersIcon sx={{ color: "#ec4899" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#ec4899" }}>Deep Learning</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Neural network fundamentals", "Backpropagation and training dynamics", "Regularisation (dropout, weight decay)",
-              "CNNs", "RNNs and sequence models", "Transformers", "Embeddings and representation learning",
-              "Transfer learning", "Multi-task learning", "Multi-modal learning"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* NLP Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#14b8a6", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <TextFieldsIcon sx={{ color: "#14b8a6" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#14b8a6" }}>Natural Language Processing</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Tokenisation and embeddings", "Text classification", "Named entity recognition",
-              "Summarisation", "Question answering"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* LLM and Agents Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#a855f7", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <SmartToyIcon sx={{ color: "#a855f7" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#a855f7" }}>Large Language Models and Agents</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["LLM pretraining and fine-tuning concepts", "Instruction tuning and alignment basics",
-              "Prompt engineering and prompt patterns", "Retrieval Augmented Generation (RAG)",
-              "Tool use and function calling", "Agents and orchestration patterns",
-              "LLM evaluation (benchmarks, rubrics, human eval)"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Computer Vision Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#0ea5e9", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <VisibilityIcon sx={{ color: "#0ea5e9" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#0ea5e9" }}>Computer Vision</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["CV fundamentals (images, augmentation, datasets)", "Image classification", "Object detection",
-              "Segmentation (semantic, instance)", "Pose estimation", "OCR", "Video understanding (tracking, action recognition)",
-              "Vision Transformers (ViT)", "Generative vision (diffusion, GANs)", "Domain shift and robustness in real-world vision"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Speech and Audio Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#f97316", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <RecordVoiceOverIcon sx={{ color: "#f97316" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#f97316" }}>Speech and Audio AI</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Automatic speech recognition (ASR)", "Text-to-speech (TTS)", "Speaker recognition",
-              "Audio classification", "Signal processing essentials"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Generative AI Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#d946ef", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <AutoAwesomeIcon sx={{ color: "#d946ef" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#d946ef" }}>Generative AI</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Generative modelling overview", "Diffusion models", "GANs", "VAEs", "Code generation models"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Evaluation and Testing Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#84cc16", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <AssessmentIcon sx={{ color: "#84cc16" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#84cc16" }}>Evaluation and Testing</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Metrics for classification, regression, ranking", "Validation methods and leakage prevention",
-              "Calibration and uncertainty", "Interpretability and explainability (XAI)", "Robustness testing"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* MLOps and Deployment Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#6366f1", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <RocketLaunchIcon sx={{ color: "#6366f1" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#6366f1" }}>MLOps and Deployment</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["ML pipelines and CI/CD", "Model serving (batch vs real-time)", "Edge deployment",
-              "Inference optimisation (quantisation, pruning, distillation)", "Monitoring and observability (drift, performance, data quality)",
-              "Model incident response", "Cost management (FinOps for AI)"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Platforms and Infrastructure Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#0891b2", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <CloudIcon sx={{ color: "#0891b2" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#0891b2" }}>Platforms and Infrastructure</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Cloud AI fundamentals (AWS/Azure/GCP patterns)", "On-prem and private AI stacks",
-              "Vector databases and embedding stores", "Data engineering for AI (logs, ETL/ELT, schemas)"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* AI Security Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#dc2626", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <SecurityIcon sx={{ color: "#dc2626" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#dc2626" }}>AI Security</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Threat modelling for AI/LLMs", "Adversarial ML (evasion, poisoning, backdoors)",
-              "Model privacy attacks (inference, inversion)", "Prompt injection and indirect prompt injection",
-              "RAG security (data poisoning, retrieval manipulation, leakage)", "Model supply chain security (datasets, checkpoints, dependencies)",
-              "Secure deployment (secrets, isolation, access control)", "Red teaming and safety testing"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* AI in Cyber Defence Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#16a34a", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <ShieldIcon sx={{ color: "#16a34a" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#16a34a" }}>AI in Cyber Defence</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["SOC triage and alert enrichment", "Detection using ML (EDR/NDR, anomaly detection)",
-              "UEBA and behavioural analytics", "Threat intelligence augmentation", "Phishing and fraud detection",
-              "Malware detection with ML (static, dynamic, behavioural)", "Vulnerability management with AI (prioritisation, remediation support)",
-              "Incident response copilots and automation", "Detection engineering with AI (rule generation, tuning, validation)"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* AI in Offensive Security Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#ea580c", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <BugReportIcon sx={{ color: "#ea580c" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#ea580c" }}>AI in Offensive Security</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Reconnaissance and OSINT augmentation", "Attack surface analysis and target prioritisation",
-              "Exploit research assistance (pattern discovery, code reasoning)", "Adversary emulation support (TTP mapping, playbooks)",
-              "Social engineering risk and controls (awareness, simulation ethics)",
-              "Offensive tool risk management (safe lab use, approvals, ethics)"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* AI for Secure Software Development Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#7c3aed", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <BuildIcon sx={{ color: "#7c3aed" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#7c3aed" }}>AI for Secure Software Development</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["AI-assisted code review and secure coding", "AI-enhanced SAST and triage",
-              "AI-assisted threat modelling", "SBOM and dependency risk analysis"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Ethics, Safety, and Governance Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#be185d", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <GavelIcon sx={{ color: "#be185d" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#be185d" }}>Ethics, Safety, and Governance</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["Bias, fairness, and harm", "Privacy and data protection", "Transparency and accountability",
-              "Human-in-the-loop design", "Misuse prevention and dual-use handling",
-              "Governance, auditability, and documentation"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Product and Professional Practice Section Outline */}
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${alpha("#0d9488", 0.15)}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <WorkIcon sx={{ color: "#0d9488" }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#0d9488" }}>Product and Professional Practice</Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {["AI product management (requirements, evaluation plans)", "Research literacy (papers, benchmarks, reproducibility)",
-              "Role-based pathways (developer, security, research, leadership)", "Portfolio projects and capstones"].map((topic) => (
-              <Chip key={topic} label={topic} size="small" variant="outlined" />
-            ))}
-          </Box>
-        </Paper>
 
         {/* Footer */}
         <Paper sx={{ p: 3, mt: 5, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.1)}` }}>
@@ -3680,6 +5312,7 @@ export default function ArtificialIntelligencePage() {
             Return to Learning Hub
           </Button>
         </Box>
+      </Box>
       </Box>
     </LearnPageLayout>
   );

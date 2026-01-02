@@ -31,11 +31,13 @@ import {
   Step,
   StepLabel,
   StepContent,
+  Button,
 } from "@mui/material";
 import { useState } from "react";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
 // Page context for AI chat
 const pageContext = `This is a comprehensive Incident Response Guide based on the NIST SP 800-61 framework covering:
@@ -128,7 +130,612 @@ import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import SpeedIcon from "@mui/icons-material/Speed";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import AnalyticsIcon from "@mui/icons-material/Analytics";
+import QuizIcon from "@mui/icons-material/Quiz";
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#3b82f6";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "Which framework is commonly referenced for incident response phases?",
+    options: ["NIST SP 800-61", "OWASP ASVS", "CIS Benchmark", "ISO 9001"],
+    correctAnswer: 0,
+    explanation: "NIST SP 800-61 outlines the standard IR lifecycle phases.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "The first phase in the NIST incident response lifecycle is:",
+    options: ["Detection and Analysis", "Preparation", "Containment", "Recovery"],
+    correctAnswer: 1,
+    explanation: "Preparation ensures policies, tools, and teams are ready before incidents.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "The primary goal of containment is to:",
+    options: ["Collect marketing data", "Stop the spread and limit impact", "Replace backups", "Draft press releases"],
+    correctAnswer: 1,
+    explanation: "Containment focuses on limiting damage and preventing further compromise.",
+  },
+  {
+    id: 4,
+    topic: "Fundamentals",
+    question: "Eradication involves:",
+    options: ["Removing malware and closing attack vectors", "Only isolating systems", "Only notifying users", "Only collecting logs"],
+    correctAnswer: 0,
+    explanation: "Eradication removes the threat and fixes root causes.",
+  },
+  {
+    id: 5,
+    topic: "Fundamentals",
+    question: "Recovery is about:",
+    options: ["Restoring systems and validating normal operations", "Deleting all logs", "Rebooting without analysis", "Ignoring monitoring"],
+    correctAnswer: 0,
+    explanation: "Recovery restores services safely and verifies integrity.",
+  },
+  {
+    id: 6,
+    topic: "Fundamentals",
+    question: "Lessons learned should be conducted:",
+    options: ["Before an incident", "After containment and recovery", "Only if required by law", "Only by executives"],
+    correctAnswer: 1,
+    explanation: "Post-incident reviews improve future response and controls.",
+  },
+  {
+    id: 7,
+    topic: "Triage",
+    question: "Incident triage is used to:",
+    options: ["Assign severity and prioritize response", "Delete alerts", "Replace firewall rules", "Disable MFA"],
+    correctAnswer: 0,
+    explanation: "Triage prioritizes incidents based on impact and urgency.",
+  },
+  {
+    id: 8,
+    topic: "Triage",
+    question: "MTTD stands for:",
+    options: ["Mean Time to Detect", "Mean Time to Deploy", "Maximum Time to Decision", "Mean Time to Document"],
+    correctAnswer: 0,
+    explanation: "MTTD measures how quickly incidents are detected.",
+  },
+  {
+    id: 9,
+    topic: "Triage",
+    question: "MTTR commonly means:",
+    options: ["Mean Time to Respond", "Maximum Time to Repair", "Mean Time to Report", "Minimum Time to Resolve"],
+    correctAnswer: 0,
+    explanation: "MTTR measures how quickly incidents are contained or resolved.",
+  },
+  {
+    id: 10,
+    topic: "Triage",
+    question: "A false positive is:",
+    options: ["Benign activity flagged as malicious", "Malicious activity missed", "A confirmed breach", "An incident report"],
+    correctAnswer: 0,
+    explanation: "False positives are benign events incorrectly flagged as incidents.",
+  },
+  {
+    id: 11,
+    topic: "Evidence",
+    question: "Why preserve evidence before remediation?",
+    options: ["To improve system performance", "To support investigation and legal needs", "To delay recovery", "To reduce staffing needs"],
+    correctAnswer: 1,
+    explanation: "Preserving evidence enables accurate analysis and legal defensibility.",
+  },
+  {
+    id: 12,
+    topic: "Evidence",
+    question: "The chain of custody documents:",
+    options: ["System uptime", "Evidence handling history", "Network routes", "Password changes"],
+    correctAnswer: 1,
+    explanation: "Chain of custody tracks evidence collection and handling.",
+  },
+  {
+    id: 13,
+    topic: "Evidence",
+    question: "Which should be collected first due to volatility?",
+    options: ["RAM and running processes", "Archived backups", "Static documentation", "Vendor contracts"],
+    correctAnswer: 0,
+    explanation: "Volatile data like memory is lost quickly and must be captured early.",
+  },
+  {
+    id: 14,
+    topic: "Evidence",
+    question: "Hashing evidence is used to:",
+    options: ["Encrypt files", "Verify integrity of collected data", "Compress files", "Hide filenames"],
+    correctAnswer: 1,
+    explanation: "Hashes verify evidence has not changed.",
+  },
+  {
+    id: 15,
+    topic: "Evidence",
+    question: "A forensic image should be created:",
+    options: ["After wiping the disk", "Before making changes to the original", "Only if time permits", "Only for cloud systems"],
+    correctAnswer: 1,
+    explanation: "Imaging preserves original evidence before remediation.",
+  },
+  {
+    id: 16,
+    topic: "Containment",
+    question: "Short-term containment often involves:",
+    options: ["Network isolation and account disabling", "Final report writing", "Backup archival", "Vendor procurement"],
+    correctAnswer: 0,
+    explanation: "Immediate actions limit spread and reduce damage.",
+  },
+  {
+    id: 17,
+    topic: "Containment",
+    question: "Long-term containment focuses on:",
+    options: ["Sustained controls and segmentation", "Deleting all logs", "Turning off monitoring", "Skipping patching"],
+    correctAnswer: 0,
+    explanation: "Long-term containment stabilizes the environment while remediation continues.",
+  },
+  {
+    id: 18,
+    topic: "Containment",
+    question: "Why avoid tipping off the attacker?",
+    options: ["It increases risk of data loss or evasion", "It speeds up recovery", "It improves alerts", "It reduces monitoring"],
+    correctAnswer: 0,
+    explanation: "Alerting attackers can cause them to destroy evidence or expand access.",
+  },
+  {
+    id: 19,
+    topic: "Containment",
+    question: "DNS sinkholing is used to:",
+    options: ["Block known malicious domains and observe callbacks", "Speed up DNS", "Encrypt traffic", "Disable logs"],
+    correctAnswer: 0,
+    explanation: "Sinkholes can block and observe malicious connections.",
+  },
+  {
+    id: 20,
+    topic: "Containment",
+    question: "Why disable accounts instead of deleting them?",
+    options: ["Preserve evidence and audit trail", "Reduce storage use", "Remove MFA", "Increase performance"],
+    correctAnswer: 0,
+    explanation: "Disabling preserves evidence while preventing access.",
+  },
+  {
+    id: 21,
+    topic: "Detection",
+    question: "Which data source is most useful for initial triage?",
+    options: ["SIEM alerts and endpoint telemetry", "Office seating charts", "HR vacation schedules", "Marketing analytics"],
+    correctAnswer: 0,
+    explanation: "SIEM and endpoint data provide fast visibility into incidents.",
+  },
+  {
+    id: 22,
+    topic: "Detection",
+    question: "An IOC is:",
+    options: ["A sign of compromise such as a hash or domain", "A ticketing system", "A firewall rule", "A user role"],
+    correctAnswer: 0,
+    explanation: "IOCs are artifacts indicating potential compromise.",
+  },
+  {
+    id: 23,
+    topic: "Detection",
+    question: "An IOA indicates:",
+    options: ["Attack behavior in progress", "A completed backup", "A patch cycle", "A login success"],
+    correctAnswer: 0,
+    explanation: "IOAs focus on behaviors that show active attack patterns.",
+  },
+  {
+    id: 24,
+    topic: "Detection",
+    question: "Event ID 4625 (Windows) indicates:",
+    options: ["Failed logon", "Service creation", "Log cleared", "Privilege assignment"],
+    correctAnswer: 0,
+    explanation: "4625 is a failed logon event.",
+  },
+  {
+    id: 25,
+    topic: "Detection",
+    question: "A spike in failed logins could indicate:",
+    options: ["Brute force or password spraying", "A successful patch", "Normal backups", "Hardware upgrade"],
+    correctAnswer: 0,
+    explanation: "Repeated failures often signal credential attacks.",
+  },
+  {
+    id: 26,
+    topic: "Eradication",
+    question: "Root cause analysis helps by:",
+    options: ["Preventing recurrence by fixing the real issue", "Delaying response", "Reducing monitoring", "Avoiding documentation"],
+    correctAnswer: 0,
+    explanation: "RCA identifies the underlying weakness to fix.",
+  },
+  {
+    id: 27,
+    topic: "Eradication",
+    question: "Rebuilding a system from a known-good image is often:",
+    options: ["Safer than attempting manual cleanup", "Always unnecessary", "Slower and less reliable", "Only for laptops"],
+    correctAnswer: 0,
+    explanation: "Rebuilding ensures removal of hidden persistence.",
+  },
+  {
+    id: 28,
+    topic: "Eradication",
+    question: "Credential resets should include:",
+    options: ["Service accounts and privileged users", "Only guest accounts", "Only email users", "No privileged users"],
+    correctAnswer: 0,
+    explanation: "Privileged and service accounts are common targets.",
+  },
+  {
+    id: 29,
+    topic: "Eradication",
+    question: "Why scan with multiple tools?",
+    options: ["Increase detection coverage", "Reduce evidence", "Speed up logs", "Avoid patching"],
+    correctAnswer: 0,
+    explanation: "Different tools can find different artifacts.",
+  },
+  {
+    id: 30,
+    topic: "Eradication",
+    question: "Removing persistence mechanisms means:",
+    options: ["Deleting scheduled tasks, services, or run keys", "Only deleting user files", "Only rebooting", "Only changing passwords"],
+    correctAnswer: 0,
+    explanation: "Persistence often uses tasks, services, or registry keys.",
+  },
+  {
+    id: 31,
+    topic: "Recovery",
+    question: "Recovery should include:",
+    options: ["Enhanced monitoring after restoration", "Turning off logs", "Removing security tools", "Skipping validation"],
+    correctAnswer: 0,
+    explanation: "Monitoring detects re-infection or missed artifacts.",
+  },
+  {
+    id: 32,
+    topic: "Recovery",
+    question: "Restoring from backups requires:",
+    options: ["Verifying backup integrity first", "Assuming backups are safe", "Skipping patching", "No validation"],
+    correctAnswer: 0,
+    explanation: "Backups can be compromised and must be verified.",
+  },
+  {
+    id: 33,
+    topic: "Recovery",
+    question: "A phased return to production helps:",
+    options: ["Reduce risk of re-infection and instability", "Hide issues", "Avoid monitoring", "Increase downtime"],
+    correctAnswer: 0,
+    explanation: "Phased recovery reduces risk and allows validation.",
+  },
+  {
+    id: 34,
+    topic: "Recovery",
+    question: "Post-recovery validation should confirm:",
+    options: ["Systems are functional and clean", "Only that logs exist", "Only that accounts reset", "Only that backups ran"],
+    correctAnswer: 0,
+    explanation: "Validation ensures normal operations and security.",
+  },
+  {
+    id: 35,
+    topic: "Recovery",
+    question: "Which is a recovery deliverable?",
+    options: ["Restored services and monitored stability", "A draft marketing plan", "Unused logs", "Unreviewed alerts"],
+    correctAnswer: 0,
+    explanation: "Recovery focuses on restoring and validating services.",
+  },
+  {
+    id: 36,
+    topic: "Communication",
+    question: "Who should be included in an IR communication plan?",
+    options: ["Security, IT, legal, and key stakeholders", "Only the SOC", "Only executives", "Only vendors"],
+    correctAnswer: 0,
+    explanation: "IR requires coordinated communications across teams.",
+  },
+  {
+    id: 37,
+    topic: "Communication",
+    question: "Why use an out-of-band channel?",
+    options: ["Primary channels may be compromised", "It is always faster", "It replaces evidence", "It disables MFA"],
+    correctAnswer: 0,
+    explanation: "Out-of-band communication reduces attacker visibility.",
+  },
+  {
+    id: 38,
+    topic: "Communication",
+    question: "Regulatory notification should be handled with:",
+    options: ["Legal and compliance guidance", "Only IT approval", "No documentation", "Public release first"],
+    correctAnswer: 0,
+    explanation: "Regulatory obligations require legal oversight.",
+  },
+  {
+    id: 39,
+    topic: "Communication",
+    question: "An incident report should include:",
+    options: ["Timeline, impact, and actions taken", "Only system names", "Only IP addresses", "Only a summary title"],
+    correctAnswer: 0,
+    explanation: "Reports should document timeline, impact, and response actions.",
+  },
+  {
+    id: 40,
+    topic: "Communication",
+    question: "Stakeholder notifications should be:",
+    options: ["Timely and coordinated", "Delayed until after cleanup", "Unstructured", "Only verbal"],
+    correctAnswer: 0,
+    explanation: "Timely and coordinated communication is essential.",
+  },
+  {
+    id: 41,
+    topic: "Tools",
+    question: "Volatility is commonly used for:",
+    options: ["Memory forensics", "DNS resolution", "Patch management", "Email filtering"],
+    correctAnswer: 0,
+    explanation: "Volatility analyzes RAM dumps.",
+  },
+  {
+    id: 42,
+    topic: "Tools",
+    question: "KAPE is used for:",
+    options: ["Rapid artifact collection", "Firewall management", "Email security", "Disk encryption"],
+    correctAnswer: 0,
+    explanation: "KAPE collects artifacts quickly during IR.",
+  },
+  {
+    id: 43,
+    topic: "Tools",
+    question: "TheHive is primarily a:",
+    options: ["Case management platform", "Packet sniffer", "Firewall", "Backup tool"],
+    correctAnswer: 0,
+    explanation: "TheHive supports case tracking and collaboration.",
+  },
+  {
+    id: 44,
+    topic: "Tools",
+    question: "MISP is commonly used for:",
+    options: ["Threat intel sharing and IOCs", "Disk imaging", "Memory capture", "Endpoint isolation"],
+    correctAnswer: 0,
+    explanation: "MISP manages and shares threat intelligence.",
+  },
+  {
+    id: 45,
+    topic: "Tools",
+    question: "FTK Imager is used for:",
+    options: ["Forensic disk imaging", "Network capture", "TLS inspection", "Log correlation"],
+    correctAnswer: 0,
+    explanation: "FTK Imager creates forensic images of disks.",
+  },
+  {
+    id: 46,
+    topic: "Forensics",
+    question: "The order of volatility says to collect:",
+    options: ["Volatile data before persistent data", "Disk before memory", "Backups before logs", "Reports before evidence"],
+    correctAnswer: 0,
+    explanation: "Volatile evidence must be captured first.",
+  },
+  {
+    id: 47,
+    topic: "Forensics",
+    question: "Why use a write blocker?",
+    options: ["Prevent changes to evidence media", "Speed up imaging", "Encrypt the disk", "Reset passwords"],
+    correctAnswer: 0,
+    explanation: "Write blockers protect evidence integrity.",
+  },
+  {
+    id: 48,
+    topic: "Forensics",
+    question: "Which is an example of volatile evidence?",
+    options: ["RAM contents", "Archived logs", "Printed policies", "Vendor invoices"],
+    correctAnswer: 0,
+    explanation: "RAM is volatile and disappears on power loss.",
+  },
+  {
+    id: 49,
+    topic: "Forensics",
+    question: "When collecting logs, timestamps should be:",
+    options: ["Recorded in UTC", "Recorded in local time only", "Rounded to the hour", "Removed for privacy"],
+    correctAnswer: 0,
+    explanation: "UTC ensures consistency across systems and time zones.",
+  },
+  {
+    id: 50,
+    topic: "Forensics",
+    question: "An evidence log should include:",
+    options: ["Who collected, when, where, and hash values", "Only file names", "Only a case ID", "Only system owners"],
+    correctAnswer: 0,
+    explanation: "Evidence logs capture full handling and integrity details.",
+  },
+  {
+    id: 51,
+    topic: "Incident Types",
+    question: "Ransomware indicators often include:",
+    options: ["Mass file encryption and ransom notes", "Only failed logins", "Only DNS timeouts", "Only printer errors"],
+    correctAnswer: 0,
+    explanation: "Ransomware commonly encrypts files and drops notes.",
+  },
+  {
+    id: 52,
+    topic: "Incident Types",
+    question: "Phishing investigations should check for:",
+    options: ["Mailbox rules and OAuth app consent", "Only disk usage", "Only patch levels", "Only backups"],
+    correctAnswer: 0,
+    explanation: "Compromised accounts may add rules or grant app access.",
+  },
+  {
+    id: 53,
+    topic: "Incident Types",
+    question: "Data breach response should include:",
+    options: ["Scope assessment and legal notification planning", "Only system rebuilds", "Only password resets", "Only firewall updates"],
+    correctAnswer: 0,
+    explanation: "Scope and legal requirements are critical in breaches.",
+  },
+  {
+    id: 54,
+    topic: "Incident Types",
+    question: "Insider threat response requires:",
+    options: ["Coordination with HR and legal", "Public disclosure", "Disabling all accounts", "Ignoring evidence"],
+    correctAnswer: 0,
+    explanation: "Insider cases require careful legal and HR coordination.",
+  },
+  {
+    id: 55,
+    topic: "Incident Types",
+    question: "DDoS response should include:",
+    options: ["Engaging mitigation services and analyzing traffic", "Forensic imaging only", "Disabling backups", "Password resets only"],
+    correctAnswer: 0,
+    explanation: "DDoS requires traffic analysis and mitigation.",
+  },
+  {
+    id: 56,
+    topic: "Incident Types",
+    question: "Unauthorized access often involves:",
+    options: ["Credential abuse or privilege escalation", "Only CPU spikes", "Only patch failures", "Only DNS errors"],
+    correctAnswer: 0,
+    explanation: "Credential abuse and privilege escalation are common.",
+  },
+  {
+    id: 57,
+    topic: "Incident Types",
+    question: "Supply chain incidents may involve:",
+    options: ["Compromised vendor software updates", "Only internal phishing", "Only physical theft", "Only DNS misconfigurations"],
+    correctAnswer: 0,
+    explanation: "Supply chain attacks exploit vendor or software distribution paths.",
+  },
+  {
+    id: 58,
+    topic: "Incident Types",
+    question: "Cryptojacking indicators include:",
+    options: ["Unusual CPU usage and mining processes", "Only file deletions", "Only network outages", "Only login prompts"],
+    correctAnswer: 0,
+    explanation: "Mining malware often causes sustained CPU spikes.",
+  },
+  {
+    id: 59,
+    topic: "Incident Types",
+    question: "Business Email Compromise often attempts to:",
+    options: ["Redirect payments or request urgent transfers", "Encrypt databases", "Disable backups", "Patch systems"],
+    correctAnswer: 0,
+    explanation: "BEC aims to trick staff into fraudulent payments.",
+  },
+  {
+    id: 60,
+    topic: "Incident Types",
+    question: "A common sign of lateral movement is:",
+    options: ["Unusual remote service usage", "A completed backup", "Normal login hours", "CPU idle"],
+    correctAnswer: 0,
+    explanation: "Unusual remote access may indicate lateral movement.",
+  },
+  {
+    id: 61,
+    topic: "Metrics",
+    question: "Reducing MTTD improves:",
+    options: ["Time to detect incidents", "Amount of storage used", "Number of users", "Patch frequency"],
+    correctAnswer: 0,
+    explanation: "Lower MTTD means faster detection.",
+  },
+  {
+    id: 62,
+    topic: "Metrics",
+    question: "Reducing MTTR improves:",
+    options: ["Speed of response and recovery", "Network bandwidth", "Password complexity", "Disk size"],
+    correctAnswer: 0,
+    explanation: "Lower MTTR means faster containment and resolution.",
+  },
+  {
+    id: 63,
+    topic: "Metrics",
+    question: "A good severity matrix considers:",
+    options: ["Impact and urgency", "Only number of alerts", "Only system age", "Only vendor type"],
+    correctAnswer: 0,
+    explanation: "Severity uses impact and urgency to prioritize response.",
+  },
+  {
+    id: 64,
+    topic: "Metrics",
+    question: "An incident SLA should define:",
+    options: ["Expected response times by severity", "Only backup schedules", "Only user training", "Only patch windows"],
+    correctAnswer: 0,
+    explanation: "SLAs guide response timing expectations.",
+  },
+  {
+    id: 65,
+    topic: "Metrics",
+    question: "A common IR KPI is:",
+    options: ["Time to containment", "Marketing reach", "Sales pipeline", "Printer uptime"],
+    correctAnswer: 0,
+    explanation: "Containment time measures response effectiveness.",
+  },
+  {
+    id: 66,
+    topic: "Governance",
+    question: "IR playbooks are useful because they:",
+    options: ["Provide consistent, repeatable actions", "Replace logging", "Eliminate training", "Disable monitoring"],
+    correctAnswer: 0,
+    explanation: "Playbooks standardize responses to common incidents.",
+  },
+  {
+    id: 67,
+    topic: "Governance",
+    question: "Tabletop exercises help teams:",
+    options: ["Practice response procedures safely", "Avoid documentation", "Ignore escalation", "Disable alerts"],
+    correctAnswer: 0,
+    explanation: "Exercises improve readiness without real incidents.",
+  },
+  {
+    id: 68,
+    topic: "Governance",
+    question: "An IR policy should define:",
+    options: ["Roles, responsibilities, and escalation paths", "Only tool versions", "Only passwords", "Only vendor names"],
+    correctAnswer: 0,
+    explanation: "Policy establishes how incidents are managed.",
+  },
+  {
+    id: 69,
+    topic: "Governance",
+    question: "Why maintain a contact list?",
+    options: ["To notify stakeholders quickly", "To store passwords", "To replace monitoring", "To avoid analysis"],
+    correctAnswer: 0,
+    explanation: "Contact lists enable quick coordination during incidents.",
+  },
+  {
+    id: 70,
+    topic: "Governance",
+    question: "Legal counsel should be involved when:",
+    options: ["Evidence handling or regulatory reporting is required", "Only for phishing", "Never", "Only for backups"],
+    correctAnswer: 0,
+    explanation: "Legal involvement protects the organization during investigations.",
+  },
+  {
+    id: 71,
+    topic: "Best Practices",
+    question: "Why log in UTC?",
+    options: ["It standardizes timelines across systems", "It hides activity", "It speeds up detection", "It reduces storage"],
+    correctAnswer: 0,
+    explanation: "UTC avoids time zone confusion in timelines.",
+  },
+  {
+    id: 72,
+    topic: "Best Practices",
+    question: "A strong IR report should be:",
+    options: ["Clear, evidence-based, and reproducible", "Opinion-based", "Only screenshots", "Only a list of IPs"],
+    correctAnswer: 0,
+    explanation: "Reports must be defensible and based on evidence.",
+  },
+  {
+    id: 73,
+    topic: "Best Practices",
+    question: "Which action is unsafe during analysis?",
+    options: ["Rebooting an infected host before capturing memory", "Capturing logs", "Creating an image", "Hashing evidence"],
+    correctAnswer: 0,
+    explanation: "Rebooting can destroy volatile evidence.",
+  },
+  {
+    id: 74,
+    topic: "Best Practices",
+    question: "Why keep detailed timelines?",
+    options: ["To correlate events and actions precisely", "To reduce alerts", "To remove evidence", "To avoid reporting"],
+    correctAnswer: 0,
+    explanation: "Timelines help reconstruct the incident accurately.",
+  },
+  {
+    id: 75,
+    topic: "Best Practices",
+    question: "A key outcome of lessons learned is:",
+    options: ["Updated controls and improved processes", "Deleting all evidence", "Reducing monitoring", "Ignoring findings"],
+    correctAnswer: 0,
+    explanation: "Lessons learned drive improvements to prevent recurrence.",
+  },
+];
 // IR phases based on NIST framework
 const irPhases = [
   {
@@ -972,21 +1579,15 @@ export default function IncidentResponseGuidePage() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Box
-          onClick={() => navigate("/learn")}
-          sx={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 1,
-            color: "text.secondary",
-            cursor: "pointer",
-            mb: 2,
-            "&:hover": { color: "primary.main" },
-          }}
-        >
-          <ArrowBackIcon fontSize="small" />
-          <Typography variant="body2">Back to Learning Hub</Typography>
-        </Box>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <Box
@@ -2188,6 +2789,41 @@ Notes: [Any observations]`}</CodeBlock>
           </Paper>
         </Box>
       )}
+
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 5,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          bgcolor: alpha(QUIZ_ACCENT_COLOR, 0.03),
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={QUIZ_ACCENT_COLOR}
+          title="Incident Response Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

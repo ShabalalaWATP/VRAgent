@@ -4822,41 +4822,6 @@ export type RichHeader = {
   clear_data: string;
 };
 
-// Hex Viewer types
-export type HexViewRow = {
-  offset: number;
-  offset_hex: string;
-  hex: string;
-  ascii: string;
-  bytes: number[];
-};
-
-export type HexViewResult = {
-  offset: number;
-  length: number;
-  total_size: number;
-  hex_data: string;
-  ascii_preview: string;
-  rows: HexViewRow[];
-};
-
-export type HexSearchResult = {
-  offset: number;
-  offset_hex: string;
-  match_length: number;
-  context_hex: string;
-  context_ascii: string;
-  match_offset_in_context: number;
-};
-
-export type HexSearchResponse = {
-  query: string;
-  search_type: string;
-  pattern_hex: string;
-  total_matches: number;
-  results: HexSearchResult[];
-};
-
 export type BinaryMetadataResult = {
   file_type: string;
   architecture: string;
@@ -6129,6 +6094,31 @@ export type DockerSecurityIssue = {
   severity: string;
   description: string;
   command?: string;
+  attack_vector?: string;  // Offensive security context
+  remediation?: string;
+  rule_id?: string;
+};
+
+export type BaseImageIntelligence = {
+  image: string;
+  category: string;  // eol, compromised, vulnerable, discouraged, typosquatting, untrusted
+  severity: string;
+  message: string;
+  attack_vector?: string;
+  recommendation?: string;
+};
+
+export type LayerSecret = {
+  layer_id: string;
+  layer_index: number;
+  file_path: string;
+  file_type: string;
+  severity: string;
+  size_bytes: number;
+  is_deleted: boolean;  // True = file was "deleted" but still recoverable!
+  content_preview?: string;
+  entropy?: number;
+  attack_vector?: string;
 };
 
 export type DockerAnalysisResult = {
@@ -6144,6 +6134,21 @@ export type DockerAnalysisResult = {
   security_issues: DockerSecurityIssue[];
   ai_analysis?: string;
   error?: string;
+  // AI False Positive Adjudication
+  adjudication_enabled?: boolean;
+  adjudication_summary?: string;
+  rejected_findings?: Array<Record<string, any>>;
+  adjudication_stats?: {
+    confirmed: number;
+    rejected: number;
+    total: number;
+  };
+  // Base Image Intelligence
+  base_image_intel?: BaseImageIntelligence[];
+  // Layer Deep Scan (recoverable secrets)
+  layer_secrets?: LayerSecret[];
+  layer_scan_metadata?: Record<string, any>;
+  deleted_secrets_count?: number;
 };
 
 export type ReverseEngineeringStatus = {
@@ -7249,17 +7254,33 @@ export const reverseEngineeringClient = {
 
   /**
    * Analyze a Docker image's layers
+   * @param imageName - Docker image name to analyze
+   * @param includeAi - Include AI-powered analysis
+   * @param adjudicateFindings - Use AI to filter false positives (recommended)
+   * @param skepticismLevel - How aggressively to filter: 'high' (default), 'medium', or 'low'
+   * @param deepLayerScan - Extract and scan image layers for recoverable secrets
+   * @param checkBaseImage - Check base image against intelligence database (EOL, compromised, etc.)
    */
   analyzeDockerImage: async (
     imageName: string,
-    includeAi: boolean = true
+    includeAi: boolean = true,
+    adjudicateFindings: boolean = true,
+    skepticismLevel: "high" | "medium" | "low" = "high",
+    deepLayerScan: boolean = true,
+    checkBaseImage: boolean = true
   ): Promise<DockerAnalysisResult> => {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     const headers: HeadersInit = {};
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    const params = new URLSearchParams({ include_ai: String(includeAi) });
+    const params = new URLSearchParams({
+      include_ai: String(includeAi),
+      adjudicate_findings: String(adjudicateFindings),
+      skepticism_level: skepticismLevel,
+      deep_layer_scan: String(deepLayerScan),
+      check_base_image: String(checkBaseImage),
+    });
     const resp = await fetch(`${API_URL}/reverse/analyze-docker/${encodeURIComponent(imageName)}?${params}`, {
       headers,
     });
@@ -7887,87 +7908,6 @@ export const reverseEngineeringClient = {
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
-  },
-
-  // ================== Hex Viewer API ==================
-
-  /**
-   * Upload a file for hex viewing
-   */
-  uploadForHexView: async (file: File): Promise<{ file_id: string; filename: string; file_size: number }> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    const formData = new FormData();
-    formData.append("file", file);
-    
-    const resp = await fetch(`${API_URL}/reverse/hex-upload`, {
-      method: "POST",
-      headers,
-      body: formData,
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
-  },
-
-  /**
-   * Get hex view of an uploaded file
-   */
-  getHexView: async (fileId: string, offset: number = 0, length: number = 512): Promise<HexViewResult> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    const params = new URLSearchParams({
-      offset: String(offset),
-      length: String(length),
-    });
-    const resp = await fetch(`${API_URL}/reverse/hex/${fileId}?${params}`, { headers });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
-  },
-
-  /**
-   * Search in hex file
-   */
-  searchHex: async (
-    fileId: string,
-    query: string,
-    searchType: 'text' | 'hex' = 'text',
-    maxResults: number = 50
-  ): Promise<HexSearchResponse> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    const params = new URLSearchParams({
-      query,
-      search_type: searchType,
-      max_results: String(maxResults),
-    });
-    const resp = await fetch(`${API_URL}/reverse/hex/${fileId}/search?${params}`, { headers });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
-  },
-
-  /**
-   * Delete an uploaded hex view file
-   */
-  deleteHexFile: async (fileId: string): Promise<void> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    const resp = await fetch(`${API_URL}/reverse/hex/${fileId}`, {
-      method: "DELETE",
-      headers,
-    });
-    if (!resp.ok) throw new Error(await resp.text());
   },
 
   // ================== JADX Decompilation API ==================
@@ -10810,7 +10750,61 @@ export type ConversationsListResponse = {
   total: number;
 };
 
-export type MessageType = "text" | "report_share" | "file" | "image" | "system" | "poll";
+export type MessageType = "text" | "report_share" | "finding_share" | "file" | "image" | "system" | "poll";
+
+// Shared Finding Data (for finding_share messages)
+export type SharedFindingData = {
+  finding_id: number;
+  project_id: number;
+  project_name: string;
+  scan_run_id?: number;
+  severity: string;
+  type: string;
+  summary: string;
+  file_path?: string;
+  start_line?: number;
+  end_line?: number;
+  details?: Record<string, any>;
+  shared_by_username: string;
+  shared_at: string;
+};
+
+// Shared Report Data (for report_share messages)
+export type SharedReportData = {
+  report_id: number;
+  project_id: number;
+  project_name: string;
+  scan_run_id?: number;
+  title: string;
+  summary?: string;
+  risk_score?: number;
+  finding_count: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  shared_by_username: string;
+  shared_at: string;
+};
+
+// Share Request/Response Types
+export type ShareFindingRequest = {
+  finding_id: number;
+  conversation_id: number;
+  comment?: string;
+};
+
+export type ShareReportRequest = {
+  report_id: number;
+  conversation_id: number;
+  comment?: string;
+};
+
+export type ShareResponse = {
+  success: boolean;
+  message_id: number;
+  conversation_id: number;
+};
 
 // Reaction Types
 export type ReactionInfo = {
@@ -10840,13 +10834,25 @@ export type ReplyInfo = {
 
 // Attachment Types
 export type AttachmentData = {
+  // File attachments
   file_name?: string;
   file_type?: string;
   file_size?: number;
   file_url?: string;
   thumbnail_url?: string;
+  // Report share
   report_id?: number;
   report_title?: string;
+  // Finding share
+  finding_id?: number;
+  // Common properties for shared items
+  title?: string;
+  severity?: string;
+  category?: string;
+  scan_type?: string;
+  finding_count?: number;
+  project_id?: number;
+  project_name?: string;
 };
 
 export type FileUploadResponse = {
@@ -11277,6 +11283,14 @@ export type SocialMessage = {
   is_own_message: boolean;
   reply_to?: ReplyInfo;
   reactions?: ReactionSummary;
+  reply_count?: number;  // Number of replies in thread
+};
+
+export type ThreadRepliesResponse = {
+  parent_message: SocialMessage;
+  replies: SocialMessage[];
+  total_replies: number;
+  conversation_id: number;
 };
 
 export type MessagesListResponse = {
@@ -11748,6 +11762,23 @@ export const socialApi = {
     return resp.json();
   },
 
+  // Get Thread Replies
+  getThreadReplies: async (
+    conversationId: number,
+    messageId: number,
+    skip: number = 0,
+    limit: number = 50
+  ): Promise<ThreadRepliesResponse> => {
+    const resp = await fetch(
+      `${API_URL}/social/conversations/${conversationId}/messages/${messageId}/thread?skip=${skip}&limit=${limit}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
   // ============================================================================
   // Message Pinning
   // ============================================================================
@@ -12079,6 +12110,30 @@ export const socialApi = {
     return resp.json();
   },
 
+  // ============================================================================
+  // Share Findings & Reports
+  // ============================================================================
+
+  shareFinding: async (request: ShareFindingRequest): Promise<ShareResponse> => {
+    const resp = await fetch(`${API_URL}/social/share/finding`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  shareReport: async (request: ShareReportRequest): Promise<ShareResponse> => {
+    const resp = await fetch(`${API_URL}/social/share/report`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
   // WebSocket URL helper
   getWebSocketUrl: (): string => {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -12093,5 +12148,253 @@ export const socialApi = {
       const baseUrl = API_URL.replace(/^https?:\/\//, "").replace(/\/api$/, "");
       return `${wsProtocol}//${baseUrl}/api/ws/chat?token=${token}`;
     }
+  },
+};
+
+// ============================================================================
+// Kanban Board Types
+// ============================================================================
+
+export interface KanbanCardLabel {
+  name: string;
+  color: string;
+}
+
+export interface KanbanChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+export interface KanbanCard {
+  id: number;
+  column_id: number;
+  title: string;
+  description?: string;
+  position: number;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  labels?: KanbanCardLabel[];
+  due_date?: string;
+  estimated_hours?: number;
+  assignee_ids?: number[];
+  assignee_names?: string[];
+  assignees?: Array<{
+    user_id: number;
+    username: string;
+    first_name?: string;
+    avatar_url?: string;
+  }>;
+  checklist?: KanbanChecklistItem[];
+  finding_id?: number;
+  finding_summary?: string;
+  comment_count: number;
+  attachment_count?: number;
+  created_by?: number;
+  creator_username?: string;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+}
+
+export interface KanbanColumn {
+  id: number;
+  board_id: number;
+  name: string;
+  position: number;
+  color?: string;
+  wip_limit?: number;
+  card_count?: number;
+  cards: KanbanCard[];
+}
+
+export interface KanbanBoard {
+  id: number;
+  project_id: number;
+  name: string;
+  description?: string;
+  columns: KanbanColumn[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface KanbanCardComment {
+  id: number;
+  card_id: number;
+  user_id: number;
+  username?: string;
+  user_avatar_url?: string;
+  content: string;
+  created_at: string;
+}
+
+export interface KanbanColumnCreate {
+  name: string;
+  position?: number;
+  color?: string;
+  wip_limit?: number;
+}
+
+export interface KanbanCardCreate {
+  title: string;
+  description?: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  labels?: KanbanCardLabel[];
+  due_date?: string;
+  assignee_ids?: number[];
+  checklist?: KanbanChecklistItem[];
+}
+
+// ============================================================================
+// Kanban API Client
+// ============================================================================
+
+export const kanbanApi = {
+  // Get or create board for a project
+  getProjectBoard: async (projectId: number): Promise<KanbanBoard> => {
+    const resp = await fetch(`${API_URL}/kanban/projects/${projectId}/board`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update board
+  updateBoard: async (boardId: number, data: { name?: string; description?: string }): Promise<KanbanBoard> => {
+    const resp = await fetch(`${API_URL}/kanban/boards/${boardId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Column operations
+  createColumn: async (boardId: number, data: KanbanColumnCreate): Promise<KanbanColumn> => {
+    const resp = await fetch(`${API_URL}/kanban/boards/${boardId}/columns`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateColumn: async (boardId: number, columnId: number, data: Partial<KanbanColumnCreate>): Promise<KanbanColumn> => {
+    const resp = await fetch(`${API_URL}/kanban/boards/${boardId}/columns/${columnId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteColumn: async (boardId: number, columnId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/kanban/boards/${boardId}/columns/${columnId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  reorderColumns: async (boardId: number, columnIds: number[]): Promise<KanbanBoard> => {
+    const resp = await fetch(`${API_URL}/kanban/boards/${boardId}/columns/reorder`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ column_ids: columnIds }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Card operations
+  createCard: async (columnId: number, data: KanbanCardCreate): Promise<KanbanCard> => {
+    const resp = await fetch(`${API_URL}/kanban/columns/${columnId}/cards`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getCard: async (cardId: number): Promise<KanbanCard> => {
+    const resp = await fetch(`${API_URL}/kanban/cards/${cardId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateCard: async (cardId: number, data: Partial<KanbanCardCreate & { column_id?: number; position?: number }>): Promise<KanbanCard> => {
+    const resp = await fetch(`${API_URL}/kanban/cards/${cardId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteCard: async (cardId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/kanban/cards/${cardId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  moveCard: async (cardId: number, columnId: number, position: number): Promise<KanbanCard> => {
+    const resp = await fetch(`${API_URL}/kanban/cards/${cardId}/move`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ column_id: columnId, position }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Create card from finding
+  createCardFromFinding: async (boardId: number, findingId: number, columnId?: number): Promise<KanbanCard> => {
+    const body: any = { finding_id: findingId };
+    if (columnId) body.column_id = columnId;
+    const resp = await fetch(`${API_URL}/kanban/boards/${boardId}/cards/from-finding`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Comment operations
+  getCardComments: async (cardId: number): Promise<KanbanCardComment[]> => {
+    const resp = await fetch(`${API_URL}/kanban/cards/${cardId}/comments`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  addComment: async (cardId: number, content: string): Promise<KanbanCardComment> => {
+    const resp = await fetch(`${API_URL}/kanban/cards/${cardId}/comments`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ content }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteComment: async (cardId: number, commentId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/kanban/cards/${cardId}/comments/${commentId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
   },
 };

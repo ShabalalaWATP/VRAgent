@@ -45,8 +45,10 @@ import WarningIcon from "@mui/icons-material/Warning";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import ShieldIcon from "@mui/icons-material/Shield";
 import SearchIcon from "@mui/icons-material/Search";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
 // Theme colors
 const theme = {
@@ -65,6 +67,987 @@ const theme = {
   text: "#e2e8f0",
   textMuted: "#94a3b8",
 };
+
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = theme.accent;
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Foundations",
+    question: "What is lateral movement?",
+    options: [
+      "Moving from one system to another within a network",
+      "Gaining administrator rights on a single host",
+      "Encrypting files to hide activity",
+      "Disabling endpoint logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Lateral movement focuses on spreading access to additional systems.",
+  },
+  {
+    id: 2,
+    topic: "Foundations",
+    question: "How does lateral movement differ from privilege escalation?",
+    options: [
+      "Lateral movement targets other systems; escalation raises privilege level",
+      "Lateral movement only uses Linux; escalation only uses Windows",
+      "Lateral movement disables logs; escalation enables logs",
+      "There is no difference between the two",
+    ],
+    correctAnswer: 0,
+    explanation: "Escalation increases privileges, while lateral movement spreads to new hosts.",
+  },
+  {
+    id: 3,
+    topic: "Foundations",
+    question: "Which is a common prerequisite for lateral movement?",
+    options: [
+      "Valid credentials or tokens",
+      "A public vulnerability scanner",
+      "Physical access to the data center",
+      "A kernel exploit on every host",
+    ],
+    correctAnswer: 0,
+    explanation: "Lateral movement often depends on reusing valid credentials or tickets.",
+  },
+  {
+    id: 4,
+    topic: "Protocols",
+    question: "PsExec typically uses which protocol?",
+    options: [
+      "SMB",
+      "DNS",
+      "ICMP",
+      "FTP",
+    ],
+    correctAnswer: 0,
+    explanation: "PsExec uses SMB to copy and create a service on the remote host.",
+  },
+  {
+    id: 5,
+    topic: "Protocols",
+    question: "What is the default port for RDP?",
+    options: [
+      "3389",
+      "22",
+      "445",
+      "5985",
+    ],
+    correctAnswer: 0,
+    explanation: "RDP typically listens on TCP 3389.",
+  },
+  {
+    id: 6,
+    topic: "Protocols",
+    question: "Which ports are commonly used by WinRM?",
+    options: [
+      "5985 and 5986",
+      "80 and 443",
+      "135 and 139",
+      "53 and 123",
+    ],
+    correctAnswer: 0,
+    explanation: "WinRM uses 5985 for HTTP and 5986 for HTTPS.",
+  },
+  {
+    id: 7,
+    topic: "Protocols",
+    question: "WMI remote execution commonly uses:",
+    options: [
+      "DCOM/RPC",
+      "DNS over HTTPS",
+      "SMTP",
+      "SNMP",
+    ],
+    correctAnswer: 0,
+    explanation: "WMI leverages DCOM and RPC endpoints.",
+  },
+  {
+    id: 8,
+    topic: "Protocols",
+    question: "What is the default port for SSH?",
+    options: [
+      "22",
+      "21",
+      "23",
+      "3389",
+    ],
+    correctAnswer: 0,
+    explanation: "SSH typically listens on TCP port 22.",
+  },
+  {
+    id: 9,
+    topic: "Credentials",
+    question: "Pass-the-Hash uses:",
+    options: [
+      "An NTLM hash instead of a plaintext password",
+      "A Kerberos ticket instead of a hash",
+      "A local API key only",
+      "A password reset token",
+    ],
+    correctAnswer: 0,
+    explanation: "PTH authenticates using NTLM hashes without the plaintext password.",
+  },
+  {
+    id: 10,
+    topic: "Credentials",
+    question: "Pass-the-Ticket uses:",
+    options: [
+      "A Kerberos ticket for authentication",
+      "A stored SSH key",
+      "A password reset link",
+      "A browser cookie only",
+    ],
+    correctAnswer: 0,
+    explanation: "PTT reuses Kerberos tickets to authenticate to services.",
+  },
+  {
+    id: 11,
+    topic: "Credentials",
+    question: "A Golden Ticket requires:",
+    options: [
+      "The krbtgt account hash",
+      "A local administrator password",
+      "An SSH private key",
+      "A valid certificate authority key",
+    ],
+    correctAnswer: 0,
+    explanation: "Golden Tickets are forged using the krbtgt hash.",
+  },
+  {
+    id: 12,
+    topic: "Credentials",
+    question: "A Silver Ticket represents:",
+    options: [
+      "A forged service ticket for a specific service",
+      "A forged TGT for the entire domain",
+      "A password reset token",
+      "A DNS TXT record",
+    ],
+    correctAnswer: 0,
+    explanation: "Silver Tickets are forged service tickets (TGS).",
+  },
+  {
+    id: 13,
+    topic: "Credentials",
+    question: "Overpass-the-Hash is:",
+    options: [
+      "Using an NTLM hash to obtain a Kerberos TGT",
+      "Using a Kerberos ticket to obtain an NTLM hash",
+      "Exfiltrating hashes over DNS",
+      "Resetting a password through LDAP",
+    ],
+    correctAnswer: 0,
+    explanation: "Overpass-the-Hash converts NTLM material into Kerberos tickets.",
+  },
+  {
+    id: 14,
+    topic: "Credentials",
+    question: "DCSync enables an attacker to:",
+    options: [
+      "Replicate AD secrets from a domain controller",
+      "Disable SMB signing",
+      "Reset workstation passwords",
+      "Create new DNS zones",
+    ],
+    correctAnswer: 0,
+    explanation: "DCSync abuses replication permissions to pull credential data.",
+  },
+  {
+    id: 15,
+    topic: "Credentials",
+    question: "Credential dumping is often performed to:",
+    options: [
+      "Obtain hashes or tickets for lateral movement",
+      "Remove all scheduled tasks",
+      "Reset firewall rules",
+      "Enable UAC prompts",
+    ],
+    correctAnswer: 0,
+    explanation: "Dumping credentials provides reusable authentication material.",
+  },
+  {
+    id: 16,
+    topic: "Tooling",
+    question: "CrackMapExec/NetExec is commonly used for:",
+    options: [
+      "SMB/WinRM enumeration and remote command execution",
+      "Kernel exploit development",
+      "Wireless packet capture",
+      "Memory forensics analysis",
+    ],
+    correctAnswer: 0,
+    explanation: "CME/NetExec automates SMB and WinRM testing and execution.",
+  },
+  {
+    id: 17,
+    topic: "Tooling",
+    question: "The Impacket suite provides:",
+    options: [
+      "Remote execution tools like psexec.py and wmiexec.py",
+      "A GUI for vulnerability management",
+      "A host-based IDS",
+      "A password manager",
+    ],
+    correctAnswer: 0,
+    explanation: "Impacket includes multiple remote execution and AD tools.",
+  },
+  {
+    id: 18,
+    topic: "Tooling",
+    question: "BloodHound helps by:",
+    options: [
+      "Mapping Active Directory relationships and attack paths",
+      "Encrypting C2 traffic automatically",
+      "Scanning external IP ranges",
+      "Blocking suspicious RDP logons",
+    ],
+    correctAnswer: 0,
+    explanation: "BloodHound visualizes AD paths to identify lateral movement routes.",
+  },
+  {
+    id: 19,
+    topic: "Tooling",
+    question: "SharpHound is:",
+    options: [
+      "The data collector used by BloodHound",
+      "A Linux kernel module",
+      "A web proxy for tunneling",
+      "A DNS exfiltration tool",
+    ],
+    correctAnswer: 0,
+    explanation: "SharpHound collects AD data for BloodHound analysis.",
+  },
+  {
+    id: 20,
+    topic: "Tooling",
+    question: "PowerView is best described as:",
+    options: [
+      "A PowerShell toolkit for AD enumeration",
+      "A disk encryption utility",
+      "An endpoint detection platform",
+      "A malware packing tool",
+    ],
+    correctAnswer: 0,
+    explanation: "PowerView gathers AD information via PowerShell.",
+  },
+  {
+    id: 21,
+    topic: "Protocols",
+    question: "Admin shares refer to:",
+    options: [
+      "Hidden SMB shares like C$ and ADMIN$",
+      "Public FTP directories",
+      "Cloud storage buckets",
+      "RDP session files",
+    ],
+    correctAnswer: 0,
+    explanation: "Admin shares are default hidden SMB shares on Windows systems.",
+  },
+  {
+    id: 22,
+    topic: "Artifacts",
+    question: "Remote service creation typically leaves which artifact?",
+    options: [
+      "Event ID 7045 (service creation)",
+      "Event ID 4624 type 10",
+      "Event ID 1102 (log clear)",
+      "Event ID 5156 (firewall allow)",
+    ],
+    correctAnswer: 0,
+    explanation: "Service creation is logged under event ID 7045.",
+  },
+  {
+    id: 23,
+    topic: "Techniques",
+    question: "Scheduled task lateral movement often uses:",
+    options: [
+      "schtasks to run a command remotely",
+      "DNS TXT records to store commands",
+      "ARP spoofing to capture traffic",
+      "Kerberos delegation to avoid tasks",
+    ],
+    correctAnswer: 0,
+    explanation: "schtasks can create and run tasks remotely with credentials.",
+  },
+  {
+    id: 24,
+    topic: "Techniques",
+    question: "WMI lateral movement commonly uses:",
+    options: [
+      "wmic or PowerShell WMI cmdlets",
+      "Only SMB file copy",
+      "ICMP ping sweeps",
+      "FTP anonymous login",
+    ],
+    correctAnswer: 0,
+    explanation: "WMI execution can be performed with wmic or PowerShell.",
+  },
+  {
+    id: 25,
+    topic: "Techniques",
+    question: "WinRM lateral movement relies on:",
+    options: [
+      "PowerShell remoting with WinRM enabled",
+      "Kerberos ticket forging only",
+      "SSH port forwarding",
+      "Local admin shares",
+    ],
+    correctAnswer: 0,
+    explanation: "WinRM provides PowerShell remoting when enabled.",
+  },
+  {
+    id: 26,
+    topic: "Defense",
+    question: "SMB signing helps prevent:",
+    options: [
+      "NTLM relay attacks",
+      "Password spraying",
+      "Local file reads",
+      "RDP brute force",
+    ],
+    correctAnswer: 0,
+    explanation: "SMB signing blocks relay by enforcing message integrity.",
+  },
+  {
+    id: 27,
+    topic: "Defense",
+    question: "Credential Guard primarily protects:",
+    options: [
+      "LSASS secrets and hashes",
+      "DNS cache entries",
+      "Browser history files",
+      "Windows update binaries",
+    ],
+    correctAnswer: 0,
+    explanation: "Credential Guard isolates secrets from user-mode attacks.",
+  },
+  {
+    id: 28,
+    topic: "Defense",
+    question: "Network segmentation helps by:",
+    options: [
+      "Limiting reachable hosts and paths",
+      "Eliminating the need for monitoring",
+      "Guaranteeing all services are patched",
+      "Allowing open access to admin shares",
+    ],
+    correctAnswer: 0,
+    explanation: "Segmentation restricts east-west movement between networks.",
+  },
+  {
+    id: 29,
+    topic: "Defense",
+    question: "Jump hosts are used to:",
+    options: [
+      "Centralize and control administrative access",
+      "Automatically scan the internet",
+      "Store malware samples",
+      "Disable logging on servers",
+    ],
+    correctAnswer: 0,
+    explanation: "Jump hosts reduce exposure by funneling admin access through controlled systems.",
+  },
+  {
+    id: 30,
+    topic: "Credentials",
+    question: "Local admin password reuse increases risk of:",
+    options: [
+      "Rapid lateral movement across hosts",
+      "Automatic patch failures",
+      "Lower CPU utilization",
+      "Improved MFA adoption",
+    ],
+    correctAnswer: 0,
+    explanation: "Reuse lets attackers move quickly once one host is compromised.",
+  },
+  {
+    id: 31,
+    topic: "Defense",
+    question: "LAPS mitigates lateral movement by:",
+    options: [
+      "Providing unique local admin passwords per host",
+      "Disabling all SMB traffic",
+      "Blocking RDP entirely",
+      "Rotating domain admin passwords hourly",
+    ],
+    correctAnswer: 0,
+    explanation: "Unique local admin passwords stop reuse across machines.",
+  },
+  {
+    id: 32,
+    topic: "Defense",
+    question: "Kerberos pre-authentication helps prevent:",
+    options: [
+      "AS-REP roasting",
+      "DNS tunneling",
+      "Password spraying",
+      "RDP brute force",
+    ],
+    correctAnswer: 0,
+    explanation: "Pre-authentication blocks unauthenticated AS-REP responses.",
+  },
+  {
+    id: 33,
+    topic: "Detection",
+    question: "Windows event 4624 type 3 indicates:",
+    options: [
+      "A network logon",
+      "A local interactive logon",
+      "A service start",
+      "A scheduled task creation",
+    ],
+    correctAnswer: 0,
+    explanation: "Logon type 3 represents network logons.",
+  },
+  {
+    id: 34,
+    topic: "Detection",
+    question: "Windows event 4624 type 10 indicates:",
+    options: [
+      "A remote interactive (RDP) logon",
+      "A batch job run",
+      "A network logon via SMB",
+      "A system reboot",
+    ],
+    correctAnswer: 0,
+    explanation: "Logon type 10 is associated with RDP sessions.",
+  },
+  {
+    id: 35,
+    topic: "Detection",
+    question: "Windows event 4648 indicates:",
+    options: [
+      "A logon using explicit credentials",
+      "A service installed",
+      "A firewall rule change",
+      "A system shutdown",
+    ],
+    correctAnswer: 0,
+    explanation: "Event 4648 shows use of explicit credentials.",
+  },
+  {
+    id: 36,
+    topic: "Detection",
+    question: "Windows event 4769 indicates:",
+    options: [
+      "A Kerberos service ticket request",
+      "A DNS zone transfer",
+      "A local group change",
+      "A registry modification",
+    ],
+    correctAnswer: 0,
+    explanation: "Event 4769 logs TGS requests.",
+  },
+  {
+    id: 37,
+    topic: "Detection",
+    question: "Windows event 4776 indicates:",
+    options: [
+      "An NTLM authentication attempt",
+      "A scheduled task execution",
+      "A new service start",
+      "A log cleared event",
+    ],
+    correctAnswer: 0,
+    explanation: "Event 4776 relates to NTLM authentication.",
+  },
+  {
+    id: 38,
+    topic: "Detection",
+    question: "Sysmon Event ID 1 records:",
+    options: [
+      "Process creation",
+      "Network connections",
+      "File deletions",
+      "Registry queries",
+    ],
+    correctAnswer: 0,
+    explanation: "Sysmon 1 logs process creation.",
+  },
+  {
+    id: 39,
+    topic: "Detection",
+    question: "Sysmon Event ID 3 records:",
+    options: [
+      "Network connections",
+      "Driver loads",
+      "Logon sessions",
+      "Scheduled tasks",
+    ],
+    correctAnswer: 0,
+    explanation: "Sysmon 3 tracks network connections.",
+  },
+  {
+    id: 40,
+    topic: "Pivoting",
+    question: "What does pivoting mean in lateral movement?",
+    options: [
+      "Routing traffic through a compromised host to reach new targets",
+      "Escalating from user to admin on the same host",
+      "Encrypting files for exfiltration",
+      "Disabling SMB signing",
+    ],
+    correctAnswer: 0,
+    explanation: "Pivoting uses a foothold to reach systems on different networks.",
+  },
+  {
+    id: 41,
+    topic: "Pivoting",
+    question: "A SOCKS proxy is used to:",
+    options: [
+      "Forward traffic through a pivot host",
+      "Reset domain passwords",
+      "Block all outbound connections",
+      "Scan for local USB devices",
+    ],
+    correctAnswer: 0,
+    explanation: "SOCKS proxies relay traffic through an intermediary host.",
+  },
+  {
+    id: 42,
+    topic: "Pivoting",
+    question: "What does `ssh -D` create?",
+    options: [
+      "A dynamic SOCKS proxy",
+      "A static port forward only",
+      "A DNS server",
+      "A Kerberos ticket",
+    ],
+    correctAnswer: 0,
+    explanation: "ssh -D opens a dynamic port for SOCKS proxying.",
+  },
+  {
+    id: 43,
+    topic: "Pivoting",
+    question: "Chisel is commonly used for:",
+    options: [
+      "HTTP-based tunneling and port forwarding",
+      "Password cracking",
+      "Memory forensics",
+      "Disk encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Chisel creates tunnels over HTTP for pivoting.",
+  },
+  {
+    id: 44,
+    topic: "Pivoting",
+    question: "Proxychains is used to:",
+    options: [
+      "Route tool traffic through a proxy",
+      "Disable all DNS queries",
+      "Automate patching",
+      "Create local admin users",
+    ],
+    correctAnswer: 0,
+    explanation: "Proxychains forces tools to use a configured proxy chain.",
+  },
+  {
+    id: 45,
+    topic: "Pivoting",
+    question: "Port forwarding differs from tunneling because:",
+    options: [
+      "It forwards a specific port rather than arbitrary traffic",
+      "It requires no credentials",
+      "It disables encryption",
+      "It only works over DNS",
+    ],
+    correctAnswer: 0,
+    explanation: "Port forwarding exposes a specific port while tunnels can carry wider traffic.",
+  },
+  {
+    id: 46,
+    topic: "Artifacts",
+    question: "RDP lateral movement often leaves:",
+    options: [
+      "TerminalServices and logon events",
+      "No logs at all",
+      "Only DNS query logs",
+      "Only firewall drop logs",
+    ],
+    correctAnswer: 0,
+    explanation: "RDP logons generate TerminalServices and security log events.",
+  },
+  {
+    id: 47,
+    topic: "Techniques",
+    question: "PsExec executes commands by:",
+    options: [
+      "Creating a service on the remote host",
+      "Injecting code into LSASS",
+      "Using a browser exploit",
+      "Modifying group policies directly",
+    ],
+    correctAnswer: 0,
+    explanation: "PsExec copies a service binary and creates a service to run commands.",
+  },
+  {
+    id: 48,
+    topic: "Techniques",
+    question: "Why is WMI execution sometimes considered stealthier than PsExec?",
+    options: [
+      "It typically does not create a new service",
+      "It disables logging automatically",
+      "It requires no credentials",
+      "It only runs from Domain Controllers",
+    ],
+    correctAnswer: 0,
+    explanation: "WMI exec can avoid the service creation artifact.",
+  },
+  {
+    id: 49,
+    topic: "Techniques",
+    question: "WinRM lateral movement requires:",
+    options: [
+      "WinRM enabled and valid credentials",
+      "Local admin shares disabled",
+      "Kerberos pre-authentication disabled",
+      "A writable registry key",
+    ],
+    correctAnswer: 0,
+    explanation: "WinRM must be enabled and requires authentication.",
+  },
+  {
+    id: 50,
+    topic: "Techniques",
+    question: "Remote registry access allows an attacker to:",
+    options: [
+      "Query or modify registry keys remotely",
+      "Access BIOS settings directly",
+      "Disable kernel protections only",
+      "Install drivers without privileges",
+    ],
+    correctAnswer: 0,
+    explanation: "Remote registry can expose sensitive config if enabled and permitted.",
+  },
+  {
+    id: 51,
+    topic: "OPSEC",
+    question: "Why use living off the land binaries (LOLBins)?",
+    options: [
+      "They reduce the need to drop new tools on disk",
+      "They remove the need for credentials",
+      "They eliminate logging",
+      "They guarantee persistence",
+    ],
+    correctAnswer: 0,
+    explanation: "Native tools blend into normal admin activity and reduce artifacts.",
+  },
+  {
+    id: 52,
+    topic: "Defense",
+    question: "NTLM relay typically requires:",
+    options: [
+      "SMB signing not enforced",
+      "Kerberos pre-authentication enabled",
+      "RDP disabled on targets",
+      "Local admin passwords rotated daily",
+    ],
+    correctAnswer: 0,
+    explanation: "SMB signing blocks relay by ensuring message integrity.",
+  },
+  {
+    id: 53,
+    topic: "Defense",
+    question: "If SMB signing is required, NTLM relay is:",
+    options: [
+      "Mostly blocked or ineffective",
+      "Guaranteed to succeed",
+      "Faster than Kerberos",
+      "Required for WinRM",
+    ],
+    correctAnswer: 0,
+    explanation: "SMB signing prevents relayed SMB authentication.",
+  },
+  {
+    id: 54,
+    topic: "Credentials",
+    question: "Pass-the-Hash works when:",
+    options: [
+      "NTLM authentication is allowed",
+      "Kerberos is the only protocol",
+      "SMB is fully blocked",
+      "MFA is enforced for every service",
+    ],
+    correctAnswer: 0,
+    explanation: "PTH requires NTLM authentication to be accepted by the service.",
+  },
+  {
+    id: 55,
+    topic: "Credentials",
+    question: "Kerberos ticket lifetime affects:",
+    options: [
+      "How long the ticket can be used",
+      "Whether DNS resolves correctly",
+      "Whether SMB signing is enabled",
+      "The length of user passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Tickets expire after their configured lifetime.",
+  },
+  {
+    id: 56,
+    topic: "Kerberos",
+    question: "TGT stands for:",
+    options: [
+      "Ticket Granting Ticket",
+      "Target Group Token",
+      "Trusted Gateway Token",
+      "Transport Gateway Tunnel",
+    ],
+    correctAnswer: 0,
+    explanation: "A TGT allows requesting service tickets from the KDC.",
+  },
+  {
+    id: 57,
+    topic: "Kerberos",
+    question: "SPN stands for:",
+    options: [
+      "Service Principal Name",
+      "Secure Path Node",
+      "System Policy Number",
+      "Session Provisioning Namespace",
+    ],
+    correctAnswer: 0,
+    explanation: "SPNs identify services for Kerberos authentication.",
+  },
+  {
+    id: 58,
+    topic: "Kerberos",
+    question: "Service accounts often have:",
+    options: [
+      "Elevated or delegated privileges",
+      "No permissions at all",
+      "Only guest access",
+      "Disabled logon rights",
+    ],
+    correctAnswer: 0,
+    explanation: "Service accounts may have broad access to run services.",
+  },
+  {
+    id: 59,
+    topic: "Credentials",
+    question: "Credential hopping means:",
+    options: [
+      "Reusing stolen credentials across multiple hosts",
+      "Resetting passwords via email",
+      "Deleting credential caches",
+      "Blocking authentication events",
+    ],
+    correctAnswer: 0,
+    explanation: "Hopping uses the same creds to move to other systems.",
+  },
+  {
+    id: 60,
+    topic: "Pivoting",
+    question: "A pivot host is:",
+    options: [
+      "A compromised system used to reach other networks",
+      "A domain controller only",
+      "A workstation used for backups",
+      "A cloud identity provider",
+    ],
+    correctAnswer: 0,
+    explanation: "Pivot hosts act as relays into additional segments.",
+  },
+  {
+    id: 61,
+    topic: "Protocols",
+    question: "SMB lateral movement commonly uses which share?",
+    options: [
+      "ADMIN$ or C$",
+      "SYSVOL only",
+      "NETLOGON only",
+      "IPC$ only",
+    ],
+    correctAnswer: 0,
+    explanation: "Admin shares are used to copy tools or create services.",
+  },
+  {
+    id: 62,
+    topic: "Defense",
+    question: "RDP Restricted Admin Mode helps by:",
+    options: [
+      "Not sending reusable credentials to the remote host",
+      "Disabling all RDP logging",
+      "Bypassing MFA requirements",
+      "Enabling SMB signing automatically",
+    ],
+    correctAnswer: 0,
+    explanation: "Restricted Admin Mode reduces credential theft risk on remote hosts.",
+  },
+  {
+    id: 63,
+    topic: "Protocols",
+    question: "Remote PowerShell typically uses:",
+    options: [
+      "WinRM",
+      "SMB",
+      "RDP",
+      "DNS",
+    ],
+    correctAnswer: 0,
+    explanation: "PowerShell remoting uses WinRM (WS-Man).",
+  },
+  {
+    id: 64,
+    topic: "Protocols",
+    question: "DCOM is commonly used by:",
+    options: [
+      "WMI for remote execution",
+      "RDP for screen sharing",
+      "DNS for query resolution",
+      "SSH for key exchange",
+    ],
+    correctAnswer: 0,
+    explanation: "WMI leverages DCOM for remote operations.",
+  },
+  {
+    id: 65,
+    topic: "Kerberos",
+    question: "RBCD stands for:",
+    options: [
+      "Resource-Based Constrained Delegation",
+      "Remote Browser Credential Dumping",
+      "Root Backup and Configuration Data",
+      "Remote Binary Code Delivery",
+    ],
+    correctAnswer: 0,
+    explanation: "RBCD allows delegation rights to be set on target resources.",
+  },
+  {
+    id: 66,
+    topic: "Kerberos",
+    question: "Kerberos delegation can be abused to:",
+    options: [
+      "Impersonate users to services",
+      "Disable all authentication",
+      "Remove all domain trusts",
+      "Encrypt DNS traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Delegation misconfigurations can allow impersonation to services.",
+  },
+  {
+    id: 67,
+    topic: "Detection",
+    question: "Honeytokens are used to:",
+    options: [
+      "Detect unauthorized access attempts",
+      "Speed up authentication",
+      "Replace MFA devices",
+      "Hide log files",
+    ],
+    correctAnswer: 0,
+    explanation: "Honeytokens trigger alerts when accessed by attackers.",
+  },
+  {
+    id: 68,
+    topic: "Defense",
+    question: "Egress filtering limits:",
+    options: [
+      "Outbound connections from compromised hosts",
+      "All inbound traffic to servers",
+      "Local file writes",
+      "USB device access",
+    ],
+    correctAnswer: 0,
+    explanation: "Egress controls restrict outbound connectivity for malware.",
+  },
+  {
+    id: 69,
+    topic: "Defense",
+    question: "Firewall rules on servers help by:",
+    options: [
+      "Restricting remote admin protocols",
+      "Disabling all logging",
+      "Increasing DNS cache size",
+      "Forcing password reuse",
+    ],
+    correctAnswer: 0,
+    explanation: "Restricting RDP, SMB, and WinRM reduces lateral movement paths.",
+  },
+  {
+    id: 70,
+    topic: "Defense",
+    question: "MFA for admin sessions reduces:",
+    options: [
+      "Impact of stolen passwords",
+      "Need for patching",
+      "Endpoint logging",
+      "Network segmentation",
+    ],
+    correctAnswer: 0,
+    explanation: "MFA adds an extra factor beyond a stolen password.",
+  },
+  {
+    id: 71,
+    topic: "Linux",
+    question: "On Linux, lateral movement commonly uses:",
+    options: [
+      "SSH with keys or passwords",
+      "RDP services",
+      "SMB admin shares",
+      "WMI",
+    ],
+    correctAnswer: 0,
+    explanation: "SSH is the standard remote admin protocol on Linux systems.",
+  },
+  {
+    id: 72,
+    topic: "Linux",
+    question: "Why is SSH agent forwarding risky?",
+    options: [
+      "A compromised host can use the forwarded agent to access other hosts",
+      "It disables SSH encryption",
+      "It forces password changes",
+      "It blocks key-based authentication",
+    ],
+    correctAnswer: 0,
+    explanation: "Forwarded agents can be abused for additional access.",
+  },
+  {
+    id: 73,
+    topic: "Linux",
+    question: "What is `ssh -J` used for?",
+    options: [
+      "Connecting via a jump host",
+      "Generating SSH keys",
+      "Resetting SSH configs",
+      "Blocking SSH connections",
+    ],
+    correctAnswer: 0,
+    explanation: "The -J flag defines a jump or bastion host.",
+  },
+  {
+    id: 74,
+    topic: "Pivoting",
+    question: "SOCKS proxies are often used to:",
+    options: [
+      "Run internal scans through a pivot",
+      "Disable local firewalls",
+      "Create new admin users",
+      "Reset passwords across a domain",
+    ],
+    correctAnswer: 0,
+    explanation: "SOCKS allows tools to reach internal targets through a pivot.",
+  },
+  {
+    id: 75,
+    topic: "Cloud",
+    question: "Cloud lateral movement often leverages:",
+    options: [
+      "Instance metadata credentials",
+      "BIOS passwords",
+      "Local print spoolers",
+      "FTP anonymous logins",
+    ],
+    correctAnswer: 0,
+    explanation: "Metadata endpoints can provide credentials to other resources.",
+  },
+];
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -244,13 +1227,15 @@ const LateralMovementPage: React.FC = () => {
       <Container maxWidth="lg">
         {/* Header */}
         <Box sx={{ mb: 5 }}>
-          <Button
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ mb: 3, color: theme.textMuted, "&:hover": { color: theme.primary, bgcolor: alpha(theme.primary, 0.1) } }}
-          >
-            Back to Learn Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
 
           {/* Hero Section */}
           <Paper
@@ -2116,6 +3101,37 @@ proxychains crackmapexec smb TARGET`}
             </Box>
           </TabPanel>
         </Paper>
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Lateral Movement Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#f97316", color: "#f97316" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </Box>
     </LearnPageLayout>

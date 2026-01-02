@@ -34,8 +34,12 @@ import {
   RadioGroup,
   FormControlLabel,
   FormControl,
-  Zoom,
-  useScrollTrigger,
+  Drawer,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  useMediaQuery,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CalculateIcon from "@mui/icons-material/Calculate";
@@ -47,9 +51,12 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import CancelIcon from "@mui/icons-material/Cancel";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import { useNavigate } from "react-router-dom";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import SchoolIcon from "@mui/icons-material/School";
+import { Link, useNavigate } from "react-router-dom";
 
-// ========== NETWORKING QUIZ BANK (100 Questions) ==========
+// ========== NETWORKING QUIZ BANK (100 Questions, 75 Used) ==========
 interface QuizQuestion {
   id: number;
   question: string;
@@ -176,6 +183,25 @@ const networkingQuizBank: QuizQuestion[] = [
   { id: 99, question: "IPv6 eliminates the need for what?", options: ["DNS", "DHCP", "NAT", "Routing"], correct: 2, explanation: "IPv6's vast address space eliminates the need for NAT - every device can have a public IP.", category: "IPv6" },
   { id: 100, question: "What replaced broadcast in IPv6?", options: ["Unicast", "Anycast", "Multicast", "Nothing"], correct: 2, explanation: "IPv6 has no broadcast - it uses multicast and anycast for similar purposes.", category: "IPv6" },
 ];
+
+const QUIZ_BANK_SIZE = 75;
+const QUIZ_QUESTION_COUNT = 10;
+const quizBank = networkingQuizBank.slice(0, QUIZ_BANK_SIZE);
+const quizCategoryOrder = ["OSI Model", "Ports & Protocols", "Subnetting", "Security", "Wireless", "Network Devices", "DNS/DHCP", "IPv6"];
+const quizCategoryColors: Record<string, string> = {
+  "OSI Model": "#3b82f6",
+  "Ports & Protocols": "#22c55e",
+  "Subnetting": "#f59e0b",
+  "Security": "#ef4444",
+  "Wireless": "#8b5cf6",
+  "Network Devices": "#06b6d4",
+  "DNS/DHCP": "#0ea5e9",
+  "IPv6": "#ec4899",
+};
+
+const selectRandomQuizQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import RouterIcon from "@mui/icons-material/Router";
@@ -200,7 +226,6 @@ import InfoIcon from "@mui/icons-material/Info";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import SettingsIcon from "@mui/icons-material/Settings";
-import SchoolIcon from "@mui/icons-material/School";
 import SyncAltIcon from "@mui/icons-material/SyncAlt";
 import CodeIcon from "@mui/icons-material/Code";
 
@@ -406,6 +431,12 @@ const ipv6Basics = [
 const ComputerNetworkingPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const accent = "#3b82f6"; // Blue accent color for Computer Networking
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
+
+  // Navigation State
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("");
 
   // Binary Calculator State
   const [calcInput, setCalcInput] = useState("");
@@ -619,29 +650,26 @@ const ComputerNetworkingPage: React.FC = () => {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [quizPool] = useState<QuizQuestion[]>(() =>
+    selectRandomQuizQuestions(quizBank, QUIZ_QUESTION_COUNT)
+  );
   // Scroll trigger for back-to-top button
-  const showBackToTop = useScrollTrigger({
-    target: typeof window !== 'undefined' ? window : undefined,
-    disableHysteresis: true,
-    threshold: 400,
-  });
 
-  // Select 10 random questions from the 100-question bank
-  const selectRandomQuestions = useCallback(() => {
-    const shuffled = [...networkingQuizBank].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 10);
-  }, []);
+  // Select 10 random questions from the 75-question bank
+  const selectRandomQuestions = useCallback(() => (
+    selectRandomQuizQuestions(quizBank, QUIZ_QUESTION_COUNT)
+  ), []);
 
   // Start a new quiz
-  const startQuiz = useCallback(() => {
-    const questions = selectRandomQuestions();
+  const startQuiz = useCallback((forceNew = false) => {
+    const questions = forceNew ? selectRandomQuestions() : quizPool;
     setQuizQuestions(questions);
     setQuizAnswers({});
     setQuizSubmitted(false);
     setQuizScore(0);
     setCurrentQuestionIndex(0);
     setQuizActive(true);
-  }, [selectRandomQuestions]);
+  }, [quizPool, selectRandomQuestions]);
 
   // Reset quiz
   const resetQuiz = useCallback(() => {
@@ -677,6 +705,21 @@ const ComputerNetworkingPage: React.FC = () => {
     return { answered, total: quizQuestions.length };
   }, [quizAnswers, quizQuestions.length]);
 
+  const quizCategoryStats = useMemo(() => {
+    const counts = quizBank.reduce((acc, question) => {
+      acc[question.category] = (acc[question.category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return quizCategoryOrder
+      .filter(category => counts[category])
+      .map(category => ({
+        label: category,
+        count: counts[category],
+        color: quizCategoryColors[category] ?? "#94a3b8",
+      }));
+  }, []);
+
   // Scroll handler for back-to-top is now handled by useScrollTrigger hook
 
   // Get score color
@@ -697,35 +740,338 @@ const ComputerNetworkingPage: React.FC = () => {
   };
 
   const pageContext = `Computer Networking Fundamentals learning page - Essential networking concepts for IT and security professionals. Covers OSI model, TCP/IP, IP addressing, subnetting, protocols, ports, DNS, wireless standards, network devices, VLANs, NAT, and essential commands.`;
-  const navSections = [
-    { id: "intro", label: "Intro" },
-    { id: "data-transmission", label: "Transmission" },
-    { id: "osi-model", label: "OSI Model" },
-    { id: "tcpip-model", label: "TCP/IP" },
-    { id: "ip-addressing", label: "IP Addressing" },
-    { id: "subnetting", label: "Subnetting" },
-    { id: "protocols-ports", label: "Protocols & Ports" },
-    { id: "devices", label: "Devices" },
-    { id: "dns", label: "DNS" },
-    { id: "wireless-security", label: "Wireless/Security" },
-    { id: "commands", label: "Commands" },
-    { id: "routing-nat", label: "Routing & NAT" },
-    { id: "vlan-switching", label: "VLANs & Switching" },
-    { id: "ipv6", label: "IPv6" },
-    { id: "automation-sdn", label: "Automation/SDN" },
-    { id: "quiz", label: "Quiz" },
+
+  // Section Navigation Items
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "data-transmission", label: "Data Transmission", icon: <SwapHorizIcon /> },
+    { id: "osi-model", label: "OSI Model", icon: <LayersIcon /> },
+    { id: "tcpip-model", label: "TCP/IP Model", icon: <AccountTreeIcon /> },
+    { id: "ip-addressing", label: "IP Addressing", icon: <LanguageIcon /> },
+    { id: "subnetting", label: "Subnetting", icon: <CalculateIcon /> },
+    { id: "protocols-ports", label: "Protocols & Ports", icon: <SettingsEthernetIcon /> },
+    { id: "devices", label: "Network Devices", icon: <RouterIcon /> },
+    { id: "dns", label: "DNS", icon: <DnsIcon /> },
+    { id: "wireless-security", label: "Wireless & Security", icon: <WifiIcon /> },
+    { id: "commands", label: "Commands", icon: <TerminalIcon /> },
+    { id: "routing-nat", label: "Routing & NAT", icon: <HubIcon /> },
+    { id: "vlan-switching", label: "VLAN & Switching", icon: <CableIcon /> },
+    { id: "ipv6", label: "IPv6", icon: <PublicIcon /> },
+    { id: "automation-sdn", label: "Automation & SDN", icon: <CloudIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
   ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  // Sidebar Navigation Component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="Computer Networking" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }} id="top">
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#2563eb" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Container maxWidth="lg" sx={{ py: 0, px: 0 }} id="top">
         {/* Back Button */}
         <Chip
+          component={Link}
+          to="/learn"
           icon={<ArrowBackIcon />}
           label="Back to Learning Hub"
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3, fontWeight: 600, cursor: "pointer" }}
           clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 3 }}
         />
 
         {/* Hero Banner */}
@@ -775,43 +1121,6 @@ const ComputerNetworkingPage: React.FC = () => {
                 Essential networking concepts for IT and security professionals
               </Typography>
             </Box>
-          </Box>
-        </Paper>
-
-        {/* Quick Navigation */}
-        <Paper
-          sx={{
-            p: 2,
-            mb: 4,
-            borderRadius: 3,
-            position: { xs: "static", md: "sticky" },
-            top: { md: 16, xs: "auto" },
-            zIndex: 10,
-            bgcolor: alpha(theme.palette.background.paper, 0.9),
-            backdropFilter: "blur(6px)",
-            border: `1px solid ${alpha(theme.palette.divider, 0.15)}`,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0ea5e9", mr: 1 }}>
-              Quick Navigation
-            </Typography>
-            {navSections.map((section) => (
-              <Chip
-                key={section.id}
-                label={section.label}
-                component="a"
-                href={`#${section.id}`}
-                clickable
-                sx={{
-                  textDecoration: "none",
-                  bgcolor: alpha("#0ea5e9", 0.08),
-                  color: "#0ea5e9",
-                  fontWeight: 600,
-                  "&:hover": { bgcolor: alpha("#0ea5e9", 0.15) },
-                }}
-              />
-            ))}
           </Box>
         </Paper>
 
@@ -6062,7 +6371,7 @@ Response Codes:
               🧠 Networking Quiz
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Test your knowledge with 10 random questions from our 100-question bank!
+              Test your knowledge with {QUIZ_QUESTION_COUNT} random questions from our {quizBank.length}-question bank!
             </Typography>
           </Box>
         </Box>
@@ -6073,22 +6382,14 @@ Response Codes:
             <EmojiEventsIcon sx={{ fontSize: 80, color: "#f59e0b", mb: 2 }} />
             <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Ready to Test Yourself?</Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: "auto" }}>
-              Each quiz randomly selects 10 questions from our comprehensive bank of 100 networking questions
+              Each quiz randomly selects {QUIZ_QUESTION_COUNT} questions from our comprehensive bank of {quizBank.length} networking questions
               covering OSI Model, TCP/IP, Subnetting, Security, Wireless, and more!
             </Typography>
             <Grid container spacing={2} justifyContent="center" sx={{ mb: 4 }}>
-              {[
-                { label: "OSI Model", count: 15, color: "#3b82f6" },
-                { label: "Protocols & Ports", count: 20, color: "#22c55e" },
-                { label: "Subnetting", count: 20, color: "#f59e0b" },
-                { label: "Security", count: 15, color: "#ef4444" },
-                { label: "Wireless", count: 10, color: "#8b5cf6" },
-                { label: "Devices & DNS", count: 15, color: "#06b6d4" },
-                { label: "IPv6", count: 5, color: "#ec4899" },
-              ].map((cat) => (
+              {quizCategoryStats.map((cat) => (
                 <Grid item key={cat.label}>
-                  <Chip 
-                    label={`${cat.label} (${cat.count})`} 
+                  <Chip
+                    label={`${cat.label} (${cat.count})`}
                     sx={{ bgcolor: alpha(cat.color, 0.1), color: cat.color, fontWeight: 600 }}
                   />
                 </Grid>
@@ -6097,7 +6398,7 @@ Response Codes:
             <Button 
               variant="contained" 
               size="large" 
-              onClick={startQuiz}
+              onClick={() => startQuiz(false)}
               startIcon={<QuizIcon />}
               sx={{ 
                 px: 6, 
@@ -6107,7 +6408,7 @@ Response Codes:
                 "&:hover": { background: "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)" }
               }}
             >
-              Start Quiz (10 Questions)
+              Start Quiz ({QUIZ_QUESTION_COUNT} Questions)
             </Button>
           </Paper>
         ) : (
@@ -6171,11 +6472,11 @@ Response Codes:
                   <Box sx={{ display: "flex", gap: 2, justifyContent: "center" }}>
                     <Button 
                       variant="contained" 
-                      onClick={startQuiz} 
+                      onClick={() => startQuiz(true)} 
                       startIcon={<RefreshIcon />}
                       sx={{ bgcolor: "#8b5cf6", "&:hover": { bgcolor: "#7c3aed" } }}
                     >
-                      New Quiz (10 New Questions)
+                      New Quiz ({QUIZ_QUESTION_COUNT} New Questions)
                     </Button>
                     <Button variant="outlined" onClick={resetQuiz}>
                       Exit Quiz
@@ -6451,29 +6752,9 @@ Response Codes:
         </Box>
       </Paper>
 
-      {/* Floating Back to Top Button with Zoom Animation */}
-      <Zoom in={showBackToTop}>
-        <Tooltip title="Back to top" placement="left">
-          <Fab
-            color="primary"
-            size="medium"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            sx={{
-              position: "fixed",
-              right: { xs: 16, md: 32 },
-              bottom: { xs: 16, md: 32 },
-              zIndex: 1200,
-              bgcolor: "#0ea5e9",
-              "&:hover": { bgcolor: "#0284c7" },
-              boxShadow: `0 4px 20px ${alpha("#0ea5e9", 0.4)}`,
-            }}
-          >
-            <KeyboardArrowUpIcon />
-          </Fab>
-        </Tooltip>
-      </Zoom>
-
-      </Container>
+          </Container>
+        </Box>
+      </Box>
     </LearnPageLayout>
   );
 };

@@ -325,6 +325,15 @@ def run_eslint_security_scan(
                 '--config', config_path,
                 '--format', 'json',
                 '--no-error-on-unmatched-pattern',
+                '--ignore-pattern', '*.test.js',
+                '--ignore-pattern', '*.test.ts',
+                '--ignore-pattern', '*.spec.js',
+                '--ignore-pattern', '*.spec.ts',
+                '--ignore-pattern', '__tests__/**',
+                '--ignore-pattern', 'tests/**',
+                '--ignore-pattern', 'test/**',
+                '--ignore-pattern', '**/*.mock.js',
+                '--ignore-pattern', '**/*.mock.ts',
             ]
             cmd.extend(js_files[:100])  # Limit files to avoid command line length issues
             

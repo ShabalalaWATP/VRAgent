@@ -131,7 +131,7 @@ export default function CreateGroupDialog({ open, onClose, onGroupCreated }: Cre
         />
 
         <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-          Add Friends ({selectedFriends.length} selected)
+          Add Contacts ({selectedFriends.length} selected)
         </Typography>
 
         {selectedFriends.length > 0 && (
@@ -157,7 +157,7 @@ export default function CreateGroupDialog({ open, onClose, onGroupCreated }: Cre
           </Box>
         ) : friends.length === 0 ? (
           <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-            No friends to add. Add some friends first!
+            No contacts to add. Add some contacts first!
           </Typography>
         ) : (
           <List sx={{ maxHeight: 250, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>

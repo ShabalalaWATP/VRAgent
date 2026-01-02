@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import { Link } from "react-router-dom";
 import {
   Box,
   Container,
@@ -173,20 +174,98 @@ const DockerForensicsGuidePage: React.FC = () => {
     { risk: "Outdated Dependencies", severity: "MEDIUM", mitigation: "Pin versions, automate updates" },
   ];
 
-  const pageContext = `This page covers Docker image forensics, including layer-by-layer analysis, secret detection in container images, Dockerfile reconstruction from images, and supply chain security. Topics include using tools like dive, trivy, and syft for image analysis, detecting hardcoded secrets and credentials in layers, understanding how deleted files persist in image layers, and implementing security best practices for container images.`;
+  const attackVectorCategories = [
+    {
+      title: "Container Escape",
+      color: "#dc2626",
+      icon: <LockIcon />,
+      description: "Findings that weaken isolation and allow host-level access.",
+      signals: [
+        "Privileged containers or host namespace flags",
+        "Docker socket or hostPath mounts",
+        "Host device access (/dev, /proc, /sys)",
+      ],
+    },
+    {
+      title: "Privilege Escalation",
+      color: "#f97316",
+      icon: <SecurityIcon />,
+      description: "Ways to elevate within the container or gain root capabilities.",
+      signals: [
+        "Root user or unsafe capabilities",
+        "SUID/SGID binaries in layers",
+        "Writable system paths or config drift",
+      ],
+    },
+    {
+      title: "Secrets Exposure",
+      color: "#ef4444",
+      icon: <BugReportIcon />,
+      description: "Credentials and tokens leaked in layers or build commands.",
+      signals: [
+        "API keys or tokens in RUN/COPY layers",
+        "Private keys and certificates",
+        ".env or config files with secrets",
+      ],
+    },
+    {
+      title: "Lateral Movement",
+      color: "#f59e0b",
+      icon: <SearchIcon />,
+      description: "Artifacts that enable pivoting to cloud or internal services.",
+      signals: [
+        "Cloud credentials or SSH keys",
+        "Kubeconfig or registry auth",
+        "Hardcoded internal endpoints",
+      ],
+    },
+    {
+      title: "Network Exposure",
+      color: "#0ea5e9",
+      icon: <VisibilityIcon />,
+      description: "Exposed services, ports, or admin surfaces in the image.",
+      signals: [
+        "Unexpected open ports",
+        "Debug endpoints in config",
+        "Embedded admin tooling",
+      ],
+    },
+    {
+      title: "Supply Chain",
+      color: "#8b5cf6",
+      icon: <BuildIcon />,
+      description: "Risk from base images, packages, and provenance gaps.",
+      signals: [
+        "Unpinned or unknown base images",
+        "Outdated packages or CVE indicators",
+        "Unsigned artifacts or downloads",
+      ],
+    },
+  ];
+
+  const inspectorChecklist = [
+    "Start with the risk score and critical/high issue counts.",
+    "Review secrets and the layer command that introduced them.",
+    "Prioritize escape, privilege escalation, and lateral movement paths.",
+    "Confirm base image and exposed services, then export the report.",
+  ];
+
+  const pageContext = `This page covers Docker Inspector workflows, including image metadata, layer inventory, secrets detection, attack-vector risk scoring, AI security analysis, and report-ready findings. It also includes practical commands for manual layer extraction, secret scanning, and container supply chain hygiene.`;
 
   return (
-    <LearnPageLayout pageTitle="Docker Image Forensics" pageContext={pageContext}>
+    <LearnPageLayout pageTitle="Docker Inspector Guide" pageContext={pageContext}>
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 2, color: "text.secondary" }}
-        >
-          Back to Learning Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <Box
             sx={{
@@ -203,10 +282,10 @@ const DockerForensicsGuidePage: React.FC = () => {
           </Box>
           <Box>
             <Typography variant="h3" fontWeight={700} sx={{ color: "text.primary" }}>
-              Docker Image Forensics
+              Docker Inspector Guide
             </Typography>
             <Typography variant="h6" sx={{ color: "text.secondary" }}>
-              Layer-by-layer analysis, secret detection, and supply chain security
+              Layer inspection, secrets, attack vectors, and AI risk scoring
             </Typography>
           </Box>
         </Box>
@@ -214,7 +293,7 @@ const DockerForensicsGuidePage: React.FC = () => {
           <Chip icon={<LayersIcon />} label="Layers" size="small" sx={{ bgcolor: alpha("#0ea5e9", 0.1), color: "#0ea5e9" }} />
           <Chip icon={<LockIcon />} label="Secrets" size="small" sx={{ bgcolor: alpha("#ef4444", 0.1), color: "#ef4444" }} />
           <Chip icon={<SecurityIcon />} label="Supply Chain" size="small" sx={{ bgcolor: alpha("#22c55e", 0.1), color: "#22c55e" }} />
-          <Chip icon={<BuildIcon />} label="Dockerfile" size="small" sx={{ bgcolor: alpha("#f59e0b", 0.1), color: "#f59e0b" }} />
+          <Chip icon={<BugReportIcon />} label="Attack Vectors" size="small" sx={{ bgcolor: alpha("#f59e0b", 0.1), color: "#f59e0b" }} />
         </Box>
       </Box>
 
@@ -238,7 +317,7 @@ const DockerForensicsGuidePage: React.FC = () => {
         >
           <Tab icon={<LayersIcon />} label="Layer Analysis" iconPosition="start" />
           <Tab icon={<SearchIcon />} label="Secret Detection" iconPosition="start" />
-          <Tab icon={<BuildIcon />} label="Dockerfile Reconstruction" iconPosition="start" />
+          <Tab icon={<BugReportIcon />} label="Risk & Attack Vectors" iconPosition="start" />
           <Tab icon={<SecurityIcon />} label="Supply Chain Security" iconPosition="start" />
           <Tab icon={<CodeIcon />} label="Tools & Commands" iconPosition="start" />
           <Tab icon={<SchoolIcon />} label="Best Practices" iconPosition="start" />
@@ -529,123 +608,63 @@ trufflehog filesystem ./ --json > secrets.json`}
             </Box>
           </TabPanel>
 
-          {/* Tab 2: Dockerfile Reconstruction */}
+          {/* Tab 2: Risk & Attack Vectors */}
           <TabPanel value={tabValue} index={2}>
             <Typography variant="h5" fontWeight={600} gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <BuildIcon sx={{ color: "#f59e0b" }} />
-              Reconstructing Dockerfiles
+              <BugReportIcon sx={{ color: "#f59e0b" }} />
+              Risk Scoring & Attack Vectors
             </Typography>
 
             <Alert severity="info" sx={{ mb: 3 }}>
-              When you have a Docker image but no Dockerfile, you can reconstruct it by analyzing the layer history. 
-              This is useful for security auditing and understanding third-party images.
+              Docker Inspector correlates layer commands, secrets, and misconfigurations into a risk score and
+              categorized attack vectors. Use these signals to prioritize the fastest paths to impact.
             </Alert>
 
-            <Box sx={{ mt: 3 }}>
+            <Grid container spacing={3}>
+              {attackVectorCategories.map((category) => (
+                <Grid item xs={12} md={6} key={category.title}>
+                  <Card sx={{ height: "100%", border: "1px solid", borderColor: alpha(category.color, 0.3), bgcolor: alpha(category.color, 0.05) }}>
+                    <CardContent>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
+                        <Box sx={{ color: category.color }}>{category.icon}</Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: category.color }}>
+                          {category.title}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" sx={{ color: "text.secondary", mb: 1.5 }}>
+                        {category.description}
+                      </Typography>
+                      <List dense>
+                        {category.signals.map((signal) => (
+                          <ListItem key={signal} sx={{ py: 0.2, px: 0 }}>
+                            <ListItemIcon sx={{ minWidth: 24 }}>
+                              <CheckCircleIcon sx={{ fontSize: 14, color: category.color }} />
+                            </ListItemIcon>
+                            <ListItemText primary={signal} primaryTypographyProps={{ variant: "body2" }} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Paper sx={{ p: 3, mt: 4, borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.25)}`, bgcolor: alpha("#f59e0b", 0.05) }}>
               <Typography variant="h6" fontWeight={600} gutterBottom>
-                Manual Reconstruction from History
+                Triage workflow
               </Typography>
-              <CodeBlock 
-                title="Extract Dockerfile from history" 
-                code={`# Get full history with commands
-docker history --no-trunc --format "{{.CreatedBy}}" myimage:latest | tac
-
-# The output shows commands in reverse order (oldest first with tac)
-# Convert to Dockerfile format:
-# /bin/sh -c #(nop) FROM ...  →  FROM ...
-# /bin/sh -c apt-get update   →  RUN apt-get update
-# /bin/sh -c #(nop) ENV ...   →  ENV ...
-# /bin/sh -c #(nop) COPY ...  →  COPY ... (but source is unknown)
-# /bin/sh -c #(nop) CMD ...   →  CMD ...
-
-# Format for cleaner output
-docker history --no-trunc --format "{{.CreatedBy}}" myimage:latest | \\
-  sed 's/^\/bin\/sh -c #(nop)  //g' | \\
-  sed 's/^\/bin\/sh -c /RUN /g' | \\
-  tac`}
-              />
-            </Box>
-
-            <Box sx={{ mt: 4 }}>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Using dfimage (Dockerfile from Image)
-              </Typography>
-              <CodeBlock 
-                title="Automated Dockerfile reconstruction" 
-                code={`# Using dfimage (docker container)
-alias dfimage="docker run -v /var/run/docker.sock:/var/run/docker.sock --rm alpine/dfimage"
-
-# Generate Dockerfile
-dfimage myimage:latest
-
-# Or use the Python tool directly
-pip install dockerfile-from-image
-dfimage myimage:latest > Dockerfile.reconstructed
-
-# Alternative: whaler
-docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
-  pegleg/whaler -f myimage:latest`}
-              />
-            </Box>
-
-            <Box sx={{ mt: 4 }}>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Analyzing Image Configuration
-              </Typography>
-              <CodeBlock 
-                title="Extract detailed image config" 
-                code={`# Full image inspection
-docker inspect myimage:latest
-
-# Extract specific fields
-docker inspect --format '{{.Config.Cmd}}' myimage:latest
-docker inspect --format '{{.Config.Entrypoint}}' myimage:latest
-docker inspect --format '{{.Config.Env}}' myimage:latest
-docker inspect --format '{{.Config.ExposedPorts}}' myimage:latest
-docker inspect --format '{{.Config.User}}' myimage:latest
-docker inspect --format '{{.Config.WorkingDir}}' myimage:latest
-
-# Get labels (often contain build info)
-docker inspect --format '{{json .Config.Labels}}' myimage:latest | jq
-
-# Health check configuration
-docker inspect --format '{{json .Config.Healthcheck}}' myimage:latest | jq`}
-              />
-            </Box>
-
-            <Box sx={{ mt: 4 }}>
-              <Card sx={{ border: "1px solid", borderColor: alpha("#f59e0b", 0.3), bgcolor: alpha("#f59e0b", 0.05) }}>
-                <CardContent>
-                  <Typography variant="h6" fontWeight={600} gutterBottom>
-                    <TipsAndUpdatesIcon sx={{ mr: 1, color: "#f59e0b", verticalAlign: "middle" }} />
-                    Reconstruction Limitations
-                  </Typography>
-                  <List dense>
-                    <ListItem>
-                      <ListItemIcon><WarningIcon sx={{ color: "#f59e0b" }} /></ListItemIcon>
-                      <ListItemText 
-                        primary="COPY/ADD source paths are lost" 
-                        secondary="You can see the destination but not where files came from"
-                      />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemIcon><WarningIcon sx={{ color: "#f59e0b" }} /></ListItemIcon>
-                      <ListItemText 
-                        primary="Build arguments are not preserved" 
-                        secondary="ARG values used during build are not in the final image"
-                      />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemIcon><WarningIcon sx={{ color: "#f59e0b" }} /></ListItemIcon>
-                      <ListItemText 
-                        primary="Multi-stage build stages are flattened" 
-                        secondary="Only the final stage's layers are visible"
-                      />
-                    </ListItem>
-                  </List>
-                </CardContent>
-              </Card>
-            </Box>
+              <List dense>
+                {inspectorChecklist.map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <TipsAndUpdatesIcon sx={{ fontSize: 16, color: "#f59e0b" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
           </TabPanel>
 
           {/* Tab 3: Supply Chain Security */}
@@ -1068,6 +1087,18 @@ jobs:
           </TabPanel>
         </Box>
       </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

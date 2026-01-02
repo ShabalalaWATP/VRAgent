@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Container,
@@ -26,6 +26,8 @@ import {
   DialogContent,
   DialogActions,
   Collapse,
+  Tooltip,
+  Badge,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -45,6 +47,9 @@ import {
   Delete as DeleteIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  CameraAlt as CameraIcon,
+  Cancel as CancelIcon,
+  Description as BioIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { socialApi, UserNote } from '../api/client';
@@ -52,7 +57,10 @@ import { socialApi, UserNote } from '../api/client';
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export default function ProfilePage() {
-  const { user, getAccessToken } = useAuth();
+  const { user, getAccessToken, refreshUser } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -62,6 +70,17 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
+  // Profile edit state
+  const [editMode, setEditMode] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
   // Notes state
   const [notes, setNotes] = useState<UserNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(true);
@@ -70,6 +89,16 @@ export default function ProfilePage() {
   const [editNoteContent, setEditNoteContent] = useState('');
   const [noteError, setNoteError] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
+
+  // Initialize edit form with current user data
+  useEffect(() => {
+    if (user) {
+      setFirstName(user.first_name || '');
+      setLastName(user.last_name || '');
+      setBio(user.bio || '');
+      setAvatarUrl(user.avatar_url || '');
+    }
+  }, [user]);
 
   // Load notes
   useEffect(() => {
@@ -93,6 +122,90 @@ export default function ProfilePage() {
       </Container>
     );
   }
+
+  // Handle avatar file upload
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setProfileError('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileError('Image must be less than 5MB');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setProfileError('');
+
+    try {
+      const result = await socialApi.uploadFile(file);
+      setAvatarUrl(result.file_url);
+      setProfileSuccess('Avatar uploaded! Click Save to apply changes.');
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Failed to upload avatar');
+    } finally {
+      setUploadingAvatar(false);
+      // Clear the input so the same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Handle profile save
+  const handleSaveProfile = async () => {
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileSuccess('');
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getAccessToken()}`,
+        },
+        body: JSON.stringify({
+          first_name: firstName || null,
+          last_name: lastName || null,
+          bio: bio || null,
+          avatar_url: avatarUrl || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to update profile');
+      }
+
+      // Refresh user data in context
+      await refreshUser();
+      
+      setProfileSuccess('Profile updated successfully!');
+      setEditMode(false);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Failed to update profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    setFirstName(user.first_name || '');
+    setLastName(user.last_name || '');
+    setBio(user.bio || '');
+    setAvatarUrl(user.avatar_url || '');
+    setEditMode(false);
+    setProfileError('');
+    setProfileSuccess('');
+  };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,6 +335,18 @@ export default function ProfilePage() {
         My Profile
       </Typography>
 
+      {/* Profile Update Alerts */}
+      {profileError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setProfileError('')}>
+          {profileError}
+        </Alert>
+      )}
+      {profileSuccess && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setProfileSuccess('')}>
+          {profileSuccess}
+        </Alert>
+      )}
+
       <Grid container spacing={3}>
         {/* Profile Info Card */}
         <Grid item xs={12} md={6}>
@@ -235,85 +360,227 @@ export default function ProfilePage() {
             }}
           >
             <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <Avatar
-                  sx={{
-                    width: 80,
-                    height: 80,
-                    bgcolor: user.role === 'admin' ? 'secondary.main' : 'primary.main',
-                    fontSize: '2rem',
-                  }}
-                >
-                  {user.username.charAt(0).toUpperCase()}
-                </Avatar>
-                <Box sx={{ ml: 2 }}>
-                  <Typography variant="h5" fontWeight={600}>
-                    {user.username}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                    <Chip
-                      size="small"
-                      icon={user.role === 'admin' ? <AdminIcon /> : <PersonIcon />}
-                      label={user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                      color={user.role === 'admin' ? 'secondary' : 'primary'}
-                      variant="outlined"
-                    />
-                    <Chip
-                      size="small"
-                      icon={getStatusIcon(user.status) || undefined}
-                      label={user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                      color={getStatusColor(user.status) as 'success' | 'warning' | 'error' | 'default'}
-                      variant="outlined"
-                    />
+              {/* Header with Edit Button */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  {/* Avatar with Upload */}
+                  <Badge
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    badgeContent={
+                      editMode && (
+                        <Tooltip title="Upload photo">
+                          <IconButton
+                            size="small"
+                            sx={{
+                              bgcolor: 'primary.main',
+                              color: 'white',
+                              width: 28,
+                              height: 28,
+                              '&:hover': { bgcolor: 'primary.dark' },
+                            }}
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingAvatar}
+                          >
+                            {uploadingAvatar ? (
+                              <CircularProgress size={14} color="inherit" />
+                            ) : (
+                              <CameraIcon sx={{ fontSize: 16 }} />
+                            )}
+                          </IconButton>
+                        </Tooltip>
+                      )
+                    }
+                  >
+                    <Avatar
+                      src={editMode ? avatarUrl : user.avatar_url}
+                      sx={{
+                        width: 80,
+                        height: 80,
+                        bgcolor: user.role === 'admin' ? 'secondary.main' : 'primary.main',
+                        fontSize: '2rem',
+                        border: editMode ? '2px solid' : 'none',
+                        borderColor: 'primary.main',
+                      }}
+                    >
+                      {user.username.charAt(0).toUpperCase()}
+                    </Avatar>
+                  </Badge>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    style={{ display: 'none' }}
+                  />
+                  <Box sx={{ ml: 2 }}>
+                    <Typography variant="h5" fontWeight={600}>
+                      {user.username}
+                    </Typography>
+                    {/* Display full name if available */}
+                    {(user.first_name || user.last_name) && !editMode && (
+                      <Typography variant="body2" color="text.secondary">
+                        {[user.first_name, user.last_name].filter(Boolean).join(' ')}
+                      </Typography>
+                    )}
+                    <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                      <Chip
+                        size="small"
+                        icon={user.role === 'admin' ? <AdminIcon /> : <PersonIcon />}
+                        label={user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                        color={user.role === 'admin' ? 'secondary' : 'primary'}
+                        variant="outlined"
+                      />
+                      <Chip
+                        size="small"
+                        icon={getStatusIcon(user.status) || undefined}
+                        label={user.status.charAt(0).toUpperCase() + user.status.slice(1)}
+                        color={getStatusColor(user.status) as 'success' | 'warning' | 'error' | 'default'}
+                        variant="outlined"
+                      />
+                    </Box>
                   </Box>
                 </Box>
+                {/* Edit/Cancel Button */}
+                {!editMode ? (
+                  <Tooltip title="Edit profile">
+                    <IconButton onClick={() => setEditMode(true)} color="primary">
+                      <EditIcon />
+                    </IconButton>
+                  </Tooltip>
+                ) : (
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    <Tooltip title="Cancel">
+                      <IconButton onClick={handleCancelEdit} color="error" size="small">
+                        <CancelIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Save">
+                      <IconButton 
+                        onClick={handleSaveProfile} 
+                        color="primary" 
+                        size="small"
+                        disabled={profileSaving}
+                      >
+                        {profileSaving ? <CircularProgress size={20} /> : <SaveIcon />}
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                )}
               </Box>
 
               <Divider sx={{ my: 2 }} />
 
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <EmailIcon color="action" />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Email
-                    </Typography>
-                    <Typography variant="body1">{user.email}</Typography>
+              {/* Edit Mode Form */}
+              {editMode ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <TextField
+                    label="First Name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    size="small"
+                    fullWidth
+                    placeholder="Your first name"
+                  />
+                  <TextField
+                    label="Last Name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    size="small"
+                    fullWidth
+                    placeholder="Your last name"
+                  />
+                  <TextField
+                    label="Bio"
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    size="small"
+                    fullWidth
+                    multiline
+                    rows={3}
+                    placeholder="Tell us about yourself..."
+                    helperText="A brief description about you"
+                  />
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={handleCancelEdit}
+                      fullWidth
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={handleSaveProfile}
+                      disabled={profileSaving}
+                      fullWidth
+                      startIcon={profileSaving ? <CircularProgress size={16} /> : <SaveIcon />}
+                    >
+                      Save
+                    </Button>
                   </Box>
                 </Box>
+              ) : (
+                /* View Mode */
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {/* Bio if available */}
+                  {user.bio && (
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                      <BioIcon color="action" sx={{ mt: 0.5 }} />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Bio
+                        </Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                          {user.bio}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
 
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <BadgeIcon color="action" />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Username
-                    </Typography>
-                    <Typography variant="body1">{user.username}</Typography>
-                  </Box>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <CalendarIcon color="action" />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Member Since
-                    </Typography>
-                    <Typography variant="body1">{formatDate(user.created_at)}</Typography>
-                  </Box>
-                </Box>
-
-                {user.last_login && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <LockIcon color="action" />
+                    <EmailIcon color="action" />
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Last Login
+                        Email
                       </Typography>
-                      <Typography variant="body1">{formatDate(user.last_login)}</Typography>
+                      <Typography variant="body1">{user.email}</Typography>
                     </Box>
                   </Box>
-                )}
-              </Box>
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <BadgeIcon color="action" />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Username
+                      </Typography>
+                      <Typography variant="body1">{user.username}</Typography>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <CalendarIcon color="action" />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Member Since
+                      </Typography>
+                      <Typography variant="body1">{formatDate(user.created_at)}</Typography>
+                    </Box>
+                  </Box>
+
+                  {user.last_login && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <LockIcon color="action" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Last Login
+                        </Typography>
+                        <Typography variant="body1">{formatDate(user.last_login)}</Typography>
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>

@@ -7,20 +7,37 @@ from sqlalchemy.orm import Session
 from backend import models
 
 
-def calculate_risk(findings: List[models.Finding]) -> float:
+def calculate_risk(findings: List[models.Finding], exclude_filtered: bool = True) -> float:
     """Calculate risk score on a 0-100 scale based on severity distribution.
     
     Formula accounts for:
     - Severity weights (critical=40, high=25, medium=10, low=2)
     - Diminishing returns for many findings of same severity
     - Caps at 100
+    - EXCLUDES findings filtered out by AI analysis (likely false positives)
+    
+    Args:
+        findings: List of Finding models
+        exclude_filtered: If True, excludes findings marked as filtered_out by AI
     """
     if not findings:
         return 0.0
     
-    # Count by severity
+    # Filter out findings marked as false positives by AI analysis
+    active_findings = findings
+    if exclude_filtered:
+        active_findings = [
+            f for f in findings 
+            if not (f.details and f.details.get("ai_analysis", {}).get("filtered_out", False))
+        ]
+    
+    # If all findings were filtered, return minimal score
+    if not active_findings:
+        return 5.0  # Minimal score to indicate scan ran
+    
+    # Count by severity using ACTIVE findings only
     severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
-    for f in findings:
+    for f in active_findings:
         sev = (f.severity.lower() if f.severity else "info")
         if sev in severity_counts:
             severity_counts[sev] += 1
@@ -44,13 +61,27 @@ def calculate_risk(findings: List[models.Finding]) -> float:
 
 
 def build_report_summary(findings: List[models.Finding], attack_chains: List[Dict] = None, ai_summary: Dict = None, scan_stats: Dict = None) -> Dict:
-    severity_counts = Counter([f.severity for f in findings])
+    # Separate active and filtered findings for transparency
+    active_findings = [
+        f for f in findings 
+        if not (f.details and f.details.get("ai_analysis", {}).get("filtered_out", False))
+    ]
+    filtered_findings_list = [
+        f for f in findings 
+        if f.details and f.details.get("ai_analysis", {}).get("filtered_out", False)
+    ]
+    
+    # Report counts for ACTIVE findings (excludes filtered)
+    severity_counts = Counter([f.severity for f in active_findings])
+    # Also track total counts including filtered for transparency
+    total_severity_counts = Counter([f.severity for f in findings])
+    
     affected_packages = [
-        f.details.get("dependency") for f in findings if f.details and f.details.get("dependency")
+        f.details.get("dependency") for f in active_findings if f.details and f.details.get("dependency")
     ]
     code_issues = [
         {"file": f.file_path, "summary": f.summary, "severity": f.severity}
-        for f in findings
+        for f in active_findings
         if f.type == "code_pattern"
     ]
     
@@ -113,7 +144,11 @@ def build_report_summary(findings: List[models.Finding], attack_chains: List[Dic
             severity_downgraded_count += 1
     
     return {
-        "severity_counts": dict(severity_counts),
+        "severity_counts": dict(severity_counts),  # Active findings only
+        "total_severity_counts": dict(total_severity_counts),  # All findings for transparency
+        "active_findings_count": len(active_findings),
+        "total_findings_count": len(findings),
+        "filtered_out_count": len(filtered_findings_list),
         "affected_packages": affected_packages,
         "code_issues": code_issues,
         "attack_chains": attack_chains or [],

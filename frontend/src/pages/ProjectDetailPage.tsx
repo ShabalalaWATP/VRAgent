@@ -47,6 +47,8 @@ import ProjectReverseTab from "../components/ProjectReverseTab";
 import ProjectCollaboratorsTab from "../components/ProjectCollaboratorsTab";
 import ProjectTeamChatTab from "../components/ProjectTeamChatTab";
 import ProjectFilesTab from "../components/ProjectFilesTab";
+import ShareToConversationDialog from "../components/social/ShareToConversationDialog";
+import { KanbanBoard } from "../components/kanban";
 import { api } from "../api/client";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import PsychologyIcon from "@mui/icons-material/Psychology";
@@ -57,6 +59,8 @@ import BuildIcon from "@mui/icons-material/Build";
 import PeopleIcon from "@mui/icons-material/People";
 import ChatIcon from "@mui/icons-material/Chat";
 import FolderIcon from "@mui/icons-material/Folder";
+import ShareIcon from "@mui/icons-material/Share";
+import ViewKanbanIcon from "@mui/icons-material/ViewKanban";
 
 // Animations
 const float = keyframes`
@@ -157,6 +161,11 @@ const getSeverityColor = (severity: string, theme: Theme) => {
       bg: alpha(theme.palette.info.main, 0.15), 
       text: theme.palette.info.main,
       glow: alpha(theme.palette.info.main, 0.3)
+    },
+    advisory: { 
+      bg: alpha("#3b82f6", 0.15), 
+      text: "#3b82f6",
+      glow: alpha("#3b82f6", 0.3)
     },
   };
   return colors[severity.toLowerCase()] || { 
@@ -260,9 +269,14 @@ export default function ProjectDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<{ id: number; date: string } | null>(null);
   const [scanCompleteSnackbar, setScanCompleteSnackbar] = useState(false);
-  const [enhancedScan, setEnhancedScan] = useState(false);  // Enhanced mode: 80→30→12 files vs default 60→20→8
+  const [enhancedScan, setEnhancedScan] = useState(false);  // Enhanced mode for deeper analysis
   // Agentic AI scan is now always enabled as part of unified pipeline
-  const [mainTab, setMainTab] = useState<"security" | "network" | "reverse" | "notes" | "collaborators" | "team-chat" | "files">("security");
+  const [mainTab, setMainTab] = useState<"security" | "network" | "reverse" | "notes" | "kanban" | "collaborators" | "team-chat" | "files">("security");
+  
+  // Share report state
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [reportToShare, setReportToShare] = useState<{ id: number; title: string; riskScore: number | null | undefined; findingCount: number } | null>(null);
+  const [shareSnackbar, setShareSnackbar] = useState(false);
 
   const projectQuery = useQuery({
     queryKey: ["project", id],
@@ -555,6 +569,12 @@ export default function ProjectDetailPage() {
             label="Files & Docs" 
             value="files" 
           />
+          <Tab 
+            icon={<ViewKanbanIcon />} 
+            iconPosition="start" 
+            label="Kanban Board" 
+            value="kanban" 
+          />
           {projectQuery.data?.is_shared === true && (
             <Tab 
               icon={<ChatIcon />} 
@@ -725,8 +745,8 @@ export default function ProjectDetailPage() {
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: "0.65rem" }}>
                           {enhancedScan 
-                            ? "80→30→12 files, 2x content depth per pass" 
-                            : "60→20→8 files per pass (default)"}
+                            ? "More files analyzed with deeper inspection per pass" 
+                            : "Standard multi-pass analysis"}
                         </Typography>
                       </Box>
                     </Stack>
@@ -1040,6 +1060,34 @@ export default function ProjectDetailPage() {
                           >
                             View Report
                           </Button>
+                          <Tooltip title="Share to conversation">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const counts = (r.data?.severity_counts || {}) as Record<string, number>;
+                                const totalFindings = Object.values(counts).reduce((sum, c) => sum + c, 0);
+                                setReportToShare({
+                                  id: r.id,
+                                  title: `Security Report - ${new Date(r.created_at).toLocaleDateString()}`,
+                                  riskScore: r.overall_risk_score,
+                                  findingCount: totalFindings,
+                                });
+                                setShareDialogOpen(true);
+                              }}
+                              sx={{
+                                color: theme.palette.primary.main,
+                                opacity: 0.7,
+                                transition: "all 0.2s ease",
+                                "&:hover": {
+                                  opacity: 1,
+                                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                },
+                              }}
+                            >
+                              <ShareIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Delete Report">
                             <IconButton
                               size="small"
@@ -1175,6 +1223,27 @@ export default function ProjectDetailPage() {
         />
       )}
 
+      {/* Kanban Board Tab Content */}
+      {mainTab === "kanban" && (
+        <Paper 
+          sx={{ 
+            p: 2, 
+            height: 'calc(100vh - 350px)', 
+            minHeight: 600,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <KanbanBoard 
+            projectId={id}
+            onFindingClick={(findingId) => {
+              // Navigate to finding or show finding details
+              console.log('Navigate to finding:', findingId);
+            }}
+          />
+        </Paper>
+      )}
+
       {/* Team Chat Tab Content */}
       {mainTab === "team-chat" && projectQuery.data?.is_shared === true && (
         <ProjectTeamChatTab 
@@ -1191,6 +1260,47 @@ export default function ProjectDetailPage() {
           userRole={projectQuery.data.user_role}
         />
       )}
+
+      {/* Share Report Dialog */}
+      <ShareToConversationDialog
+        open={shareDialogOpen}
+        onClose={() => {
+          setShareDialogOpen(false);
+          setReportToShare(null);
+        }}
+        shareType="report"
+        itemId={reportToShare?.id || 0}
+        itemTitle={reportToShare?.title || 'Security Report'}
+        itemDetails={{
+          riskScore: reportToShare?.riskScore ?? undefined,
+          findingCount: reportToShare?.findingCount ?? 0,
+          projectName: projectQuery.data?.name,
+        }}
+        onShareSuccess={() => {
+          setShareSnackbar(true);
+        }}
+      />
+
+      {/* Share Success Snackbar */}
+      <Snackbar
+        open={shareSnackbar}
+        autoHideDuration={4000}
+        onClose={() => setShareSnackbar(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        TransitionComponent={(props: SlideProps) => <Slide {...props} direction="up" />}
+      >
+        <Alert 
+          onClose={() => setShareSnackbar(false)} 
+          severity="success"
+          variant="filled"
+          sx={{
+            fontWeight: 600,
+            background: `linear-gradient(135deg, ${theme.palette.success.main} 0%, ${theme.palette.success.dark} 100%)`,
+          }}
+        >
+          Report shared successfully! Check your Social Hub messages.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

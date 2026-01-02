@@ -41,8 +41,10 @@ import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import DescriptionIcon from "@mui/icons-material/Description";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -100,6 +102,781 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   );
 };
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#14b8a6";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "Digital forensics is primarily concerned with:",
+    options: [
+      "Collecting and analyzing electronic evidence",
+      "Writing malware",
+      "Building web apps",
+      "Managing network switches",
+    ],
+    correctAnswer: 0,
+    explanation: "Digital forensics focuses on evidence acquisition and analysis.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "The first principle of forensics is to:",
+    options: [
+      "Work only on original evidence",
+      "Preserve evidence and work on copies",
+      "Delete suspicious files",
+      "Reinstall the OS",
+    ],
+    correctAnswer: 1,
+    explanation: "Always preserve originals and analyze forensic copies.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "Order of volatility means you should collect:",
+    options: [
+      "Disk images before memory",
+      "Volatile data like RAM before disk",
+      "Backups first",
+      "Reports first",
+    ],
+    correctAnswer: 1,
+    explanation: "Volatile evidence disappears quickly and must be captured first.",
+  },
+  {
+    id: 4,
+    topic: "Fundamentals",
+    question: "A forensic image is:",
+    options: [
+      "A screenshot",
+      "A bit-for-bit copy of a storage device",
+      "A file backup only",
+      "A compressed log file",
+    ],
+    correctAnswer: 1,
+    explanation: "Forensic images capture a full bit-level copy.",
+  },
+  {
+    id: 5,
+    topic: "Fundamentals",
+    question: "Hashes are used to:",
+    options: [
+      "Encrypt data",
+      "Verify evidence integrity",
+      "Recover deleted files",
+      "Scan for malware",
+    ],
+    correctAnswer: 1,
+    explanation: "Hashes confirm evidence has not been altered.",
+  },
+  {
+    id: 6,
+    topic: "Fundamentals",
+    question: "A write blocker prevents:",
+    options: [
+      "Reading data",
+      "Changes to evidence media",
+      "Network access",
+      "Memory capture",
+    ],
+    correctAnswer: 1,
+    explanation: "Write blockers protect evidence integrity.",
+  },
+  {
+    id: 7,
+    topic: "Fundamentals",
+    question: "Chain of custody documents:",
+    options: [
+      "Network routes",
+      "Evidence handling history",
+      "Patch schedules",
+      "User roles",
+    ],
+    correctAnswer: 1,
+    explanation: "Chain of custody tracks who handled evidence and when.",
+  },
+  {
+    id: 8,
+    topic: "Fundamentals",
+    question: "Why use UTC timestamps?",
+    options: [
+      "It hides activity",
+      "It standardizes timelines across systems",
+      "It speeds up imaging",
+      "It reduces log size",
+    ],
+    correctAnswer: 1,
+    explanation: "UTC avoids time zone confusion during analysis.",
+  },
+  {
+    id: 9,
+    topic: "Fundamentals",
+    question: "A false positive in forensics means:",
+    options: [
+      "Benign artifact interpreted as malicious",
+      "Confirmed malicious evidence",
+      "A missing log file",
+      "A corrupted image",
+    ],
+    correctAnswer: 0,
+    explanation: "False positives are benign artifacts mistaken as malicious.",
+  },
+  {
+    id: 10,
+    topic: "Fundamentals",
+    question: "Evidence should be collected:",
+    options: [
+      "Only after remediation",
+      "Before making changes to the system",
+      "Only when time permits",
+      "Only from backups",
+    ],
+    correctAnswer: 1,
+    explanation: "Collect evidence before making changes that could alter it.",
+  },
+  {
+    id: 11,
+    topic: "Tools",
+    question: "Autopsy is commonly used for:",
+    options: [
+      "Disk forensics and timeline analysis",
+      "Memory capture",
+      "Network routing",
+      "Password management",
+    ],
+    correctAnswer: 0,
+    explanation: "Autopsy provides disk analysis and timeline features.",
+  },
+  {
+    id: 12,
+    topic: "Tools",
+    question: "FTK Imager is used to:",
+    options: [
+      "Create forensic disk images",
+      "Capture network traffic",
+      "Run YARA rules",
+      "Scan antivirus signatures",
+    ],
+    correctAnswer: 0,
+    explanation: "FTK Imager is a common imaging tool.",
+  },
+  {
+    id: 13,
+    topic: "Tools",
+    question: "Volatility is a framework for:",
+    options: [
+      "Memory forensics",
+      "Disk encryption",
+      "Patch management",
+      "Firewall policy",
+    ],
+    correctAnswer: 0,
+    explanation: "Volatility analyzes RAM dumps.",
+  },
+  {
+    id: 14,
+    topic: "Tools",
+    question: "KAPE is designed for:",
+    options: [
+      "Rapid artifact collection",
+      "Network load balancing",
+      "Email filtering",
+      "Data encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "KAPE quickly collects forensic artifacts.",
+  },
+  {
+    id: 15,
+    topic: "Tools",
+    question: "Wireshark is used for:",
+    options: [
+      "Packet capture analysis",
+      "Disk imaging",
+      "Memory dumping",
+      "Registry parsing",
+    ],
+    correctAnswer: 0,
+    explanation: "Wireshark analyzes network captures.",
+  },
+  {
+    id: 16,
+    topic: "Tools",
+    question: "Plaso/log2timeline helps with:",
+    options: [
+      "Timeline generation",
+      "Disk encryption",
+      "Credential storage",
+      "Malware execution",
+    ],
+    correctAnswer: 0,
+    explanation: "Plaso builds super timelines from artifacts.",
+  },
+  {
+    id: 17,
+    topic: "Tools",
+    question: "Sleuth Kit provides:",
+    options: [
+      "File system analysis utilities",
+      "EDR alerts",
+      "Network firewalling",
+      "Email gateway filtering",
+    ],
+    correctAnswer: 0,
+    explanation: "Sleuth Kit is a file system analysis toolkit.",
+  },
+  {
+    id: 18,
+    topic: "Tools",
+    question: "Eric Zimmerman tools are commonly used for:",
+    options: [
+      "Windows artifact analysis",
+      "Packet capture",
+      "Web app scanning",
+      "Disk encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "These tools parse Windows artifacts like Registry and Prefetch.",
+  },
+  {
+    id: 19,
+    topic: "Tools",
+    question: "YARA is used for:",
+    options: [
+      "Pattern matching in files or memory",
+      "DNS resolution",
+      "Route discovery",
+      "Patch deployment",
+    ],
+    correctAnswer: 0,
+    explanation: "YARA identifies patterns in malware samples.",
+  },
+  {
+    id: 20,
+    topic: "Tools",
+    question: "Hashdeep is commonly used to:",
+    options: [
+      "Compute and compare hashes",
+      "Decrypt files",
+      "Scan ports",
+      "Mount images",
+    ],
+    correctAnswer: 0,
+    explanation: "Hashdeep calculates hashes for verification.",
+  },
+  {
+    id: 21,
+    topic: "Disk Forensics",
+    question: "NTFS $MFT stores:",
+    options: [
+      "File metadata records",
+      "Browser cookies only",
+      "Memory pages",
+      "Network routes",
+    ],
+    correctAnswer: 0,
+    explanation: "The Master File Table stores metadata for files.",
+  },
+  {
+    id: 22,
+    topic: "Disk Forensics",
+    question: "The Windows Registry is useful for:",
+    options: [
+      "Configuration and persistence artifacts",
+      "Packet capture",
+      "Disk encryption keys only",
+      "Cloud billing",
+    ],
+    correctAnswer: 0,
+    explanation: "Registry keys reveal configuration and persistence.",
+  },
+  {
+    id: 23,
+    topic: "Disk Forensics",
+    question: "Prefetch files indicate:",
+    options: [
+      "Program execution history",
+      "Password changes",
+      "Printer activity",
+      "Network routing",
+    ],
+    correctAnswer: 0,
+    explanation: "Prefetch records help show program execution.",
+  },
+  {
+    id: 24,
+    topic: "Disk Forensics",
+    question: "Shellbags are artifacts that show:",
+    options: [
+      "Folder access and navigation",
+      "Firewall rules",
+      "Browser passwords",
+      "System updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Shellbags indicate folder browsing activity.",
+  },
+  {
+    id: 25,
+    topic: "Disk Forensics",
+    question: "The USN Journal tracks:",
+    options: [
+      "File system changes",
+      "Memory allocation",
+      "Network connections",
+      "User passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "The USN Journal logs file system modifications.",
+  },
+  {
+    id: 26,
+    topic: "Disk Forensics",
+    question: "LNK files can reveal:",
+    options: [
+      "Shortcuts and file access history",
+      "DNS lookups",
+      "Installed patches",
+      "Antivirus signatures",
+    ],
+    correctAnswer: 0,
+    explanation: "LNK files include path, timestamps, and file metadata.",
+  },
+  {
+    id: 27,
+    topic: "Disk Forensics",
+    question: "A common artifact of file deletion is:",
+    options: [
+      "Entries in unallocated space",
+      "Guaranteed removal of all traces",
+      "No metadata evidence",
+      "Immediate hash changes on backups",
+    ],
+    correctAnswer: 0,
+    explanation: "Deleted files often leave artifacts in unallocated space.",
+  },
+  {
+    id: 28,
+    topic: "Disk Forensics",
+    question: "File carving is used to:",
+    options: [
+      "Recover deleted files from raw data",
+      "Encrypt files",
+      "Change metadata",
+      "Patch the OS",
+    ],
+    correctAnswer: 0,
+    explanation: "Carving extracts files from raw disk data.",
+  },
+  {
+    id: 29,
+    topic: "Disk Forensics",
+    question: "A forensic mount is used to:",
+    options: [
+      "Access image contents without altering evidence",
+      "Encrypt the image",
+      "Send logs to SIEM",
+      "Disable antivirus",
+    ],
+    correctAnswer: 0,
+    explanation: "Mounting lets you view image contents safely.",
+  },
+  {
+    id: 30,
+    topic: "Disk Forensics",
+    question: "Why record hash values before and after imaging?",
+    options: [
+      "To verify image integrity matches the source",
+      "To compress the image",
+      "To speed imaging",
+      "To hide evidence",
+    ],
+    correctAnswer: 0,
+    explanation: "Matching hashes confirm the image is an exact copy.",
+  },
+  {
+    id: 31,
+    topic: "Windows Artifacts",
+    question: "Windows Event ID 4624 indicates:",
+    options: ["Successful logon", "Log cleared", "Service creation", "Power shutdown"],
+    correctAnswer: 0,
+    explanation: "4624 is a successful logon event.",
+  },
+  {
+    id: 32,
+    topic: "Windows Artifacts",
+    question: "Windows Event ID 4688 indicates:",
+    options: ["Process creation", "Logon failure", "Registry change", "File deletion"],
+    correctAnswer: 0,
+    explanation: "4688 is process creation with command line details.",
+  },
+  {
+    id: 33,
+    topic: "Windows Artifacts",
+    question: "Shimcache (AppCompatCache) helps show:",
+    options: [
+      "Programs executed on the system",
+      "Network traffic",
+      "Password resets",
+      "Patch schedules",
+    ],
+    correctAnswer: 0,
+    explanation: "Shimcache provides evidence of program execution.",
+  },
+  {
+    id: 34,
+    topic: "Windows Artifacts",
+    question: "Amcache is useful for:",
+    options: [
+      "Tracking installed and executed programs",
+      "Capturing RAM",
+      "DNS caching",
+      "Firewall rules",
+    ],
+    correctAnswer: 0,
+    explanation: "Amcache stores program execution metadata.",
+  },
+  {
+    id: 35,
+    topic: "Windows Artifacts",
+    question: "Registry Run keys often indicate:",
+    options: ["Persistence mechanisms", "Network latency", "User logoff", "Disk encryption"],
+    correctAnswer: 0,
+    explanation: "Run keys can auto-start programs at login.",
+  },
+  {
+    id: 36,
+    topic: "Windows Artifacts",
+    question: "Scheduled tasks are relevant because they:",
+    options: ["Provide persistence or automation", "Only configure DNS", "Only handle printing", "Only log system time"],
+    correctAnswer: 0,
+    explanation: "Tasks can execute programs on a schedule.",
+  },
+  {
+    id: 37,
+    topic: "Windows Artifacts",
+    question: "Browser history analysis can reveal:",
+    options: ["User activity and downloads", "RAM usage", "File system cluster size", "Firewall rules"],
+    correctAnswer: 0,
+    explanation: "Browser artifacts provide user activity timelines.",
+  },
+  {
+    id: 38,
+    topic: "Windows Artifacts",
+    question: "Jump lists are artifacts related to:",
+    options: ["Recently opened files and folders", "Network sockets", "Memory pages", "Patch deployment"],
+    correctAnswer: 0,
+    explanation: "Jump lists track recent files for applications.",
+  },
+  {
+    id: 39,
+    topic: "Windows Artifacts",
+    question: "Timestomping refers to:",
+    options: ["Manipulating file timestamps to hide activity", "Encrypting files", "Deleting logs", "Capturing memory"],
+    correctAnswer: 0,
+    explanation: "Attackers may alter timestamps to evade detection.",
+  },
+  {
+    id: 40,
+    topic: "Windows Artifacts",
+    question: "Why compare $STANDARD_INFO and $FILE_NAME timestamps?",
+    options: [
+      "To detect possible timestamp manipulation",
+      "To encrypt files",
+      "To delete artifacts",
+      "To compress images",
+    ],
+    correctAnswer: 0,
+    explanation: "Inconsistencies can indicate tampering.",
+  },
+  {
+    id: 41,
+    topic: "Memory Forensics",
+    question: "Memory forensics is useful for:",
+    options: [
+      "Capturing running processes and network connections",
+      "Deleting files",
+      "Encrypting data",
+      "Formatting disks",
+    ],
+    correctAnswer: 0,
+    explanation: "RAM contains active processes and volatile data.",
+  },
+  {
+    id: 42,
+    topic: "Memory Forensics",
+    question: "A memory dump should be collected:",
+    options: ["Before shutting down a system", "After disk wiping", "Only after reboot", "Only after patching"],
+    correctAnswer: 0,
+    explanation: "Reboots destroy volatile memory evidence.",
+  },
+  {
+    id: 43,
+    topic: "Memory Forensics",
+    question: "Process injection can be detected by:",
+    options: ["Analyzing suspicious memory regions and handles", "Checking only DNS logs", "Reading printer logs", "Running backups"],
+    correctAnswer: 0,
+    explanation: "Injected code often appears in abnormal memory regions.",
+  },
+  {
+    id: 44,
+    topic: "Memory Forensics",
+    question: "DLL listing in memory helps identify:",
+    options: ["Loaded modules and potential malicious libraries", "Disk partitions", "Network routes", "Email headers"],
+    correctAnswer: 0,
+    explanation: "Unexpected DLLs can indicate malicious activity.",
+  },
+  {
+    id: 45,
+    topic: "Memory Forensics",
+    question: "Network connections in RAM can reveal:",
+    options: ["Active C2 or data exfil paths", "Disk errors", "USB usage", "Patch status"],
+    correctAnswer: 0,
+    explanation: "RAM can show active or recent network sessions.",
+  },
+  {
+    id: 46,
+    topic: "Memory Forensics",
+    question: "Volatility plugins can list:",
+    options: ["Processes, modules, and network activity", "Only file names", "Only browser history", "Only firewall rules"],
+    correctAnswer: 0,
+    explanation: "Volatility provides many plugins for memory analysis.",
+  },
+  {
+    id: 47,
+    topic: "Memory Forensics",
+    question: "Strings found in memory can indicate:",
+    options: ["URLs, commands, or embedded credentials", "Disk geometry", "Printer queues", "BIOS settings"],
+    correctAnswer: 0,
+    explanation: "Memory can reveal live command lines or URLs.",
+  },
+  {
+    id: 48,
+    topic: "Memory Forensics",
+    question: "Why analyze memory for malware?",
+    options: ["Fileless malware may exist only in RAM", "Memory is always encrypted", "Disk has more data", "RAM never changes"],
+    correctAnswer: 0,
+    explanation: "Fileless malware often lives only in memory.",
+  },
+  {
+    id: 49,
+    topic: "Memory Forensics",
+    question: "Hidden processes may indicate:",
+    options: ["Rootkit activity", "Normal updates", "User logoff", "Disk cleanup"],
+    correctAnswer: 0,
+    explanation: "Rootkits can hide processes from normal tools.",
+  },
+  {
+    id: 50,
+    topic: "Memory Forensics",
+    question: "A memory profile is needed to:",
+    options: ["Interpret OS structures correctly", "Encrypt memory", "Delete logs", "Mount disk images"],
+    correctAnswer: 0,
+    explanation: "Correct profiles match OS version and architecture.",
+  },
+  {
+    id: 51,
+    topic: "Timeline",
+    question: "Timeline analysis helps to:",
+    options: ["Reconstruct event sequences", "Encrypt evidence", "Delete artifacts", "Reset passwords"],
+    correctAnswer: 0,
+    explanation: "Timelines show what happened and when.",
+  },
+  {
+    id: 52,
+    topic: "Timeline",
+    question: "Super timelines combine:",
+    options: ["Multiple artifact sources into one timeline", "Only registry data", "Only network logs", "Only file hashes"],
+    correctAnswer: 0,
+    explanation: "Super timelines correlate artifacts across sources.",
+  },
+  {
+    id: 53,
+    topic: "Timeline",
+    question: "MAC times refer to:",
+    options: ["Modified, Accessed, Created timestamps", "Memory, CPU, Cache", "Mail, Audit, Control", "Malware, Alert, Crash"],
+    correctAnswer: 0,
+    explanation: "MAC times track file modification and access.",
+  },
+  {
+    id: 54,
+    topic: "Timeline",
+    question: "Timezone normalization is important because:",
+    options: ["Systems may log in different time zones", "It encrypts evidence", "It deletes artifacts", "It reduces data size"],
+    correctAnswer: 0,
+    explanation: "Time normalization ensures consistent timelines.",
+  },
+  {
+    id: 55,
+    topic: "Timeline",
+    question: "Log correlation helps identify:",
+    options: ["Related events across systems", "Disk sector sizes", "User favorites", "Printer queues"],
+    correctAnswer: 0,
+    explanation: "Correlating logs links actions across hosts.",
+  },
+  {
+    id: 56,
+    topic: "Timeline",
+    question: "Event logs are useful because they:",
+    options: ["Record authentication and system events", "Encrypt files", "Run antivirus", "Create disk images"],
+    correctAnswer: 0,
+    explanation: "Event logs capture critical activity.",
+  },
+  {
+    id: 57,
+    topic: "Timeline",
+    question: "When building timelines, you should:",
+    options: ["Document data sources and tool versions", "Delete raw logs", "Skip validation", "Ignore time zones"],
+    correctAnswer: 0,
+    explanation: "Documentation supports reproducibility.",
+  },
+  {
+    id: 58,
+    topic: "Timeline",
+    question: "A timeline gap may indicate:",
+    options: ["Log clearing or missing data", "Normal operation", "Increased security", "Improved backups"],
+    correctAnswer: 0,
+    explanation: "Gaps can signal tampering or data loss.",
+  },
+  {
+    id: 59,
+    topic: "Timeline",
+    question: "A reliable timeline should be:",
+    options: ["Evidence-based and reproducible", "Speculative", "Only screenshots", "Only memory data"],
+    correctAnswer: 0,
+    explanation: "Timelines must be supported by evidence.",
+  },
+  {
+    id: 60,
+    topic: "Timeline",
+    question: "Why correlate timestamps with user context?",
+    options: ["To associate actions with accounts", "To hide evidence", "To compress files", "To disable monitoring"],
+    correctAnswer: 0,
+    explanation: "User context clarifies responsibility and access.",
+  },
+  {
+    id: 61,
+    topic: "Network Forensics",
+    question: "PCAP files contain:",
+    options: ["Captured network packets", "Disk sectors", "Memory pages", "Registry hives"],
+    correctAnswer: 0,
+    explanation: "PCAPs store raw network traffic.",
+  },
+  {
+    id: 62,
+    topic: "Network Forensics",
+    question: "DNS logs can reveal:",
+    options: ["Command and control domains", "Disk fragmentation", "Password hashes", "System uptime"],
+    correctAnswer: 0,
+    explanation: "DNS queries often show external communications.",
+  },
+  {
+    id: 63,
+    topic: "Network Forensics",
+    question: "Netflow data provides:",
+    options: ["High-level traffic metadata", "Packet payloads", "Disk images", "Memory dumps"],
+    correctAnswer: 0,
+    explanation: "Netflow summarizes connections without payloads.",
+  },
+  {
+    id: 64,
+    topic: "Network Forensics",
+    question: "TLS inspection can help identify:",
+    options: ["Malicious domains in encrypted traffic", "Disk corruption", "File hashes", "Registry keys"],
+    correctAnswer: 0,
+    explanation: "Inspection can surface encrypted traffic destinations.",
+  },
+  {
+    id: 65,
+    topic: "Network Forensics",
+    question: "Beaconing behavior is:",
+    options: ["Regular periodic callbacks to a server", "One-time patch download", "A file copy", "A user logon"],
+    correctAnswer: 0,
+    explanation: "Beaconing often indicates command and control.",
+  },
+  {
+    id: 66,
+    topic: "Mobile Forensics",
+    question: "Mobile forensics often examines:",
+    options: ["App data, messages, and location artifacts", "Disk sector sizes", "BIOS settings", "Server racks"],
+    correctAnswer: 0,
+    explanation: "Mobile devices store app, message, and location data.",
+  },
+  {
+    id: 67,
+    topic: "Cloud Forensics",
+    question: "Cloud forensics relies heavily on:",
+    options: ["Provider logs and API audit trails", "Disk write blockers", "BIOS imaging", "Physical drive removal"],
+    correctAnswer: 0,
+    explanation: "Cloud evidence is typically log and API based.",
+  },
+  {
+    id: 68,
+    topic: "Malware Analysis",
+    question: "Static malware analysis involves:",
+    options: ["Inspecting files without executing them", "Running the malware", "Rebooting servers", "Network capture only"],
+    correctAnswer: 0,
+    explanation: "Static analysis inspects the file contents safely.",
+  },
+  {
+    id: 69,
+    topic: "Malware Analysis",
+    question: "Dynamic analysis means:",
+    options: ["Executing malware in a controlled environment", "Only hashing files", "Only reading logs", "Only carving files"],
+    correctAnswer: 0,
+    explanation: "Dynamic analysis observes runtime behavior.",
+  },
+  {
+    id: 70,
+    topic: "Malware Analysis",
+    question: "A sandbox is used to:",
+    options: ["Observe malware behavior safely", "Encrypt files", "Patch systems", "Create backups"],
+    correctAnswer: 0,
+    explanation: "Sandboxes isolate malware during analysis.",
+  },
+  {
+    id: 71,
+    topic: "Reporting",
+    question: "A forensic report should be:",
+    options: ["Clear, precise, and evidence-backed", "Speculative", "Only screenshots", "Only a timeline"],
+    correctAnswer: 0,
+    explanation: "Reports must be defensible and evidence-based.",
+  },
+  {
+    id: 72,
+    topic: "Reporting",
+    question: "Why document tool versions?",
+    options: ["For reproducibility and legal defensibility", "To reduce log size", "To hide methods", "To avoid hashing"],
+    correctAnswer: 0,
+    explanation: "Tool versions matter for repeatability and credibility.",
+  },
+  {
+    id: 73,
+    topic: "Reporting",
+    question: "A key element of defensible analysis is:",
+    options: ["Repeatable methods and evidence citation", "Guessing root cause", "Deleting raw data", "Ignoring time zones"],
+    correctAnswer: 0,
+    explanation: "Methods must be repeatable and cited.",
+  },
+  {
+    id: 74,
+    topic: "Reporting",
+    question: "A timeline should be supported by:",
+    options: ["Multiple corroborating artifacts", "Only a single log", "Only memory data", "Only email headers"],
+    correctAnswer: 0,
+    explanation: "Multiple artifacts improve confidence in timelines.",
+  },
+  {
+    id: 75,
+    topic: "Reporting",
+    question: "What is the safest place to store evidence?",
+    options: ["Secure, access-controlled storage with logs", "Shared folder", "Personal laptop", "Public cloud bucket"],
+    correctAnswer: 0,
+    explanation: "Evidence must be secured with controlled access and auditing.",
+  },
+];
+
 const DigitalForensicsPage: React.FC = () => {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
@@ -125,9 +902,15 @@ const DigitalForensicsPage: React.FC = () => {
       <Container maxWidth="lg">
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-            Back to Learn Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 2 }}
+          />
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <SearchIcon sx={{ fontSize: 40, color: "#14b8a6" }} />
             <Typography
@@ -2428,6 +3211,29 @@ characteristic of commodity malware and penetration testing frameworks.`}
           </TabPanel>
         </Paper>
 
+        <Paper
+          id="quiz-section"
+          sx={{
+            p: 4,
+            mb: 5,
+            borderRadius: 3,
+            border: "1px solid rgba(20, 184, 166, 0.25)",
+            bgcolor: "rgba(20, 184, 166, 0.04)",
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Digital Forensics Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
         {/* Footer */}
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
@@ -2436,7 +3242,7 @@ characteristic of commodity malware and penetration testing frameworks.`}
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#14b8a6", color: "#14b8a6" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

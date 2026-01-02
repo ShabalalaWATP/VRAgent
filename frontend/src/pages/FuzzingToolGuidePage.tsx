@@ -32,7 +32,7 @@ import {
   StepContent,
 } from "@mui/material";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import BugReportIcon from "@mui/icons-material/BugReport";
@@ -174,12 +174,19 @@ export default function FuzzingToolGuidePage() {
   return (
     <LearnPageLayout pageTitle="Fuzzing Tool Guide" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Back Button */}
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
+
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-          <ArrowBackIcon />
-        </IconButton>
-
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
           <Box
             sx={{

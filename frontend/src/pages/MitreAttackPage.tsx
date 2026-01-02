@@ -20,14 +20,17 @@ import {
   Alert,
   Card,
   CardContent,
+  Button,
 } from "@mui/material";
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SearchIcon from "@mui/icons-material/Search";
 import LaunchIcon from "@mui/icons-material/Launch";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 interface Technique {
   id: string;
@@ -327,6 +330,611 @@ const tactics: Tactic[] = [
   },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#3b82f6";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "ATT&CK stands for:",
+    options: ["Adversarial Tactics, Techniques, and Common Knowledge", "Advanced Threat Tracking and Control Kit", "Attack Tools and Threat Checklist", "Applied Tactics and Threat Catalog"],
+    correctAnswer: 0,
+    explanation: "ATT&CK is the MITRE knowledge base of adversary behavior.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "A tactic describes:",
+    options: ["The adversary goal or why", "The exact exploit code", "The CVE identifier", "The patch schedule"],
+    correctAnswer: 0,
+    explanation: "Tactics represent objectives like initial access or exfiltration.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "A technique describes:",
+    options: ["How the adversary achieves a tactic", "Why the attacker acts", "The severity score", "The firewall rule"],
+    correctAnswer: 0,
+    explanation: "Techniques are the methods used to accomplish tactics.",
+  },
+  {
+    id: 4,
+    topic: "Identifiers",
+    question: "Technique IDs start with:",
+    options: ["T", "TA", "G", "S"],
+    correctAnswer: 0,
+    explanation: "Techniques are labeled T####.",
+  },
+  {
+    id: 5,
+    topic: "Identifiers",
+    question: "Tactic IDs start with:",
+    options: ["TA", "T", "G", "S"],
+    correctAnswer: 0,
+    explanation: "Tactics are labeled TA####.",
+  },
+  {
+    id: 6,
+    topic: "Identifiers",
+    question: "Sub-techniques are shown as:",
+    options: ["T1059.001", "TA1059", "S1059", "G1059"],
+    correctAnswer: 0,
+    explanation: "Sub-techniques use a dot notation.",
+  },
+  {
+    id: 7,
+    topic: "Matrices",
+    question: "The ATT&CK matrices include:",
+    options: ["Enterprise, Mobile, and ICS", "Web, Cloud, and IoT only", "Linux and Windows only", "Email and DNS only"],
+    correctAnswer: 0,
+    explanation: "ATT&CK covers Enterprise, Mobile, and ICS.",
+  },
+  {
+    id: 8,
+    topic: "Use",
+    question: "ATT&CK is primarily used to:",
+    options: ["Map adversary behaviors and defenses", "Assign CVEs", "Configure firewalls", "Patch operating systems"],
+    correctAnswer: 0,
+    explanation: "It helps map behaviors, detections, and gaps.",
+  },
+  {
+    id: 9,
+    topic: "Use",
+    question: "Coverage mapping helps teams:",
+    options: ["Identify detection gaps", "Disable alerts", "Remove logs", "Skip tuning"],
+    correctAnswer: 0,
+    explanation: "Mapping shows which techniques lack coverage.",
+  },
+  {
+    id: 10,
+    topic: "Use",
+    question: "The ATT&CK Navigator is used to:",
+    options: ["Visualize and annotate coverage", "Scan vulnerabilities", "Encrypt logs", "Block traffic"],
+    correctAnswer: 0,
+    explanation: "Navigator helps visualize technique coverage.",
+  },
+  {
+    id: 11,
+    topic: "Tactics",
+    question: "Initial Access is a tactic focused on:",
+    options: ["Gaining entry into a network", "Encrypting files", "Erasing logs", "Disabling monitoring"],
+    correctAnswer: 0,
+    explanation: "Initial Access covers entry methods.",
+  },
+  {
+    id: 12,
+    topic: "Tactics",
+    question: "Execution is a tactic focused on:",
+    options: ["Running malicious code", "Sending phishing emails", "Exfiltrating data", "Scanning ports"],
+    correctAnswer: 0,
+    explanation: "Execution covers code running on a system.",
+  },
+  {
+    id: 13,
+    topic: "Tactics",
+    question: "Persistence is a tactic focused on:",
+    options: ["Maintaining access over time", "Gathering user info", "Blocking network traffic", "Cleaning logs"],
+    correctAnswer: 0,
+    explanation: "Persistence keeps access after restarts.",
+  },
+  {
+    id: 14,
+    topic: "Tactics",
+    question: "Privilege Escalation is focused on:",
+    options: ["Gaining higher-level permissions", "Exfiltration", "Initial access", "Reconnaissance"],
+    correctAnswer: 0,
+    explanation: "Privilege escalation raises permissions.",
+  },
+  {
+    id: 15,
+    topic: "Tactics",
+    question: "Defense Evasion is focused on:",
+    options: ["Avoiding detection and controls", "Only collecting data", "Only scanning ports", "Only phishing"],
+    correctAnswer: 0,
+    explanation: "Defense evasion hides attacker activity.",
+  },
+  {
+    id: 16,
+    topic: "Tactics",
+    question: "Credential Access is focused on:",
+    options: ["Stealing credentials", "Encrypting disks", "User training", "Firewall tuning"],
+    correctAnswer: 0,
+    explanation: "Credential access targets passwords and tokens.",
+  },
+  {
+    id: 17,
+    topic: "Tactics",
+    question: "Discovery is focused on:",
+    options: ["Learning about the environment", "Installing persistence", "Exfiltrating data", "Encrypting files"],
+    correctAnswer: 0,
+    explanation: "Discovery maps hosts, users, and networks.",
+  },
+  {
+    id: 18,
+    topic: "Tactics",
+    question: "Lateral Movement is focused on:",
+    options: ["Moving between systems", "Phishing users", "Running scripts", "Encrypting data"],
+    correctAnswer: 0,
+    explanation: "Lateral movement spreads access.",
+  },
+  {
+    id: 19,
+    topic: "Tactics",
+    question: "Collection is focused on:",
+    options: ["Gathering data of interest", "Blocking C2", "Patching systems", "Deleting logs"],
+    correctAnswer: 0,
+    explanation: "Collection gathers data before exfiltration.",
+  },
+  {
+    id: 20,
+    topic: "Tactics",
+    question: "Command and Control is focused on:",
+    options: ["Establishing remote communication", "Delivering emails", "Scanning ports", "Deploying patches"],
+    correctAnswer: 0,
+    explanation: "C2 enables attacker control.",
+  },
+  {
+    id: 21,
+    topic: "Tactics",
+    question: "Exfiltration is focused on:",
+    options: ["Stealing data out of the network", "Executing scripts", "Gaining initial access", "Collecting logs"],
+    correctAnswer: 0,
+    explanation: "Exfiltration is data theft.",
+  },
+  {
+    id: 22,
+    topic: "Tactics",
+    question: "Impact is focused on:",
+    options: ["Disrupting availability or integrity", "Reconnaissance", "Initial access", "Collection"],
+    correctAnswer: 0,
+    explanation: "Impact covers damage like ransomware or sabotage.",
+  },
+  {
+    id: 23,
+    topic: "Technique",
+    question: "T1059 is:",
+    options: ["Command and Scripting Interpreter", "Credential Dumping", "Phishing", "Lateral Tool Transfer"],
+    correctAnswer: 0,
+    explanation: "T1059 covers scripting and command execution.",
+  },
+  {
+    id: 24,
+    topic: "Technique",
+    question: "T1566 is:",
+    options: ["Phishing", "Valid Accounts", "Data Encrypted for Impact", "Remote Services"],
+    correctAnswer: 0,
+    explanation: "T1566 covers phishing techniques.",
+  },
+  {
+    id: 25,
+    topic: "Technique",
+    question: "T1003 is:",
+    options: ["Credential Dumping", "Exfiltration Over C2", "System Information Discovery", "Screen Capture"],
+    correctAnswer: 0,
+    explanation: "T1003 covers credential dumping.",
+  },
+  {
+    id: 26,
+    topic: "Technique",
+    question: "T1071 is:",
+    options: ["Application Layer Protocol", "Ingress Tool Transfer", "System Service Discovery", "Spearphishing Link"],
+    correctAnswer: 0,
+    explanation: "T1071 covers C2 over common protocols.",
+  },
+  {
+    id: 27,
+    topic: "Technique",
+    question: "T1021 is:",
+    options: ["Remote Services", "Process Injection", "Registry Run Keys", "Data from Local System"],
+    correctAnswer: 0,
+    explanation: "T1021 covers remote service access for lateral movement.",
+  },
+  {
+    id: 28,
+    topic: "Technique",
+    question: "T1055 is:",
+    options: ["Process Injection", "Screen Capture", "Network Sniffing", "Keylogging"],
+    correctAnswer: 0,
+    explanation: "T1055 covers process injection techniques.",
+  },
+  {
+    id: 29,
+    topic: "Technique",
+    question: "T1082 is:",
+    options: ["System Information Discovery", "Account Discovery", "Clipboard Data", "Application Layer Protocol"],
+    correctAnswer: 0,
+    explanation: "T1082 covers system info discovery.",
+  },
+  {
+    id: 30,
+    topic: "Technique",
+    question: "T1105 is:",
+    options: ["Ingress Tool Transfer", "System Owner/User Discovery", "Remote File Copy", "Data from Cloud Storage"],
+    correctAnswer: 0,
+    explanation: "T1105 covers transferring tools into the environment.",
+  },
+  {
+    id: 31,
+    topic: "Technique",
+    question: "T1486 is:",
+    options: ["Data Encrypted for Impact", "Account Discovery", "Email Collection", "Disk Wipe"],
+    correctAnswer: 0,
+    explanation: "T1486 covers ransomware encryption.",
+  },
+  {
+    id: 32,
+    topic: "Technique",
+    question: "T1041 is:",
+    options: ["Exfiltration Over C2 Channel", "Credential Dumping", "Modify Registry", "Remote Services"],
+    correctAnswer: 0,
+    explanation: "T1041 is exfiltration over C2.",
+  },
+  {
+    id: 33,
+    topic: "Technique",
+    question: "T1547 is:",
+    options: ["Boot or Logon Autostart Execution", "Process Injection", "File Deletion", "Data from Local System"],
+    correctAnswer: 0,
+    explanation: "T1547 covers persistence via autostart.",
+  },
+  {
+    id: 34,
+    topic: "Technique",
+    question: "T1110 is:",
+    options: ["Brute Force", "Command and Scripting Interpreter", "Phishing", "System Information Discovery"],
+    correctAnswer: 0,
+    explanation: "T1110 covers brute force credential attempts.",
+  },
+  {
+    id: 35,
+    topic: "Technique",
+    question: "T1204 is:",
+    options: ["User Execution", "Exploit Public-Facing Application", "Remote Services", "Obfuscated Files or Information"],
+    correctAnswer: 0,
+    explanation: "T1204 covers user-driven execution.",
+  },
+  {
+    id: 36,
+    topic: "Technique",
+    question: "T1567 is:",
+    options: ["Exfiltration Over Web Service", "Application Layer Protocol", "Archive Collected Data", "Command and Control"],
+    correctAnswer: 0,
+    explanation: "T1567 covers exfiltration via web services.",
+  },
+  {
+    id: 37,
+    topic: "Technique",
+    question: "T1033 is:",
+    options: ["System Owner/User Discovery", "Permission Groups Discovery", "System Information Discovery", "Network Service Discovery"],
+    correctAnswer: 0,
+    explanation: "T1033 identifies logged in users.",
+  },
+  {
+    id: 38,
+    topic: "Technique",
+    question: "T1018 is:",
+    options: ["Remote System Discovery", "Spearphishing Attachment", "Data from Network Shared Drive", "Account Discovery"],
+    correctAnswer: 0,
+    explanation: "T1018 covers discovery of remote systems.",
+  },
+  {
+    id: 39,
+    topic: "Technique",
+    question: "T1558 is:",
+    options: ["Steal or Forge Kerberos Tickets", "Exfiltration Over C2", "Modify Registry", "Email Collection"],
+    correctAnswer: 0,
+    explanation: "T1558 covers Kerberos ticket abuse.",
+  },
+  {
+    id: 40,
+    topic: "Technique",
+    question: "T1078 is commonly used for:",
+    options: ["Valid Accounts", "Network Sniffing", "Exfiltration Over C2", "Data from Clipboard"],
+    correctAnswer: 0,
+    explanation: "T1078 covers use of valid credentials.",
+  },
+  {
+    id: 41,
+    topic: "Concepts",
+    question: "ATT&CK groups represent:",
+    options: ["Adversary groups or actors", "Software vendors", "Patch schedules", "Network segments"],
+    correctAnswer: 0,
+    explanation: "Groups are adversary sets like APTs.",
+  },
+  {
+    id: 42,
+    topic: "Concepts",
+    question: "ATT&CK software entries describe:",
+    options: ["Tools and malware used by adversaries", "Only operating systems", "Only vulnerabilities", "Only patches"],
+    correctAnswer: 0,
+    explanation: "Software entries include tools and malware.",
+  },
+  {
+    id: 43,
+    topic: "Concepts",
+    question: "ATT&CK is not:",
+    options: ["A vulnerability database", "A behavior framework", "A shared taxonomy", "A detection mapping tool"],
+    correctAnswer: 0,
+    explanation: "ATT&CK focuses on behaviors, not CVEs.",
+  },
+  {
+    id: 44,
+    topic: "Concepts",
+    question: "ATT&CK technique pages include:",
+    options: ["Description, detection, and mitigation ideas", "Only CVE lists", "Only exploit code", "Only patch notes"],
+    correctAnswer: 0,
+    explanation: "Each technique includes detection and mitigation guidance.",
+  },
+  {
+    id: 45,
+    topic: "Concepts",
+    question: "ATT&CK is useful for:",
+    options: ["Threat hunting hypotheses", "Only policy writing", "Only user training", "Only network design"],
+    correctAnswer: 0,
+    explanation: "Hunts can be mapped to ATT&CK techniques.",
+  },
+  {
+    id: 46,
+    topic: "Concepts",
+    question: "A heatmap in Navigator shows:",
+    options: ["Coverage or priority by technique", "Disk usage", "CPU temperature", "Patch status"],
+    correctAnswer: 0,
+    explanation: "Heatmaps visualize coverage or risk.",
+  },
+  {
+    id: 47,
+    topic: "Concepts",
+    question: "ATT&CK tactics are arranged:",
+    options: ["Left to right by attack lifecycle", "Randomly", "Alphabetically only", "By CVSS score"],
+    correctAnswer: 0,
+    explanation: "The matrix flows across tactics.",
+  },
+  {
+    id: 48,
+    topic: "Concepts",
+    question: "A detection mapped to ATT&CK should include:",
+    options: ["Technique ID and context", "Only a log line", "Only a severity", "Only a ticket ID"],
+    correctAnswer: 0,
+    explanation: "Technique mapping improves clarity and coverage.",
+  },
+  {
+    id: 49,
+    topic: "Concepts",
+    question: "ATT&CK can help prioritize:",
+    options: ["Detections based on adversary behavior", "Printer queues", "Monitor brightness", "Keyboard layouts"],
+    correctAnswer: 0,
+    explanation: "Behavior-based prioritization improves defense.",
+  },
+  {
+    id: 50,
+    topic: "Concepts",
+    question: "A technique can map to multiple tactics because:",
+    options: ["The same method can achieve different goals", "Tactics are random", "IDs are reused", "Mitigations are missing"],
+    correctAnswer: 0,
+    explanation: "Techniques can support multiple objectives.",
+  },
+  {
+    id: 51,
+    topic: "Examples",
+    question: "Phishing is typically an Initial Access technique because:",
+    options: ["It gains entry via social engineering", "It only exfiltrates data", "It only disables logging", "It only scans networks"],
+    correctAnswer: 0,
+    explanation: "Phishing is a common initial entry method.",
+  },
+  {
+    id: 52,
+    topic: "Examples",
+    question: "Process injection is often used for:",
+    options: ["Defense evasion and privilege escalation", "Data archiving", "Network discovery", "User training"],
+    correctAnswer: 0,
+    explanation: "Injection hides or elevates malicious code.",
+  },
+  {
+    id: 53,
+    topic: "Examples",
+    question: "Credential dumping supports which tactic?",
+    options: ["Credential Access", "Collection", "Exfiltration", "Impact"],
+    correctAnswer: 0,
+    explanation: "Credential dumping steals secrets.",
+  },
+  {
+    id: 54,
+    topic: "Examples",
+    question: "Remote Services is commonly used for:",
+    options: ["Lateral Movement", "Reconnaissance", "Impact", "Exfiltration"],
+    correctAnswer: 0,
+    explanation: "Remote services allow movement between systems.",
+  },
+  {
+    id: 55,
+    topic: "Examples",
+    question: "Data encryption for impact maps to:",
+    options: ["Impact", "Execution", "Discovery", "Collection"],
+    correctAnswer: 0,
+    explanation: "Encrypting data is an impact technique.",
+  },
+  {
+    id: 56,
+    topic: "Examples",
+    question: "System Information Discovery maps to:",
+    options: ["Discovery", "Execution", "Impact", "Initial Access"],
+    correctAnswer: 0,
+    explanation: "It gathers system details.",
+  },
+  {
+    id: 57,
+    topic: "Examples",
+    question: "Ingress Tool Transfer is commonly used for:",
+    options: ["Command and Control", "Impact", "Exfiltration", "Reconnaissance"],
+    correctAnswer: 0,
+    explanation: "It brings tools into the environment.",
+  },
+  {
+    id: 58,
+    topic: "Examples",
+    question: "Exfiltration Over C2 Channel maps to:",
+    options: ["Exfiltration", "Command and Control", "Impact", "Collection"],
+    correctAnswer: 0,
+    explanation: "It is an exfiltration technique.",
+  },
+  {
+    id: 59,
+    topic: "Hunting",
+    question: "Threat hunting with ATT&CK means:",
+    options: ["Building hypotheses based on techniques", "Only using IOC lists", "Only scanning ports", "Only reviewing patches"],
+    correctAnswer: 0,
+    explanation: "ATT&CK guides hunt hypotheses.",
+  },
+  {
+    id: 60,
+    topic: "Hunting",
+    question: "ATT&CK is updated:",
+    options: ["Periodically with new techniques and changes", "Never after release", "Daily with CVEs only", "Only by vendors"],
+    correctAnswer: 0,
+    explanation: "MITRE releases periodic updates.",
+  },
+  {
+    id: 61,
+    topic: "Operations",
+    question: "ATT&CK can help build:",
+    options: ["Detection engineering backlogs", "Only user training", "Only firewall configs", "Only patch schedules"],
+    correctAnswer: 0,
+    explanation: "Coverage gaps feed detection roadmaps.",
+  },
+  {
+    id: 62,
+    topic: "Operations",
+    question: "Mapping incidents to ATT&CK helps:",
+    options: ["Standardize reporting and lessons learned", "Hide evidence", "Disable logging", "Avoid triage"],
+    correctAnswer: 0,
+    explanation: "Mapping improves reporting and analysis.",
+  },
+  {
+    id: 63,
+    topic: "Operations",
+    question: "ATT&CK mitigations can be used to:",
+    options: ["Plan security controls by technique", "Assign CVSS scores", "Patch kernels automatically", "Disable alerts"],
+    correctAnswer: 0,
+    explanation: "Mitigations guide control selection.",
+  },
+  {
+    id: 64,
+    topic: "Operations",
+    question: "ATT&CK detections provide:",
+    options: ["Ideas for monitoring and data sources", "Exploit code", "Passwords", "Patch binaries"],
+    correctAnswer: 0,
+    explanation: "Detection guidance suggests telemetry sources.",
+  },
+  {
+    id: 65,
+    topic: "Operations",
+    question: "A technique in ATT&CK can have:",
+    options: ["Multiple sub-techniques", "Only one example", "No description", "No IDs"],
+    correctAnswer: 0,
+    explanation: "Sub-techniques describe specific variants.",
+  },
+  {
+    id: 66,
+    topic: "Operations",
+    question: "ATT&CK does not replace:",
+    options: ["Risk assessment and business context", "Threat hunting", "Detection engineering", "Incident response"],
+    correctAnswer: 0,
+    explanation: "You still need business context and risk analysis.",
+  },
+  {
+    id: 67,
+    topic: "Operations",
+    question: "ATT&CK is vendor neutral because:",
+    options: ["It describes behaviors, not products", "It only lists tools", "It only lists CVEs", "It is proprietary"],
+    correctAnswer: 0,
+    explanation: "It is a behavior-based taxonomy.",
+  },
+  {
+    id: 68,
+    topic: "Operations",
+    question: "ATT&CK should be used with:",
+    options: ["Local telemetry and environment context", "Only threat feeds", "Only CVSS scores", "Only vulnerability scanners"],
+    correctAnswer: 0,
+    explanation: "Local context is critical for prioritization.",
+  },
+  {
+    id: 69,
+    topic: "Operations",
+    question: "Technique coverage does not mean:",
+    options: ["Guaranteed prevention", "Visibility into activity", "A detection exists", "A mapping was done"],
+    correctAnswer: 0,
+    explanation: "Coverage does not guarantee prevention or blocking.",
+  },
+  {
+    id: 70,
+    topic: "Operations",
+    question: "The best way to validate ATT&CK coverage is:",
+    options: ["Test detections with simulations", "Assume mappings are correct", "Disable alerting", "Remove telemetry"],
+    correctAnswer: 0,
+    explanation: "Testing confirms detections are effective.",
+  },
+  {
+    id: 71,
+    topic: "Concepts",
+    question: "ATT&CK complements the Cyber Kill Chain by:",
+    options: ["Providing detailed technique-level behaviors", "Replacing all tactics", "Focusing only on malware", "Ignoring defender actions"],
+    correctAnswer: 0,
+    explanation: "ATT&CK adds granular technique detail.",
+  },
+  {
+    id: 72,
+    topic: "Concepts",
+    question: "The Enterprise matrix includes:",
+    options: ["Windows, macOS, Linux, and cloud behaviors", "Only mobile apps", "Only ICS devices", "Only web apps"],
+    correctAnswer: 0,
+    explanation: "Enterprise covers common enterprise platforms.",
+  },
+  {
+    id: 73,
+    topic: "Concepts",
+    question: "MITRE ATT&CK is maintained by:",
+    options: ["MITRE Corporation", "OWASP", "NIST only", "Vendor consortium"],
+    correctAnswer: 0,
+    explanation: "MITRE maintains the ATT&CK knowledge base.",
+  },
+  {
+    id: 74,
+    topic: "Concepts",
+    question: "ATT&CK does not directly provide:",
+    options: ["Exploit code", "Behavior descriptions", "Technique IDs", "Mitigation ideas"],
+    correctAnswer: 0,
+    explanation: "ATT&CK documents behaviors, not exploit code.",
+  },
+  {
+    id: 75,
+    topic: "Summary",
+    question: "The main value of ATT&CK is:",
+    options: ["A shared language for adversary behavior", "A patch management system", "A vulnerability scanner", "A firewall appliance"],
+    correctAnswer: 0,
+    explanation: "ATT&CK provides a common behavior taxonomy.",
+  },
+];
+
 export default function MitreAttackPage() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -347,9 +955,15 @@ export default function MitreAttackPage() {
     <LearnPageLayout pageTitle="MITRE ATT&CK Framework" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
-      <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-        <ArrowBackIcon />
-      </IconButton>
+      <Chip
+        component={RouterLink}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
 
       {/* Header */}
       <Box sx={{ mb: 5 }}>
@@ -575,6 +1189,40 @@ export default function MitreAttackPage() {
           ))}
         </Grid>
       </Paper>
+
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 4,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={QUIZ_ACCENT_COLOR}
+          title="MITRE ATT&CK Framework Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

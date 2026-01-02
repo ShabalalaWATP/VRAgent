@@ -50,12 +50,27 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/findings", response_model=list[Finding])
-def get_report_findings(report_id: int, db: Session = Depends(get_db)):
-    """Get all findings for a report."""
+def get_report_findings(
+    report_id: int, 
+    include_duplicates: bool = False,
+    db: Session = Depends(get_db)
+):
+    """Get all findings for a report.
+    
+    Args:
+        report_id: The report ID
+        include_duplicates: If True, include findings marked as duplicates (default: False)
+    """
     report = _get_report(db, report_id)
-    findings = db.query(models.Finding).filter(
+    query = db.query(models.Finding).filter(
         models.Finding.scan_run_id == report.scan_run_id
-    ).all()
+    )
+    # Fix #2: Filter out duplicate findings by default
+    if not include_duplicates:
+        query = query.filter(
+            (models.Finding.is_duplicate == False) | (models.Finding.is_duplicate.is_(None))
+        )
+    findings = query.all()
     return findings
 
 
@@ -153,9 +168,12 @@ def get_finding_code_snippet(
 def export_markdown(report_id: int, db: Session = Depends(get_db)):
     """Export report as Markdown with full AI summaries and exploit scenarios."""
     try:
-        report, findings = export_service.get_report_with_findings(db, report_id)
-        content = export_service.generate_markdown(report, findings, db=db, include_ai_summaries=True)
-        logger.info(f"Exported markdown for report {report_id}")
+        report, findings, filtered_findings = export_service.get_report_with_findings(db, report_id)
+        content = export_service.generate_markdown(
+            report, findings, db=db, include_ai_summaries=True, 
+            filtered_findings=filtered_findings
+        )
+        logger.info(f"Exported markdown for report {report_id} ({len(findings)} active, {len(filtered_findings)} filtered)")
         return Response(
             content=content,
             media_type="text/markdown",
@@ -169,9 +187,12 @@ def export_markdown(report_id: int, db: Session = Depends(get_db)):
 def export_pdf(report_id: int, db: Session = Depends(get_db)):
     """Export report as PDF with full AI summaries and exploit scenarios."""
     try:
-        report, findings = export_service.get_report_with_findings(db, report_id)
-        content = export_service.generate_pdf(report, findings, db=db, include_ai_summaries=True)
-        logger.info(f"Exported PDF for report {report_id}")
+        report, findings, filtered_findings = export_service.get_report_with_findings(db, report_id)
+        content = export_service.generate_pdf(
+            report, findings, db=db, include_ai_summaries=True,
+            filtered_findings=filtered_findings
+        )
+        logger.info(f"Exported PDF for report {report_id} ({len(findings)} active, {len(filtered_findings)} filtered)")
         return Response(
             content=content,
             media_type="application/pdf",
@@ -185,9 +206,12 @@ def export_pdf(report_id: int, db: Session = Depends(get_db)):
 def export_docx(report_id: int, db: Session = Depends(get_db)):
     """Export report as DOCX with full AI summaries and exploit scenarios."""
     try:
-        report, findings = export_service.get_report_with_findings(db, report_id)
-        content = export_service.generate_docx(report, findings, db=db, include_ai_summaries=True)
-        logger.info(f"Exported DOCX for report {report_id}")
+        report, findings, filtered_findings = export_service.get_report_with_findings(db, report_id)
+        content = export_service.generate_docx(
+            report, findings, db=db, include_ai_summaries=True,
+            filtered_findings=filtered_findings
+        )
+        logger.info(f"Exported DOCX for report {report_id} ({len(findings)} active, {len(filtered_findings)} filtered)")
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -768,11 +792,21 @@ Lines of Code: {total_lines:,}
 {chr(10).join(sample_contents[:12])}
 
 ## YOUR TASK
-Create a Mermaid diagram showing the app's architecture. Show:
-1. Main layers (UI/Frontend, API/Backend, Business Logic, Data Layer)
-2. Key components and their relationships
-3. Data flow between components
-4. External service connections (if any)
+Create a Mermaid diagram showing the app's ACTUAL architecture as it exists in the code.
+
+## CRITICAL ACCURACY RULES
+- ONLY include components that are ACTUALLY in the source code provided above
+- Every node should correspond to actual files, folders, or class names you can see in the code samples
+- DO NOT "enterprise-ify" or modernize the architecture - show it AS IT IS
+- If the code is procedural PHP with includes, show that - NOT an API layer architecture
+- If there's no framework, don't invent one (no Symfony, Laravel, etc. unless you see imports)
+- If there's no Redis/cache, don't add one
+- If there's no API layer, don't add one
+- Search the code samples for evidence before adding ANY technology (Swagger, Redis, etc.)
+- Legacy/simple code should look legacy/simple in the diagram
+- If you're unsure about something, leave it out rather than guess
+
+Tech Stack Detected: {', '.join(tech_stack) if tech_stack else 'Unknown'}
 
 {get_webapp_diagram_prompt_icons()}
 
@@ -782,45 +816,51 @@ Use the icon block syntax for individual nodes: NodeId@{{ icon: "prefix:name", f
 
 IMPORTANT: Output ONLY the Mermaid code, no explanations. Start with ```mermaid and end with ```.
 
-Example structure:
+Example for SIMPLE/LEGACY PHP app (procedural code):
 ```mermaid
 flowchart TB
-    subgraph UI["🖥️ User Interface"]
+    subgraph Client["🖥️ Client"]
         Browser@{{ icon: "fa:globe", form: "square", label: "Web Browser" }}
-        Mobile@{{ icon: "fa:mobile", form: "square", label: "Mobile App" }}
     end
-    subgraph Frontend["⚛️ Frontend Layer"]
-        ReactApp@{{ icon: "fab:react", form: "square", label: "React Application" }}
-        Components@{{ icon: "fab:js", form: "square", label: "UI Components" }}
+    subgraph Server["🐘 PHP Application"]
+        Index@{{ icon: "fab:php", form: "square", label: "index.php" }}
+        Includes@{{ icon: "fa:folder", form: "square", label: "includes/" }}
+        Pages@{{ icon: "fa:file-code", form: "square", label: "Page Scripts" }}
     end
-    subgraph Backend["🔧 Backend API"]
-        APIServer@{{ icon: "mdi:api", form: "square", label: "REST API" }}
-        AuthService@{{ icon: "fa:lock", form: "square", label: "Authentication" }}
-        BusinessLogic@{{ icon: "mdi:cog", form: "square", label: "Business Logic" }}
-    end
-    subgraph Data["💾 Data Layer"]
-        Database@{{ icon: "mdi:elephant", form: "square", label: "PostgreSQL" }}
-        Cache@{{ icon: "mdi:memory", form: "square", label: "Redis Cache" }}
-    end
-    subgraph External["☁️ External Services"]
-        EmailService@{{ icon: "mdi:email", form: "square", label: "Email Provider" }}
-        CloudStorage@{{ icon: "fa:cloud", form: "square", label: "Cloud Storage" }}
+    subgraph Data["💾 Database"]
+        MySQL@{{ icon: "mdi:database", form: "square", label: "MySQL" }}
     end
     
-    Browser --> ReactApp
-    Mobile --> APIServer
-    ReactApp --> APIServer
-    APIServer --> AuthService
-    APIServer --> BusinessLogic
-    BusinessLogic --> Database
-    BusinessLogic --> Cache
-    BusinessLogic --> EmailService
-    BusinessLogic --> CloudStorage
+    Browser --> Index
+    Index --> Includes
+    Index --> Pages
+    Pages --> MySQL
 ```
 
-Generate a diagram for THIS app based on the actual code structure provided. 
-Tech Stack Detected: {', '.join(tech_stack) if tech_stack else 'Unknown'}
-Use the appropriate icons from the list above for the detected technologies."""
+Example for MODERN framework app (only if you see framework imports):
+```mermaid
+flowchart TB
+    subgraph Client["🖥️ Client Layer"]
+        Browser@{{ icon: "fa:globe", form: "square", label: "Web Browser" }}
+    end
+    subgraph App["⚙️ Application Layer"]
+        EntryPoint@{{ icon: "mdi:api", form: "square", label: "Main Entry Point" }}
+        Controllers@{{ icon: "fa:cogs", form: "square", label: "Controllers/Routes" }}
+        Services@{{ icon: "mdi:cog", form: "square", label: "Business Logic" }}
+    end
+    subgraph Data["💾 Data Layer"]
+        Database@{{ icon: "mdi:database", form: "square", label: "Database" }}
+    end
+    
+    Browser --> EntryPoint
+    EntryPoint --> Controllers
+    Controllers --> Services
+    Services --> Database
+```
+
+Generate a diagram for THIS app based on the actual code structure provided.
+Use the appropriate icons from the list above for the detected technologies.
+Name components based on ACTUAL file names and patterns from the code samples above."""
     
     mermaid_code = None
     

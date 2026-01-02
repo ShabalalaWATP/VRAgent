@@ -4,7 +4,7 @@
  * Provides tools for:
  * - Binary Analysis (EXE, ELF, DLL) - Extract strings, imports, metadata
  * - APK Analysis - Android app analysis with permission/security checks
- * - Docker Layer Analysis - Find secrets in image layers
+ * - Docker Inspector - Inspect image layers, secrets, and attack vectors
  */
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -64,7 +64,7 @@ import {
   InputLabel,
   Collapse,
 } from "@mui/material";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import {
   CloudUpload as UploadIcon,
   Memory as BinaryIcon,
@@ -94,6 +94,7 @@ import {
   History as HistoryIcon,
   Delete as DeleteIcon,
   Visibility as ViewIcon,
+  Share as ShareIcon,
   NavigateBefore as PrevIcon,
   NavigateNext as NextIcon,
   FirstPage as FirstPageIcon,
@@ -102,7 +103,6 @@ import {
   Stop as StopIcon,
   AccountTree as ArchitectureIcon,
   Assessment as ReportIcon,
-  DataObject as HexIcon,
   InsertLink as LinkIcon,
   Folder as StorageIcon,
   Folder as FolderIcon,
@@ -123,6 +123,8 @@ import {
   Terminal as TerminalIcon,
   Memory as MemoryIcon,
   AccessTime as AccessTimeIcon,
+  Close as CloseIcon,
+  ArrowBack as ArrowBackIcon,
 } from "@mui/icons-material";
 import {
   reverseEngineeringClient,
@@ -134,8 +136,6 @@ import {
   type DockerImageInfo,
   type REReportSummary,
   type SaveREReportRequest,
-  type HexViewResult,
-  type HexSearchResponse,
   type DataFlowAnalysisResult,
   type JadxDecompilationResult,
   type AIVulnScanResult,
@@ -149,6 +149,7 @@ import {
   type VulnerabilityFinding,
 } from "../api/client";
 import { MermaidDiagram } from "../components/MermaidDiagram";
+import ShareToConversationDialog from "../components/social/ShareToConversationDialog";
 
 // Advanced APK Analysis Components
 import { JadxDecompiler, ManifestVisualizer, AttackSurfaceMap, ObfuscationAnalyzer } from "../components/ApkAdvancedAnalysis";
@@ -166,7 +167,7 @@ import LearnPageLayout from "../components/LearnPageLayout";
 const pageContext = `This is the Reverse Engineering Hub page covering:
 - Binary Analysis (EXE, ELF, DLL) - Extract strings, imports, metadata, entropy visualization
 - APK Analysis - Android app analysis with permission/security checks, JADX decompilation, manifest analysis
-- Docker Layer Analysis - Find secrets in image layers
+- Docker Inspector - Layer inventory, secrets detection, and risk insights
 - Ghidra integration for decompilation and function analysis
 - AI-powered security scanning and vulnerability detection
 - Attack surface mapping and obfuscation analysis
@@ -184,6 +185,10 @@ const getSeverityColor = (severity: string): string => {
       return "#ca8a04";
     case "low":
       return "#16a34a";
+    case "advisory":
+      return "#3b82f6"; // Blue for advisory/informational hardening suggestions
+    case "info":
+      return "#6b7280";
     default:
       return "#6b7280";
   }
@@ -1207,15 +1212,16 @@ function DecompiledCodeFindingsAccordion({ findings, summary, jadxSessionId }: D
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   
-  const severityColors: Record<string, "error" | "warning" | "info" | "success" | "default"> = {
+  const severityColors: Record<string, "error" | "warning" | "info" | "success" | "default" | "primary"> = {
     critical: "error",
     high: "error",
     medium: "warning",
     low: "info",
+    advisory: "primary", // Blue for hardening suggestions (not vulnerabilities)
     info: "default"
   };
   
-  const severityOrder = ["critical", "high", "medium", "low", "info"];
+  const severityOrder = ["critical", "high", "medium", "low", "info", "advisory"];
   
   const filteredFindings = findings.filter(f => {
     if (severityFilter !== "all" && f.severity !== severityFilter) return false;
@@ -3144,11 +3150,18 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
                               {finding.affected_library && (
                                 <Typography variant="caption" color="warning.main" sx={{ display: "block", mb: 1 }}>
                                   Library: {finding.affected_library}
+                                  {(finding as any).version_confirmed && " (version confirmed)"}
                                 </Typography>
                               )}
                               {finding.cvss_score && (
                                 <Typography variant="caption" color="error.main" sx={{ display: "block", mb: 1 }}>
                                   CVSS Score: {finding.cvss_score}
+                                </Typography>
+                              )}
+                              {(finding as any).cve_confidence && (
+                                <Typography variant="caption" color={(finding as any).cve_confidence === "high" ? "success.main" : (finding as any).cve_confidence === "medium" ? "warning.main" : "text.secondary"} sx={{ display: "block", mb: 1 }}>
+                                  CVE Confidence: {(finding as any).cve_confidence}
+                                  {(finding as any).fixed_version && ` (fixed in ${(finding as any).fixed_version})`}
                                 </Typography>
                               )}
                               {finding.code_snippet && (
@@ -11503,16 +11516,253 @@ function HardeningScoreCard({ hardeningScore }: { hardeningScore: import("../api
   );
 }
 
-// Docker Analysis Results Component
+// Docker Inspector Results Component
 function DockerResults({ result }: { result: DockerAnalysisResult }) {
   const theme = useTheme();
 
+  // Categorize security issues by attack type for offensive security view
+  const categorizeIssues = () => {
+    const categories = {
+      container_escape: [] as typeof result.security_issues,
+      privilege_escalation: [] as typeof result.security_issues,
+      secrets: [] as typeof result.security_issues,
+      lateral_movement: [] as typeof result.security_issues,
+      network_exposure: [] as typeof result.security_issues,
+      supply_chain: [] as typeof result.security_issues,
+      other: [] as typeof result.security_issues,
+    };
+
+    result.security_issues.forEach((issue) => {
+      const cat = issue.category?.toLowerCase() || "";
+      if (cat.includes("escape") || cat.includes("privileged")) {
+        categories.container_escape.push(issue);
+      } else if (cat.includes("privilege") || cat.includes("root") || cat.includes("suid")) {
+        categories.privilege_escalation.push(issue);
+      } else if (cat.includes("secret") || cat.includes("credential") || cat.includes("key")) {
+        categories.secrets.push(issue);
+      } else if (cat.includes("lateral") || cat.includes("ssh") || cat.includes("kube") || cat.includes("aws")) {
+        categories.lateral_movement.push(issue);
+      } else if (cat.includes("network") || cat.includes("port") || cat.includes("expose")) {
+        categories.network_exposure.push(issue);
+      } else if (cat.includes("supply") || cat.includes("registry") || cat.includes("base")) {
+        categories.supply_chain.push(issue);
+      } else {
+        categories.other.push(issue);
+      }
+    });
+    return categories;
+  };
+
+  const categories = categorizeIssues();
+
+  // Calculate risk score
+  const calculateRiskScore = () => {
+    let score = 0;
+    result.security_issues.forEach((issue) => {
+      switch (issue.severity?.toLowerCase()) {
+        case "critical": score += 40; break;
+        case "high": score += 25; break;
+        case "medium": score += 10; break;
+        case "low": score += 3; break;
+      }
+    });
+    result.secrets.forEach((s) => {
+      switch (s.severity?.toLowerCase()) {
+        case "critical": score += 35; break;
+        case "high": score += 20; break;
+        default: score += 10;
+      }
+    });
+    return Math.min(100, score);
+  };
+
+  const riskScore = calculateRiskScore();
+  const getRiskLevel = (score: number) => {
+    if (score >= 70) return { level: "CRITICAL", color: "#dc2626", icon: "🔴" };
+    if (score >= 40) return { level: "HIGH", color: "#f97316", icon: "🟠" };
+    if (score >= 20) return { level: "MEDIUM", color: "#eab308", icon: "🟡" };
+    return { level: "LOW", color: "#22c55e", icon: "🟢" };
+  };
+  const risk = getRiskLevel(riskScore);
+
+  const criticalCount = result.security_issues.filter(i => i.severity?.toLowerCase() === "critical").length;
+  const highCount = result.security_issues.filter(i => i.severity?.toLowerCase() === "high").length;
+
   return (
     <Box>
+      {/* Risk Assessment Banner */}
+      <Paper
+        sx={{
+          p: 3,
+          mb: 3,
+          background: `linear-gradient(135deg, ${alpha(risk.color, 0.15)} 0%, ${alpha(risk.color, 0.05)} 100%)`,
+          border: `2px solid ${alpha(risk.color, 0.3)}`,
+        }}
+      >
+        <Grid container spacing={3} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <Box sx={{ textAlign: "center" }}>
+              <Typography variant="h2" sx={{ color: risk.color, fontWeight: 700 }}>
+                {risk.icon} {riskScore}
+              </Typography>
+              <Typography variant="h6" sx={{ color: risk.color }}>
+                {risk.level} RISK
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <Typography variant="h6" gutterBottom>
+              Offensive Security Assessment
+            </Typography>
+            <Grid container spacing={1}>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#dc2626", 0.1), borderRadius: 1 }}>
+                  <Typography variant="h5" color="error">{criticalCount}</Typography>
+                  <Typography variant="caption">Critical</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#f97316", 0.1), borderRadius: 1 }}>
+                  <Typography variant="h5" sx={{ color: "#f97316" }}>{highCount}</Typography>
+                  <Typography variant="caption">High</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#dc2626", 0.1), borderRadius: 1 }}>
+                  <Typography variant="h5" color="error">{result.secrets.length}</Typography>
+                  <Typography variant="caption">Secrets</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha(theme.palette.info.main, 0.1), borderRadius: 1 }}>
+                  <Typography variant="h5" color="info">{result.total_layers}</Typography>
+                  <Typography variant="caption">Layers</Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Attack Vector Categories */}
+      {result.security_issues.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <TargetIcon color="error" /> Attack Vectors by Category
+          </Typography>
+          <Grid container spacing={2}>
+            {categories.container_escape.length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha("#dc2626", 0.05), borderColor: alpha("#dc2626", 0.3) }}>
+                  <Typography variant="subtitle2" sx={{ color: "#dc2626", display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    🚨 Container Escape ({categories.container_escape.length})
+                  </Typography>
+                  {categories.container_escape.slice(0, 3).map((issue, idx) => (
+                    <Box key={idx} sx={{ mb: 1 }}>
+                      <Typography variant="body2">{issue.description}</Typography>
+                      {issue.attack_vector && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                          → {issue.attack_vector}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Paper>
+              </Grid>
+            )}
+            {categories.lateral_movement.length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha("#f97316", 0.05), borderColor: alpha("#f97316", 0.3) }}>
+                  <Typography variant="subtitle2" sx={{ color: "#f97316", display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    ⚠️ Lateral Movement ({categories.lateral_movement.length})
+                  </Typography>
+                  {categories.lateral_movement.slice(0, 3).map((issue, idx) => (
+                    <Box key={idx} sx={{ mb: 1 }}>
+                      <Typography variant="body2">{issue.description}</Typography>
+                      {issue.attack_vector && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                          → {issue.attack_vector}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Paper>
+              </Grid>
+            )}
+            {categories.privilege_escalation.length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha("#eab308", 0.05), borderColor: alpha("#eab308", 0.3) }}>
+                  <Typography variant="subtitle2" sx={{ color: "#eab308", display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    ⬆️ Privilege Escalation ({categories.privilege_escalation.length})
+                  </Typography>
+                  {categories.privilege_escalation.slice(0, 3).map((issue, idx) => (
+                    <Box key={idx} sx={{ mb: 1 }}>
+                      <Typography variant="body2">{issue.description}</Typography>
+                      {issue.attack_vector && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                          → {issue.attack_vector}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Paper>
+              </Grid>
+            )}
+            {categories.secrets.length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha("#dc2626", 0.05), borderColor: alpha("#dc2626", 0.3) }}>
+                  <Typography variant="subtitle2" sx={{ color: "#dc2626", display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    🔑 Secrets Exposure ({categories.secrets.length})
+                  </Typography>
+                  {categories.secrets.slice(0, 3).map((issue, idx) => (
+                    <Box key={idx} sx={{ mb: 1 }}>
+                      <Typography variant="body2">{issue.description}</Typography>
+                      {issue.attack_vector && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                          → {issue.attack_vector}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Paper>
+              </Grid>
+            )}
+            {categories.network_exposure.length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
+                  <Typography variant="subtitle2" sx={{ color: theme.palette.info.main, display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    🌐 Network Exposure ({categories.network_exposure.length})
+                  </Typography>
+                  {categories.network_exposure.slice(0, 3).map((issue, idx) => (
+                    <Box key={idx} sx={{ mb: 1 }}>
+                      <Typography variant="body2">{issue.description}</Typography>
+                    </Box>
+                  ))}
+                </Paper>
+              </Grid>
+            )}
+            {categories.supply_chain.length > 0 && (
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.05), borderColor: alpha("#8b5cf6", 0.3) }}>
+                  <Typography variant="subtitle2" sx={{ color: "#8b5cf6", display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    📦 Supply Chain ({categories.supply_chain.length})
+                  </Typography>
+                  {categories.supply_chain.slice(0, 3).map((issue, idx) => (
+                    <Box key={idx} sx={{ mb: 1 }}>
+                      <Typography variant="body2">{issue.description}</Typography>
+                    </Box>
+                  ))}
+                </Paper>
+              </Grid>
+            )}
+          </Grid>
+        </Paper>
+      )}
+
       {/* Image Info */}
       <Paper sx={{ p: 3, mb: 3, bgcolor: alpha(theme.palette.background.paper, 0.7) }}>
         <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <DockerIcon color="info" /> Docker Image Information
+          <DockerIcon color="info" /> Image Information
         </Typography>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
@@ -11540,96 +11790,125 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
         </Grid>
       </Paper>
 
-      {/* Security Issues */}
+      {/* All Security Issues (Detailed) */}
       {result.security_issues.length > 0 && (
-        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha(theme.palette.error.main, 0.05) }}>
-          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <BugIcon color="error" /> Security Issues ({result.security_issues.length})
-          </Typography>
-          <List dense>
-            {result.security_issues.map((issue, idx) => (
-              <ListItem key={idx}>
-                <ListItemIcon>
-                  <Chip
-                    label={issue.severity}
-                    size="small"
-                    sx={{
-                      bgcolor: alpha(getSeverityColor(issue.severity), 0.2),
-                      color: getSeverityColor(issue.severity),
-                      fontWeight: 600,
-                    }}
-                  />
-                </ListItemIcon>
-                <ListItemText
-                  primary={issue.description}
-                  secondary={issue.command ? (
-                    <Typography
-                      variant="caption"
-                      fontFamily="monospace"
-                      sx={{ wordBreak: "break-all" }}
-                    >
-                      {issue.command}
-                    </Typography>
-                  ) : issue.category}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
+        <Accordion defaultExpanded>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <BugIcon color="error" /> All Security Issues ({result.security_issues.length})
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <TableContainer sx={{ maxHeight: 400 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell width={100}>Severity</TableCell>
+                    <TableCell width={150}>Category</TableCell>
+                    <TableCell>Issue</TableCell>
+                    <TableCell>Attack Vector</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {result.security_issues.map((issue, idx) => (
+                    <TableRow key={idx} sx={{ bgcolor: issue.severity?.toLowerCase() === "critical" ? alpha("#dc2626", 0.05) : "inherit" }}>
+                      <TableCell>
+                        <Chip
+                          label={issue.severity}
+                          size="small"
+                          sx={{
+                            bgcolor: alpha(getSeverityColor(issue.severity), 0.2),
+                            color: getSeverityColor(issue.severity),
+                            fontWeight: 600,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption">{issue.category}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{issue.description}</Typography>
+                        {issue.command && (
+                          <Typography variant="caption" fontFamily="monospace" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                            {issue.command.length > 100 ? issue.command.slice(0, 100) + "..." : issue.command}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption" color="error" sx={{ fontStyle: "italic" }}>
+                          {issue.attack_vector || "-"}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </AccordionDetails>
+        </Accordion>
       )}
 
       {/* Secrets in Layers */}
       {result.secrets.length > 0 && (
-        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha(theme.palette.error.main, 0.05) }}>
-          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <SecretIcon color="error" /> Secrets in Image Layers ({result.secrets.length})
-          </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Layer</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Value</TableCell>
-                  <TableCell>Severity</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {result.secrets.map((secret, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>
-                      <Tooltip title={secret.layer_command}>
-                        <Typography variant="body2" fontFamily="monospace">
-                          {secret.layer_id.slice(0, 8)}
-                        </Typography>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>{secret.secret_type}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
-                        {secret.masked_value}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={secret.severity}
-                        size="small"
-                        sx={{
-                          bgcolor: alpha(getSeverityColor(secret.severity), 0.2),
-                          color: getSeverityColor(secret.severity),
-                        }}
-                      />
-                    </TableCell>
+        <Accordion sx={{ mt: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1, color: "#dc2626" }}>
+              <SecretIcon /> Secrets Found in Image ({result.secrets.length})
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                <strong>Attack Vector:</strong> Secrets in image layers can be extracted using <code>docker save</code> + <code>tar</code> even if "deleted" in later layers.
+              </Typography>
+            </Alert>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Layer</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Value (Masked)</TableCell>
+                    <TableCell>Severity</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
+                </TableHead>
+                <TableBody>
+                  {result.secrets.map((secret, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>
+                        <Tooltip title={secret.layer_command}>
+                          <Typography variant="body2" fontFamily="monospace">
+                            {secret.layer_id.slice(0, 8)}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>{secret.secret_type}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                          {secret.masked_value}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={secret.severity}
+                          size="small"
+                          sx={{
+                            bgcolor: alpha(getSeverityColor(secret.severity), 0.2),
+                            color: getSeverityColor(secret.severity),
+                          }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </AccordionDetails>
+        </Accordion>
       )}
 
       {/* Image Layers */}
-      <Accordion defaultExpanded>
+      <Accordion sx={{ mt: 2 }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <LayersIcon color="primary" /> Image Layers ({result.layers.length})
@@ -11684,7 +11963,7 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
       {result.ai_analysis && (
         <Paper sx={{ p: 3, mt: 3, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
           <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <AiIcon color="info" /> AI Analysis
+            <AiIcon color="info" /> AI Security Analysis
           </Typography>
           <Typography
             variant="body2"
@@ -11703,318 +11982,16 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
   );
 }
 
-// ============================================================================
-// Hex Viewer Component
-// ============================================================================
-
-function HexViewer() {
-  const theme = useTheme();
-  const [file, setFile] = useState<File | null>(null);
-  const [fileId, setFileId] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
-  const [totalSize, setTotalSize] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  const [hexData, setHexData] = useState<HexViewResult | null>(null);
-  const [currentOffset, setCurrentOffset] = useState(0);
-  const [bytesPerPage] = useState(512);
-  
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchType, setSearchType] = useState<"text" | "hex">("text");
-  const [searchResults, setSearchResults] = useState<HexSearchResponse | null>(null);
-  const [searching, setSearching] = useState(false);
-
-  const handleFileSelect = async (selectedFile: File) => {
-    setFile(selectedFile);
-    setFileName(selectedFile.name);
-    setError(null);
-    setLoading(true);
-    setSearchResults(null);
-    
-    try {
-      const result = await reverseEngineeringClient.uploadForHexView(selectedFile);
-      setFileId(result.file_id);
-      setTotalSize(result.file_size);
-      
-      // Load first chunk
-      const hexResult = await reverseEngineeringClient.getHexView(result.file_id, 0, bytesPerPage);
-      setHexData(hexResult);
-      setCurrentOffset(0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload file");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadHexData = async (offset: number) => {
-    if (!fileId) return;
-    setLoading(true);
-    try {
-      const result = await reverseEngineeringClient.getHexView(fileId, offset, bytesPerPage);
-      setHexData(result);
-      setCurrentOffset(offset);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load hex data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSearch = async () => {
-    if (!fileId || !searchQuery) return;
-    setSearching(true);
-    setError(null);
-    try {
-      const result = await reverseEngineeringClient.searchHex(fileId, searchQuery, searchType, 50);
-      setSearchResults(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed");
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const goToOffset = (offset: number) => {
-    const alignedOffset = Math.floor(offset / 16) * 16;
-    loadHexData(alignedOffset);
-    setSearchResults(null);
-  };
-
-  const formatOffset = (offset: number) => offset.toString(16).toUpperCase().padStart(8, "0");
-
-  return (
-    <Paper sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <HexIcon color="primary" /> Interactive Hex Viewer
-      </Typography>
-
-      {/* File Upload */}
-      {!fileId && (
-        <Box
-          sx={{
-            border: `2px dashed ${theme.palette.divider}`,
-            borderRadius: 2,
-            p: 4,
-            textAlign: "center",
-            cursor: "pointer",
-            "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.05) },
-          }}
-          onClick={() => document.getElementById("hex-file-input")?.click()}
-        >
-          <input
-            id="hex-file-input"
-            type="file"
-            hidden
-            onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-          />
-          <UploadIcon sx={{ fontSize: 48, color: "text.secondary", mb: 1 }} />
-          <Typography>Click to select a file for hex viewing</Typography>
-          <Typography variant="caption" color="text.secondary">
-            Any binary file up to 500MB
-          </Typography>
-        </Box>
-      )}
-
-      {loading && <LinearProgress sx={{ my: 2 }} />}
-      
-      {error && (
-        <Alert severity="error" sx={{ my: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Hex View Display */}
-      {fileId && hexData && (
-        <Box>
-          {/* File Info & Controls */}
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-            <Box>
-              <Typography variant="subtitle1">{fileName}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {totalSize.toLocaleString()} bytes | Viewing offset 0x{formatOffset(currentOffset)} - 0x{formatOffset(currentOffset + hexData.length)}
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => {
-                setFileId(null);
-                setFile(null);
-                setHexData(null);
-                setSearchResults(null);
-              }}
-            >
-              Load Different File
-            </Button>
-          </Box>
-
-          {/* Navigation */}
-          <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap", alignItems: "center" }}>
-            <IconButton
-              onClick={() => goToOffset(0)}
-              disabled={currentOffset === 0}
-              size="small"
-            >
-              <FirstPageIcon />
-            </IconButton>
-            <IconButton
-              onClick={() => loadHexData(Math.max(0, currentOffset - bytesPerPage))}
-              disabled={currentOffset === 0}
-              size="small"
-            >
-              <PrevIcon />
-            </IconButton>
-            <TextField
-              size="small"
-              label="Go to offset (hex)"
-              placeholder="e.g., 1000"
-              sx={{ width: 150 }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const input = (e.target as HTMLInputElement).value;
-                  const offset = parseInt(input, 16);
-                  if (!isNaN(offset)) goToOffset(offset);
-                }
-              }}
-            />
-            <IconButton
-              onClick={() => loadHexData(currentOffset + bytesPerPage)}
-              disabled={currentOffset + bytesPerPage >= totalSize}
-              size="small"
-            >
-              <NextIcon />
-            </IconButton>
-            <IconButton
-              onClick={() => goToOffset(totalSize - bytesPerPage)}
-              disabled={currentOffset + bytesPerPage >= totalSize}
-              size="small"
-            >
-              <LastPageIcon />
-            </IconButton>
-          </Box>
-
-          {/* Search */}
-          <Box sx={{ display: "flex", gap: 1, mb: 2, alignItems: "center" }}>
-            <TextField
-              size="small"
-              label="Search"
-              placeholder={searchType === "hex" ? "4d 5a 90 00" : "MZ"}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{ flexGrow: 1 }}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={searchType === "hex"}
-                  onChange={(e) => setSearchType(e.target.checked ? "hex" : "text")}
-                  size="small"
-                />
-              }
-              label="Hex"
-            />
-            <Button
-              variant="contained"
-              onClick={handleSearch}
-              disabled={searching || !searchQuery}
-              startIcon={searching ? <CircularProgress size={16} /> : <SearchIcon />}
-            >
-              Search
-            </Button>
-          </Box>
-
-          {/* Search Results */}
-          {searchResults && searchResults.results.length > 0 && (
-            <Paper variant="outlined" sx={{ p: 2, mb: 2, maxHeight: 200, overflow: "auto" }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Found {searchResults.total_matches} matches for "{searchResults.query}"
-              </Typography>
-              <List dense>
-                {searchResults.results.slice(0, 20).map((match, idx) => (
-                  <ListItem
-                    key={idx}
-                    sx={{ cursor: "pointer", "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.1) } }}
-                    onClick={() => goToOffset(match.offset)}
-                  >
-                    <ListItemText
-                      primary={
-                        <Typography variant="body2" fontFamily="monospace">
-                          Offset: 0x{match.offset_hex}
-                        </Typography>
-                      }
-                      secondary={
-                        <Typography variant="caption" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
-                          {match.context_ascii}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            </Paper>
-          )}
-
-          {/* Hex Display Table */}
-          <TableContainer
-            component={Paper}
-            variant="outlined"
-            sx={{
-              fontFamily: "monospace",
-              fontSize: "13px",
-              maxHeight: 500,
-              "& .MuiTableCell-root": {
-                py: 0.5,
-                px: 1,
-                fontFamily: "monospace",
-                fontSize: "13px",
-              },
-            }}
-          >
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), width: 90 }}>Offset</TableCell>
-                  <TableCell sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
-                    00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
-                  </TableCell>
-                  <TableCell sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), width: 150 }}>ASCII</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {hexData.rows.map((row, idx) => (
-                  <TableRow
-                    key={idx}
-                    sx={{
-                      "&:nth-of-type(odd)": { bgcolor: alpha(theme.palette.action.hover, 0.5) },
-                    }}
-                  >
-                    <TableCell sx={{ color: theme.palette.primary.main, fontWeight: 600 }}>
-                      {row.offset_hex}
-                    </TableCell>
-                    <TableCell>{row.hex}</TableCell>
-                    <TableCell sx={{ color: theme.palette.text.secondary }}>{row.ascii}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      )}
-    </Paper>
-  );
-}
-
 // Main Component
 export default function ReverseEngineeringHub() {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('projectId') ? parseInt(searchParams.get('projectId')!) : undefined;
   const projectName = searchParams.get('projectName') ? decodeURIComponent(searchParams.get('projectName')!) : undefined;
-  
-  const [activeTab, setActiveTab] = useState(0);
+  const initialTab = searchParams.get('tab') ? parseInt(searchParams.get('tab')!) : 0;
+
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [status, setStatus] = useState<ReverseEngineeringStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -12078,6 +12055,8 @@ export default function ReverseEngineeringHub() {
   const [selectedImage, setSelectedImage] = useState<string>("");
   const [dockerResult, setDockerResult] = useState<DockerAnalysisResult | null>(null);
   const [dockerLoading, setDockerLoading] = useState(false);
+  const [dockerImageFilter, setDockerImageFilter] = useState("");
+  const [dockerImagesLoading, setDockerImagesLoading] = useState(false);
 
   // Saved reports state
   const [savedReports, setSavedReports] = useState<REReportSummary[]>([]);
@@ -12085,6 +12064,10 @@ export default function ReverseEngineeringHub() {
   const [savingReport, setSavingReport] = useState(false);
   const [viewingReportId, setViewingReportId] = useState<number | null>(null);
   const [loadingReportView, setLoadingReportView] = useState(false);
+  
+  // Share dialog state
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [reportToShare, setReportToShare] = useState<REReportSummary | null>(null);
 
   // Load status on mount
   useEffect(() => {
@@ -12116,6 +12099,26 @@ export default function ReverseEngineeringHub() {
       setLoading(false);
     }
   };
+
+  // Refresh Docker images list
+  const refreshDockerImages = async () => {
+    if (!status?.docker_available) return;
+    try {
+      setDockerImagesLoading(true);
+      const imgs = await reverseEngineeringClient.listDockerImages();
+      setDockerImages(imgs.images);
+    } catch (e: any) {
+      console.error("Failed to refresh Docker images:", e);
+    } finally {
+      setDockerImagesLoading(false);
+    }
+  };
+
+  // Filter docker images based on search
+  const filteredDockerImages = dockerImages.filter((img) =>
+    img.name.toLowerCase().includes(dockerImageFilter.toLowerCase()) ||
+    img.id.toLowerCase().includes(dockerImageFilter.toLowerCase())
+  );
 
   const loadSavedReports = async () => {
     try {
@@ -12496,11 +12499,40 @@ export default function ReverseEngineeringHub() {
     if (!dockerResult) return;
     try {
       setSavingReport(true);
+
+      // Calculate risk score for the report
+      let riskScore = 0;
+      dockerResult.security_issues.forEach((issue) => {
+        switch (issue.severity?.toLowerCase()) {
+          case "critical": riskScore += 40; break;
+          case "high": riskScore += 25; break;
+          case "medium": riskScore += 10; break;
+          case "low": riskScore += 3; break;
+        }
+      });
+      dockerResult.secrets.forEach((s) => {
+        switch (s.severity?.toLowerCase()) {
+          case "critical": riskScore += 35; break;
+          case "high": riskScore += 20; break;
+          default: riskScore += 10;
+        }
+      });
+      riskScore = Math.min(100, riskScore);
+
+      const getRiskLevel = (score: number) => {
+        if (score >= 70) return "critical";
+        if (score >= 40) return "high";
+        if (score >= 20) return "medium";
+        return "low";
+      };
+
       const report: SaveREReportRequest = {
         analysis_type: 'docker',
-        title: `Docker Analysis: ${dockerResult.image_name}`,
+        title: `Docker Inspector: ${dockerResult.image_name}`,
         filename: dockerResult.image_name,
         project_id: projectId,
+        risk_level: getRiskLevel(riskScore),
+        risk_score: riskScore,
         image_name: dockerResult.image_name,
         image_id: dockerResult.image_id,
         total_layers: dockerResult.total_layers,
@@ -12513,10 +12545,13 @@ export default function ReverseEngineeringHub() {
           image_id: dockerResult.image_id,
           total_layers: dockerResult.total_layers,
           total_size: dockerResult.total_size,
+          total_size_human: dockerResult.total_size_human,
           base_image: dockerResult.base_image,
           layers: dockerResult.layers,
           secrets: dockerResult.secrets,
           security_issues: dockerResult.security_issues,
+          risk_score: riskScore,
+          risk_level: getRiskLevel(riskScore),
         },
       };
       await reverseEngineeringClient.saveReport(report);
@@ -12919,7 +12954,7 @@ export default function ReverseEngineeringHub() {
             />
             <Chip
               icon={<DockerIcon />}
-              label="Docker Analysis"
+              label="Docker Inspector"
               color={status.docker_analysis ? "success" : "default"}
               variant={status.docker_analysis ? "filled" : "outlined"}
             />
@@ -12976,11 +13011,6 @@ export default function ReverseEngineeringHub() {
             label="Docker Inspector"
             iconPosition="start"
             disabled={!status?.docker_available}
-          />
-          <Tab
-            icon={<HexIcon />}
-            label="Hex Viewer"
-            iconPosition="start"
           />
           <Tab
             icon={<HistoryIcon />}
@@ -13954,30 +13984,109 @@ export default function ReverseEngineeringHub() {
 
                   <Divider sx={{ my: 3 }} />
 
-                  <Typography variant="subtitle2" gutterBottom>
-                    Local Images ({dockerImages.length})
-                  </Typography>
-                  <List dense sx={{ maxHeight: 300, overflow: "auto" }}>
-                    {dockerImages.map((img, idx) => (
-                      <ListItem
-                        key={idx}
-                        button
-                        onClick={() => {
-                          setSelectedImage(img.name);
-                          setDockerResult(null);
-                        }}
-                        selected={selectedImage === img.name}
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                    <Typography variant="subtitle2">
+                      Local Images ({filteredDockerImages.length}{dockerImageFilter ? ` of ${dockerImages.length}` : ""})
+                    </Typography>
+                    <Tooltip title="Refresh local images">
+                      <IconButton
+                        size="small"
+                        onClick={refreshDockerImages}
+                        disabled={dockerImagesLoading}
                       >
-                        <ListItemIcon>
-                          <DockerIcon color={selectedImage === img.name ? "primary" : "inherit"} />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={img.name}
-                          secondary={`${img.size} • ${img.id}`}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
+                        {dockerImagesLoading ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder="Search local images..."
+                    value={dockerImageFilter}
+                    onChange={(e) => setDockerImageFilter(e.target.value)}
+                    InputProps={{
+                      startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
+                      endAdornment: dockerImageFilter && (
+                        <IconButton size="small" onClick={() => setDockerImageFilter("")}>
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      ),
+                    }}
+                    sx={{ mb: 1 }}
+                  />
+
+                  {dockerImagesLoading ? (
+                    <Box sx={{ textAlign: "center", py: 3 }}>
+                      <CircularProgress size={24} />
+                      <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                        Scanning for Docker images...
+                      </Typography>
+                    </Box>
+                  ) : filteredDockerImages.length === 0 ? (
+                    <Box sx={{ textAlign: "center", py: 3, color: "text.secondary" }}>
+                      <DockerIcon sx={{ fontSize: 32, opacity: 0.3 }} />
+                      <Typography variant="body2" sx={{ mt: 1 }}>
+                        {dockerImageFilter ? "No images match your search" : "No local Docker images found"}
+                      </Typography>
+                      {!dockerImageFilter && (
+                        <Typography variant="caption">
+                          Pull images with: docker pull &lt;image&gt;
+                        </Typography>
+                      )}
+                    </Box>
+                  ) : (
+                    <List dense sx={{ maxHeight: 300, overflow: "auto" }}>
+                      {filteredDockerImages.map((img, idx) => (
+                        <ListItem
+                          key={idx}
+                          button
+                          onClick={() => {
+                            setSelectedImage(img.name);
+                            setDockerResult(null);
+                          }}
+                          selected={selectedImage === img.name}
+                          sx={{
+                            borderRadius: 1,
+                            mb: 0.5,
+                            "&.Mui-selected": {
+                              bgcolor: "primary.main",
+                              color: "primary.contrastText",
+                              "&:hover": { bgcolor: "primary.dark" },
+                            },
+                          }}
+                        >
+                          <ListItemIcon sx={{ minWidth: 36 }}>
+                            <DockerIcon
+                              fontSize="small"
+                              sx={{ color: selectedImage === img.name ? "inherit" : "primary.main" }}
+                            />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontFamily: "monospace",
+                                  fontWeight: selectedImage === img.name ? 600 : 400,
+                                }}
+                              >
+                                {img.name}
+                              </Typography>
+                            }
+                            secondary={
+                              <Typography
+                                variant="caption"
+                                sx={{ color: selectedImage === img.name ? "inherit" : "text.secondary" }}
+                              >
+                                {img.size} • ID: {img.id.slice(0, 12)}
+                              </Typography>
+                            }
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
                 </Paper>
               </Grid>
               <Grid item xs={12} md={8}>
@@ -14021,13 +14130,8 @@ export default function ReverseEngineeringHub() {
           )}
         </TabPanel>
 
-        {/* Hex Viewer Tab */}
-        <TabPanel value={activeTab} index={3}>
-          <HexViewer />
-        </TabPanel>
-
         {/* Saved Reports Tab */}
-        <TabPanel value={activeTab} index={4}>
+        <TabPanel value={activeTab} index={3}>
           <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Typography variant="h6">
               Saved Analysis Reports
@@ -14177,6 +14281,18 @@ export default function ReverseEngineeringHub() {
                               <WordIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
+                          <Tooltip title="Share to conversation">
+                            <IconButton
+                              size="small"
+                              color="secondary"
+                              onClick={() => {
+                                setReportToShare(report);
+                                setShareDialogOpen(true);
+                              }}
+                            >
+                              <ShareIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Delete Report">
                             <IconButton
                               size="small"
@@ -14210,6 +14326,39 @@ export default function ReverseEngineeringHub() {
         unifiedScanResult={unifiedApkResult}
         onNavigateToTab={(tabIndex) => setActiveTab(tabIndex)}
       />
+
+      {/* Share Report Dialog */}
+      <ShareToConversationDialog
+        open={shareDialogOpen}
+        onClose={() => {
+          setShareDialogOpen(false);
+          setReportToShare(null);
+        }}
+        shareType="report"
+        itemId={reportToShare?.id || 0}
+        itemTitle={reportToShare?.title || 'RE Analysis Report'}
+        itemSeverity={reportToShare?.risk_level}
+        itemDetails={{
+          type: reportToShare?.analysis_type ? `${reportToShare.analysis_type.toUpperCase()} Analysis` : undefined,
+          filePath: reportToShare?.filename,
+          projectName: 'Reverse Engineering Hub',
+        }}
+        onShareSuccess={() => {
+          // Optionally show a success snackbar
+        }}
+      />
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, mb: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </>
     </LearnPageLayout>
   );

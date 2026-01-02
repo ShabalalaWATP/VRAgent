@@ -26,10 +26,12 @@ import {
   Tooltip,
   Alert,
   AlertTitle,
+  alpha,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import QuizIcon from "@mui/icons-material/Quiz";
 import StorageIcon from "@mui/icons-material/Storage";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -40,8 +42,9 @@ import SearchIcon from "@mui/icons-material/Search";
 import CodeIcon from "@mui/icons-material/Code";
 import BuildIcon from "@mui/icons-material/Build";
 import LockIcon from "@mui/icons-material/Lock";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -536,14 +539,999 @@ rg -n \"SELECT.*\\+|\\+.*SELECT\" src`;
     "Avoid destructive queries or payloads.",
     "Focus on detection, prevention, and secure code review.",
   ];
+  const QUIZ_QUESTION_COUNT = 10;
+  const QUIZ_ACCENT_COLOR = "#f97316";
+  const quizQuestions: QuizQuestion[] = [
+    {
+      id: 1,
+      topic: "Fundamentals",
+      question: "What is SQL injection?",
+      options: [
+        "A database backup process",
+        "Inserting malicious SQL through untrusted input",
+        "Encrypting SQL queries",
+        "Running SQL in the browser",
+      ],
+      correctAnswer: 1,
+      explanation: "SQL injection happens when untrusted input becomes part of a SQL command.",
+    },
+    {
+      id: 2,
+      topic: "Fundamentals",
+      question: "SQL injection occurs when an application:",
+      options: [
+        "Uses HTTPS",
+        "Concatenates untrusted input into SQL",
+        "Encrypts data at rest",
+        "Uses an ORM",
+      ],
+      correctAnswer: 1,
+      explanation: "String concatenation allows user input to change the query structure.",
+    },
+    {
+      id: 3,
+      topic: "Fundamentals",
+      question: "The primary impact of SQL injection is:",
+      options: [
+        "Faster queries",
+        "Unauthorized data access or modification",
+        "Improved caching",
+        "Better UI performance",
+      ],
+      correctAnswer: 1,
+      explanation: "Attackers can read, modify, or delete data beyond their permissions.",
+    },
+    {
+      id: 4,
+      topic: "Fundamentals",
+      question: "The best first-line defense against SQL injection is:",
+      options: [
+        "Input blacklists",
+        "Parameterized queries or prepared statements",
+        "Obfuscating SQL",
+        "Hiding endpoints",
+      ],
+      correctAnswer: 1,
+      explanation: "Parameters separate data from code, preventing SQL interpretation.",
+    },
+    {
+      id: 5,
+      topic: "Fundamentals",
+      question: "Why is input validation alone insufficient for SQL injection?",
+      options: [
+        "It slows the app",
+        "Attackers can bypass it and still inject SQL",
+        "It breaks TLS",
+        "It disables logging",
+      ],
+      correctAnswer: 1,
+      explanation: "Validation helps but does not replace parameterized queries.",
+    },
+    {
+      id: 6,
+      topic: "Fundamentals",
+      question: "Least privilege for the database account means:",
+      options: [
+        "Use admin for all queries",
+        "Grant only required permissions",
+        "Disable logging",
+        "Share credentials across services",
+      ],
+      correctAnswer: 1,
+      explanation: "Limiting permissions reduces the damage from a compromise.",
+    },
+    {
+      id: 7,
+      topic: "Fundamentals",
+      question: "SQL injection can happen in:",
+      options: [
+        "Only login forms",
+        "Any input that reaches a query",
+        "Only URLs",
+        "Only cookies",
+      ],
+      correctAnswer: 1,
+      explanation: "Any input that becomes part of a query can be a vector.",
+    },
+    {
+      id: 8,
+      topic: "Fundamentals",
+      question: "A prepared statement:",
+      options: [
+        "Executes multiple statements at once",
+        "Separates SQL structure from data with placeholders",
+        "Is the same as escaping",
+        "Disables indexes",
+      ],
+      correctAnswer: 1,
+      explanation: "Prepared statements bind values instead of concatenating them.",
+    },
+    {
+      id: 9,
+      topic: "Fundamentals",
+      question: "Second-order SQL injection is when:",
+      options: [
+        "Errors are hidden",
+        "Stored input is later used in an unsafe query",
+        "A query runs twice",
+        "Only numeric fields are affected",
+      ],
+      correctAnswer: 1,
+      explanation: "Stored data can still be untrusted when reused in queries.",
+    },
+    {
+      id: 10,
+      topic: "Fundamentals",
+      question: "Which is NOT a SQL injection type?",
+      options: [
+        "Union-based",
+        "Error-based",
+        "Cross-site scripting",
+        "Time-based blind",
+      ],
+      correctAnswer: 2,
+      explanation: "Cross-site scripting is a different class of vulnerability.",
+    },
+    {
+      id: 11,
+      topic: "Injection Types",
+      question: "Error-based SQL injection relies on:",
+      options: [
+        "Silent responses",
+        "Database error messages",
+        "Only timing",
+        "Only DNS lookups",
+      ],
+      correctAnswer: 1,
+      explanation: "Error messages can leak query structure and data.",
+    },
+    {
+      id: 12,
+      topic: "Injection Types",
+      question: "Union-based SQL injection requires:",
+      options: [
+        "Matching column counts and compatible types",
+        "A WAF bypass",
+        "A file upload",
+        "TLS downgrade",
+      ],
+      correctAnswer: 0,
+      explanation: "Union queries must align column counts and types.",
+    },
+    {
+      id: 13,
+      topic: "Injection Types",
+      question: "Boolean-based blind SQL injection uses:",
+      options: [
+        "Response differences for true/false conditions",
+        "Syntax errors only",
+        "Only DNS callbacks",
+        "Stacked queries",
+      ],
+      correctAnswer: 0,
+      explanation: "Attackers infer data from changes in responses.",
+    },
+    {
+      id: 14,
+      topic: "Injection Types",
+      question: "Time-based SQL injection confirms execution by:",
+      options: [
+        "Returning rows",
+        "Triggering delays like SLEEP",
+        "Changing HTTP status only",
+        "Dropping tables",
+      ],
+      correctAnswer: 1,
+      explanation: "Delays indicate the injected condition evaluated true.",
+    },
+    {
+      id: 15,
+      topic: "Injection Types",
+      question: "Out-of-band SQL injection uses:",
+      options: [
+        "Local error messages",
+        "External DNS/HTTP callbacks",
+        "Only client-side code",
+        "Browser storage",
+      ],
+      correctAnswer: 1,
+      explanation: "The database calls out to an attacker-controlled host.",
+    },
+    {
+      id: 16,
+      topic: "Injection Types",
+      question: "Stacked queries allow an attacker to:",
+      options: [
+        "Run multiple SQL statements in one request",
+        "Read cookies",
+        "Bypass TLS",
+        "Modify HTML only",
+      ],
+      correctAnswer: 0,
+      explanation: "Multiple statements can execute sequentially.",
+    },
+    {
+      id: 17,
+      topic: "Injection Types",
+      question: "Stacked queries usually require:",
+      options: [
+        "Multiple statements enabled by the driver or server",
+        "A UNION clause",
+        "A view",
+        "No semicolons",
+      ],
+      correctAnswer: 0,
+      explanation: "Many drivers disable multi-statement execution by default.",
+    },
+    {
+      id: 18,
+      topic: "Injection Types",
+      question: "A login bypass using ' OR '1'='1 is an example of:",
+      options: [
+        "Tautology-based injection",
+        "Out-of-band injection",
+        "Hash collision",
+        "CSRF",
+      ],
+      correctAnswer: 0,
+      explanation: "The condition is always true, bypassing checks.",
+    },
+    {
+      id: 19,
+      topic: "Injection Types",
+      question: "Which SQLi type is hardest to confirm with visible output?",
+      options: [
+        "Error-based",
+        "Union-based",
+        "Blind",
+        "Inline",
+      ],
+      correctAnswer: 2,
+      explanation: "Blind SQLi requires inference from timing or subtle changes.",
+    },
+    {
+      id: 20,
+      topic: "Injection Types",
+      question: "Second-order SQL injection most often appears in:",
+      options: [
+        "Admin panels or exports that reuse stored input",
+        "Static landing pages",
+        "CDN caches",
+        "Client-only apps",
+      ],
+      correctAnswer: 0,
+      explanation: "Stored input can become dangerous when used later.",
+    },
+    {
+      id: 21,
+      topic: "Detection",
+      question: "MySQL error 'You have an error in your SQL syntax' suggests:",
+      options: [
+        "A caching issue",
+        "Possible error-based SQL injection",
+        "Valid input",
+        "TLS failure",
+      ],
+      correctAnswer: 1,
+      explanation: "Syntax errors are a common SQLi signal.",
+    },
+    {
+      id: 22,
+      topic: "Detection",
+      question: "Repeated 500 errors after adding quotes to input indicates:",
+      options: [
+        "Potential SQL injection",
+        "Successful MFA",
+        "CSP violation",
+        "Normal traffic",
+      ],
+      correctAnswer: 0,
+      explanation: "Quotes can break query strings and trigger SQL errors.",
+    },
+    {
+      id: 23,
+      topic: "Detection",
+      question: "Consistent delays after SLEEP(5) indicate:",
+      options: [
+        "Time-based blind SQL injection",
+        "Rate limiting",
+        "DNS caching",
+        "TLS renegotiation",
+      ],
+      correctAnswer: 0,
+      explanation: "Timing changes signal true/false evaluation in blind SQLi.",
+    },
+    {
+      id: 24,
+      topic: "Detection",
+      question: "Which log is most useful for SQL injection triage?",
+      options: [
+        "Database error or audit logs",
+        "Browser cache",
+        "CSS files",
+        "Image CDN logs only",
+      ],
+      correctAnswer: 0,
+      explanation: "Database and app logs show the real query failures.",
+    },
+    {
+      id: 25,
+      topic: "Detection",
+      question: "Outbound DNS lookups from a database host are a sign of:",
+      options: [
+        "Out-of-band SQL injection testing",
+        "Normal backups",
+        "User login",
+        "Static content delivery",
+      ],
+      correctAnswer: 0,
+      explanation: "OOB attacks use DNS or HTTP callbacks for confirmation.",
+    },
+    {
+      id: 26,
+      topic: "Detection",
+      question: "A sudden spike in slow queries on one endpoint can mean:",
+      options: [
+        "Injection probes or heavy scans",
+        "New CSS load",
+        "Static asset optimization",
+        "No issue",
+      ],
+      correctAnswer: 0,
+      explanation: "Attackers often cause slow queries with time-based payloads.",
+    },
+    {
+      id: 27,
+      topic: "Detection",
+      question: "A response that grows only when OR 1=1 is added suggests:",
+      options: [
+        "Boolean-based SQL injection",
+        "CSRF",
+        "JWT validation",
+        "CORS issue",
+      ],
+      correctAnswer: 0,
+      explanation: "A true condition increases results in boolean-based SQLi.",
+    },
+    {
+      id: 28,
+      topic: "Detection",
+      question: "Which is a false positive to rule out first?",
+      options: [
+        "Recent deploy or schema change",
+        "Any SQL error",
+        "Any slow query",
+        "Any 200 response",
+      ],
+      correctAnswer: 0,
+      explanation: "Changes in code or schema can explain new errors.",
+    },
+    {
+      id: 29,
+      topic: "Detection",
+      question: "Which signal is least likely to indicate SQL injection?",
+      options: [
+        "SQL syntax errors in responses",
+        "Unexpected table names in logs",
+        "Static asset 304 responses",
+        "Time delays after SQL functions",
+      ],
+      correctAnswer: 2,
+      explanation: "Static asset caching is unrelated to SQL injection.",
+    },
+    {
+      id: 30,
+      topic: "Detection",
+      question: "First step in SQL injection triage is to:",
+      options: [
+        "Identify the endpoint and parameter",
+        "Drop the database",
+        "Disable TLS",
+        "Ignore logs",
+      ],
+      correctAnswer: 0,
+      explanation: "You need the exact entry point before investigating.",
+    },
+    {
+      id: 31,
+      topic: "Prevention",
+      question: "Parameterized queries prevent SQL injection because they:",
+      options: [
+        "Send SQL and data separately",
+        "Encrypt SQL",
+        "Hide endpoints",
+        "Disable logging",
+      ],
+      correctAnswer: 0,
+      explanation: "Parameters ensure user input cannot alter query structure.",
+    },
+    {
+      id: 32,
+      topic: "Prevention",
+      question: "Escaping user input alone is:",
+      options: [
+        "Error-prone and incomplete",
+        "Always sufficient",
+        "Better than parameters",
+        "Required for all queries",
+      ],
+      correctAnswer: 0,
+      explanation: "Escaping rules vary and miss many injection contexts.",
+    },
+    {
+      id: 33,
+      topic: "Prevention",
+      question: "ORMs reduce SQL injection risk only if you:",
+      options: [
+        "Avoid raw string concatenation",
+        "Disable parameters",
+        "Use admin DB accounts",
+        "Return errors to users",
+      ],
+      correctAnswer: 0,
+      explanation: "Raw SQL bypasses the ORM safety mechanisms.",
+    },
+    {
+      id: 34,
+      topic: "Prevention",
+      question: "Dynamic ORDER BY is safest when you:",
+      options: [
+        "Use an allowlist and map to known columns",
+        "Concatenate user input directly",
+        "Store input in cookies",
+        "Use SELECT * only",
+      ],
+      correctAnswer: 0,
+      explanation: "Identifiers cannot be parameterized, so allowlisting is required.",
+    },
+    {
+      id: 35,
+      topic: "Prevention",
+      question: "For IN lists, a safe approach is:",
+      options: [
+        "Use array parameters or repeated placeholders",
+        "Join strings with commas",
+        "Trust JSON",
+        "Disable validation",
+      ],
+      correctAnswer: 0,
+      explanation: "Binding each value avoids injection in lists.",
+    },
+    {
+      id: 36,
+      topic: "Prevention",
+      question: "Stored procedures are safe when they:",
+      options: [
+        "Use parameters and avoid dynamic SQL",
+        "Concatenate strings",
+        "Run as admin",
+        "Return raw errors",
+      ],
+      correctAnswer: 0,
+      explanation: "Dynamic SQL inside procedures can still be injectable.",
+    },
+    {
+      id: 37,
+      topic: "Prevention",
+      question: "Hide SQL error details from users because:",
+      options: [
+        "They leak schema and query structure",
+        "They slow the UI",
+        "They break TLS",
+        "They block cookies",
+      ],
+      correctAnswer: 0,
+      explanation: "Detailed errors help attackers craft payloads.",
+    },
+    {
+      id: 38,
+      topic: "Prevention",
+      question: "Input validation helps by:",
+      options: [
+        "Enforcing expected formats and types",
+        "Replacing parameterization",
+        "Adding encryption",
+        "Disabling logs",
+      ],
+      correctAnswer: 0,
+      explanation: "Validation reduces attack surface but does not stop SQLi alone.",
+    },
+    {
+      id: 39,
+      topic: "Prevention",
+      question: "Which query is safest?",
+      options: [
+        "SELECT * FROM users WHERE id = ?",
+        "SELECT * FROM users WHERE id = <user input>",
+        "SELECT * FROM users WHERE <filter>",
+        "SELECT * FROM users ORDER BY <user input>",
+      ],
+      correctAnswer: 0,
+      explanation: "The safe query uses parameters instead of string concatenation.",
+    },
+    {
+      id: 40,
+      topic: "Prevention",
+      question: "Dynamic table names should be:",
+      options: [
+        "Chosen from a strict allowlist",
+        "Taken from user input",
+        "Built with string replace",
+        "Ignored",
+      ],
+      correctAnswer: 0,
+      explanation: "Identifiers cannot be safely parameterized without an allowlist.",
+    },
+    {
+      id: 41,
+      topic: "Prevention",
+      question: "Least privilege limits damage by:",
+      options: [
+        "Restricting accessible tables and actions",
+        "Increasing permissions",
+        "Disabling auditing",
+        "Sharing credentials",
+      ],
+      correctAnswer: 0,
+      explanation: "Lower privileges reduce the blast radius of a compromise.",
+    },
+    {
+      id: 42,
+      topic: "Prevention",
+      question: "Query builders help because they:",
+      options: [
+        "Centralize parameterization and reduce string concatenation",
+        "Disable indexes",
+        "Avoid validation",
+        "Require admin access",
+      ],
+      correctAnswer: 0,
+      explanation: "Builders produce parameterized queries consistently.",
+    },
+    {
+      id: 43,
+      topic: "Prevention",
+      question: "A safe way to handle LIMIT is to:",
+      options: [
+        "Validate numeric range and bind it",
+        "Concatenate user input",
+        "Allow any string",
+        "Use UNION",
+      ],
+      correctAnswer: 0,
+      explanation: "Validation and parameters prevent numeric injection tricks.",
+    },
+    {
+      id: 44,
+      topic: "Prevention",
+      question: "WAF rules are best described as:",
+      options: [
+        "Defense in depth, not the primary fix",
+        "A complete replacement for parameterization",
+        "Only for logging",
+        "A database feature",
+      ],
+      correctAnswer: 0,
+      explanation: "WAFs help detect and block, but code fixes are required.",
+    },
+    {
+      id: 45,
+      topic: "Prevention",
+      question: "Prepared statements protect against:",
+      options: [
+        "Injection in values, not in identifiers",
+        "All SQLi including dynamic table names",
+        "XSS only",
+        "CSRF only",
+      ],
+      correctAnswer: 0,
+      explanation: "Identifiers still need allowlists and safe mappings.",
+    },
+    {
+      id: 46,
+      topic: "Query Contexts",
+      question: "SQL injection can still happen with numeric input because:",
+      options: [
+        "Concatenation allows expressions like 1 OR 1=1",
+        "Numbers are always safe",
+        "Databases ignore numbers",
+        "Numeric input is encrypted",
+      ],
+      correctAnswer: 0,
+      explanation: "Numbers can still change logic when concatenated.",
+    },
+    {
+      id: 47,
+      topic: "Query Contexts",
+      question: "ORDER BY from user input is risky because:",
+      options: [
+        "Identifiers cannot be parameterized",
+        "It is always safe",
+        "It disables indexes",
+        "It is ignored by the DB",
+      ],
+      correctAnswer: 0,
+      explanation: "Only allowlisted identifiers should be used.",
+    },
+    {
+      id: 48,
+      topic: "Query Contexts",
+      question: "LIKE searches are risky when:",
+      options: [
+        "Wildcards are not escaped and input is concatenated",
+        "Parameters are used",
+        "Only fixed strings are used",
+        "Indexes exist",
+      ],
+      correctAnswer: 0,
+      explanation: "Unescaped wildcards can alter the intended search logic.",
+    },
+    {
+      id: 49,
+      topic: "Query Contexts",
+      question: "Multi-tenant queries must always:",
+      options: [
+        "Enforce tenant_id scoping",
+        "Use admin accounts",
+        "Disable indexes",
+        "Return all tenants",
+      ],
+      correctAnswer: 0,
+      explanation: "Tenant scoping prevents cross-tenant data access.",
+    },
+    {
+      id: 50,
+      topic: "Query Contexts",
+      question: "CSV imports can lead to SQL injection when:",
+      options: [
+        "Stored data is later used in unsafe queries",
+        "Files are compressed",
+        "Headers are missing",
+        "Encoding is UTF-8",
+      ],
+      correctAnswer: 0,
+      explanation: "Second-order SQLi often starts with stored data.",
+    },
+    {
+      id: 51,
+      topic: "Query Contexts",
+      question: "Safe dynamic filters are built by:",
+      options: [
+        "Collecting parameterized fragments and binding values",
+        "Concatenating raw SQL",
+        "Disabling validation",
+        "Using eval",
+      ],
+      correctAnswer: 0,
+      explanation: "Build the WHERE clause with placeholders and bound values.",
+    },
+    {
+      id: 52,
+      topic: "Query Contexts",
+      question: "A report builder is risky when it:",
+      options: [
+        "Concatenates user-defined filters into SQL",
+        "Uses predefined templates",
+        "Uses parameters",
+        "Limits output",
+      ],
+      correctAnswer: 0,
+      explanation: "Ad hoc filters are a common source of injection.",
+    },
+    {
+      id: 53,
+      topic: "Query Contexts",
+      question: "Dynamic column selection should use:",
+      options: [
+        "Allowlisted mappings",
+        "User input directly",
+        "Regex replaces",
+        "Random columns",
+      ],
+      correctAnswer: 0,
+      explanation: "Map user choices to known safe identifiers.",
+    },
+    {
+      id: 54,
+      topic: "Query Contexts",
+      question: "The statement WHERE name = '<user input>' is:",
+      options: [
+        "Vulnerable to SQL injection",
+        "Safe because of quotes",
+        "Safe in all databases",
+        "A prepared statement",
+      ],
+      correctAnswer: 0,
+      explanation: "Concatenation creates an injection point.",
+    },
+    {
+      id: 55,
+      topic: "Query Contexts",
+      question: "JSON path input should be:",
+      options: [
+        "Allowlisted or mapped to safe paths",
+        "Concatenated directly",
+        "Ignored",
+        "Only base64 encoded",
+      ],
+      correctAnswer: 0,
+      explanation: "Dynamic paths can be abused without strict control.",
+    },
+    {
+      id: 56,
+      topic: "Query Contexts",
+      question: "Using ORM .where(\"id = \" + id) is:",
+      options: [
+        "Vulnerable",
+        "Safe because ORM is used",
+        "Equivalent to parameters",
+        "Recommended",
+      ],
+      correctAnswer: 0,
+      explanation: "String concatenation defeats ORM protections.",
+    },
+    {
+      id: 57,
+      topic: "Query Contexts",
+      question: "If the DB user has DROP privileges, SQLi impact includes:",
+      options: [
+        "Data destruction",
+        "Only read access",
+        "UI glitches",
+        "Cache invalidation",
+      ],
+      correctAnswer: 0,
+      explanation: "Elevated privileges allow destructive statements.",
+    },
+    {
+      id: 58,
+      topic: "Query Contexts",
+      question: "Second-order SQL injection is prevented by:",
+      options: [
+        "Parameterizing queries even for stored data",
+        "Only validating on input",
+        "Disabling indexes",
+        "Using GET requests",
+      ],
+      correctAnswer: 0,
+      explanation: "Stored data must be treated as untrusted.",
+    },
+    {
+      id: 59,
+      topic: "Query Contexts",
+      question: "Which area often hides SQL injection?",
+      options: [
+        "Admin analytics with ad hoc filters",
+        "Static help pages",
+        "Image CDN",
+        "Client-only apps",
+      ],
+      correctAnswer: 0,
+      explanation: "Reporting and analytics commonly build dynamic SQL.",
+    },
+    {
+      id: 60,
+      topic: "Query Contexts",
+      question: "SQL injection in stored procedures occurs when they:",
+      options: [
+        "Build dynamic SQL with concatenation",
+        "Use fixed parameters",
+        "Use typed parameters only",
+        "Run in read-only mode",
+      ],
+      correctAnswer: 0,
+      explanation: "Dynamic SQL inside procedures can still be injectable.",
+    },
+    {
+      id: 61,
+      topic: "Hardening",
+      question: "After fixing SQL injection, the best validation is to:",
+      options: [
+        "Add regression tests for query paths",
+        "Delete logs",
+        "Disable monitoring",
+        "Hide endpoints",
+      ],
+      correctAnswer: 0,
+      explanation: "Tests confirm the fix and prevent regressions.",
+    },
+    {
+      id: 62,
+      topic: "Hardening",
+      question: "Monitoring should alert on:",
+      options: [
+        "SQL errors and unusual query patterns",
+        "Normal 200 responses",
+        "Static asset cache hits",
+        "CSS changes",
+      ],
+      correctAnswer: 0,
+      explanation: "Error and anomaly detection helps spot active attacks.",
+    },
+    {
+      id: 63,
+      topic: "Hardening",
+      question: "Rotating DB credentials after an incident helps:",
+      options: [
+        "Limit exposure from leaked credentials",
+        "Increase privileges",
+        "Disable TLS",
+        "Slow queries",
+      ],
+      correctAnswer: 0,
+      explanation: "Rotation cuts off attackers using stolen credentials.",
+    },
+    {
+      id: 64,
+      topic: "Hardening",
+      question: "Read-only accounts are best for:",
+      options: [
+        "Reporting endpoints",
+        "Schema migrations",
+        "Admin tooling",
+        "User management",
+      ],
+      correctAnswer: 0,
+      explanation: "Read-only access reduces risk in reporting paths.",
+    },
+    {
+      id: 65,
+      topic: "Hardening",
+      question: "Network segmentation helps by:",
+      options: [
+        "Limiting access to database servers",
+        "Speeding up queries",
+        "Disabling encryption",
+        "Removing firewalls",
+      ],
+      correctAnswer: 0,
+      explanation: "Segmentation reduces exposure to untrusted networks.",
+    },
+    {
+      id: 66,
+      topic: "Hardening",
+      question: "Keeping drivers and ORMs updated helps because:",
+      options: [
+        "Security fixes and safer defaults",
+        "It removes parameters",
+        "It disables logging",
+        "It breaks TLS",
+      ],
+      correctAnswer: 0,
+      explanation: "Updates reduce vulnerabilities and improve safety.",
+    },
+    {
+      id: 67,
+      topic: "Hardening",
+      question: "Logs should avoid:",
+      options: [
+        "Leaking secrets or full raw queries to users",
+        "Capturing errors",
+        "Capturing timings",
+        "Capturing audit events",
+      ],
+      correctAnswer: 0,
+      explanation: "Logs should be safe and not expose sensitive data.",
+    },
+    {
+      id: 68,
+      topic: "Hardening",
+      question: "A safe proof of SQL injection is to:",
+      options: [
+        "Use non-destructive boolean or time-based checks",
+        "Drop tables",
+        "Dump all data",
+        "Disable backups",
+      ],
+      correctAnswer: 0,
+      explanation: "Safe testing demonstrates risk without harm.",
+    },
+    {
+      id: 69,
+      topic: "Hardening",
+      question: "Which is NOT safe during testing?",
+      options: [
+        "DELETE FROM users",
+        "Using a harmless sleep delay",
+        "Testing in a sandbox",
+        "Using least privilege",
+      ],
+      correctAnswer: 0,
+      explanation: "Destructive queries should never be used in safe testing.",
+    },
+    {
+      id: 70,
+      topic: "Hardening",
+      question: "Code scanning should look for:",
+      options: [
+        "String concatenation around SQL keywords",
+        "Only CSS files",
+        "Only images",
+        "TLS certificates",
+      ],
+      correctAnswer: 0,
+      explanation: "Concatenated SQL is a common source of injection.",
+    },
+    {
+      id: 71,
+      topic: "Hardening",
+      question: "After patching, you should:",
+      options: [
+        "Verify all query paths are parameterized",
+        "Remove validation",
+        "Turn off logging",
+        "Use admin accounts",
+      ],
+      correctAnswer: 0,
+      explanation: "Verification ensures the fix is complete and consistent.",
+    },
+    {
+      id: 72,
+      topic: "Hardening",
+      question: "Rate limiting helps by:",
+      options: [
+        "Slowing automated injection attempts",
+        "Preventing all SQL injection",
+        "Encrypting queries",
+        "Hiding errors",
+      ],
+      correctAnswer: 0,
+      explanation: "Rate limiting is a defense-in-depth control.",
+    },
+    {
+      id: 73,
+      topic: "Hardening",
+      question: "Database audit logs are useful to:",
+      options: [
+        "Detect unusual query access and scanning",
+        "Style the UI",
+        "Compress images",
+        "Generate CSS",
+      ],
+      correctAnswer: 0,
+      explanation: "Audit logs show who accessed what data and when.",
+    },
+    {
+      id: 74,
+      topic: "Hardening",
+      question: "When implementing pagination, you should:",
+      options: [
+        "Validate page size and bind parameters",
+        "Concatenate raw input",
+        "Allow any string",
+        "Use UNION",
+      ],
+      correctAnswer: 0,
+      explanation: "Validation and parameters prevent misuse of limits.",
+    },
+    {
+      id: 75,
+      topic: "Hardening",
+      question: "Best long-term control against SQL injection is:",
+      options: [
+        "Consistent parameterization plus code review",
+        "Blacklists only",
+        "Security by obscurity",
+        "Disabling logs",
+      ],
+      correctAnswer: 0,
+      explanation: "A consistent secure pattern plus review prevents regressions.",
+    },
+  ];
 
   return (
     <LearnPageLayout pageTitle="SQL Injection (SQLi)" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
       <Container maxWidth="lg">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learn Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <StorageIcon sx={{ fontSize: 42, color: "#f97316" }} />
@@ -1426,6 +2414,29 @@ rg -n \"SELECT.*\\+|\\+.*SELECT\" src`;
           </TabPanel>
         </Paper>
 
+        <Paper
+          id="quiz-section"
+          sx={{
+            p: 4,
+            mb: 5,
+            borderRadius: 4,
+            bgcolor: "#0f1422",
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="SQL Injection Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
@@ -1433,7 +2444,7 @@ rg -n \"SELECT.*\\+|\\+.*SELECT\" src`;
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#f97316", color: "#f97316" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

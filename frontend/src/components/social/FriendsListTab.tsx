@@ -32,6 +32,15 @@ import {
   Save as SaveIcon,
 } from '@mui/icons-material';
 import { socialApi, Friend, FriendsListResponse, UserNote } from '../../api/client';
+import { PresenceIndicator, PresenceStatus } from './PresenceIndicator';
+
+interface PresenceData {
+  user_id: number;
+  status: PresenceStatus;
+  custom_status?: string;
+  status_emoji?: string;
+  last_seen_at?: string;
+}
 
 interface FriendsListTabProps {
   onStartChat: () => void;
@@ -52,10 +61,40 @@ export default function FriendsListTab({ onStartChat }: FriendsListTabProps) {
   const [noteLoading, setNoteLoading] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
   const [userNotes, setUserNotes] = useState<Record<number, string>>({});
+  
+  // Presence state
+  const [presenceMap, setPresenceMap] = useState<Record<number, PresenceData>>({});
 
   useEffect(() => {
     loadFriends();
   }, []);
+  
+  // Load presence for all friends
+  useEffect(() => {
+    if (friends.length > 0) {
+      loadFriendsPresence();
+    }
+  }, [friends]);
+  
+  const loadFriendsPresence = async () => {
+    try {
+      const response = await fetch('/api/social/presence/friends/all', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const map: Record<number, PresenceData> = {};
+        data.presences?.forEach((p: PresenceData) => {
+          map[p.user_id] = p;
+        });
+        setPresenceMap(map);
+      }
+    } catch (err) {
+      console.error('Failed to load presence:', err);
+    }
+  };
 
   const loadFriends = async () => {
     setLoading(true);
@@ -193,7 +232,7 @@ export default function FriendsListTab({ onStartChat }: FriendsListTabProps) {
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <PersonIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
           <Typography color="text.secondary">
-            No friends yet. Search for users to connect!
+            No contacts yet. Search for users to connect!
           </Typography>
         </Box>
       )}
@@ -201,7 +240,7 @@ export default function FriendsListTab({ onStartChat }: FriendsListTabProps) {
       {friends.length > 0 && (
         <>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-            {friends.length} friend{friends.length !== 1 ? 's' : ''}
+            {friends.length} contact{friends.length !== 1 ? 's' : ''}
           </Typography>
           <List>
             {friends.map((friend) => (
@@ -227,12 +266,18 @@ export default function FriendsListTab({ onStartChat }: FriendsListTabProps) {
                 }
               >
                 <ListItemAvatar>
-                  <Avatar
-                    src={friend.avatar_url}
-                    sx={{ bgcolor: 'primary.main' }}
+                  <PresenceIndicator 
+                    status={presenceMap[friend.user_id]?.status || 'offline'}
+                    customStatus={presenceMap[friend.user_id]?.custom_status}
+                    statusEmoji={presenceMap[friend.user_id]?.status_emoji}
                   >
-                    {friend.username.charAt(0).toUpperCase()}
-                  </Avatar>
+                    <Avatar
+                      src={friend.avatar_url}
+                      sx={{ bgcolor: 'primary.main' }}
+                    >
+                      {friend.username.charAt(0).toUpperCase()}
+                    </Avatar>
+                  </PresenceIndicator>
                 </ListItemAvatar>
                 <ListItemText
                   primary={
@@ -245,8 +290,10 @@ export default function FriendsListTab({ onStartChat }: FriendsListTabProps) {
                           ({friend.first_name} {friend.last_name})
                         </Typography>
                       )}
-                      {friend.last_login && formatLastLogin(friend.last_login) === 'Online now' && (
-                        <Chip label="Online" size="small" color="success" variant="outlined" />
+                      {presenceMap[friend.user_id]?.custom_status && (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          {presenceMap[friend.user_id]?.status_emoji} {presenceMap[friend.user_id]?.custom_status}
+                        </Typography>
                       )}
                     </Box>
                   }
@@ -259,7 +306,7 @@ export default function FriendsListTab({ onStartChat }: FriendsListTabProps) {
                       )}
                       <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                         <Typography variant="caption" color="text.secondary">
-                          Friends since {formatDate(friend.friends_since)}
+                          Connected since {formatDate(friend.friends_since)}
                         </Typography>
                         {friend.last_login && (
                           <Typography variant="caption" color="text.secondary">
@@ -292,16 +339,16 @@ export default function FriendsListTab({ onStartChat }: FriendsListTabProps) {
           <ListItemIcon>
             <RemoveIcon fontSize="small" color="error" />
           </ListItemIcon>
-          <Typography color="error">Remove Friend</Typography>
+          <Typography color="error">Remove Contact</Typography>
         </MenuItem>
       </Menu>
 
       {/* Confirm Remove Dialog */}
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <DialogTitle>Remove Friend</DialogTitle>
+        <DialogTitle>Remove Contact</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to remove <strong>{selectedFriend?.username}</strong> from your friends?
+            Are you sure you want to remove <strong>{selectedFriend?.username}</strong> from your contacts?
           </Typography>
         </DialogContent>
         <DialogActions>

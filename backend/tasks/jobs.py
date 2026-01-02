@@ -320,10 +320,21 @@ def perform_ai_summaries(report_id: int) -> int:
             logger.error(f"Report {report_id} not found")
             raise ReportNotFoundError(report_id)
         
-        # Check if summaries already exist
-        if report.data and report.data.get("ai_summaries"):
-            logger.info(f"AI summaries already exist for report {report_id}, skipping")
-            return report_id
+        # Check if summaries already exist and are still valid
+        # Summaries should be regenerated if findings have changed
+        existing_summaries = report.data.get("ai_summaries") if report.data else None
+        if existing_summaries:
+            # Check if findings count matches what was used for the summary
+            summary_findings_count = existing_summaries.get("findings_count", 0)
+            current_findings_count = db.query(models.Finding).filter(
+                models.Finding.scan_run_id == report.scan_run_id
+            ).count()
+            
+            if summary_findings_count == current_findings_count:
+                logger.info(f"AI summaries already exist for report {report_id} with same finding count ({current_findings_count}), skipping")
+                return report_id
+            else:
+                logger.info(f"AI summaries need refresh: findings changed from {summary_findings_count} to {current_findings_count}")
         
         project_id = report.project_id
         project = db.get(models.Project, project_id)
@@ -670,16 +681,18 @@ For each: what to fix, why it matters, effort estimate (quick/medium/extensive)
                         security_summary = response.text
                         logger.info(f"Generated security summary for report {report_id}")
                 
-                # Cache the summaries
+                # Cache the summaries with metadata for cache validation
                 if app_summary or security_summary:
                     report_data = report.data or {}
                     report_data["ai_summaries"] = {
                         "app_summary": app_summary,
-                        "security_summary": security_summary
+                        "security_summary": security_summary,
+                        "findings_count": len(findings),  # Track for cache invalidation
+                        "generated_at": str(report.created_at),
                     }
                     report.data = report_data
                     db.commit()
-                    logger.info(f"Cached AI summaries for report {report_id}")
+                    logger.info(f"Cached AI summaries for report {report_id} (based on {len(findings)} findings)")
                     
             except Exception as e:
                 logger.error(f"Failed to generate AI summaries for report {report_id}: {e}")
@@ -864,14 +877,34 @@ def perform_agentic_scan(project_id: int, scan_run_id: int, report_id: int) -> d
             logger.info(f"Stored {len(result.vulnerabilities)} agentic findings for report {report_id}")
         
         # Also store as regular findings for unified view
+        # Check for existing agentic findings to prevent duplicates (e.g., if inline scan already ran)
+        existing_agentic = db.query(models.Finding).filter(
+            models.Finding.scan_run_id == scan_run_id,
+            models.Finding.type.like("agentic-%")
+        ).all()
+        
+        # Build lookup set of existing findings by (file, line, type) to prevent duplicates
+        existing_keys = set()
+        for ef in existing_agentic:
+            key = (ef.file_path, ef.start_line, ef.type)
+            existing_keys.add(key)
+        
+        new_findings_count = 0
         for vuln in result.vulnerabilities:
             file_path = vuln.flow.entry_point.file_path if vuln.flow else "unknown"
             line_number = vuln.flow.entry_point.line_number if vuln.flow else 1
+            finding_type = f"agentic-{vuln.vulnerability_type}"
+            
+            # Skip if this finding already exists (from inline scan)
+            key = (file_path, line_number, finding_type)
+            if key in existing_keys:
+                logger.debug(f"Skipping duplicate agentic finding: {finding_type} at {file_path}:{line_number}")
+                continue
             
             finding = models.Finding(
                 project_id=project_id,
                 scan_run_id=scan_run_id,
-                type=f"agentic-{vuln.vulnerability_type}",
+                type=finding_type,
                 severity=vuln.severity,
                 file_path=file_path,
                 start_line=line_number,
@@ -886,8 +919,11 @@ def perform_agentic_scan(project_id: int, scan_run_id: int, report_id: int) -> d
                 }
             )
             db.add(finding)
+            existing_keys.add(key)  # Track this finding to avoid self-duplicates
+            new_findings_count += 1
         
         db.commit()
+        logger.info(f"Added {new_findings_count} new agentic findings (skipped {len(result.vulnerabilities) - new_findings_count} duplicates)")
         
         # Publish completion
         progress_manager.publish_progress(

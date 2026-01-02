@@ -726,6 +726,12 @@ def get_messages(
         if msg.reply_to_id:
             reply_to = _get_reply_info(db, msg.reply_to_id)
         
+        # Get reply count for threading
+        reply_count = db.query(Message).filter(
+            Message.reply_to_id == msg.id,
+            Message.is_deleted == "false"
+        ).count()
+        
         result.append({
             "id": msg.id,
             "conversation_id": msg.conversation_id,
@@ -738,6 +744,7 @@ def get_messages(
             "attachment_data": msg.attachment_data,
             "reply_to": reply_to,
             "reactions": reactions,
+            "reply_count": reply_count,
             "created_at": msg.created_at,
             "updated_at": msg.updated_at,
             "is_edited": msg.is_edited == "true",
@@ -1014,6 +1021,100 @@ def send_reply(
     db.refresh(message)
     
     return message, ""
+
+
+def get_reply_count(db: Session, message_id: int) -> int:
+    """Get the number of replies to a message."""
+    return db.query(Message).filter(
+        Message.reply_to_id == message_id,
+        Message.is_deleted == "false"
+    ).count()
+
+
+def get_thread_replies(
+    db: Session,
+    conversation_id: int,
+    parent_message_id: int,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 50
+) -> Tuple[Optional[Dict], List[Dict], int, str]:
+    """Get all replies in a thread."""
+    # Check user is participant
+    if not is_conversation_participant(db, conversation_id, user_id):
+        return None, [], 0, "You are not a participant in this conversation"
+    
+    # Get parent message
+    parent = db.query(Message).filter(
+        Message.id == parent_message_id,
+        Message.conversation_id == conversation_id,
+        Message.is_deleted == "false"
+    ).first()
+    
+    if not parent:
+        return None, [], 0, "Parent message not found"
+    
+    # Get sender info for parent
+    parent_sender = db.query(User).filter(User.id == parent.sender_id).first()
+    parent_reactions = _get_reactions_for_message(db, parent.id, user_id)
+    parent_reply_to = _get_reply_info(db, parent.reply_to_id) if parent.reply_to_id else None
+    
+    parent_data = {
+        "id": parent.id,
+        "conversation_id": parent.conversation_id,
+        "sender_id": parent.sender_id,
+        "sender_username": parent_sender.username if parent_sender else "Unknown",
+        "sender_first_name": parent_sender.first_name if parent_sender else None,
+        "sender_avatar_url": parent_sender.avatar_url if parent_sender else None,
+        "content": parent.content,
+        "message_type": parent.message_type,
+        "attachment_data": parent.attachment_data,
+        "reply_to": parent_reply_to,
+        "reactions": parent_reactions,
+        "reply_count": get_reply_count(db, parent.id),
+        "created_at": parent.created_at,
+        "updated_at": parent.updated_at,
+        "is_edited": parent.is_edited == "true",
+        "is_deleted": parent.is_deleted == "true",
+        "is_own_message": parent.sender_id == user_id
+    }
+    
+    # Get replies
+    replies_query = db.query(Message).filter(
+        Message.reply_to_id == parent_message_id,
+        Message.is_deleted == "false"
+    )
+    
+    total_replies = replies_query.count()
+    
+    replies = replies_query.order_by(Message.created_at).offset(skip).limit(limit).all()
+    
+    replies_data = []
+    for reply in replies:
+        sender = db.query(User).filter(User.id == reply.sender_id).first()
+        reactions = _get_reactions_for_message(db, reply.id, user_id)
+        
+        replies_data.append({
+            "id": reply.id,
+            "conversation_id": reply.conversation_id,
+            "sender_id": reply.sender_id,
+            "sender_username": sender.username if sender else "Unknown",
+            "sender_first_name": sender.first_name if sender else None,
+            "sender_avatar_url": sender.avatar_url if sender else None,
+            "content": reply.content,
+            "message_type": reply.message_type,
+            "attachment_data": reply.attachment_data,
+            "reply_to": {"id": parent.id, "sender_username": parent_sender.username if parent_sender else "Unknown", "content_preview": parent.content[:100], "message_type": parent.message_type},
+            "reactions": reactions,
+            "reply_count": get_reply_count(db, reply.id),
+            "created_at": reply.created_at,
+            "updated_at": reply.updated_at,
+            "is_edited": reply.is_edited == "true",
+            "is_deleted": reply.is_deleted == "true",
+            "is_own_message": reply.sender_id == user_id
+        })
+    
+    return parent_data, replies_data, total_replies, ""
 
 
 # ============================================================================

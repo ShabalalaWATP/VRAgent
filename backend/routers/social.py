@@ -59,6 +59,11 @@ from backend.schemas.social import (
     GifTrendingResponse,
     GifItem,
     MuteRequest,
+    # Presence schemas
+    UserPresenceUpdate,
+    UserPresenceResponse,
+    BulkPresenceRequest,
+    BulkPresenceResponse,
     MuteStatusResponse,
     # Bookmark and edit history schemas
     BookmarkCreate,
@@ -67,6 +72,10 @@ from backend.schemas.social import (
     BookmarksListResponse,
     EditHistoryEntry,
     MessageEditHistoryResponse,
+    # Share findings and reports schemas
+    ShareFindingRequest,
+    ShareReportRequest,
+    ShareResponse,
 )
 from backend.services.social_service import (
     search_users,
@@ -1216,7 +1225,8 @@ async def reply_to_message(
         is_deleted=message.is_deleted == "true",
         is_own_message=True,
         reply_to=reply_to,
-        reactions=reactions
+        reactions=reactions,
+        reply_count=0  # New messages have no replies yet
     )
     
     # Broadcast via WebSocket
@@ -1231,6 +1241,40 @@ async def reply_to_message(
     )
     
     return response
+
+
+# ============================================================================
+# Thread Endpoints
+# ============================================================================
+
+@router.get("/conversations/{conversation_id}/messages/{message_id}/thread")
+async def get_message_thread(
+    conversation_id: int,
+    message_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Get all replies in a message thread."""
+    from backend.services.messaging_service import get_thread_replies
+    
+    parent_data, replies_data, total_replies, error = get_thread_replies(
+        db, conversation_id, message_id, current_user.id, skip, limit
+    )
+    
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+    
+    return {
+        "parent_message": parent_data,
+        "replies": replies_data,
+        "total_replies": total_replies,
+        "conversation_id": conversation_id
+    }
 
 
 # ============================================================================
@@ -1797,3 +1841,280 @@ async def get_edit_history_endpoint(
         )
     
     return history
+
+
+# ============================================================================
+# Share Findings & Reports Endpoints
+# ============================================================================
+
+@router.post("/share/finding", response_model=ShareResponse)
+async def share_finding_to_conversation(
+    request: ShareFindingRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Share a finding to a conversation."""
+    from backend.models.models import Finding, Project, Conversation, ConversationParticipant
+    from datetime import datetime
+    import json
+    
+    # Verify finding exists
+    finding = db.query(Finding).filter(Finding.id == request.finding_id).first()
+    if not finding:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finding not found"
+        )
+    
+    # Verify conversation exists and user has access
+    conversation = db.query(Conversation).filter(Conversation.id == request.conversation_id).first()
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+    
+    participant = db.query(ConversationParticipant).filter(
+        ConversationParticipant.conversation_id == request.conversation_id,
+        ConversationParticipant.user_id == current_user.id
+    ).first()
+    
+    if not participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant in this conversation"
+        )
+    
+    # Get project name
+    project = db.query(Project).filter(Project.id == finding.project_id).first()
+    project_name = project.name if project else "Unknown Project"
+    
+    # Create shared finding data
+    shared_data = {
+        "finding_id": finding.id,
+        "project_id": finding.project_id,
+        "project_name": project_name,
+        "scan_run_id": finding.scan_run_id,
+        "severity": finding.severity,
+        "type": finding.type,
+        "summary": finding.summary,
+        "file_path": finding.file_path,
+        "start_line": finding.start_line,
+        "end_line": finding.end_line,
+        "details": finding.details,
+        "shared_by_username": current_user.username,
+        "shared_at": datetime.utcnow().isoformat()
+    }
+    
+    # Create message content
+    content = f"Shared a {finding.severity.upper()} severity finding"
+    if request.comment:
+        content = f"{request.comment}\n\n📋 Shared finding: {finding.severity.upper()} - {finding.type}"
+    
+    # Send the message
+    message = send_message(
+        db, 
+        request.conversation_id, 
+        current_user.id, 
+        content,
+        message_type="finding_share",
+        attachment_data=shared_data
+    )
+    
+    return ShareResponse(
+        success=True,
+        message_id=message.id,
+        conversation_id=request.conversation_id
+    )
+
+
+@router.post("/share/report", response_model=ShareResponse)
+async def share_report_to_conversation(
+    request: ShareReportRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Share a report/scan to a conversation."""
+    from backend.models.models import Report, Project, Finding, Conversation, ConversationParticipant
+    from datetime import datetime
+    from sqlalchemy import func
+    
+    # Verify report exists
+    report = db.query(Report).filter(Report.id == request.report_id).first()
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+    
+    # Verify conversation exists and user has access
+    conversation = db.query(Conversation).filter(Conversation.id == request.conversation_id).first()
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+    
+    participant = db.query(ConversationParticipant).filter(
+        ConversationParticipant.conversation_id == request.conversation_id,
+        ConversationParticipant.user_id == current_user.id
+    ).first()
+    
+    if not participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant in this conversation"
+        )
+    
+    # Get project name
+    project = db.query(Project).filter(Project.id == report.project_id).first()
+    project_name = project.name if project else "Unknown Project"
+    
+    # Count findings by severity
+    severity_counts = db.query(
+        Finding.severity,
+        func.count(Finding.id)
+    ).filter(
+        Finding.scan_run_id == report.scan_run_id
+    ).group_by(Finding.severity).all()
+    
+    counts = {s.lower(): c for s, c in severity_counts}
+    total_findings = sum(counts.values())
+    
+    # Create shared report data
+    shared_data = {
+        "report_id": report.id,
+        "project_id": report.project_id,
+        "project_name": project_name,
+        "scan_run_id": report.scan_run_id,
+        "title": report.title,
+        "summary": report.summary[:500] if report.summary else None,  # Truncate long summaries
+        "risk_score": report.overall_risk_score,
+        "finding_count": total_findings,
+        "critical_count": counts.get("critical", 0),
+        "high_count": counts.get("high", 0),
+        "medium_count": counts.get("medium", 0),
+        "low_count": counts.get("low", 0),
+        "shared_by_username": current_user.username,
+        "shared_at": datetime.utcnow().isoformat()
+    }
+    
+    # Create message content
+    risk_str = f"Risk Score: {report.overall_risk_score:.0f}/100" if report.overall_risk_score else ""
+    content = f"Shared scan report: {report.title}"
+    if request.comment:
+        content = f"{request.comment}\n\n📊 Shared report: {report.title}"
+    
+    # Send the message
+    message = send_message(
+        db, 
+        request.conversation_id, 
+        current_user.id, 
+        content,
+        message_type="report_share",
+        attachment_data=shared_data
+    )
+    
+    return ShareResponse(
+        success=True,
+        message_id=message.id,
+        conversation_id=request.conversation_id
+    )
+
+
+# ============================================================================
+# User Presence Endpoints
+# ============================================================================
+
+@router.get("/presence/me", response_model=UserPresenceResponse)
+async def get_my_presence(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Get current user's presence status."""
+    from backend.services.presence_service import get_user_presence
+    
+    presence = get_user_presence(db, current_user.id, current_user.id)
+    return UserPresenceResponse(**presence)
+
+
+@router.put("/presence/me", response_model=UserPresenceResponse)
+async def update_my_presence(
+    request: UserPresenceUpdate,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Update current user's presence status."""
+    from backend.services.presence_service import update_user_presence, get_user_presence
+    from backend.services.social_service import get_friend_ids
+    from backend.core.websocket_manager import chat_manager
+    
+    presence, error = update_user_presence(
+        db,
+        current_user.id,
+        status=request.status.value if request.status else None,
+        custom_status=request.custom_status,
+        status_emoji=request.status_emoji,
+        status_duration_hours=request.status_duration_hours,
+        clear_custom_status=request.clear_custom_status or False
+    )
+    
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    
+    # Notify friends of status change
+    friend_ids = get_friend_ids(db, current_user.id)
+    if friend_ids and request.status:
+        background_tasks.add_task(
+            chat_manager.send_online_status,
+            current_user.id,
+            current_user.username,
+            request.status.value != "offline",
+            friend_ids
+        )
+    
+    # Return full presence info
+    presence_info = get_user_presence(db, current_user.id, current_user.id)
+    return UserPresenceResponse(**presence_info)
+
+
+@router.get("/presence/{user_id}", response_model=UserPresenceResponse)
+async def get_user_presence_endpoint(
+    user_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Get another user's presence status."""
+    from backend.services.presence_service import get_user_presence
+    
+    presence = get_user_presence(db, user_id, current_user.id)
+    if not presence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    return UserPresenceResponse(**presence)
+
+
+@router.post("/presence/bulk", response_model=BulkPresenceResponse)
+async def get_bulk_presence_endpoint(
+    request: BulkPresenceRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Get presence status for multiple users."""
+    from backend.services.presence_service import get_bulk_presence
+    
+    presences = get_bulk_presence(db, request.user_ids, current_user.id)
+    return BulkPresenceResponse(users=[UserPresenceResponse(**p) for p in presences])
+
+
+@router.get("/presence/friends/all", response_model=BulkPresenceResponse)
+async def get_friends_presence_endpoint(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Get presence status for all friends."""
+    from backend.services.presence_service import get_friends_presence
+    
+    presences = get_friends_presence(db, current_user.id)
+    return BulkPresenceResponse(users=[UserPresenceResponse(**p) for p in presences])

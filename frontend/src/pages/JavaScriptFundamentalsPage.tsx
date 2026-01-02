@@ -36,7 +36,7 @@ import ConstructionIcon from "@mui/icons-material/Construction";
 import CloseIcon from "@mui/icons-material/Close";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ListAltIcon from "@mui/icons-material/ListAlt";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 export default function JavaScriptFundamentalsPage() {
@@ -311,11 +311,13 @@ export default function JavaScriptFundamentalsPage() {
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Chip
+            component={Link}
+            to="/learn"
             icon={<ArrowBackIcon />}
             label="Back to Learning Hub"
-            onClick={() => navigate("/learn")}
-            sx={{ mb: 3, fontWeight: 600, cursor: "pointer" }}
             clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
           />
 
           {/* Hero Section */}

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import { Link } from "react-router-dom";
 import {
   Box,
   Container,
@@ -2698,13 +2699,15 @@ export default function CareerPathsPage() {
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Button
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ mb: 2 }}
-          >
-            Back to Learning Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 2 }}
+          />
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <Box
               sx={{
@@ -5202,6 +5205,18 @@ export default function CareerPathsPage() {
             </Grid>
           </Grid>
         </Paper>
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </LearnPageLayout>
   );

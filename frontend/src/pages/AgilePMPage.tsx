@@ -64,7 +64,7 @@ import BuildIcon from "@mui/icons-material/Build";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 interface QuizQuestion {
   id: number;
@@ -738,7 +738,15 @@ export default function AgilePMPage() {
         {sidebarNav}
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Chip icon={<ArrowBackIcon />} label="Back to Learning Hub" onClick={() => navigate("/learn")} sx={{ mb: 3, fontWeight: 600, cursor: "pointer" }} clickable />
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
 
           {/* Hero Section */}
           <Paper

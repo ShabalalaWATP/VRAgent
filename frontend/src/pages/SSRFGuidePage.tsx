@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Typography,
@@ -28,11 +29,12 @@ import {
   TableHead,
   TableRow,
   IconButton,
+  Button,
   Tooltip,
   alpha,
   useTheme,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -223,10 +225,638 @@ const ssrfTools = [
   { name: "interactsh", type: "Detection", desc: "Open-source OOB interaction server" },
 ];
 
+const ACCENT_COLOR = "#3b82f6";
+const QUIZ_QUESTION_COUNT = 10;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "SSRF allows an attacker to:",
+    options: [
+      "Make a server send requests to unintended locations",
+      "Execute code in the browser",
+      "Bypass SQL constraints",
+      "Modify DNS records directly",
+    ],
+    correctAnswer: 0,
+    explanation: "SSRF abuses server-side requests to reach internal targets.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "Why is SSRF dangerous?",
+    options: [
+      "Servers can access internal networks and metadata",
+      "It only affects images",
+      "It only changes UI",
+      "It requires local access",
+    ],
+    correctAnswer: 0,
+    explanation: "Servers often have access to internal services and metadata.",
+  },
+  {
+    id: 3,
+    topic: "Types",
+    question: "Basic SSRF is:",
+    options: [
+      "A direct request to an attacker-controlled URL",
+      "No response and no side effects",
+      "Only timing based",
+      "Only via DNS",
+    ],
+    correctAnswer: 0,
+    explanation: "Basic SSRF uses direct, attacker-controlled URLs.",
+  },
+  {
+    id: 4,
+    topic: "Types",
+    question: "Blind SSRF is detected by:",
+    options: ["Timing or out-of-band signals", "Full response content", "Browser popups", "SQL errors"],
+    correctAnswer: 0,
+    explanation: "Blind SSRF requires side channels or OOB detection.",
+  },
+  {
+    id: 5,
+    topic: "Types",
+    question: "Full-response SSRF means:",
+    options: ["The server returns the fetched content", "No content is returned", "Only status codes are shown", "Only timing is visible"],
+    correctAnswer: 0,
+    explanation: "Full-response SSRF exposes the entire response.",
+  },
+  {
+    id: 6,
+    topic: "OWASP",
+    question: "SSRF was added to the OWASP Top 10 in:",
+    options: ["2021", "2013", "2017", "2023"],
+    correctAnswer: 0,
+    explanation: "SSRF appears in the 2021 OWASP Top 10 list.",
+  },
+  {
+    id: 7,
+    topic: "Entry Points",
+    question: "A common SSRF entry point is:",
+    options: ["URL fetch or webhook feature", "Static HTML", "CSS files", "Client-only storage"],
+    correctAnswer: 0,
+    explanation: "URL fetchers and webhooks often accept user URLs.",
+  },
+  {
+    id: 8,
+    topic: "Entry Points",
+    question: "A profile image URL feature can be risky because:",
+    options: ["It may fetch attacker-supplied URLs", "It runs in the browser only", "It never touches servers", "It blocks all URLs"],
+    correctAnswer: 0,
+    explanation: "Server-side fetches can be abused for SSRF.",
+  },
+  {
+    id: 9,
+    topic: "Targets",
+    question: "A high-value SSRF target is:",
+    options: ["Cloud metadata services", "Public CSS", "User avatars", "Static icons"],
+    correctAnswer: 0,
+    explanation: "Metadata services can expose credentials.",
+  },
+  {
+    id: 10,
+    topic: "Targets",
+    question: "The AWS metadata IP is:",
+    options: ["169.254.169.254", "127.0.0.1", "10.0.0.1", "8.8.8.8"],
+    correctAnswer: 0,
+    explanation: "AWS metadata is served from a link-local address.",
+  },
+  {
+    id: 11,
+    topic: "Targets",
+    question: "The GCP metadata host is:",
+    options: ["metadata.google.internal", "metadata.aws.local", "meta.azure.internal", "metadata.cloud"],
+    correctAnswer: 0,
+    explanation: "GCP metadata is available via metadata.google.internal.",
+  },
+  {
+    id: 12,
+    topic: "Targets",
+    question: "Azure metadata is accessed at:",
+    options: ["169.254.169.254 with an api-version", "127.0.0.1:8080", "kubernetes.default.svc", "10.10.10.10"],
+    correctAnswer: 0,
+    explanation: "Azure uses the link-local endpoint with api-version.",
+  },
+  {
+    id: 13,
+    topic: "Targets",
+    question: "SSRF can access internal APIs because:",
+    options: ["The server can reach internal networks", "The browser bypasses TLS", "DNS is disabled", "Cookies are missing"],
+    correctAnswer: 0,
+    explanation: "Servers often have internal network access.",
+  },
+  {
+    id: 14,
+    topic: "Impact",
+    question: "SSRF can be used for:",
+    options: ["Internal port scanning", "Client-side XSS", "Keyboard logging", "Local file browsing"],
+    correctAnswer: 0,
+    explanation: "Changing ports helps map internal services.",
+  },
+  {
+    id: 15,
+    topic: "Impact",
+    question: "SSRF can bypass IP allowlists because:",
+    options: ["The request comes from the trusted server", "Headers are encrypted", "TLS is disabled", "DNS is cached"],
+    correctAnswer: 0,
+    explanation: "Allowlists often trust the server IP.",
+  },
+  {
+    id: 16,
+    topic: "Bypass",
+    question: "IP decimal encoding can bypass filters by using:",
+    options: ["2130706433 for 127.0.0.1", "127.0.0.1 only", "localhost only", "::1 only"],
+    correctAnswer: 0,
+    explanation: "Decimal form can evade naive filters.",
+  },
+  {
+    id: 17,
+    topic: "Bypass",
+    question: "IP octal encoding can look like:",
+    options: ["0177.0.0.1", "0x7f000001", "127.0.0.1", "localhost"],
+    correctAnswer: 0,
+    explanation: "Octal encoding can evade blocklists.",
+  },
+  {
+    id: 18,
+    topic: "Bypass",
+    question: "IP hex encoding can look like:",
+    options: ["0x7f000001", "0177.0.0.1", "2130706433", "127.0.0.1"],
+    correctAnswer: 0,
+    explanation: "Hex encoding is another common bypass.",
+  },
+  {
+    id: 19,
+    topic: "Bypass",
+    question: "An IPv6 loopback address is:",
+    options: ["::1", "::2", "2001:db8::1", "fe80::1"],
+    correctAnswer: 0,
+    explanation: "::1 is the IPv6 loopback address.",
+  },
+  {
+    id: 20,
+    topic: "Bypass",
+    question: "DNS rebinding works by:",
+    options: ["Changing DNS answers over time", "Encrypting DNS", "Disabling DNS", "Caching forever"],
+    correctAnswer: 0,
+    explanation: "DNS responses can change between checks.",
+  },
+  {
+    id: 21,
+    topic: "Bypass",
+    question: "URL parser confusion can use:",
+    options: ["http://evil.com@internal", "only https", "only localhost", "only IPv6"],
+    correctAnswer: 0,
+    explanation: "Userinfo or fragments can confuse parsers.",
+  },
+  {
+    id: 22,
+    topic: "Bypass",
+    question: "Redirect chains are used to:",
+    options: ["Hop from an external URL to an internal one", "Encrypt responses", "Block access", "Increase caching"],
+    correctAnswer: 0,
+    explanation: "Open redirects can pivot to internal targets.",
+  },
+  {
+    id: 23,
+    topic: "Bypass",
+    question: "Protocol smuggling can use:",
+    options: ["gopher://", "mailto:", "ftp:// only", "file:// only"],
+    correctAnswer: 0,
+    explanation: "Gopher can send raw TCP payloads.",
+  },
+  {
+    id: 24,
+    topic: "Bypass",
+    question: "The file:// scheme is risky because it can:",
+    options: ["Read local files", "Encrypt files", "Patch systems", "Update DNS"],
+    correctAnswer: 0,
+    explanation: "file:// can access local file paths.",
+  },
+  {
+    id: 25,
+    topic: "Bypass",
+    question: "CRLF injection can allow:",
+    options: ["Header manipulation in requests", "Faster TLS", "Better caching", "Session renewal"],
+    correctAnswer: 0,
+    explanation: "CRLF can inject new headers.",
+  },
+  {
+    id: 26,
+    topic: "Bypass",
+    question: "Wildcard DNS services can be used as:",
+    options: ["127.0.0.1.nip.io", "example.com", "localhost", "10.0.0.1"],
+    correctAnswer: 0,
+    explanation: "Wildcard DNS maps hostnames to chosen IPs.",
+  },
+  {
+    id: 27,
+    topic: "Bypass",
+    question: "URL shorteners can:",
+    options: ["Hide internal targets behind redirects", "Fix validation", "Add auth", "Prevent SSRF"],
+    correctAnswer: 0,
+    explanation: "Shorteners can obscure the final URL.",
+  },
+  {
+    id: 28,
+    topic: "Prevention",
+    question: "A strong mitigation is:",
+    options: ["Hostname allowlists", "Only hiding errors", "Only client-side checks", "Allowing all IPs"],
+    correctAnswer: 0,
+    explanation: "Allowlists restrict destinations.",
+  },
+  {
+    id: 29,
+    topic: "Prevention",
+    question: "Block which range to stop metadata access?",
+    options: ["169.254.0.0/16", "8.8.8.0/24", "1.1.1.0/24", "224.0.0.0/4"],
+    correctAnswer: 0,
+    explanation: "169.254.0.0/16 is link-local metadata range.",
+  },
+  {
+    id: 30,
+    topic: "Prevention",
+    question: "Validation should check resolved IPs to:",
+    options: ["Catch DNS rebinding", "Improve UI", "Enable caching", "Reduce logging"],
+    correctAnswer: 0,
+    explanation: "Resolve and validate all IPs after DNS lookup.",
+  },
+  {
+    id: 31,
+    topic: "Prevention",
+    question: "Disabling redirects helps because:",
+    options: ["Redirects can jump to internal targets", "It speeds DNS", "It encrypts traffic", "It increases logs"],
+    correctAnswer: 0,
+    explanation: "Redirects can bypass allowlists.",
+  },
+  {
+    id: 32,
+    topic: "Prevention",
+    question: "An egress firewall is used to:",
+    options: ["Control outbound connections", "Filter browser cookies", "Encrypt disks", "Rotate logs"],
+    correctAnswer: 0,
+    explanation: "Egress controls restrict where servers can connect.",
+  },
+  {
+    id: 33,
+    topic: "Prevention",
+    question: "Allowing only http/https helps by:",
+    options: ["Blocking file and gopher protocols", "Enabling redirects", "Disabling TLS", "Allowing all schemes"],
+    correctAnswer: 0,
+    explanation: "Scheme allowlists prevent protocol smuggling.",
+  },
+  {
+    id: 34,
+    topic: "Prevention",
+    question: "Timeout controls help prevent:",
+    options: ["Long-running SSRF abuse", "JWT tampering", "XSS", "CSRF"],
+    correctAnswer: 0,
+    explanation: "Timeouts limit resource usage.",
+  },
+  {
+    id: 35,
+    topic: "Prevention",
+    question: "Response filtering reduces risk by:",
+    options: ["Not returning internal data to users", "Disabling DNS", "Allowing all IPs", "Skipping validation"],
+    correctAnswer: 0,
+    explanation: "Avoid exposing fetched internal responses.",
+  },
+  {
+    id: 36,
+    topic: "Cloud",
+    question: "AWS IMDSv2 requires:",
+    options: ["A session token via PUT", "No token", "Only GET", "Only POST"],
+    correctAnswer: 0,
+    explanation: "IMDSv2 uses a token obtained with PUT.",
+  },
+  {
+    id: 37,
+    topic: "Cloud",
+    question: "Kubernetes API default service is:",
+    options: ["kubernetes.default.svc", "metadata.google.internal", "localhost:2375", "169.254.169.254"],
+    correctAnswer: 0,
+    explanation: "The Kubernetes API service is kubernetes.default.svc.",
+  },
+  {
+    id: 38,
+    topic: "Targets",
+    question: "Redis is often targeted via:",
+    options: ["gopher:// payloads", "mailto:", "file:// only", "ssh:// only"],
+    correctAnswer: 0,
+    explanation: "Gopher can send raw Redis commands.",
+  },
+  {
+    id: 39,
+    topic: "Targets",
+    question: "The Docker API default port is:",
+    options: ["2375", "3306", "5432", "9200"],
+    correctAnswer: 0,
+    explanation: "Docker API often listens on 2375 when unsecured.",
+  },
+  {
+    id: 40,
+    topic: "Targets",
+    question: "Elasticsearch default port is:",
+    options: ["9200", "2375", "6379", "11211"],
+    correctAnswer: 0,
+    explanation: "Elasticsearch commonly listens on 9200.",
+  },
+  {
+    id: 41,
+    topic: "Types",
+    question: "Semi-blind SSRF often returns:",
+    options: ["Headers or status codes", "Full response bodies", "Only images", "No response at all"],
+    correctAnswer: 0,
+    explanation: "Semi-blind SSRF leaks limited response info.",
+  },
+  {
+    id: 42,
+    topic: "Types",
+    question: "Full-response SSRF allows:",
+    options: ["Data exfiltration through the response", "Only timing", "Only logging", "Only redirects"],
+    correctAnswer: 0,
+    explanation: "Full response can reveal internal data.",
+  },
+  {
+    id: 43,
+    topic: "Detection",
+    question: "A common OOB SSRF tool is:",
+    options: ["Burp Collaborator", "Nmap", "Hashcat", "Aircrack"],
+    correctAnswer: 0,
+    explanation: "Collaborator detects external interactions.",
+  },
+  {
+    id: 44,
+    topic: "Tools",
+    question: "SSRFmap is used for:",
+    options: ["Automated SSRF exploitation", "Password cracking", "DNS hosting", "Log analysis"],
+    correctAnswer: 0,
+    explanation: "SSRFmap automates SSRF testing and exploitation.",
+  },
+  {
+    id: 45,
+    topic: "Tools",
+    question: "Interactsh provides:",
+    options: ["Out-of-band interaction detection", "Firewall rules", "TLS certificates", "DNS caching"],
+    correctAnswer: 0,
+    explanation: "Interactsh is for OOB detection.",
+  },
+  {
+    id: 46,
+    topic: "Tools",
+    question: "Nuclei can help by:",
+    options: ["Running SSRF templates", "Disabling TLS", "Generating passwords", "Fixing code"],
+    correctAnswer: 0,
+    explanation: "Nuclei runs automated SSRF checks.",
+  },
+  {
+    id: 47,
+    topic: "Prevention",
+    question: "Validating the final IP after redirects helps:",
+    options: ["Prevent redirect-based bypass", "Increase cache hits", "Avoid TLS", "Enable gopher"],
+    correctAnswer: 0,
+    explanation: "Redirects can change the destination.",
+  },
+  {
+    id: 48,
+    topic: "Impact",
+    question: "SSRF to metadata can expose:",
+    options: ["Temporary cloud credentials", "User passwords in UI", "Browser history", "Static assets"],
+    correctAnswer: 0,
+    explanation: "Metadata often contains IAM credentials.",
+  },
+  {
+    id: 49,
+    topic: "Impact",
+    question: "SSRF can lead to:",
+    options: ["Internal network mapping", "Stronger encryption", "Lower latency", "Better UX"],
+    correctAnswer: 0,
+    explanation: "SSRF can scan internal hosts and ports.",
+  },
+  {
+    id: 50,
+    topic: "Impact",
+    question: "SSRF can result in:",
+    options: ["Data exfiltration", "Only UI changes", "Only caching", "Only redirects"],
+    correctAnswer: 0,
+    explanation: "Internal data can be accessed or leaked.",
+  },
+  {
+    id: 51,
+    topic: "Validation",
+    question: "Parsing URLs should reject:",
+    options: ["Userinfo trickery like user@host", "Valid HTTPS URLs", "Known domains", "Standard ports"],
+    correctAnswer: 0,
+    explanation: "Userinfo can confuse parsers and validators.",
+  },
+  {
+    id: 52,
+    topic: "Prevention",
+    question: "Blocking private ranges includes:",
+    options: ["10.0.0.0/8 and 192.168.0.0/16", "8.8.8.0/24", "1.1.1.0/24", "224.0.0.0/4"],
+    correctAnswer: 0,
+    explanation: "Private ranges should be blocked.",
+  },
+  {
+    id: 53,
+    topic: "Prevention",
+    question: "Loopback addresses are in:",
+    options: ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+    correctAnswer: 0,
+    explanation: "127.0.0.0/8 is loopback.",
+  },
+  {
+    id: 54,
+    topic: "Prevention",
+    question: "Disallowing file:// and gopher:// is:",
+    options: ["Protocol allowlisting", "DNS rebinding", "Rate limiting", "Token rotation"],
+    correctAnswer: 0,
+    explanation: "Allowlisting schemes blocks dangerous protocols.",
+  },
+  {
+    id: 55,
+    topic: "Detection",
+    question: "Monitoring outbound traffic to 169.254.169.254 helps detect:",
+    options: ["Metadata SSRF attempts", "SQL injection", "XSS", "CSRF"],
+    correctAnswer: 0,
+    explanation: "Metadata access is a key SSRF indicator.",
+  },
+  {
+    id: 56,
+    topic: "Logging",
+    question: "Which log field is important for SSRF detection?",
+    options: ["Destination host and port", "User agent only", "Screen size", "Font settings"],
+    correctAnswer: 0,
+    explanation: "Destination data shows internal access attempts.",
+  },
+  {
+    id: 57,
+    topic: "Entry Points",
+    question: "A webhook callback URL feature is risky because:",
+    options: ["It may call attacker-chosen URLs", "It only runs client-side", "It uses no network", "It blocks input"],
+    correctAnswer: 0,
+    explanation: "Webhooks often send server-side requests.",
+  },
+  {
+    id: 58,
+    topic: "Entry Points",
+    question: "A file import by URL can enable:",
+    options: ["SSRF to internal services", "TLS pinning", "Cookie protection", "HSTS"],
+    correctAnswer: 0,
+    explanation: "Import features often fetch arbitrary URLs.",
+  },
+  {
+    id: 59,
+    topic: "Bypass",
+    question: "Why are redirects dangerous?",
+    options: ["They can bypass allowlists", "They disable DNS", "They encrypt traffic", "They block private IPs"],
+    correctAnswer: 0,
+    explanation: "Redirects can change the final destination.",
+  },
+  {
+    id: 60,
+    topic: "Cloud",
+    question: "GCP metadata typically requires the header:",
+    options: ["Metadata-Flavor: Google", "Authorization: Bearer", "X-API-Key", "Accept: */*"],
+    correctAnswer: 0,
+    explanation: "GCP requires Metadata-Flavor: Google.",
+  },
+  {
+    id: 61,
+    topic: "Prevention",
+    question: "Why validate DNS after resolution?",
+    options: ["A hostname can resolve to internal IPs", "It improves caching", "It speeds requests", "It enables redirects"],
+    correctAnswer: 0,
+    explanation: "Hostnames can point to private IPs.",
+  },
+  {
+    id: 62,
+    topic: "Bypass",
+    question: "Using @ in URLs can:",
+    options: ["Hide the real host after userinfo", "Encrypt the request", "Disable redirects", "Force HTTPS"],
+    correctAnswer: 0,
+    explanation: "userinfo can confuse host parsing.",
+  },
+  {
+    id: 63,
+    topic: "Bypass",
+    question: "Using # in URLs can:",
+    options: ["Confuse parsing or validation", "Add headers", "Change DNS", "Set cookies"],
+    correctAnswer: 0,
+    explanation: "Fragments are ignored by servers but may bypass filters.",
+  },
+  {
+    id: 64,
+    topic: "Targets",
+    question: "An internal admin panel target might be:",
+    options: ["127.0.0.1:8000/admin", "example.com", "cdn.example.com", "public-site.com"],
+    correctAnswer: 0,
+    explanation: "Admin panels are often bound to localhost.",
+  },
+  {
+    id: 65,
+    topic: "Targets",
+    question: "Which protocol is often used to talk to Redis?",
+    options: ["Gopher", "FTP", "SMTP", "IMAP"],
+    correctAnswer: 0,
+    explanation: "Gopher can craft raw Redis commands.",
+  },
+  {
+    id: 66,
+    topic: "Prevention",
+    question: "Why not return raw responses to users?",
+    options: ["It can leak internal data", "It is slower", "It breaks TLS", "It disables DNS"],
+    correctAnswer: 0,
+    explanation: "Raw responses may expose sensitive data.",
+  },
+  {
+    id: 67,
+    topic: "Prevention",
+    question: "A safe fetch service should:",
+    options: ["Run in a restricted network zone", "Share the main database", "Allow all IPs", "Disable logging"],
+    correctAnswer: 0,
+    explanation: "Network isolation limits SSRF impact.",
+  },
+  {
+    id: 68,
+    topic: "Validation",
+    question: "Which scheme should be rejected by default?",
+    options: ["file://", "https://", "http://", "wss://"],
+    correctAnswer: 0,
+    explanation: "file:// can access local files.",
+  },
+  {
+    id: 69,
+    topic: "Detection",
+    question: "Repeated requests to internal ports indicate:",
+    options: ["Potential SSRF scanning", "Normal browsing", "TLS handshakes", "User logout"],
+    correctAnswer: 0,
+    explanation: "Port scanning via SSRF is common.",
+  },
+  {
+    id: 70,
+    topic: "Prevention",
+    question: "Which is NOT a strong control?",
+    options: ["Relying on blacklists only", "Allowlists", "Egress filtering", "DNS validation"],
+    correctAnswer: 0,
+    explanation: "Blacklists are easy to bypass.",
+  },
+  {
+    id: 71,
+    topic: "Impact",
+    question: "SSRF can enable:",
+    options: ["Credential theft from metadata", "Only UI changes", "Only caching", "Only CSS updates"],
+    correctAnswer: 0,
+    explanation: "Metadata often contains credentials.",
+  },
+  {
+    id: 72,
+    topic: "Prevention",
+    question: "Why limit request size?",
+    options: ["Reduce abuse and resource exhaustion", "Improve CSS", "Disable auth", "Increase logging"],
+    correctAnswer: 0,
+    explanation: "Limits prevent resource consumption attacks.",
+  },
+  {
+    id: 73,
+    topic: "Bypass",
+    question: "Which is a DNS rebinding indicator?",
+    options: ["Short TTL and changing IPs", "Long TTL and static IP", "No DNS", "Only IPv6"],
+    correctAnswer: 0,
+    explanation: "Rebinding uses short TTLs and IP changes.",
+  },
+  {
+    id: 74,
+    topic: "Fundamentals",
+    question: "SSRF differs from CSRF because:",
+    options: ["SSRF is server-side, CSRF uses a user session", "SSRF runs in the browser", "CSRF uses DNS", "SSRF only affects SQL"],
+    correctAnswer: 0,
+    explanation: "SSRF is server-side; CSRF uses the victim's browser session.",
+  },
+  {
+    id: 75,
+    topic: "Prevention",
+    question: "The most reliable SSRF defense is:",
+    options: ["Strict allowlist plus network egress controls", "Hiding error messages", "Client-side checks", "Using GET only"],
+    correctAnswer: 0,
+    explanation: "Combine allowlists with strong network controls.",
+  },
+];
+
+
 const SSRFGuidePage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const navigate = useNavigate();
   const theme = useTheme();
+  const [quizPool] = useState<QuizQuestion[]>(() =>
+    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
+  );
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -237,12 +867,20 @@ const SSRFGuidePage: React.FC = () => {
   return (
     <LearnPageLayout pageTitle="Server-Side Request Forgery (SSRF)" pageContext={pageContext}>
     <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* Back Button */}
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
+
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <IconButton onClick={() => navigate("/learn")} sx={{ color: "primary.main" }}>
-            <ArrowBackIcon />
-          </IconButton>
           <CloudIcon sx={{ fontSize: 40, color: "primary.main" }} />
           <Box>
             <Typography variant="h4" fontWeight="bold">
@@ -1722,6 +2360,29 @@ func safeFetch(urlStr string) (string, error) {
           </Accordion>
         </TabPanel>
       </Paper>
+
+      {/* Quiz Section */}
+      <Box id="quiz" sx={{ mt: 5 }}>
+        <QuizSection
+          questions={quizPool}
+          accentColor={ACCENT_COLOR}
+          title="SSRF Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Box>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

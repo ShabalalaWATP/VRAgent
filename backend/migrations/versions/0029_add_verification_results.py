@@ -1,7 +1,7 @@
 """Add verification_results column to reverse_engineering_reports
 
 Revision ID: 0029_add_verification_results
-Revises: 0028_add_manifest_obfuscation_fields
+Revises: 0028_manifest_obf
 Create Date: 2024-12-24
 
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '0029_add_verification_results'
-down_revision = '0028_add_manifest_obfuscation_fields'
+down_revision = '0028_manifest_obf'
 branch_labels = None
 depends_on = None
 

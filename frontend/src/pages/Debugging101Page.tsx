@@ -47,7 +47,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import QuizIcon from "@mui/icons-material/Quiz";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 // ==================== QUIZ SECTION ====================
@@ -757,9 +757,15 @@ break processItems if i == items.size - 1`;
     <LearnPageLayout pageTitle="Debugging 101" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
       <Container maxWidth="lg">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learn Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <BugReportIcon sx={{ fontSize: 42, color: "#3b82f6" }} />
@@ -1679,7 +1685,7 @@ break processItems if i == items.size - 1`;
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#3b82f6", color: "#3b82f6" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

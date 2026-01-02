@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
@@ -29,7 +29,7 @@ import {
   alpha,
   useTheme,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MemoryIcon from "@mui/icons-material/Memory";
 import SearchIcon from "@mui/icons-material/Search";
@@ -916,30 +916,53 @@ const CodeBlock: React.FC<{ code: string; language?: string; title?: string }> =
 function QuizSection() {
   const theme = useTheme();
   const [quizStarted, setQuizStarted] = useState(false);
-  const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
+  const [quizSession, setQuizSession] = useState(0);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResults, setShowResults] = useState(false);
+  const [answers, setAnswers] = useState<(number | null)[]>([]);
 
-  const pickQuestion = () => {
+  const quizQuestions = useMemo(() => {
     const shuffled = [...questionBank].sort(() => Math.random() - 0.5);
-    return shuffled[0];
-  };
+    return shuffled.slice(0, 10);
+  }, [quizSession]);
 
   const startQuiz = () => {
-    setCurrentQuestion(pickQuestion());
+    setCurrentQuestionIndex(0);
     setSelectedAnswer(null);
     setShowResults(false);
     setQuizStarted(true);
+    setAnswers([]);
+    setQuizSession((prev) => prev + 1);
   };
 
-  const score = currentQuestion && selectedAnswer === currentQuestion.correctAnswer ? 1 : 0;
+  const handleSubmitAnswer = () => {
+    if (selectedAnswer === null) return;
 
-  const getScoreColor = (value: number) => (value === 1 ? "#22c55e" : "#ef4444");
+    setAnswers((prev) => [...prev, selectedAnswer]);
 
-  const getScoreMessage = (value: number) =>
-    value === 1
-      ? "Great job! You nailed the essentials."
-      : "Good attempt. Review the section above and try again.";
+    if (currentQuestionIndex + 1 >= quizQuestions.length) {
+      setShowResults(true);
+    } else {
+      setCurrentQuestionIndex((prev) => prev + 1);
+      setSelectedAnswer(null);
+    }
+  };
+
+  const getScoreColor = (value: number, total: number) => {
+    const percentage = (value / total) * 100;
+    if (percentage >= 80) return "#22c55e";
+    if (percentage >= 60) return "#f59e0b";
+    return "#ef4444";
+  };
+
+  const getScoreMessage = (value: number, total: number) => {
+    const percentage = (value / total) * 100;
+    if (percentage === 100) return "Perfect score! You nailed the essentials.";
+    if (percentage >= 80) return "Great job! You know the essentials well.";
+    if (percentage >= 60) return "Good attempt. Review a few sections and try again.";
+    return "Keep practicing. Review the guide and try again.";
+  };
 
   if (!quizStarted) {
     return (
@@ -972,15 +995,15 @@ function QuizSection() {
         </Typography>
 
         <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8, fontSize: "1.05rem" }}>
-          Ready to test what you learned? This quiz presents <strong>one random question</strong> selected
+          Ready to test what you learned? This quiz presents <strong>10 random questions</strong> selected
           from a bank of <strong>75 questions</strong>, so every attempt is different.
         </Typography>
 
         <Grid container spacing={2} sx={{ mb: 4 }}>
           <Grid item xs={6} sm={3}>
             <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#2563eb", 0.1), borderRadius: 2 }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, color: "#2563eb" }}>1</Typography>
-              <Typography variant="caption" color="text.secondary">Question</Typography>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#2563eb" }}>10</Typography>
+              <Typography variant="caption" color="text.secondary">Questions</Typography>
             </Paper>
           </Grid>
           <Grid item xs={6} sm={3}>
@@ -1025,11 +1048,19 @@ function QuizSection() {
     );
   }
 
+  const currentQuestion = quizQuestions[currentQuestionIndex];
   if (!currentQuestion) {
     return null;
   }
   if (showResults) {
-    const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
+    const totalQuestions = quizQuestions.length;
+    const score = answers.reduce<number>((total, answer, index) => {
+      if (answer !== null && answer === quizQuestions[index]?.correctAnswer) {
+        return total + 1;
+      }
+      return total;
+    }, 0);
+    const scoreColor = getScoreColor(score, totalQuestions);
     return (
       <Paper
         id="quiz-section"
@@ -1038,26 +1069,26 @@ function QuizSection() {
           mb: 5,
           borderRadius: 4,
           bgcolor: alpha(theme.palette.background.paper, 0.6),
-          border: `2px solid ${alpha(getScoreColor(score), 0.3)}`,
+          border: `2px solid ${alpha(scoreColor, 0.3)}`,
         }}
       >
         <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-          <EmojiEventsIcon sx={{ color: getScoreColor(score), fontSize: 40 }} />
+          <EmojiEventsIcon sx={{ color: scoreColor, fontSize: 40 }} />
           Quiz Results
         </Typography>
 
         <Box sx={{ textAlign: "center", mb: 4 }}>
-          <Typography variant="h1" sx={{ fontWeight: 900, color: getScoreColor(score), mb: 1 }}>
-            {score}/1
+          <Typography variant="h1" sx={{ fontWeight: 900, color: scoreColor, mb: 1 }}>
+            {score}/{totalQuestions}
           </Typography>
           <Typography variant="h6" sx={{ color: "text.secondary", mb: 2 }}>
-            {getScoreMessage(score)}
+            {getScoreMessage(score, totalQuestions)}
           </Typography>
           <Chip
-            label={`${score * 100}%`}
+            label={`${Math.round((score / totalQuestions) * 100)}%`}
             sx={{
-              bgcolor: alpha(getScoreColor(score), 0.15),
-              color: getScoreColor(score),
+              bgcolor: alpha(scoreColor, 0.15),
+              color: scoreColor,
               fontWeight: 700,
               fontSize: "1rem",
               px: 2,
@@ -1067,45 +1098,53 @@ function QuizSection() {
 
         <Divider sx={{ my: 3 }} />
 
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Review Your Answer:</Typography>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Review Your Answers:</Typography>
 
-        <Paper
-          sx={{
-            p: 2,
-            borderRadius: 2,
-            bgcolor: alpha(isCorrect ? "#22c55e" : "#ef4444", 0.05),
-            border: `1px solid ${alpha(isCorrect ? "#22c55e" : "#ef4444", 0.2)}`,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1 }}>
-            <Chip
-              label="Q1"
-              size="small"
-              sx={{
-                bgcolor: isCorrect ? "#22c55e" : "#ef4444",
-                color: "white",
-                fontWeight: 700,
-              }}
-            />
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {currentQuestion.question}
-            </Typography>
-          </Box>
-          <Typography variant="body2" sx={{ color: "text.secondary", ml: 4.5 }}>
-            <strong>Your answer:</strong> {selectedAnswer !== null ? currentQuestion.options[selectedAnswer] : "Not answered"}
-            {!isCorrect && (
-              <>
-                <br />
-                <strong style={{ color: "#22c55e" }}>Correct:</strong> {currentQuestion.options[currentQuestion.correctAnswer]}
-              </>
-            )}
-          </Typography>
-          {!isCorrect && (
-            <Alert severity="info" sx={{ mt: 1, ml: 4.5 }}>
-              <Typography variant="caption">{currentQuestion.explanation}</Typography>
-            </Alert>
-          )}
-        </Paper>
+        <Box>
+          {quizQuestions.map((question, index) => {
+            const answer = answers[index];
+            const isCorrect = answer === question.correctAnswer;
+            return (
+              <Paper
+                key={question.id}
+                sx={{
+                  p: 2,
+                  mb: 2,
+                  borderRadius: 2,
+                  bgcolor: alpha(isCorrect ? "#22c55e" : "#ef4444", 0.05),
+                  border: `1px solid ${alpha(isCorrect ? "#22c55e" : "#ef4444", 0.2)}`,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1 }}>
+                  <Chip
+                    label={`Q${index + 1}`}
+                    size="small"
+                    sx={{
+                      bgcolor: isCorrect ? "#22c55e" : "#ef4444",
+                      color: "white",
+                      fontWeight: 700,
+                    }}
+                  />
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {question.question}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ color: "text.secondary", ml: 4.5 }}>
+                  <strong>Your answer:</strong> {answer !== null && answer !== undefined ? question.options[answer] : "Not answered"}
+                  {!isCorrect && (
+                    <>
+                      <br />
+                      <strong style={{ color: "#22c55e" }}>Correct:</strong> {question.options[question.correctAnswer]}
+                    </>
+                  )}
+                </Typography>
+                <Typography variant="caption" sx={{ display: "block", mt: 1, ml: 4.5, fontStyle: "italic" }}>
+                  {question.explanation}
+                </Typography>
+              </Paper>
+            );
+          })}
+        </Box>
 
         <Box sx={{ display: "flex", gap: 2, mt: 3 }}>
           <Button
@@ -1117,7 +1156,7 @@ function QuizSection() {
               fontWeight: 700,
             }}
           >
-            Try Again (New Question)
+            Try Again (New Questions)
           </Button>
           <Button
             variant="outlined"
@@ -1130,6 +1169,12 @@ function QuizSection() {
       </Paper>
     );
   }
+
+  const answeredCount = answers.length + (selectedAnswer !== null ? 1 : 0);
+  const progressValue = quizQuestions.length
+    ? ((currentQuestionIndex + 1) / quizQuestions.length) * 100
+    : 0;
+  const isLastQuestion = currentQuestionIndex + 1 >= quizQuestions.length;
 
   return (
     <Paper
@@ -1145,7 +1190,7 @@ function QuizSection() {
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-            Question 1 of 1
+            Question {currentQuestionIndex + 1} of {quizQuestions.length}
           </Typography>
           <Chip
             label={currentQuestion.topic}
@@ -1156,7 +1201,7 @@ function QuizSection() {
         <Box sx={{ width: "100%", bgcolor: alpha("#2563eb", 0.1), borderRadius: 1, height: 8 }}>
           <Box
             sx={{
-              width: "100%",
+              width: `${progressValue}%`,
               bgcolor: "#2563eb",
               borderRadius: 1,
               height: "100%",
@@ -1219,12 +1264,12 @@ function QuizSection() {
 
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="body2" color="text.secondary">
-          {selectedAnswer === null ? "0/1 answered" : "1/1 answered"}
+          {answeredCount}/{quizQuestions.length} answered
         </Typography>
 
         <Button
           variant="contained"
-          onClick={() => setShowResults(true)}
+          onClick={handleSubmitAnswer}
           disabled={selectedAnswer === null}
           sx={{
             background: selectedAnswer !== null
@@ -1233,7 +1278,7 @@ function QuizSection() {
             fontWeight: 700,
           }}
         >
-          Submit Quiz
+          {isLastQuestion ? "Finish Quiz" : "Next Question"}
         </Button>
       </Box>
     </Paper>
@@ -1396,13 +1441,15 @@ export default function IDAProEssentialsPage() {
           </Grid>
         </Paper>
 
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3 }}
-        >
-          Back to Learning Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 3 }}
+        />
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             Quick Start Workflow
@@ -1650,6 +1697,18 @@ print("Total functions:", count)`}
         </Paper>
 
         <QuizSection />
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </LearnPageLayout>
   );

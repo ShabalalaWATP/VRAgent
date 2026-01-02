@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
+import { Link } from "react-router-dom";
 import {
   Box,
   Container,
@@ -24,6 +26,12 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Drawer,
+  Fab,
+  IconButton,
+  Tooltip,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -47,6 +55,11 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import InfoIcon from "@mui/icons-material/Info";
 import WarningIcon from "@mui/icons-material/Warning";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import QuizIcon from "@mui/icons-material/Quiz";
+import SchoolIcon from "@mui/icons-material/School";
 import { useNavigate } from "react-router-dom";
 
 // ========== CLOUD SERVICE MODELS ==========
@@ -325,9 +338,809 @@ const outlineSections = [
   { title: "Cloud Certifications Guide", description: "AWS, Azure, and GCP certification paths and study tips", status: "Coming Soon" },
 ];
 
+const ACCENT_COLOR = "#0ea5e9";
+const QUIZ_QUESTION_COUNT = 10;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "Cloud computing is best described as:",
+    options: [
+      "On-demand access to shared computing resources over the internet",
+      "Buying and owning physical servers",
+      "Running only desktop applications",
+      "A single private data center",
+    ],
+    correctAnswer: 0,
+    explanation: "Cloud provides on-demand resources delivered over the internet.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "Elasticity refers to:",
+    options: [
+      "Automatically scaling resources up and down",
+      "Using only one server",
+      "Encrypting all data",
+      "Buying hardware upfront",
+    ],
+    correctAnswer: 0,
+    explanation: "Elasticity is the ability to scale resources based on demand.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "Scalability focuses on:",
+    options: [
+      "Handling growth by adding resources",
+      "Reducing latency only",
+      "Using one region only",
+      "Encrypting traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Scalability is the ability to grow capacity as demand increases.",
+  },
+  {
+    id: 4,
+    topic: "Service Models",
+    question: "Which model provides virtual machines and networking?",
+    options: ["IaaS", "PaaS", "SaaS", "FaaS"],
+    correctAnswer: 0,
+    explanation: "IaaS provides infrastructure like VMs and networking.",
+  },
+  {
+    id: 5,
+    topic: "Service Models",
+    question: "Which model lets you deploy code without managing servers?",
+    options: ["PaaS", "IaaS", "SaaS", "Colocation"],
+    correctAnswer: 0,
+    explanation: "PaaS handles the platform so you focus on code.",
+  },
+  {
+    id: 6,
+    topic: "Service Models",
+    question: "Which model delivers full applications to end users?",
+    options: ["SaaS", "IaaS", "PaaS", "Bare metal"],
+    correctAnswer: 0,
+    explanation: "SaaS provides ready-to-use applications.",
+  },
+  {
+    id: 7,
+    topic: "Service Models",
+    question: "Serverless computing is often referred to as:",
+    options: ["FaaS", "IaaS", "SaaS", "DaaS"],
+    correctAnswer: 0,
+    explanation: "Serverless is commonly called Function as a Service (FaaS).",
+  },
+  {
+    id: 8,
+    topic: "Deployment Models",
+    question: "A public cloud is:",
+    options: [
+      "Shared infrastructure operated by a provider",
+      "Dedicated to a single organization only",
+      "Always on-premises",
+      "Air-gapped by default",
+    ],
+    correctAnswer: 0,
+    explanation: "Public clouds are multi-tenant and provider-operated.",
+  },
+  {
+    id: 9,
+    topic: "Deployment Models",
+    question: "A private cloud is:",
+    options: [
+      "Dedicated to one organization",
+      "Shared across unrelated customers",
+      "Always free to use",
+      "Only for SaaS apps",
+    ],
+    correctAnswer: 0,
+    explanation: "Private clouds are dedicated to a single organization.",
+  },
+  {
+    id: 10,
+    topic: "Deployment Models",
+    question: "Hybrid cloud combines:",
+    options: ["Public and private clouds", "Only public clouds", "Only private clouds", "Only edge locations"],
+    correctAnswer: 0,
+    explanation: "Hybrid uses both public and private environments.",
+  },
+  {
+    id: 11,
+    topic: "Deployment Models",
+    question: "Multi-cloud means:",
+    options: ["Using multiple cloud providers", "Using multiple regions in one provider", "Using only SaaS", "Using only on-prem"],
+    correctAnswer: 0,
+    explanation: "Multi-cloud spreads workloads across providers.",
+  },
+  {
+    id: 12,
+    topic: "Regions and AZs",
+    question: "A cloud region is:",
+    options: ["A geographic area with multiple data centers", "A single server", "A single rack", "A single VM"],
+    correctAnswer: 0,
+    explanation: "Regions group multiple data centers in a geographic area.",
+  },
+  {
+    id: 13,
+    topic: "Regions and AZs",
+    question: "An Availability Zone (AZ) is:",
+    options: ["An isolated data center within a region", "A cloud provider logo", "A single database", "A billing plan"],
+    correctAnswer: 0,
+    explanation: "AZs are isolated data centers within a region.",
+  },
+  {
+    id: 14,
+    topic: "Regions and AZs",
+    question: "Using multiple AZs improves:",
+    options: ["Availability", "Local disk speed", "Monitor resolution", "Keyboard latency"],
+    correctAnswer: 0,
+    explanation: "Multi-AZ setups improve resilience and availability.",
+  },
+  {
+    id: 15,
+    topic: "Shared Responsibility",
+    question: "In the shared responsibility model, the provider is responsible for:",
+    options: ["Infrastructure security", "Customer data classification", "Application code", "User access policy"],
+    correctAnswer: 0,
+    explanation: "Providers secure the infrastructure; customers secure their data and configs.",
+  },
+  {
+    id: 16,
+    topic: "Shared Responsibility",
+    question: "Customers are responsible for:",
+    options: ["Configuring access controls and data security", "Physical data center security", "Power and cooling", "Provider hardware"],
+    correctAnswer: 0,
+    explanation: "Customers manage access controls and data protections.",
+  },
+  {
+    id: 17,
+    topic: "Security",
+    question: "IAM is used for:",
+    options: ["Identity and access management", "Image rendering", "Network routing", "Storage replication"],
+    correctAnswer: 0,
+    explanation: "IAM controls identities, roles, and permissions.",
+  },
+  {
+    id: 18,
+    topic: "Security",
+    question: "MFA provides:",
+    options: ["Additional authentication factor", "Automatic scaling", "Network encryption only", "Disk defragmentation"],
+    correctAnswer: 0,
+    explanation: "MFA adds an extra authentication step.",
+  },
+  {
+    id: 19,
+    topic: "Security",
+    question: "Least privilege means:",
+    options: ["Grant only necessary permissions", "Grant admin to all users", "Disable logging", "Ignore audits"],
+    correctAnswer: 0,
+    explanation: "Least privilege limits access to what is required.",
+  },
+  {
+    id: 20,
+    topic: "Security",
+    question: "Encryption at rest protects:",
+    options: ["Stored data", "Network traffic only", "CPU caches only", "User sessions only"],
+    correctAnswer: 0,
+    explanation: "Encryption at rest secures stored data.",
+  },
+  {
+    id: 21,
+    topic: "Security",
+    question: "Encryption in transit protects:",
+    options: ["Data moving over networks", "Only backups", "Only disks", "Only CPU registers"],
+    correctAnswer: 0,
+    explanation: "In-transit encryption protects network data.",
+  },
+  {
+    id: 22,
+    topic: "Storage",
+    question: "Object storage is best for:",
+    options: ["Unstructured data like images and backups", "Boot disks only", "Databases only", "CPU registers"],
+    correctAnswer: 0,
+    explanation: "Object storage is ideal for unstructured data.",
+  },
+  {
+    id: 23,
+    topic: "Storage",
+    question: "Block storage is typically used for:",
+    options: ["VM disks and databases", "Static websites only", "DNS records", "Email routing"],
+    correctAnswer: 0,
+    explanation: "Block storage is used for VM volumes and databases.",
+  },
+  {
+    id: 24,
+    topic: "Storage",
+    question: "File storage provides:",
+    options: ["Shared file systems", "Object buckets only", "TCP load balancing", "User authentication"],
+    correctAnswer: 0,
+    explanation: "File storage provides shared file systems.",
+  },
+  {
+    id: 25,
+    topic: "Networking",
+    question: "A CDN primarily improves:",
+    options: ["Content delivery latency", "Database writes", "CPU frequency", "RAM speed"],
+    correctAnswer: 0,
+    explanation: "CDNs cache content closer to users to reduce latency.",
+  },
+  {
+    id: 26,
+    topic: "Networking",
+    question: "A load balancer distributes:",
+    options: ["Traffic across multiple servers", "Disk storage across volumes", "Power across racks", "Keys across users"],
+    correctAnswer: 0,
+    explanation: "Load balancers distribute traffic to multiple targets.",
+  },
+  {
+    id: 27,
+    topic: "Networking",
+    question: "A VPC is:",
+    options: ["A logically isolated virtual network", "A hardware firewall only", "A storage bucket", "A DNS record"],
+    correctAnswer: 0,
+    explanation: "A VPC provides a private virtual network in the cloud.",
+  },
+  {
+    id: 28,
+    topic: "Networking",
+    question: "Security groups typically act as:",
+    options: ["Stateful firewalls for instances", "Routing tables", "DNS resolvers", "WAF rules only"],
+    correctAnswer: 0,
+    explanation: "Security groups are stateful firewalls for resources.",
+  },
+  {
+    id: 29,
+    topic: "Networking",
+    question: "NAT gateways are used to:",
+    options: ["Allow private subnets to access the internet", "Encrypt storage", "Manage IAM users", "Monitor logs"],
+    correctAnswer: 0,
+    explanation: "NAT gateways provide outbound internet for private subnets.",
+  },
+  {
+    id: 30,
+    topic: "Compute",
+    question: "A virtual machine is:",
+    options: ["A software emulation of a physical server", "A physical rack", "A storage bucket", "A load balancer"],
+    correctAnswer: 0,
+    explanation: "VMs are software-based servers running on hardware.",
+  },
+  {
+    id: 31,
+    topic: "Compute",
+    question: "A hypervisor is used to:",
+    options: ["Host multiple VMs on one server", "Route network traffic", "Store backups", "Manage DNS zones"],
+    correctAnswer: 0,
+    explanation: "Hypervisors create and run virtual machines.",
+  },
+  {
+    id: 32,
+    topic: "Containers",
+    question: "Containers are best described as:",
+    options: ["Lightweight app packaging using shared OS kernels", "Full virtual machines", "Physical servers", "Database clusters only"],
+    correctAnswer: 0,
+    explanation: "Containers share the host OS kernel and package apps.",
+  },
+  {
+    id: 33,
+    topic: "Containers",
+    question: "Kubernetes is used for:",
+    options: ["Container orchestration", "Object storage", "Email delivery", "DNS resolution"],
+    correctAnswer: 0,
+    explanation: "Kubernetes manages containerized workloads.",
+  },
+  {
+    id: 34,
+    topic: "Serverless",
+    question: "A common serverless concern is:",
+    options: ["Cold start latency", "Lack of encryption", "No internet access", "No scalability"],
+    correctAnswer: 0,
+    explanation: "Serverless can introduce cold starts.",
+  },
+  {
+    id: 35,
+    topic: "Scaling",
+    question: "Horizontal scaling means:",
+    options: ["Adding more instances", "Increasing CPU on one instance", "Buying a bigger server only", "Reducing instances to one"],
+    correctAnswer: 0,
+    explanation: "Horizontal scaling adds more instances.",
+  },
+  {
+    id: 36,
+    topic: "Scaling",
+    question: "Vertical scaling means:",
+    options: ["Increasing resources on one instance", "Adding more instances", "Reducing memory", "Removing redundancy"],
+    correctAnswer: 0,
+    explanation: "Vertical scaling increases CPU/RAM on a single instance.",
+  },
+  {
+    id: 37,
+    topic: "Pricing",
+    question: "On-demand pricing means:",
+    options: ["Pay as you go with no long-term commitment", "Pay for a year upfront only", "Free usage", "Use only reserved capacity"],
+    correctAnswer: 0,
+    explanation: "On-demand is pay-as-you-go without long-term commitment.",
+  },
+  {
+    id: 38,
+    topic: "Pricing",
+    question: "Reserved instances provide:",
+    options: ["Discounts for commitment", "Free internet", "Free storage", "Free support always"],
+    correctAnswer: 0,
+    explanation: "Reservations lower cost in exchange for commitment.",
+  },
+  {
+    id: 39,
+    topic: "Pricing",
+    question: "Spot instances are best for:",
+    options: ["Interruptible workloads", "Mission-critical databases", "Legacy mainframes", "Single points of failure"],
+    correctAnswer: 0,
+    explanation: "Spot instances are low-cost but can be interrupted.",
+  },
+  {
+    id: 40,
+    topic: "Pricing",
+    question: "Cloud spending is typically considered:",
+    options: ["Operational expenditure (OpEx)", "Capital expenditure (CapEx)", "Fixed assets only", "Depreciation only"],
+    correctAnswer: 0,
+    explanation: "Cloud is usually OpEx because you pay for usage.",
+  },
+  {
+    id: 41,
+    topic: "Reliability",
+    question: "RPO stands for:",
+    options: ["Recovery Point Objective", "Real-time Processing Output", "Regional Provider Option", "Resource Planning Order"],
+    correctAnswer: 0,
+    explanation: "RPO is the maximum acceptable data loss.",
+  },
+  {
+    id: 42,
+    topic: "Reliability",
+    question: "RTO stands for:",
+    options: ["Recovery Time Objective", "Real-time Transfer Output", "Region Target Order", "Resource Tracking Option"],
+    correctAnswer: 0,
+    explanation: "RTO is the target time to restore service.",
+  },
+  {
+    id: 43,
+    topic: "Reliability",
+    question: "Active-active DR means:",
+    options: ["Multiple sites serving traffic simultaneously", "Only one site running", "No backups required", "Single AZ only"],
+    correctAnswer: 0,
+    explanation: "Active-active uses multiple sites at the same time.",
+  },
+  {
+    id: 44,
+    topic: "Reliability",
+    question: "Active-passive DR means:",
+    options: ["Primary site active, secondary on standby", "Both sites active always", "No failover needed", "Only local backups"],
+    correctAnswer: 0,
+    explanation: "Active-passive keeps a standby site ready.",
+  },
+  {
+    id: 45,
+    topic: "Security",
+    question: "A WAF is used to:",
+    options: ["Protect web apps from common attacks", "Store files", "Run containers", "Manage DNS"],
+    correctAnswer: 0,
+    explanation: "WAFs block common web attacks like SQLi and XSS.",
+  },
+  {
+    id: 46,
+    topic: "Security",
+    question: "CSPM tools focus on:",
+    options: ["Detecting misconfigurations", "Replacing databases", "Running containers", "Routing traffic"],
+    correctAnswer: 0,
+    explanation: "CSPM tools identify misconfigurations and compliance issues.",
+  },
+  {
+    id: 47,
+    topic: "Security",
+    question: "CASB tools help with:",
+    options: ["Controlling cloud app usage", "Encrypting CPU caches", "Replacing VPCs", "Managing GPUs"],
+    correctAnswer: 0,
+    explanation: "CASB tools provide visibility and control of cloud apps.",
+  },
+  {
+    id: 48,
+    topic: "Identity",
+    question: "Identity federation allows:",
+    options: ["Using existing identity providers for cloud access", "Disabling MFA", "Sharing root keys", "Bypassing logging"],
+    correctAnswer: 0,
+    explanation: "Federation integrates external identity providers.",
+  },
+  {
+    id: 49,
+    topic: "Operations",
+    question: "Infrastructure as Code (IaC) enables:",
+    options: ["Provisioning infrastructure using code", "Manual server setup only", "Only spreadsheets", "No version control"],
+    correctAnswer: 0,
+    explanation: "IaC defines infrastructure using code and automation.",
+  },
+  {
+    id: 50,
+    topic: "Operations",
+    question: "CI/CD pipelines are used for:",
+    options: ["Automated build, test, and deploy", "Manual patching only", "Stopping deployments", "Tracking invoices"],
+    correctAnswer: 0,
+    explanation: "CI/CD automates build and deployment workflows.",
+  },
+  {
+    id: 51,
+    topic: "Observability",
+    question: "Observability includes:",
+    options: ["Logs, metrics, and traces", "Only CPU usage", "Only storage size", "Only billing data"],
+    correctAnswer: 0,
+    explanation: "Observability uses logs, metrics, and traces to understand systems.",
+  },
+  {
+    id: 52,
+    topic: "Monitoring",
+    question: "Cloud monitoring services are used to:",
+    options: ["Collect metrics and alerts", "Run databases", "Encrypt disks", "Provision VMs only"],
+    correctAnswer: 0,
+    explanation: "Monitoring collects metrics and triggers alerts.",
+  },
+  {
+    id: 53,
+    topic: "Storage",
+    question: "Object storage durability is typically described as:",
+    options: ["Very high with multiple replicas", "Low and unreliable", "Only single copy", "Depends on client only"],
+    correctAnswer: 0,
+    explanation: "Object storage usually replicates data for durability.",
+  },
+  {
+    id: 54,
+    topic: "Databases",
+    question: "Managed databases help by:",
+    options: ["Handling backups, patching, and scaling", "Removing all costs", "Disabling encryption", "Eliminating latency"],
+    correctAnswer: 0,
+    explanation: "Managed databases reduce operational burden.",
+  },
+  {
+    id: 55,
+    topic: "Messaging",
+    question: "A message queue is used to:",
+    options: ["Decouple producers and consumers", "Store files long-term", "Provide DNS", "Replace load balancers"],
+    correctAnswer: 0,
+    explanation: "Queues decouple components and smooth workloads.",
+  },
+  {
+    id: 56,
+    topic: "Networking",
+    question: "A VPN connection to the cloud provides:",
+    options: ["Encrypted tunnel from on-prem to cloud", "Public internet access only", "Disk encryption", "Container scheduling"],
+    correctAnswer: 0,
+    explanation: "VPNs provide encrypted connectivity to cloud networks.",
+  },
+  {
+    id: 57,
+    topic: "Networking",
+    question: "Dedicated private connectivity is often called:",
+    options: ["Direct Connect or ExpressRoute", "WAF", "CSPM", "SaaS"],
+    correctAnswer: 0,
+    explanation: "Providers offer direct private links for low latency.",
+  },
+  {
+    id: 58,
+    topic: "Compliance",
+    question: "Data residency refers to:",
+    options: ["Where data is stored geographically", "How fast data moves", "Which CPU is used", "Which browser is used"],
+    correctAnswer: 0,
+    explanation: "Residency specifies geographic storage location.",
+  },
+  {
+    id: 59,
+    topic: "Compliance",
+    question: "PCI DSS is related to:",
+    options: ["Payment card data security", "Medical data", "Government only", "Browser cookies"],
+    correctAnswer: 0,
+    explanation: "PCI DSS applies to payment card data security.",
+  },
+  {
+    id: 60,
+    topic: "Compliance",
+    question: "HIPAA is related to:",
+    options: ["Healthcare data protection", "Video streaming", "Gaming", "Retail pricing"],
+    correctAnswer: 0,
+    explanation: "HIPAA governs protected health information.",
+  },
+  {
+    id: 61,
+    topic: "Cost",
+    question: "Rightsizing means:",
+    options: ["Selecting appropriate instance sizes", "Always choosing the largest instance", "Disabling monitoring", "Avoiding tags"],
+    correctAnswer: 0,
+    explanation: "Rightsizing matches resources to actual needs.",
+  },
+  {
+    id: 62,
+    topic: "Cost",
+    question: "Tagging resources helps with:",
+    options: ["Cost allocation and organization", "Encrypting storage", "Improving CPU speed", "Reducing bandwidth"],
+    correctAnswer: 0,
+    explanation: "Tags help track ownership and costs.",
+  },
+  {
+    id: 63,
+    topic: "Cloud Providers",
+    question: "Which is a major cloud provider?",
+    options: ["AWS", "Windows 7", "Photoshop", "Ubuntu"],
+    correctAnswer: 0,
+    explanation: "AWS is a major cloud provider.",
+  },
+  {
+    id: 64,
+    topic: "Cloud Providers",
+    question: "Which is a major cloud provider?",
+    options: ["Microsoft Azure", "LibreOffice", "Notepad", "WinRAR"],
+    correctAnswer: 0,
+    explanation: "Azure is a major cloud provider.",
+  },
+  {
+    id: 65,
+    topic: "Cloud Providers",
+    question: "Which is a major cloud provider?",
+    options: ["Google Cloud Platform", "GIMP", "VLC", "Firefox"],
+    correctAnswer: 0,
+    explanation: "Google Cloud Platform is a major cloud provider.",
+  },
+  {
+    id: 66,
+    topic: "Networking",
+    question: "A security group is typically:",
+    options: ["Stateful", "Stateless", "A DNS record", "A storage class"],
+    correctAnswer: 0,
+    explanation: "Security groups are stateful firewalls in many clouds.",
+  },
+  {
+    id: 67,
+    topic: "Networking",
+    question: "A network ACL is typically:",
+    options: ["Stateless", "Stateful", "A CPU scheduler", "An IAM role"],
+    correctAnswer: 0,
+    explanation: "Network ACLs are often stateless.",
+  },
+  {
+    id: 68,
+    topic: "Reliability",
+    question: "An SLA defines:",
+    options: ["Service availability commitments", "CPU clock speed", "Disk size", "IP address format"],
+    correctAnswer: 0,
+    explanation: "SLAs outline availability and service commitments.",
+  },
+  {
+    id: 69,
+    topic: "Security",
+    question: "A common cloud breach cause is:",
+    options: ["Misconfiguration", "Too many regions", "Too much memory", "Too much redundancy"],
+    correctAnswer: 0,
+    explanation: "Misconfigurations are a leading cause of cloud incidents.",
+  },
+  {
+    id: 70,
+    topic: "Operations",
+    question: "Logs for API activity are commonly stored in:",
+    options: ["Audit logs like CloudTrail", "CPU cache", "Local browser storage", "USB devices"],
+    correctAnswer: 0,
+    explanation: "Audit logs capture API activity.",
+  },
+  {
+    id: 71,
+    topic: "Storage",
+    question: "Archive storage is best for:",
+    options: ["Long-term, infrequently accessed data", "High IOPS databases", "Real-time streaming", "Cache data only"],
+    correctAnswer: 0,
+    explanation: "Archive storage is low cost for infrequent access.",
+  },
+  {
+    id: 72,
+    topic: "Serverless",
+    question: "Serverless billing is usually based on:",
+    options: ["Execution time and requests", "Fixed monthly cost only", "CPU model", "Physical rack space"],
+    correctAnswer: 0,
+    explanation: "Serverless costs depend on invocations and duration.",
+  },
+  {
+    id: 73,
+    topic: "Containers",
+    question: "Container images are typically stored in:",
+    options: ["Registries", "DNS servers", "Load balancers", "Key vaults only"],
+    correctAnswer: 0,
+    explanation: "Registries store and distribute container images.",
+  },
+  {
+    id: 74,
+    topic: "Architecture",
+    question: "Cloud bursting means:",
+    options: ["Using cloud resources to handle peak demand", "Deleting all resources", "Avoiding autoscaling", "Turning off backups"],
+    correctAnswer: 0,
+    explanation: "Cloud bursting uses cloud capacity for spikes.",
+  },
+  {
+    id: 75,
+    topic: "Architecture",
+    question: "A well-architected cloud design emphasizes:",
+    options: ["Reliability, security, and cost efficiency", "Single points of failure", "Manual scaling only", "No monitoring"],
+    correctAnswer: 0,
+    explanation: "Good architectures prioritize reliability, security, and cost.",
+  },
+];
+
 const CloudComputingPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const [quizPool] = useState<QuizQuestion[]>(() =>
+    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
+  );
+
+  // Navigation state
+  const accent = "#06b6d4"; // Cyan for Cloud Computing
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "service-models", label: "Service Models", icon: <CloudIcon /> },
+    { id: "deployment", label: "Deployment", icon: <DevicesIcon /> },
+    { id: "providers", label: "Providers", icon: <BusinessIcon /> },
+    { id: "core-services", label: "Core Services", icon: <SettingsIcon /> },
+    { id: "virtualization", label: "Virtualization", icon: <DataUsageIcon /> },
+    { id: "containers", label: "Containers", icon: <StorageIcon /> },
+    { id: "serverless", label: "Serverless", icon: <CloudUploadIcon /> },
+    { id: "storage", label: "Storage", icon: <StorageIcon /> },
+    { id: "networking", label: "Networking", icon: <PublicIcon /> },
+    { id: "pricing", label: "Pricing", icon: <SavingsIcon /> },
+    { id: "benefits", label: "Benefits", icon: <CheckCircleOutlineIcon /> },
+    { id: "security", label: "Security", icon: <SecurityIcon /> },
+    { id: "misconfigs", label: "Misconfigs", icon: <WarningIcon /> },
+    { id: "terminology", label: "Terminology", icon: <InfoIcon /> },
+    { id: "service-comparison", label: "Comparison", icon: <CloudQueueIcon /> },
+    { id: "iam", label: "IAM", icon: <LockIcon /> },
+    { id: "architecture", label: "Architecture", icon: <BuildIcon /> },
+    { id: "devops", label: "DevOps", icon: <SpeedIcon /> },
+    { id: "cli", label: "CLI Tools", icon: <BuildIcon /> },
+    { id: "security-tools", label: "Security Tools", icon: <SecurityIcon /> },
+    { id: "real-world", label: "Real World", icon: <TipsAndUpdatesIcon /> },
+    { id: "outline", label: "Outline", icon: <ListAltIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   const pageContext = `This page covers cloud computing fundamentals for beginners. Topics include:
 - What is cloud computing and why it matters (utility model analogy)
@@ -348,7 +1161,180 @@ const CloudComputingPage: React.FC = () => {
 
   return (
     <LearnPageLayout pageTitle="Cloud Computing Fundamentals" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#0891b2" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          <List>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.12) : "transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.08),
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ color: activeSection === item.id ? accent : "inherit", minWidth: 36 }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={item.label}
+                  primaryTypographyProps={{
+                    fontWeight: activeSection === item.id ? 600 : 400,
+                    color: activeSection === item.id ? accent : "inherit",
+                  }}
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Back Button */}
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
+
         {/* Hero Banner */}
         <Paper
           elevation={0}
@@ -373,63 +1359,6 @@ const CloudComputingPage: React.FC = () => {
             <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 700 }}>
               Understanding on-demand computing resources, cloud service models, major providers, and how the cloud is transforming IT infrastructure.
             </Typography>
-          </Box>
-        </Paper>
-
-        {/* Quick Navigation */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 2,
-            mb: 4,
-            borderRadius: 3,
-            bgcolor: alpha(theme.palette.background.paper, 0.6),
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            position: "sticky",
-            top: 64,
-            zIndex: 100,
-            backdropFilter: "blur(10px)",
-          }}
-        >
-          <Typography variant="overline" sx={{ fontWeight: 700, color: "text.secondary", mb: 1, display: "block" }}>
-            Quick Navigation
-          </Typography>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {[
-              { label: "Introduction", id: "intro" },
-              { label: "Service Models", id: "service-models" },
-              { label: "Deployment", id: "deployment" },
-              { label: "Providers", id: "providers" },
-              { label: "Service Comparison", id: "service-comparison" },
-              { label: "Virtualization", id: "virtualization" },
-              { label: "Containers", id: "containers" },
-              { label: "Serverless", id: "serverless" },
-              { label: "Storage", id: "storage" },
-              { label: "Networking", id: "networking" },
-              { label: "IAM", id: "iam" },
-              { label: "Architecture", id: "architecture" },
-              { label: "DevOps", id: "devops" },
-              { label: "CLI Tools", id: "cli" },
-              { label: "Pricing", id: "pricing" },
-              { label: "Security", id: "security" },
-              { label: "Security Tools", id: "security-tools" },
-              { label: "Misconfigs", id: "misconfigs" },
-              { label: "Real World", id: "real-world" },
-              { label: "Terminology", id: "terminology" },
-            ].map((nav) => (
-              <Chip
-                key={nav.id}
-                label={nav.label}
-                clickable
-                component="a"
-                href={`#${nav.id}`}
-                size="small"
-                sx={{
-                  fontWeight: 600,
-                  "&:hover": { bgcolor: alpha("#0ea5e9", 0.15), color: "#0ea5e9" },
-                }}
-              />
-            ))}
           </Box>
         </Paper>
 
@@ -1374,6 +2303,17 @@ const CloudComputingPage: React.FC = () => {
           </Grid>
         </Paper>
 
+        {/* Quiz Section */}
+        <Box id="quiz" sx={{ mt: 5 }}>
+          <QuizSection
+            questions={quizPool}
+            accentColor={ACCENT_COLOR}
+            title="Cloud Computing Fundamentals Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Box>
+
         {/* Footer Navigation */}
         <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
           <Button
@@ -1397,7 +2337,8 @@ const CloudComputingPage: React.FC = () => {
             Return to Learning Hub
           </Button>
         </Box>
-      </Container>
+        </Box>
+      </Box>
     </LearnPageLayout>
   );
 };

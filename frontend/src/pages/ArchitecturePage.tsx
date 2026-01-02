@@ -21,9 +21,15 @@ import {
   Tooltip,
   Grid,
   Divider,
+  Card,
+  CardContent,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -40,6 +46,25 @@ import WebhookIcon from "@mui/icons-material/Webhook";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import LayersIcon from "@mui/icons-material/Layers";
 import DataObjectIcon from "@mui/icons-material/DataObject";
+import BugReportIcon from "@mui/icons-material/BugReport";
+import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
+import BuildIcon from "@mui/icons-material/Build";
+import GroupIcon from "@mui/icons-material/Group";
+import ViewKanbanIcon from "@mui/icons-material/ViewKanban";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
+import HttpIcon from "@mui/icons-material/Http";
+import RouterIcon from "@mui/icons-material/Router";
+import DnsIcon from "@mui/icons-material/Dns";
+import VpnKeyIcon from "@mui/icons-material/VpnKey";
+import TerminalIcon from "@mui/icons-material/Terminal";
+import AndroidIcon from "@mui/icons-material/Android";
+import DescriptionIcon from "@mui/icons-material/Description";
+import ChatIcon from "@mui/icons-material/Chat";
+import PersonIcon from "@mui/icons-material/Person";
+import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import WarningIcon from "@mui/icons-material/Warning";
+import ShuffleIcon from "@mui/icons-material/Shuffle";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -54,6 +79,15 @@ function TabPanel(props: TabPanelProps) {
       {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
     </div>
   );
+}
+
+interface FeatureInfo {
+  name: string;
+  icon: React.ReactNode;
+  description: string;
+  capabilities: string[];
+  files?: string[];
+  color: string;
 }
 
 interface ServiceInfo {
@@ -334,6 +368,460 @@ const dataModels = [
   { model: "Webhook", description: "Notification endpoint", fields: "id, project_id, url, type, active" },
 ];
 
+// ============ FEATURE HUB DATA ============
+
+const securityScanFeatures: FeatureInfo[] = [
+  {
+    name: "Static Code Analysis (SAST)",
+    icon: <BugReportIcon />,
+    description: "Multi-scanner security analysis with 14-phase pipeline and parallel execution.",
+    capabilities: [
+      "12+ security scanners (Semgrep, Bandit, ESLint, GoSec, SpotBugs, Brakeman, etc.)",
+      "Language auto-detection triggers appropriate scanners",
+      "ThreadPoolExecutor parallel scanning (2× CPU cores)",
+      "Real-time progress via WebSocket + Redis pub/sub",
+      "Cross-scanner deduplication to reduce noise",
+    ],
+    files: ["scan_service.py", "semgrep_service.py", "bandit_service.py"],
+    color: "#3b82f6",
+  },
+  {
+    name: "Agentic AI Scanning",
+    icon: <SmartToyIcon />,
+    description: "Deep AI-powered vulnerability hunting with source-to-sink analysis.",
+    capabilities: [
+      "Always-enabled agentic scanning mode",
+      "Progressive file analysis (80→30→12 files)",
+      "Entry point discovery and call flow tracing",
+      "CWE mapping and severity classification",
+      "Cross-references SAST findings for validation",
+    ],
+    files: ["agentic_scan_service.py", "agentic_scan.py"],
+    color: "#8b5cf6",
+  },
+  {
+    name: "VulnHuntr",
+    icon: <PsychologyIcon />,
+    description: "LLM-powered vulnerability hunting with source-to-sink data flow tracing.",
+    capabilities: [
+      "Deep LLM analysis for vulnerability confirmation",
+      "Python source/sink pattern matching",
+      "Quick scan mode for code snippets",
+      "Markdown report generation",
+      "False positive reduction through AI verification",
+    ],
+    files: ["vulnhuntr_service.py", "vulnhuntr.py"],
+    color: "#ec4899",
+  },
+  {
+    name: "Exploitability Analysis",
+    icon: <WarningIcon />,
+    description: "AI-generated attack chains and exploit scenarios with severity ranking.",
+    capabilities: [
+      "Multiple analysis modes: full, summary, auto",
+      "Attack chain diagram generation (Mermaid)",
+      "16+ pre-built exploit templates (SQLi, XSS, RCE, etc.)",
+      "Executive summary generation",
+      "Remediation code examples",
+    ],
+    files: ["exploit_service.py", "exploitability.py"],
+    color: "#ef4444",
+  },
+  {
+    name: "Three-Stage AI Analysis",
+    icon: <LayersIcon />,
+    description: "Heuristics → Agentic corroboration → LLM for smart false positive reduction.",
+    capabilities: [
+      "Heuristic patterns detect obvious false positives (test files, mock code)",
+      "Agentic AI cross-references scanner findings",
+      "Context-aware severity adjustment (auth, admin, ORM)",
+      "8 pre-defined attack chain patterns",
+      "LLM analysis limited to top 50 critical findings",
+    ],
+    files: ["ai_analysis_service.py"],
+    color: "#7c3aed",
+  },
+  {
+    name: "Dependency Security",
+    icon: <AccountTreeIcon />,
+    description: "Full dependency tree analysis with CVE lookup and reachability checking.",
+    capabilities: [
+      "8 ecosystem support (npm, pip, Maven, Go, Ruby, Rust, PHP, .NET)",
+      "OSV.dev batch queries (100 deps/request)",
+      "Transitive dependency tree building from lock files",
+      "Reachability analysis - check if vulns are actually used",
+      "EPSS scoring + CISA KEV auto-escalation",
+    ],
+    files: ["dependency_service.py", "cve_service.py", "reachability_service.py"],
+    color: "#10b981",
+  },
+];
+
+const reverseEngineeringFeatures: FeatureInfo[] = [
+  {
+    name: "Binary Analysis",
+    icon: <MemoryIcon />,
+    description: "Deep analysis of EXE, ELF, DLL, SO files with Ghidra decompilation.",
+    capabilities: [
+      "Ghidra headless decompilation",
+      "Rich header analysis and symbol extraction",
+      "Fuzzy hashing (SSDEEP, TLSH, imphash)",
+      "YARA rule matching",
+      "CAPA capability analysis",
+    ],
+    files: ["ghidra_service.py", "reverse_engineering.py"],
+    color: "#6366f1",
+  },
+  {
+    name: "APK/Mobile Analysis",
+    icon: <AndroidIcon />,
+    description: "Android application security analysis with JADX decompilation.",
+    capabilities: [
+      "JADX decompilation to Java source",
+      "Manifest parsing and permission analysis",
+      "Component identification (activities, services, receivers)",
+      "Sensitive data discovery",
+      "Certificate validation and signing info",
+    ],
+    files: ["reverse_engineering.py"],
+    color: "#10b981",
+  },
+  {
+    name: "Docker Image Analysis",
+    icon: <LayersIcon />,
+    description: "Layer-by-layer Docker image security inspection.",
+    capabilities: [
+      "Layer-by-layer filesystem analysis",
+      "Configuration inspection",
+      "Per-layer vulnerability scanning",
+      "Secrets detection in layers",
+      "Base image tracing",
+    ],
+    files: ["docker_scan_service.py"],
+    color: "#2496ed",
+  },
+  {
+    name: "AI-Powered RE Analysis",
+    icon: <PsychologyIcon />,
+    description: "Multi-pass vulnerability hunting with attack surface mapping.",
+    capabilities: [
+      "Multi-pass vulnerability hunting with legitimacy filtering",
+      "Attack surface mapping",
+      "Frida script generation for dynamic analysis",
+      "Unicorn emulation scripts",
+      "CVE lookup and correlation",
+    ],
+    files: ["reverse_engineering.py"],
+    color: "#8b5cf6",
+  },
+  {
+    name: "11-Phase Unified Scan",
+    icon: <SecurityIcon />,
+    description: "Complete binary security assessment pipeline.",
+    capabilities: [
+      "Static analysis → Ghidra decompilation → Pattern scanning",
+      "CVE lookup → Sensitive data discovery → AI verification",
+      "Attack surface mapping → Frida script generation",
+      "Unicorn emulation → Report generation",
+      "Comprehensive security report output",
+    ],
+    files: ["reverse_engineering.py"],
+    color: "#ef4444",
+  },
+];
+
+const networkFeatures: FeatureInfo[] = [
+  {
+    name: "PCAP Analysis",
+    icon: <NetworkCheckIcon />,
+    description: "Multi-file network capture analysis with protocol inspection.",
+    capabilities: [
+      "Multi-file PCAP upload and analysis",
+      "Protocol distribution analysis",
+      "Top talkers identification",
+      "DNS query extraction",
+      "Credential detection in traffic",
+    ],
+    files: ["pcap_service.py", "network.py", "pcap.py"],
+    color: "#3b82f6",
+  },
+  {
+    name: "Nmap Integration",
+    icon: <RouterIcon />,
+    description: "Network scanning with service detection and OS fingerprinting.",
+    capabilities: [
+      "Nmap scan file analysis",
+      "Live network scanning",
+      "Service detection and version enumeration",
+      "OS fingerprinting",
+      "Network topology visualization",
+    ],
+    files: ["nmap_service.py", "network.py"],
+    color: "#10b981",
+  },
+  {
+    name: "SSL/TLS Scanner",
+    icon: <VpnKeyIcon />,
+    description: "SSL/TLS vulnerability detection and certificate validation.",
+    capabilities: [
+      "POODLE, BEAST, Heartbleed, ROBOT detection",
+      "Certificate validation and chain analysis",
+      "Protocol version enumeration",
+      "Cipher suite analysis",
+      "Security recommendations",
+    ],
+    files: ["network.py"],
+    color: "#f59e0b",
+  },
+  {
+    name: "DNS Reconnaissance",
+    icon: <DnsIcon />,
+    description: "Comprehensive DNS enumeration and security analysis.",
+    capabilities: [
+      "DNS enumeration (A, AAAA, MX, NS, TXT, etc.)",
+      "Subdomain discovery",
+      "Zone transfer attempts",
+      "Security analysis (SPF, DMARC, DKIM, DNSSEC, CAA)",
+      "WHOIS lookup for domains and IPs",
+    ],
+    files: ["dns_service.py", "dns.py"],
+    color: "#7c3aed",
+  },
+  {
+    name: "Traceroute Visualization",
+    icon: <AccountTreeIcon />,
+    description: "Network path analysis with latency and hop visualization.",
+    capabilities: [
+      "Real-time streaming traceroute",
+      "Cross-platform support (Windows/Linux/macOS)",
+      "AI-generated path analysis",
+      "Latency and packet loss detection",
+      "Network segment identification",
+    ],
+    files: ["traceroute_service.py", "traceroute.py"],
+    color: "#ec4899",
+  },
+  {
+    name: "MITM Proxy Workbench",
+    icon: <ShuffleIcon />,
+    description: "Intercepting proxy with rule-based traffic modification.",
+    capabilities: [
+      "Multiple proxy instance management",
+      "Interception modes: passthrough, intercept, auto_modify",
+      "8 preset rules (CORS bypass, CSP removal, script injection)",
+      "Natural language rule creation via AI",
+      "AI-powered traffic analysis",
+    ],
+    files: ["mitm_service.py", "mitm.py"],
+    color: "#ef4444",
+  },
+];
+
+const apiTestingFeatures: FeatureInfo[] = [
+  {
+    name: "API Security Testing",
+    icon: <HttpIcon />,
+    description: "Full API security assessment with OWASP API Top 10 coverage.",
+    capabilities: [
+      "Authentication and authorization testing",
+      "CORS and rate limiting analysis",
+      "Input validation testing",
+      "GraphQL security testing",
+      "WebSocket security testing",
+    ],
+    files: ["api_tester_service.py", "api_tester.py"],
+    color: "#3b82f6",
+  },
+  {
+    name: "OpenAPI/Swagger Import",
+    icon: <DescriptionIcon />,
+    description: "Import and parse API specifications for automated testing.",
+    capabilities: [
+      "OpenAPI/Swagger spec parsing",
+      "Automatic endpoint discovery",
+      "Parameter extraction",
+      "Test case generation",
+      "Batch testing support",
+    ],
+    files: ["api_tester_service.py"],
+    color: "#10b981",
+  },
+  {
+    name: "JWT Analysis",
+    icon: <VpnKeyIcon />,
+    description: "JSON Web Token security analysis and vulnerability detection.",
+    capabilities: [
+      "Algorithm vulnerability detection",
+      "Weak secret detection",
+      "Expiration validation",
+      "Claim analysis",
+      "Token manipulation testing",
+    ],
+    files: ["api_tester_service.py"],
+    color: "#f59e0b",
+  },
+];
+
+const fuzzingFeatures: FeatureInfo[] = [
+  {
+    name: "Core Fuzzing Engine",
+    icon: <TerminalIcon />,
+    description: "High-performance fuzzing with multiple attack modes.",
+    capabilities: [
+      "Attack modes: sniper, batteringram, pitchfork, clusterbomb",
+      "Position marker support for targeted fuzzing",
+      "Concurrent threading (up to 50 threads)",
+      "Real-time streaming via SSE/WebSocket",
+      "Status code matching and regex filtering",
+    ],
+    files: ["fuzzing_service.py", "fuzzing_advanced.py", "fuzzing.py"],
+    color: "#ef4444",
+  },
+  {
+    name: "Built-in Wordlists",
+    icon: <DataObjectIcon />,
+    description: "Comprehensive payload libraries for common attack vectors.",
+    capabilities: [
+      "SQL Injection payloads",
+      "XSS payloads",
+      "Path traversal (LFI) payloads",
+      "Command injection payloads",
+      "SSTI payloads",
+    ],
+    files: ["fuzzing_service.py"],
+    color: "#8b5cf6",
+  },
+  {
+    name: "Payload Transformations",
+    icon: <BuildIcon />,
+    description: "Advanced encoding and mutation capabilities.",
+    capabilities: [
+      "Multiple encodings (URL, Base64, HTML, Unicode, Hex)",
+      "Payload generators (number/char range, date, UUID)",
+      "Payload mutations (case, encoding, whitespace)",
+      "Null byte and comment injection",
+      "Concatenation variants",
+    ],
+    files: ["fuzzing_advanced.py"],
+    color: "#7c3aed",
+  },
+  {
+    name: "Smart Detection",
+    icon: <PsychologyIcon />,
+    description: "Intelligent vulnerability detection and analysis.",
+    capabilities: [
+      "Signature-based vulnerability detection",
+      "Anomaly detection (time, length, status, content)",
+      "Response clustering and categorization",
+      "WAF detection",
+      "Differential analysis",
+    ],
+    files: ["fuzzing_advanced.py"],
+    color: "#3b82f6",
+  },
+];
+
+const collaborationFeatures: FeatureInfo[] = [
+  {
+    name: "Contacts & Friends",
+    icon: <GroupIcon />,
+    description: "Connect with other security researchers and team members.",
+    capabilities: [
+      "User search and suggested connections",
+      "Friend/contact request system",
+      "Public profile viewing",
+      "Private notes about contacts",
+      "Connection management",
+    ],
+    files: ["social.py", "messaging_service.py"],
+    color: "#3b82f6",
+  },
+  {
+    name: "Direct Messaging",
+    icon: <ChatIcon />,
+    description: "Real-time 1-on-1 conversations with rich features.",
+    capabilities: [
+      "Real-time message delivery via WebSocket",
+      "Message editing and deletion",
+      "Read receipts and typing indicators",
+      "Message threading (replies)",
+      "Unread counts and notifications",
+    ],
+    files: ["social.py", "messaging_service.py"],
+    color: "#10b981",
+  },
+  {
+    name: "Group Chat",
+    icon: <GroupIcon />,
+    description: "Team collaboration with role-based permissions.",
+    capabilities: [
+      "Create groups with multiple members",
+      "Member roles (owner, admin, member)",
+      "Add/remove/promote members",
+      "Group settings and avatars",
+      "Shared conversation history",
+    ],
+    files: ["social.py"],
+    color: "#8b5cf6",
+  },
+  {
+    name: "Advanced Messaging",
+    icon: <ChatIcon />,
+    description: "Rich messaging features for team collaboration.",
+    capabilities: [
+      "Message reactions (emoji)",
+      "Message pinning and bookmarks",
+      "Message forwarding and search",
+      "@mentions with user resolution",
+      "Polls (single/multiple choice, anonymous)",
+    ],
+    files: ["social.py"],
+    color: "#f59e0b",
+  },
+  {
+    name: "Content Sharing",
+    icon: <SecurityIcon />,
+    description: "Share security findings and reports with team members.",
+    capabilities: [
+      "Share findings to conversations",
+      "Share reports to conversations",
+      "File uploads (up to 1GB)",
+      "Support for security file types",
+      "GIF integration",
+    ],
+    files: ["social.py"],
+    color: "#ef4444",
+  },
+  {
+    name: "User Presence",
+    icon: <FiberManualRecordIcon />,
+    description: "Real-time online status and availability indicators.",
+    capabilities: [
+      "Online/offline/away status",
+      "Last seen timestamps",
+      "Real-time status updates via WebSocket",
+      "Bulk presence queries",
+      "Status indicators on contacts",
+    ],
+    files: ["presence_service.py", "websocket.py"],
+    color: "#22c55e",
+  },
+  {
+    name: "Kanban Boards",
+    icon: <ViewKanbanIcon />,
+    description: "Visual task management for security projects.",
+    capabilities: [
+      "Board creation per project",
+      "Customizable columns with WIP limits",
+      "Drag-and-drop card management",
+      "Create cards from security findings",
+      "Card comments and assignees",
+    ],
+    files: ["kanban_service.py", "kanban.py"],
+    color: "#7c3aed",
+  },
+];
+
 export default function ArchitecturePage() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -380,25 +868,98 @@ export default function ArchitecturePage() {
     </Box>
   );
 
-  const pageContext = `This page covers VRAgent's system architecture including:
-- High-level architecture overview and design principles
-- Frontend components built with React, TypeScript, and MUI
-- Backend services using FastAPI, Python, and async patterns
-- Database architecture with PostgreSQL, Redis, and Elasticsearch
-- Security architecture and authentication flows
-- Integration patterns and API design
-- Deployment options and containerization
-- Interactive component diagrams for each layer`;
+  const FeatureCard = ({ feature }: { feature: FeatureInfo }) => (
+    <Card
+      sx={{
+        height: "100%",
+        borderRadius: 3,
+        border: `1px solid ${alpha(feature.color, 0.2)}`,
+        transition: "all 0.2s",
+        "&:hover": {
+          borderColor: feature.color,
+          transform: "translateY(-4px)",
+          boxShadow: `0 8px 24px ${alpha(feature.color, 0.15)}`,
+        },
+      }}
+    >
+      <CardContent>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 2,
+              bgcolor: alpha(feature.color, 0.15),
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: feature.color,
+            }}
+          >
+            {feature.icon}
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1rem" }}>
+            {feature.name}
+          </Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
+          {feature.description}
+        </Typography>
+        <List dense sx={{ p: 0 }}>
+          {feature.capabilities.map((cap, i) => (
+            <ListItem key={i} sx={{ px: 0, py: 0.25 }}>
+              <ListItemIcon sx={{ minWidth: 24 }}>
+                <CheckCircleIcon sx={{ fontSize: 14, color: feature.color }} />
+              </ListItemIcon>
+              <ListItemText
+                primary={cap}
+                primaryTypographyProps={{ variant: "caption", color: "text.secondary" }}
+              />
+            </ListItem>
+          ))}
+        </List>
+        {feature.files && (
+          <Box sx={{ mt: 2, display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+            {feature.files.map((file) => (
+              <Chip
+                key={file}
+                label={file}
+                size="small"
+                sx={{ fontSize: "0.65rem", fontFamily: "monospace", height: 20 }}
+              />
+            ))}
+          </Box>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const pageContext = `This page covers VRAgent's complete system architecture including:
+- Security Scanning: 14-phase SAST pipeline, Agentic AI, VulnHuntr, exploitability analysis
+- Reverse Engineering Hub: Binary analysis, APK/mobile, Docker images, Ghidra integration
+- Network Analysis: PCAP, Nmap, SSL/TLS, DNS recon, traceroute, MITM proxy
+- API Security Testing: OWASP API Top 10, JWT analysis, OpenAPI import
+- Security Fuzzing: Multi-mode fuzzing, payload generation, smart detection
+- Collaboration: Contacts, messaging, group chat, user presence, Kanban boards
+- Docker services and deployment architecture
+- Backend services and data models`;
 
   return (
     <LearnPageLayout pageTitle="VRAgent Architecture" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Back Button */}
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
+
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-          <ArrowBackIcon />
-        </IconButton>
-        
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
           <Box
             sx={{
@@ -445,8 +1006,11 @@ export default function ArchitecturePage() {
             { label: "Docker", color: "#2496ed" },
             { label: "Gemini AI", color: "#8b5cf6" },
             { label: "Semgrep", color: "#10b981" },
+            { label: "Ghidra", color: "#ef4444" },
             { label: "Trivy", color: "#2496ed" },
             { label: "Checkov", color: "#7c3aed" },
+            { label: "Nmap", color: "#f59e0b" },
+            { label: "WebSocket", color: "#3b82f6" },
           ].map((tech) => (
             <Chip
               key={tech.label}
@@ -476,12 +1040,14 @@ export default function ArchitecturePage() {
             "& .MuiTab-root": { fontWeight: 600, textTransform: "none", minHeight: 56 },
           }}
         >
-          <Tab label="🏗️ System Overview" />
-          <Tab label="🐳 Docker Services" />
+          <Tab label="🏗️ Overview" />
+          <Tab label="🔍 Security Scanning" />
+          <Tab label="🔬 Reverse Engineering" />
+          <Tab label="🌐 Network Analysis" />
+          <Tab label="🧪 API & Fuzzing" />
+          <Tab label="👥 Collaboration" />
           <Tab label="⚙️ Backend Services" />
-          <Tab label="🔍 Scanners" />
-          <Tab label="📊 Data Models" />
-          <Tab label="🔄 Scan Pipeline" />
+          <Tab label="🐳 Docker" />
         </Tabs>
       </Paper>
 
@@ -497,65 +1063,150 @@ export default function ArchitecturePage() {
             component="pre"
             sx={{
               fontFamily: "monospace",
-              fontSize: { xs: "0.6rem", sm: "0.75rem", md: "0.85rem" },
+              fontSize: { xs: "0.5rem", sm: "0.65rem", md: "0.75rem" },
               color: "#e2e8f0",
               overflow: "auto",
               lineHeight: 1.4,
               m: 0,
             }}
           >
-{`┌─────────────────────────────────────────────────────────────────────────────┐
-│                              VRAgent Architecture                           │
-└─────────────────────────────────────────────────────────────────────────────┘
+{`┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              VRAgent Platform Architecture                           │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
-    ┌─────────────────┐                        ┌─────────────────────────────┐
-    │   Web Browser   │                        │      External Services      │
-    │  (User Client)  │                        │                             │
-    └────────┬────────┘                        │  • OSV.dev (CVE database)   │
-             │                                 │  • NVD (NIST)               │
-             │ HTTP/WebSocket                  │  • EPSS (Exploit scores)    │
-             ▼                                 │  • Gemini AI                │
-    ┌─────────────────┐                        │  • Slack/Teams/Discord      │
-    │    Frontend     │                        └─────────────────────────────┘
-    │  React + Vite   │                                      ▲
-    │  Port: 3000     │                                      │
-    │  (nginx)        │                                      │ HTTPS
-    └────────┬────────┘                                      │
-             │                                               │
-             │ HTTP API                        ┌─────────────┴───────────────┐
-             ▼                                 │                             │
-    ┌─────────────────┐      Job Queue         │     ┌─────────────────┐     │
-    │    Backend      │◄─────────────────────► │     │     Worker      │     │
-    │    FastAPI      │        Redis           │     │    RQ Jobs      │     │
-    │  Port: 8000     │◄─────────────────────► │     │  (Background)   │     │
-    └────────┬────────┘      Pub/Sub           │     └─────────────────┘     │
-             │                                 │              │               │
-             │ SQL                             │              │               │
-             ▼                                 │              ▼               │
-    ┌─────────────────┐                        │     ┌─────────────────┐     │
-    │   PostgreSQL    │◄───────────────────────┼─────│   Scan Engine   │     │
-    │   + pgvector    │                        │     │   • Semgrep     │     │
-    │  Port: 5432     │                        │     │   • Bandit      │     │
-    └─────────────────┘                        │     │   • ESLint      │     │
-                                               │     │   • gosec       │     │
-    ┌─────────────────┐                        │     │   • SpotBugs    │     │
-    │     Redis       │◄───────────────────────┘     │   • clang-tidy  │     │
-    │  Port: 6379     │                              │   • Secrets     │     │
-    │  (Queue+Cache)  │                              └─────────────────┘     │
-    └─────────────────┘                                                       │
-                                                                              │
-    ┌─────────────────────────────────────────────────────────────────────────┘
-    │
-    │  All services run in Docker containers on a shared network (vragent-network)
-    │  Volumes: postgres_data, redis_data, upload_data
-    │
-    └─────────────────────────────────────────────────────────────────────────────`}
+                                    ┌─────────────────┐
+                                    │   Web Browser   │
+                                    │  (React + MUI)  │
+                                    └────────┬────────┘
+                                             │
+           ┌─────────────────────────────────┼─────────────────────────────────┐
+           │                                 │                                 │
+           ▼                                 ▼                                 ▼
+┌─────────────────┐              ┌─────────────────┐              ┌─────────────────┐
+│  REST API       │              │   WebSocket     │              │  SSE Streaming  │
+│  (CRUD, Auth)   │              │  (Real-time)    │              │  (Progress)     │
+└────────┬────────┘              └────────┬────────┘              └────────┬────────┘
+         │                                │                                │
+         └────────────────────────────────┼────────────────────────────────┘
+                                          │
+                                          ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              FastAPI Backend (Port 8000)                            │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐ │
+│  │   Scans     │  │  Reverse    │  │   Network   │  │     API     │  │  Fuzzing  │ │
+│  │   Router    │  │  Eng Router │  │   Router    │  │   Tester    │  │  Router   │ │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────┬─────┘ │
+│         │                │                │                │               │       │
+│  ┌──────┴──────┐  ┌──────┴──────┐  ┌──────┴──────┐  ┌──────┴──────┐  ┌─────┴─────┐ │
+│  │ Social      │  │ Kanban      │  │ Auth        │  │ Projects    │  │ Webhooks  │ │
+│  │ Router      │  │ Router      │  │ Router      │  │ Router      │  │ Router    │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘ │
+│                                                                                     │
+└──────────────────────────────────────┬──────────────────────────────────────────────┘
+                                       │
+         ┌─────────────────────────────┼─────────────────────────────┐
+         ▼                             ▼                             ▼
+┌─────────────────┐          ┌─────────────────┐          ┌─────────────────┐
+│   PostgreSQL    │          │      Redis      │          │   Background    │
+│   + pgvector    │          │   Queue/PubSub  │          │     Worker      │
+│   Port: 5432    │          │   Port: 6379    │          │    (RQ Jobs)    │
+└─────────────────┘          └─────────────────┘          └────────┬────────┘
+                                                                   │
+         ┌─────────────────────────────────────────────────────────┤
+         │                                                         │
+         ▼                                                         ▼
+┌─────────────────────────────────────┐     ┌─────────────────────────────────────────┐
+│        Security Scanners            │     │           External Services             │
+├─────────────────────────────────────┤     ├─────────────────────────────────────────┤
+│ • Semgrep (2000+ rules)             │     │ • Gemini AI (Analysis + Embeddings)     │
+│ • Bandit (Python)                   │     │ • OSV.dev (CVE Database)                │
+│ • ESLint Security (JS/TS)           │     │ • NVD (NIST Vuln Data)                  │
+│ • GoSec (Go)                        │     │ • EPSS (Exploit Probability)            │
+│ • SpotBugs + FindSecBugs (Java)     │     │ • CISA KEV (Known Exploited)            │
+│ • Brakeman (Ruby)                   │     │ • Slack/Teams/Discord (Webhooks)        │
+│ • clang-tidy (C/C++)                │     │                                         │
+│ • Trivy (Docker/Container)          │     │                                         │
+│ • Checkov + tfsec (IaC)             │     │                                         │
+│ • Secret Scanner (50+ patterns)     │     │                                         │
+│ • Ghidra (Binary Analysis)          │     │                                         │
+│ • Nmap (Network Scanning)           │     │                                         │
+└─────────────────────────────────────┘     └─────────────────────────────────────────┘`}
           </Typography>
         </Paper>
 
+        {/* Feature Highlights */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+          Platform Capabilities
+        </Typography>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          {[
+            {
+              title: "Security Scanning",
+              icon: <SecurityIcon />,
+              description: "14-phase pipeline with 12+ scanners, agentic AI, and VulnHuntr for comprehensive SAST analysis.",
+              color: "#3b82f6",
+            },
+            {
+              title: "Reverse Engineering",
+              icon: <MemoryIcon />,
+              description: "Binary analysis with Ghidra, APK decompilation, Docker layer inspection, and AI-powered vuln hunting.",
+              color: "#ef4444",
+            },
+            {
+              title: "Network Analysis",
+              icon: <NetworkCheckIcon />,
+              description: "PCAP analysis, Nmap scanning, SSL/TLS audit, DNS recon, traceroute, and MITM proxy workbench.",
+              color: "#10b981",
+            },
+            {
+              title: "API Security",
+              icon: <HttpIcon />,
+              description: "OWASP API Top 10 testing, JWT analysis, OpenAPI import, and automated endpoint discovery.",
+              color: "#f59e0b",
+            },
+            {
+              title: "Security Fuzzing",
+              icon: <TerminalIcon />,
+              description: "Multi-mode fuzzer with built-in wordlists, payload mutations, smart detection, and WAF bypass.",
+              color: "#8b5cf6",
+            },
+            {
+              title: "Collaboration",
+              icon: <GroupIcon />,
+              description: "Real-time messaging, group chat, user presence, Kanban boards, and security content sharing.",
+              color: "#ec4899",
+            },
+          ].map((item) => (
+            <Grid item xs={12} sm={6} md={4} key={item.title}>
+              <Paper
+                sx={{
+                  p: 3,
+                  height: "100%",
+                  borderRadius: 3,
+                  border: `1px solid ${alpha(item.color, 0.2)}`,
+                  transition: "all 0.2s",
+                  "&:hover": { borderColor: item.color },
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                  <Box sx={{ color: item.color }}>{item.icon}</Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    {item.title}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                  {item.description}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
         {/* Key Architectural Decisions */}
         <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-          Key Architectural Decisions
+          Architectural Patterns
         </Typography>
         <Grid container spacing={3} sx={{ mb: 4 }}>
           {[
@@ -620,51 +1271,278 @@ export default function ArchitecturePage() {
             </Grid>
           ))}
         </Grid>
-
-        {/* Data Flow */}
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-          Request Flow: Starting a Scan
-        </Typography>
-        <Paper sx={{ p: 3, borderRadius: 3 }}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {[
-              { step: 1, action: "User clicks 'Start Scan'", component: "Frontend", detail: "POST /projects/{id}/scan" },
-              { step: 2, action: "API creates ScanRun record", component: "Backend", detail: "Status: PENDING" },
-              { step: 3, action: "Job enqueued to Redis", component: "Backend → Redis", detail: "RQ job with scan_run_id" },
-              { step: 4, action: "Worker picks up job", component: "Worker", detail: "Starts 14-phase pipeline" },
-              { step: 5, action: "Phase 1: Extract archive (0-5%)", component: "Worker", detail: "Zip bomb + path traversal protection" },
-              { step: 6, action: "Phase 2: Parse & chunk files (5-30%)", component: "Worker", detail: "Parallel file processing with ThreadPoolExecutor" },
-              { step: 7, action: "Phase 3: Generate embeddings (30-45%)", component: "Worker → Gemini", detail: "SHA-256 hash reuse, gemini-embedding-001" },
-              { step: 8, action: "Phase 4-7: Parallel scan phases (45-72%)", component: "Worker", detail: "SAST + Docker + IaC + Deps concurrently" },
-              { step: 9, action: "Phase 8: Deduplicate findings (70-72%)", component: "Worker", detail: "Cross-scanner merge" },
-              { step: 10, action: "Phase 9-10: Transitive deps (72-77%)", component: "Worker", detail: "Lock file parsing, dependency trees" },
-              { step: 11, action: "Phase 11: CVE + parallel enrichment (78-88%)", component: "Worker → OSV/NVD/EPSS/KEV", detail: "Parallel API calls for all vulns" },
-              { step: 12, action: "Phase 12: Reachability analysis (84-86%)", component: "Worker", detail: "Import analysis for unused deps" },
-              { step: 13, action: "Phase 13: AI analysis (90-94%)", component: "Worker → Gemini", detail: "Heuristics + Agentic corroboration + LLM" },
-              { step: 14, action: "Phase 14: Generate report (94-100%)", component: "Worker", detail: "Risk score, findings saved, webhooks fired" },
-            ].map((item) => (
-              <Box key={item.step} sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
-                <Chip
-                  label={item.step}
-                  size="small"
-                  sx={{ bgcolor: alpha("#6366f1", 0.15), color: "#6366f1", fontWeight: 700, minWidth: 32 }}
-                />
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {item.action}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {item.component} — {item.detail}
-                  </Typography>
-                </Box>
-              </Box>
-            ))}
-          </Box>
-        </Paper>
       </TabPanel>
 
-      {/* Docker Services */}
+      {/* Security Scanning Tab */}
       <TabPanel value={tabValue} index={1}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+          Security Scanning
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Comprehensive static analysis with 12+ scanners, AI-powered vulnerability hunting, and intelligent false positive reduction.
+        </Typography>
+
+        <Grid container spacing={3}>
+          {securityScanFeatures.map((feature) => (
+            <Grid item xs={12} md={6} key={feature.name}>
+              <FeatureCard feature={feature} />
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Scanner Table */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+          Language-Specific Scanners
+        </Typography>
+        <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Language</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Scanner</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Service File</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Detects</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {languageScanners.map((scanner) => (
+                <TableRow key={scanner.scanner}>
+                  <TableCell>
+                    <Chip label={scanner.language} size="small" />
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{scanner.scanner}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{scanner.service}</TableCell>
+                  <TableCell sx={{ fontSize: "0.85rem" }}>{scanner.detects}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+
+      {/* Reverse Engineering Tab */}
+      <TabPanel value={tabValue} index={2}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+          Reverse Engineering Hub
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Deep analysis of binaries, APKs, and Docker images with Ghidra integration and AI-powered vulnerability hunting.
+        </Typography>
+
+        <Grid container spacing={3}>
+          {reverseEngineeringFeatures.map((feature) => (
+            <Grid item xs={12} md={6} key={feature.name}>
+              <FeatureCard feature={feature} />
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Supported File Types */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+          Supported File Types
+        </Typography>
+        <Grid container spacing={2}>
+          {[
+            { type: "Windows Executables", extensions: ".exe, .dll, .sys", color: "#3b82f6" },
+            { type: "Linux/macOS Binaries", extensions: "ELF, .so, Mach-O", color: "#10b981" },
+            { type: "Android Apps", extensions: ".apk, .aab", color: "#22c55e" },
+            { type: "Docker Images", extensions: "docker://image:tag", color: "#2496ed" },
+            { type: "Archives", extensions: ".zip, .tar, .gz", color: "#f59e0b" },
+            { type: "YARA Rules", extensions: ".yar, .yara", color: "#8b5cf6" },
+          ].map((item) => (
+            <Grid item xs={6} sm={4} md={2} key={item.type}>
+              <Paper
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  textAlign: "center",
+                  border: `1px solid ${alpha(item.color, 0.2)}`,
+                }}
+              >
+                <Typography variant="caption" sx={{ fontWeight: 700, display: "block", color: item.color }}>
+                  {item.type}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
+                  {item.extensions}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </TabPanel>
+
+      {/* Network Analysis Tab */}
+      <TabPanel value={tabValue} index={3}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+          Network Analysis Hub
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Comprehensive network security analysis including PCAP inspection, Nmap scanning, DNS reconnaissance, and MITM proxy.
+        </Typography>
+
+        <Grid container spacing={3}>
+          {networkFeatures.map((feature) => (
+            <Grid item xs={12} md={6} key={feature.name}>
+              <FeatureCard feature={feature} />
+            </Grid>
+          ))}
+        </Grid>
+      </TabPanel>
+
+      {/* API & Fuzzing Tab */}
+      <TabPanel value={tabValue} index={4}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+          API Security & Fuzzing
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Automated API security testing and advanced fuzzing capabilities for web application security assessment.
+        </Typography>
+
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+          API Security Testing
+        </Typography>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          {apiTestingFeatures.map((feature) => (
+            <Grid item xs={12} md={4} key={feature.name}>
+              <FeatureCard feature={feature} />
+            </Grid>
+          ))}
+        </Grid>
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+          Security Fuzzing
+        </Typography>
+        <Grid container spacing={3}>
+          {fuzzingFeatures.map((feature) => (
+            <Grid item xs={12} md={6} key={feature.name}>
+              <FeatureCard feature={feature} />
+            </Grid>
+          ))}
+        </Grid>
+      </TabPanel>
+
+      {/* Collaboration Tab */}
+      <TabPanel value={tabValue} index={5}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+          Collaboration Features
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Real-time communication, project management, and security content sharing for team collaboration.
+        </Typography>
+
+        <Grid container spacing={3}>
+          {collaborationFeatures.map((feature) => (
+            <Grid item xs={12} md={6} lg={4} key={feature.name}>
+              <FeatureCard feature={feature} />
+            </Grid>
+          ))}
+        </Grid>
+      </TabPanel>
+
+      {/* Backend Services Tab */}
+      <TabPanel value={tabValue} index={6}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
+          Backend Services
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          The backend is organized into focused services, each handling a specific responsibility. Located in <code>backend/services/</code>.
+        </Typography>
+
+        <Grid container spacing={3}>
+          {backendServices.map((svc) => (
+            <Grid item xs={12} md={6} key={svc.name}>
+              <Accordion
+                sx={{
+                  borderRadius: "12px !important",
+                  border: `1px solid ${alpha(svc.color, 0.2)}`,
+                  "&:before": { display: "none" },
+                  overflow: "hidden",
+                }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 40,
+                        borderRadius: 1,
+                        bgcolor: svc.color,
+                      }}
+                    />
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                        {svc.name}
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
+                        {svc.file}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {svc.description}
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 1 }}>
+                    Responsibilities:
+                  </Typography>
+                  <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                    {svc.responsibilities.map((r, i) => (
+                      <Typography component="li" variant="caption" key={i} sx={{ mb: 0.5 }}>
+                        {r}
+                      </Typography>
+                    ))}
+                  </Box>
+                  {svc.dependencies && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 0.5 }}>
+                        Dependencies:
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                        {svc.dependencies.map((dep) => (
+                          <Chip key={dep} label={dep} size="small" sx={{ fontSize: "0.65rem", height: 20 }} />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Data Models */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+          Core Data Models
+        </Typography>
+        <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Model</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Key Fields</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {dataModels.map((model) => (
+                <TableRow key={model.model}>
+                  <TableCell>
+                    <Chip label={model.model} color="primary" size="small" sx={{ fontWeight: 600 }} />
+                  </TableCell>
+                  <TableCell>{model.description}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{model.fields}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+
+      {/* Docker Services Tab */}
+      <TabPanel value={tabValue} index={7}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
           Docker Services
         </Typography>
@@ -775,373 +1653,6 @@ volumes:
             </Grid>
           ))}
         </Grid>
-      </TabPanel>
-
-      {/* Backend Services */}
-      <TabPanel value={tabValue} index={2}>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-          Backend Services
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          The backend is organized into focused services, each handling a specific responsibility. Located in <code>backend/services/</code>.
-        </Typography>
-
-        <Grid container spacing={3}>
-          {backendServices.map((svc) => (
-            <Grid item xs={12} md={6} key={svc.name}>
-              <Accordion
-                sx={{
-                  borderRadius: "12px !important",
-                  border: `1px solid ${alpha(svc.color, 0.2)}`,
-                  "&:before": { display: "none" },
-                  overflow: "hidden",
-                }}
-              >
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Box
-                      sx={{
-                        width: 8,
-                        height: 40,
-                        borderRadius: 1,
-                        bgcolor: svc.color,
-                      }}
-                    />
-                    <Box>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                        {svc.name}
-                      </Typography>
-                      <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
-                        {svc.file}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {svc.description}
-                  </Typography>
-                  <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 1 }}>
-                    Responsibilities:
-                  </Typography>
-                  <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                    {svc.responsibilities.map((r, i) => (
-                      <Typography component="li" variant="caption" key={i} sx={{ mb: 0.5 }}>
-                        {r}
-                      </Typography>
-                    ))}
-                  </Box>
-                  {svc.dependencies && (
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 0.5 }}>
-                        Dependencies:
-                      </Typography>
-                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                        {svc.dependencies.map((dep) => (
-                          <Chip key={dep} label={dep} size="small" sx={{ fontSize: "0.65rem", height: 20 }} />
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
-                </AccordionDetails>
-              </Accordion>
-            </Grid>
-          ))}
-        </Grid>
-      </TabPanel>
-
-      {/* Scanners */}
-      <TabPanel value={tabValue} index={3}>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-          Security Scanners
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          VRAgent automatically runs the appropriate scanners based on detected languages. All scanner outputs are normalized into a common finding format.
-        </Typography>
-
-        <TableContainer component={Paper} sx={{ borderRadius: 3, mb: 4 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.1) }}>
-                <TableCell sx={{ fontWeight: 700 }}>Language</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Scanner</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Service File</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Detects</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {languageScanners.map((scanner) => (
-                <TableRow key={scanner.scanner}>
-                  <TableCell>
-                    <Chip label={scanner.language} size="small" />
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{scanner.scanner}</TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{scanner.service}</TableCell>
-                  <TableCell sx={{ fontSize: "0.85rem" }}>{scanner.detects}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-          Scanner Execution Flow
-        </Typography>
-        <Paper sx={{ p: 3, borderRadius: 3, mb: 4 }}>
-          <CodeBlock
-            id="scanner-flow"
-            code={`# Simplified scanner execution in scan_service.py
-
-async def run_scanners(project_path: str, languages: set[str]):
-    findings = []
-    
-    # Always run Semgrep (multi-language)
-    findings.extend(await semgrep_service.scan(project_path))
-    
-    # Always run secret scanner
-    findings.extend(await secret_service.scan(project_path))
-    
-    # Run language-specific scanners
-    if "Python" in languages:
-        findings.extend(await bandit_service.scan(project_path))
-    
-    if "JavaScript" in languages or "TypeScript" in languages:
-        findings.extend(await eslint_service.scan(project_path))
-    
-    if "Go" in languages:
-        findings.extend(await gosec_service.scan(project_path))
-    
-    if "Java" in languages or "Kotlin" in languages:
-        findings.extend(await spotbugs_service.scan(project_path))
-    
-    if "C" in languages or "C++" in languages:
-        findings.extend(await clangtidy_service.scan(project_path))
-    
-    return deduplicate_findings(findings)`}
-          />
-        </Paper>
-
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-          Finding Normalization
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Each scanner outputs findings in different formats. VRAgent normalizes all findings to a common schema:
-        </Typography>
-        <CodeBlock
-          id="finding-schema"
-          code={`# Normalized finding structure
-
-{
-    "type": "sql_injection",           # Vulnerability category
-    "severity": "HIGH",                # CRITICAL, HIGH, MEDIUM, LOW
-    "message": "SQL query built from user input",
-    "file_path": "src/db/queries.py",
-    "line_start": 42,
-    "line_end": 45,
-    "code_snippet": "query = f'SELECT * FROM users WHERE id = {user_id}'",
-    "scanner": "bandit",               # Which scanner found it
-    "rule_id": "B608",                 # Scanner-specific rule
-    "cwe": "CWE-89",                   # Weakness classification
-    "cve": null,                       # CVE if applicable
-    "confidence": "HIGH"               # Scanner confidence
-}`}
-        />
-      </TabPanel>
-
-      {/* Data Models */}
-      <TabPanel value={tabValue} index={4}>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-          Data Models
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          VRAgent uses SQLAlchemy ORM with PostgreSQL. Models are defined in <code>backend/models/models.py</code>.
-        </Typography>
-
-        <TableContainer component={Paper} sx={{ borderRadius: 3, mb: 4 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
-                <TableCell sx={{ fontWeight: 700 }}>Model</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Key Fields</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {dataModels.map((model) => (
-                <TableRow key={model.model}>
-                  <TableCell>
-                    <Chip label={model.model} color="primary" size="small" sx={{ fontWeight: 600 }} />
-                  </TableCell>
-                  <TableCell>{model.description}</TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{model.fields}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-          Entity Relationship
-        </Typography>
-        <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha(theme.palette.common.black, 0.85) }}>
-          <Typography
-            component="pre"
-            sx={{
-              fontFamily: "monospace",
-              fontSize: "0.8rem",
-              color: "#e2e8f0",
-              overflow: "auto",
-              m: 0,
-            }}
-          >
-{`┌─────────────┐       ┌─────────────┐       ┌─────────────┐
-│   Project   │──────<│   ScanRun   │──────<│   Finding   │
-│             │ 1:N   │             │ 1:N   │             │
-│ id          │       │ id          │       │ id          │
-│ name        │       │ project_id  │       │ scan_run_id │
-│ description │       │ status      │       │ type        │
-│ created_at  │       │ risk_score  │       │ severity    │
-└─────────────┘       │ started_at  │       │ file_path   │
-      │               │ completed_at│       │ message     │
-      │               └─────────────┘       │ cwe, cve    │
-      │                     │               └─────────────┘
-      │                     │                     │
-      │                     │                     │ 1:1
-      │                     │                     ▼
-      │                     │               ┌─────────────┐
-      │                     │               │  Exploit    │
-      │                     │               │  Scenario   │
-      │               1:N   │               │             │
-      │                     ▼               │ finding_id  │
-      │               ┌─────────────┐       │ narrative   │
-      │               │ Dependency  │       │ impact      │
-      │               │             │       │ poc         │
-      │               │ scan_run_id │       │ mitigations │
-      │               │ ecosystem   │       └─────────────┘
-      │               │ name        │
-      │               │ version     │
-      │               │ vulns (JSON)│
-      │               └─────────────┘
-      │ 1:N
-      ▼
-┌─────────────┐
-│   Webhook   │
-│             │
-│ project_id  │
-│ url         │
-│ type        │
-│ active      │
-└─────────────┘`}
-          </Typography>
-        </Paper>
-      </TabPanel>
-
-      {/* Scan Pipeline */}
-      <TabPanel value={tabValue} index={5}>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-          The 14-Phase Scan Pipeline
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          The pipeline uses parallel execution where possible. Phases 1-3 are sequential, Phases 4-7 run all scanning types concurrently, then phases 8-14 run with parallel API calls for enrichment.
-        </Typography>
-
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {[
-            { phase: 1, name: "Code Extraction", desc: "Extract archive with zip bomb (500MB) + path traversal protection", duration: "5-30s", service: "codebase_service", progress: "0-5%", parallel: false },
-            { phase: 2, name: "File Parsing & Chunking", desc: "Parallel file processing with ThreadPoolExecutor (2× CPU cores)", duration: "10-60s", service: "codebase_service", progress: "5-30%", parallel: false },
-            { phase: 3, name: "Embedding Generation", desc: "gemini-embedding-001 (768 dims), SHA-256 hash enables reuse", duration: "20-60s", service: "embedding_service", progress: "30-45%", parallel: false },
-            { phase: "4-7", name: "Parallel Scan Phases", desc: "SAST + Docker + IaC + Dependencies run concurrently via ParallelPhaseTracker", duration: "60-300s", service: "scan_service → all scanners", progress: "45-72%", parallel: true },
-            { phase: 8, name: "Cross-Scanner Deduplication", desc: "Merge same file+line+type findings from multiple scanners", duration: "2-5s", service: "deduplication_service", progress: "70-72%", parallel: false },
-            { phase: 9, name: "Save Dependencies", desc: "Store parsed dependencies from parallel phase", duration: "1-2s", service: "dependency_service", progress: "72-75%", parallel: false },
-            { phase: 10, name: "Transitive Analysis", desc: "Parse lock files (package-lock, yarn.lock, poetry.lock, etc.)", duration: "5-15s", service: "transitive_deps_service", progress: "75-77%", parallel: false },
-            { phase: 11, name: "CVE Lookup", desc: "OSV.dev batch queries (100 deps/request) for all dependencies", duration: "10-30s", service: "cve_service", progress: "78-82%", parallel: false },
-            { phase: "11b", name: "Transitive Enrichment", desc: "Map CVEs to direct vs transitive dependencies", duration: "2-5s", service: "transitive_deps_service", progress: "82-84%", parallel: false },
-            { phase: "11c", name: "Reachability Analysis", desc: "Check if vulnerable deps are actually imported/used in code", duration: "10-30s", service: "reachability_service", progress: "84-86%", parallel: false },
-            { phase: 12, name: "Parallel Enrichment", desc: "EPSS + NVD + CISA KEV in parallel for all CVEs", duration: "20-60s", service: "epss_service, nvd_service", progress: "86-88%", parallel: true },
-            { phase: 13, name: "AI Analysis", desc: "Heuristics → Agentic corroboration → LLM (top 50) + attack chains", duration: "30-120s", service: "ai_analysis_service", progress: "90-94%", parallel: false },
-            { phase: 14, name: "Report Generation", desc: "Risk score calculation, findings saved, webhooks fired", duration: "5-15s", service: "report_service", progress: "94-100%", parallel: false },
-          ].map((phase, i, arr) => (
-            <Paper
-              key={String(phase.phase)}
-              sx={{
-                p: 3,
-                borderRadius: 3,
-                border: `1px solid ${alpha(phase.parallel ? "#10b981" : theme.palette.primary.main, 0.2)}`,
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 3,
-                transition: "all 0.2s",
-                "&:hover": {
-                  borderColor: phase.parallel ? "#10b981" : theme.palette.primary.main,
-                  transform: "translateX(8px)",
-                },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  bgcolor: phase.parallel ? alpha("#10b981", 0.15) : alpha(theme.palette.primary.main, 0.15),
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Typography variant="body1" sx={{ fontWeight: 800, color: phase.parallel ? "#10b981" : "primary.main", fontSize: "0.9rem" }}>
-                  {phase.phase}
-                </Typography>
-              </Box>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, fontSize: "1rem" }}>
-                  {phase.name}
-                  {phase.parallel && <Chip label="PARALLEL" size="small" sx={{ ml: 1, bgcolor: "#10b981", color: "white", fontSize: "0.6rem" }} />}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  {phase.desc}
-                </Typography>
-                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                  <Chip label={phase.progress} size="small" sx={{ fontSize: "0.65rem", bgcolor: alpha("#6366f1", 0.1) }} />
-                  <Chip label={phase.duration} size="small" sx={{ fontSize: "0.65rem" }} />
-                  <Chip
-                    label={phase.service}
-                    size="small"
-                    sx={{ fontSize: "0.65rem", fontFamily: "monospace", bgcolor: alpha(theme.palette.primary.main, 0.1) }}
-                  />
-                </Box>
-              </Box>
-              {i < arr.length - 1 && (
-                <Typography
-                  sx={{
-                    color: "text.disabled",
-                    fontSize: "1.5rem",
-                    alignSelf: "center",
-                  }}
-                >
-                  →
-                </Typography>
-              )}
-            </Paper>
-          ))}
-        </Box>
-
-        <Paper
-          sx={{
-            mt: 4,
-            p: 3,
-            borderRadius: 3,
-            bgcolor: alpha(theme.palette.success.main, 0.1),
-            border: `1px solid ${alpha(theme.palette.success.main, 0.3)}`,
-          }}
-        >
-          <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "success.main" }}>
-            ✅ Scan Complete
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Risk score calculated, findings saved, webhooks fired. AI summaries generate in background for instant report exports.
-          </Typography>
-        </Paper>
       </TabPanel>
 
       {/* Footer */}

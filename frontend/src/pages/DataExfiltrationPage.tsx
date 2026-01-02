@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -46,7 +47,8 @@ import StorageIcon from "@mui/icons-material/Storage";
 import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import CodeIcon from "@mui/icons-material/Code";
 import ScienceIcon from "@mui/icons-material/Science";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -110,6 +112,987 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
     </Paper>
   );
 };
+
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#0ea5e9";
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Basics",
+    question: "What is data exfiltration?",
+    options: [
+      "Unauthorized transfer of data out of a system or network",
+      "Normal backup of files to local storage",
+      "Encryption of data at rest",
+      "Routine software updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Exfiltration is the unauthorized movement of data out of an environment.",
+  },
+  {
+    id: 2,
+    topic: "Basics",
+    question: "Why do attackers exfiltrate data?",
+    options: [
+      "To monetize, extort, or gain intelligence",
+      "To improve system performance",
+      "To reduce storage costs",
+      "To automate patching",
+    ],
+    correctAnswer: 0,
+    explanation: "Exfiltration is often used for financial gain or espionage.",
+  },
+  {
+    id: 3,
+    topic: "Channels",
+    question: "Which is a common exfiltration channel?",
+    options: [
+      "Web uploads (HTTPS)",
+      "Local event logs",
+      "BIOS updates",
+      "Printer drivers",
+    ],
+    correctAnswer: 0,
+    explanation: "HTTPS uploads are a common channel for data exfiltration.",
+  },
+  {
+    id: 4,
+    topic: "Channels",
+    question: "Why is DNS tunneling used for exfiltration?",
+    options: [
+      "DNS is often allowed through egress controls",
+      "DNS provides high bandwidth",
+      "DNS is never logged",
+      "DNS removes the need for encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "DNS is frequently allowed and can be used for small data transfers.",
+  },
+  {
+    id: 5,
+    topic: "Channels",
+    question: "Exfiltration over cloud storage refers to:",
+    options: [
+      "Using services like cloud drives to move data out",
+      "Backing up files to a local NAS",
+      "Copying files to a USB drive only",
+      "Encrypting files on the server",
+    ],
+    correctAnswer: 0,
+    explanation: "Cloud services can be abused as exfil channels.",
+  },
+  {
+    id: 6,
+    topic: "Basics",
+    question: "What is data staging?",
+    options: [
+      "Collecting and packaging data before exfiltration",
+      "Deleting logs after an incident",
+      "Encrypting disks for recovery",
+      "Resetting user passwords",
+    ],
+    correctAnswer: 0,
+    explanation: "Staging gathers and prepares data for transfer.",
+  },
+  {
+    id: 7,
+    topic: "Basics",
+    question: "Why do attackers compress data before exfiltration?",
+    options: [
+      "To reduce size and transfer time",
+      "To increase detection",
+      "To disable encryption",
+      "To force reboots",
+    ],
+    correctAnswer: 0,
+    explanation: "Compression reduces data volume and speeds transfer.",
+  },
+  {
+    id: 8,
+    topic: "Basics",
+    question: "Why is encryption used during exfiltration?",
+    options: [
+      "To conceal content from inspection",
+      "To improve storage performance",
+      "To disable TLS",
+      "To reduce logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Encryption hides data content from security controls.",
+  },
+  {
+    id: 9,
+    topic: "Detection",
+    question: "A sudden spike in outbound traffic can indicate:",
+    options: [
+      "Potential data exfiltration",
+      "Routine log rotation",
+      "Normal user browsing",
+      "System patching",
+    ],
+    correctAnswer: 0,
+    explanation: "Large outbound transfers can indicate exfiltration.",
+  },
+  {
+    id: 10,
+    topic: "Detection",
+    question: "Why is data classification important?",
+    options: [
+      "It identifies which data requires stronger controls",
+      "It disables encryption",
+      "It removes need for monitoring",
+      "It prevents backups",
+    ],
+    correctAnswer: 0,
+    explanation: "Classification guides protection and monitoring priorities.",
+  },
+  {
+    id: 11,
+    topic: "Channels",
+    question: "Exfiltration over email often uses:",
+    options: [
+      "Attachments or embedded data",
+      "Kernel drivers",
+      "Printer queues only",
+      "DNS-only transfers",
+    ],
+    correctAnswer: 0,
+    explanation: "Email attachments can carry exfiltrated data.",
+  },
+  {
+    id: 12,
+    topic: "Channels",
+    question: "Removable media exfiltration refers to:",
+    options: [
+      "Copying data to USB drives or external disks",
+      "Sending data via HTTPS",
+      "Using DNS tunneling",
+      "Uploading to a SaaS app",
+    ],
+    correctAnswer: 0,
+    explanation: "Removable media can carry data out of the environment.",
+  },
+  {
+    id: 13,
+    topic: "Detection",
+    question: "What is a red flag in proxy logs?",
+    options: [
+      "Large uploads to unfamiliar domains",
+      "Routine access to known SaaS apps",
+      "Normal browsing patterns",
+      "Short-lived connections to CDNs",
+    ],
+    correctAnswer: 0,
+    explanation: "Large transfers to unknown domains can indicate exfiltration.",
+  },
+  {
+    id: 14,
+    topic: "Detection",
+    question: "Why monitor for high-entropy data in outbound traffic?",
+    options: [
+      "It may indicate compressed or encrypted exfiltration",
+      "It always means software updates",
+      "It indicates DNS misconfiguration",
+      "It is normal for all traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "High entropy can be a sign of encrypted data transfer.",
+  },
+  {
+    id: 15,
+    topic: "Detection",
+    question: "Which telemetry is most useful for exfiltration detection?",
+    options: [
+      "Netflow and firewall logs",
+      "BIOS logs only",
+      "Printer logs only",
+      "Display logs only",
+    ],
+    correctAnswer: 0,
+    explanation: "Network telemetry highlights unusual outbound transfers.",
+  },
+  {
+    id: 16,
+    topic: "MITRE",
+    question: "Exfiltration over C2 channel maps to which technique?",
+    options: [
+      "T1041",
+      "T1078",
+      "T1059",
+      "T1218",
+    ],
+    correctAnswer: 0,
+    explanation: "T1041 describes exfiltration over C2.",
+  },
+  {
+    id: 17,
+    topic: "MITRE",
+    question: "Exfiltration over web services maps to:",
+    options: [
+      "T1567",
+      "T1003",
+      "T1087",
+      "T1098",
+    ],
+    correctAnswer: 0,
+    explanation: "T1567 covers exfiltration over web services.",
+  },
+  {
+    id: 18,
+    topic: "MITRE",
+    question: "Exfiltration over alternative protocol maps to:",
+    options: [
+      "T1048",
+      "T1134",
+      "T1110",
+      "T1547",
+    ],
+    correctAnswer: 0,
+    explanation: "T1048 covers alternative protocol exfiltration.",
+  },
+  {
+    id: 19,
+    topic: "Detection",
+    question: "Why is outbound traffic at unusual hours suspicious?",
+    options: [
+      "It may indicate stealthy exfiltration outside business hours",
+      "It always indicates backups",
+      "It only happens during updates",
+      "It indicates local admin logons",
+    ],
+    correctAnswer: 0,
+    explanation: "Attackers often exfiltrate during quiet periods.",
+  },
+  {
+    id: 20,
+    topic: "Prevention",
+    question: "What does DLP help with?",
+    options: [
+      "Detecting and blocking sensitive data transfers",
+      "Replacing MFA",
+      "Disabling encryption",
+      "Removing backups",
+    ],
+    correctAnswer: 0,
+    explanation: "DLP monitors and blocks sensitive data exfiltration.",
+  },
+  {
+    id: 21,
+    topic: "Prevention",
+    question: "Why is egress filtering effective?",
+    options: [
+      "It limits outbound destinations and protocols",
+      "It disables endpoint logging",
+      "It removes the need for monitoring",
+      "It improves download speeds",
+    ],
+    correctAnswer: 0,
+    explanation: "Restricting egress reduces exfiltration options.",
+  },
+  {
+    id: 22,
+    topic: "Prevention",
+    question: "Why use allowlists for outbound connections?",
+    options: [
+      "To block unknown destinations used for exfiltration",
+      "To allow all traffic by default",
+      "To disable TLS",
+      "To avoid monitoring",
+    ],
+    correctAnswer: 0,
+    explanation: "Allowlists reduce exposure to unknown endpoints.",
+  },
+  {
+    id: 23,
+    topic: "Prevention",
+    question: "Why limit access to sensitive data?",
+    options: [
+      "To reduce the impact of a compromised account",
+      "To disable monitoring",
+      "To increase data sharing",
+      "To avoid audits",
+    ],
+    correctAnswer: 0,
+    explanation: "Least privilege reduces exposure if accounts are compromised.",
+  },
+  {
+    id: 24,
+    topic: "Detection",
+    question: "What indicates potential archive staging?",
+    options: [
+      "Large archive creation in user directories",
+      "Normal logon events",
+      "Patch management logs",
+      "Printer queue activity",
+    ],
+    correctAnswer: 0,
+    explanation: "Large archives can indicate staging for exfiltration.",
+  },
+  {
+    id: 25,
+    topic: "Channels",
+    question: "Why use encrypted channels for exfiltration?",
+    options: [
+      "To hide content from inspection tools",
+      "To increase file size",
+      "To disable TLS",
+      "To force log rotation",
+    ],
+    correctAnswer: 0,
+    explanation: "Encryption hides data content from security controls.",
+  },
+  {
+    id: 26,
+    topic: "Channels",
+    question: "Which is an example of physical exfiltration?",
+    options: [
+      "Copying data to a USB drive",
+      "Uploading to cloud storage",
+      "Sending data via HTTPS",
+      "DNS tunneling",
+    ],
+    correctAnswer: 0,
+    explanation: "Physical exfiltration uses removable media.",
+  },
+  {
+    id: 27,
+    topic: "Detection",
+    question: "Why monitor for large outbound uploads to personal storage?",
+    options: [
+      "They can indicate data leakage",
+      "They are always normal",
+      "They are required for updates",
+      "They are only internal traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "Personal storage services are common exfil targets.",
+  },
+  {
+    id: 28,
+    topic: "Detection",
+    question: "What is a sign of DNS tunneling?",
+    options: [
+      "Long, random-looking subdomains at high volume",
+      "Only HTTP GET traffic",
+      "No DNS traffic",
+      "Only ICMP traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "DNS tunneling often uses high-entropy subdomains.",
+  },
+  {
+    id: 29,
+    topic: "Prevention",
+    question: "Why disable unused outbound protocols?",
+    options: [
+      "It reduces the exfiltration surface",
+      "It disables logging",
+      "It prevents backups",
+      "It removes encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Fewer protocols reduce available exfil channels.",
+  },
+  {
+    id: 30,
+    topic: "Prevention",
+    question: "Why apply rate limits to outbound traffic?",
+    options: [
+      "To reduce large data transfers and detect anomalies",
+      "To disable monitoring",
+      "To block all web access",
+      "To increase storage capacity",
+    ],
+    correctAnswer: 0,
+    explanation: "Rate limits can reduce or detect large exfil transfers.",
+  },
+  {
+    id: 31,
+    topic: "Detection",
+    question: "Why inspect TLS SNI values?",
+    options: [
+      "They reveal destination domains for encrypted traffic",
+      "They always indicate malware",
+      "They disable TLS encryption",
+      "They are unrelated to exfiltration",
+    ],
+    correctAnswer: 0,
+    explanation: "SNI shows the intended domain for TLS connections.",
+  },
+  {
+    id: 32,
+    topic: "Detection",
+    question: "Why is data exfiltration often detected late?",
+    options: [
+      "Attackers blend with normal outbound traffic",
+      "Exfiltration is impossible to detect",
+      "Logs are never stored",
+      "All traffic is blocked",
+    ],
+    correctAnswer: 0,
+    explanation: "Exfiltration can blend into normal traffic patterns.",
+  },
+  {
+    id: 33,
+    topic: "Prevention",
+    question: "Why use encryption at rest for sensitive data?",
+    options: [
+      "To reduce impact if data is copied or stolen",
+      "To increase data exposure",
+      "To prevent backups",
+      "To disable logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Encryption at rest limits usefulness of stolen data.",
+  },
+  {
+    id: 34,
+    topic: "Basics",
+    question: "Which is NOT an exfiltration method?",
+    options: [
+      "Disk defragmentation",
+      "Web uploads",
+      "DNS tunneling",
+      "Cloud storage abuse",
+    ],
+    correctAnswer: 0,
+    explanation: "Disk defragmentation is not related to exfiltration.",
+  },
+  {
+    id: 35,
+    topic: "Prevention",
+    question: "Why is data minimization important?",
+    options: [
+      "Less sensitive data reduces what can be stolen",
+      "It increases data exposure",
+      "It disables encryption",
+      "It prevents logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Reducing data volume lowers exfiltration impact.",
+  },
+  {
+    id: 36,
+    topic: "Detection",
+    question: "What indicates possible cloud exfiltration?",
+    options: [
+      "Large uploads to unfamiliar cloud services",
+      "Local system reboots",
+      "Routine user logins",
+      "Printer queue activity",
+    ],
+    correctAnswer: 0,
+    explanation: "Large uploads to unknown cloud services are suspicious.",
+  },
+  {
+    id: 37,
+    topic: "Detection",
+    question: "Why inspect proxy authentication logs?",
+    options: [
+      "To detect anomalous users or systems sending large data",
+      "To disable all logging",
+      "To stop backups",
+      "To increase storage",
+    ],
+    correctAnswer: 0,
+    explanation: "Proxy auth logs tie traffic to users and devices.",
+  },
+  {
+    id: 38,
+    topic: "Detection",
+    question: "Why monitor for data egress to new domains?",
+    options: [
+      "New destinations can indicate exfiltration",
+      "New domains are always benign",
+      "New domains disable logging",
+      "New domains are required for updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Unfamiliar domains can indicate data transfer out.",
+  },
+  {
+    id: 39,
+    topic: "Detection",
+    question: "Which file operations suggest staging?",
+    options: [
+      "Large file copies to a single directory",
+      "Normal document edits",
+      "Routine OS updates",
+      "Printer driver installs",
+    ],
+    correctAnswer: 0,
+    explanation: "Bulk copying into staging directories can indicate prep for exfil.",
+  },
+  {
+    id: 40,
+    topic: "Channels",
+    question: "Why is HTTPS often used for exfiltration?",
+    options: [
+      "It blends with common web traffic and provides encryption",
+      "It is always blocked by firewalls",
+      "It disables authentication",
+      "It removes logs",
+    ],
+    correctAnswer: 0,
+    explanation: "HTTPS is common and encrypted, making it attractive.",
+  },
+  {
+    id: 41,
+    topic: "Detection",
+    question: "What is a sign of slow exfiltration?",
+    options: [
+      "Consistent low-volume outbound transfers over time",
+      "A single large transfer at once",
+      "Only inbound traffic",
+      "No network activity",
+    ],
+    correctAnswer: 0,
+    explanation: "Slow, steady transfers can evade threshold alerts.",
+  },
+  {
+    id: 42,
+    topic: "Detection",
+    question: "Why monitor for unusual archive formats?",
+    options: [
+      "Attackers may use uncommon formats to evade DLP",
+      "Archive formats are always unsafe",
+      "Archives disable encryption",
+      "Archives always trigger alerts",
+    ],
+    correctAnswer: 0,
+    explanation: "Unusual formats can bypass simple content filters.",
+  },
+  {
+    id: 43,
+    topic: "Prevention",
+    question: "Why enforce least privilege on data stores?",
+    options: [
+      "It limits what an attacker can access to exfiltrate",
+      "It disables backups",
+      "It prevents logging",
+      "It increases attack surface",
+    ],
+    correctAnswer: 0,
+    explanation: "Least privilege reduces exposure of sensitive data.",
+  },
+  {
+    id: 44,
+    topic: "Prevention",
+    question: "Why use network segmentation for data stores?",
+    options: [
+      "It restricts access paths to sensitive repositories",
+      "It disables encryption",
+      "It removes monitoring",
+      "It increases bandwidth",
+    ],
+    correctAnswer: 0,
+    explanation: "Segmentation restricts who can reach sensitive data.",
+  },
+  {
+    id: 45,
+    topic: "Detection",
+    question: "What is a common sign of exfiltration via email?",
+    options: [
+      "Unusually large outbound attachments",
+      "Normal internal emails",
+      "Routine newsletter emails",
+      "Calendar invites",
+    ],
+    correctAnswer: 0,
+    explanation: "Large attachments can indicate data exfiltration.",
+  },
+  {
+    id: 46,
+    topic: "Channels",
+    question: "Steganography is used to:",
+    options: [
+      "Hide data inside other files like images",
+      "Compress files for backups",
+      "Encrypt disks at rest",
+      "Patch operating systems",
+    ],
+    correctAnswer: 0,
+    explanation: "Steganography conceals data inside benign files.",
+  },
+  {
+    id: 47,
+    topic: "Detection",
+    question: "Why monitor for unexpected use of compression tools?",
+    options: [
+      "They can indicate staging for exfiltration",
+      "They always run during patching",
+      "They disable encryption",
+      "They are unrelated to data handling",
+    ],
+    correctAnswer: 0,
+    explanation: "Unexpected compression can signal staging activity.",
+  },
+  {
+    id: 48,
+    topic: "Prevention",
+    question: "Why maintain an asset inventory for data stores?",
+    options: [
+      "It helps identify where sensitive data resides",
+      "It disables monitoring",
+      "It prevents patching",
+      "It increases risk",
+    ],
+    correctAnswer: 0,
+    explanation: "Inventory helps secure and monitor sensitive locations.",
+  },
+  {
+    id: 49,
+    topic: "Detection",
+    question: "What is a suspicious outbound destination?",
+    options: [
+      "Newly registered domains with no business purpose",
+      "Well-known vendor update sites",
+      "Corporate SaaS platforms",
+      "Internal services",
+    ],
+    correctAnswer: 0,
+    explanation: "New, unknown domains are often used for exfiltration.",
+  },
+  {
+    id: 50,
+    topic: "Prevention",
+    question: "Why use TLS inspection where appropriate?",
+    options: [
+      "To detect sensitive data leaving in encrypted channels",
+      "To disable all encryption",
+      "To block internal traffic",
+      "To remove auditing",
+    ],
+    correctAnswer: 0,
+    explanation: "Inspection can reveal sensitive data within encrypted flows.",
+  },
+  {
+    id: 51,
+    topic: "Basics",
+    question: "What is exfiltration over C2?",
+    options: [
+      "Using the command-and-control channel to send data out",
+      "Backing up data locally",
+      "Copying files between internal hosts",
+      "Encrypting files at rest",
+    ],
+    correctAnswer: 0,
+    explanation: "C2 channels can be used to move stolen data out.",
+  },
+  {
+    id: 52,
+    topic: "Detection",
+    question: "Why monitor for unusual protocol usage on endpoints?",
+    options: [
+      "Exfiltration may use non-standard protocols",
+      "Protocols are never logged",
+      "Protocols only apply to servers",
+      "Protocols disable MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "Unusual protocol usage can indicate covert channels.",
+  },
+  {
+    id: 53,
+    topic: "Prevention",
+    question: "Why enforce strong access controls on file shares?",
+    options: [
+      "To reduce access to sensitive files",
+      "To disable monitoring",
+      "To increase data exposure",
+      "To prevent backups",
+    ],
+    correctAnswer: 0,
+    explanation: "Access controls limit what can be stolen.",
+  },
+  {
+    id: 54,
+    topic: "Detection",
+    question: "Why inspect endpoint process activity during large transfers?",
+    options: [
+      "It can reveal which process is sending the data",
+      "It disables encryption",
+      "It prevents logging",
+      "It removes network data",
+    ],
+    correctAnswer: 0,
+    explanation: "Process context ties data transfer to a specific binary.",
+  },
+  {
+    id: 55,
+    topic: "Prevention",
+    question: "Why restrict outbound access to file sharing sites?",
+    options: [
+      "They are common exfiltration channels",
+      "They improve patching",
+      "They reduce monitoring",
+      "They prevent MFA",
+    ],
+    correctAnswer: 0,
+    explanation: "File sharing sites are frequently abused for exfiltration.",
+  },
+  {
+    id: 56,
+    topic: "Detection",
+    question: "What is a common exfiltration detection approach?",
+    options: [
+      "Baselining normal outbound data volumes and alerting on spikes",
+      "Disabling all alerts",
+      "Ignoring network traffic",
+      "Only monitoring disk space",
+    ],
+    correctAnswer: 0,
+    explanation: "Baselines help identify unusual outbound transfers.",
+  },
+  {
+    id: 57,
+    topic: "Channels",
+    question: "Why is HTTPS exfiltration hard to detect?",
+    options: [
+      "Encryption hides content and blends with normal traffic",
+      "HTTPS is never logged",
+      "HTTPS is blocked everywhere",
+      "HTTPS has no headers",
+    ],
+    correctAnswer: 0,
+    explanation: "Encrypted traffic hides content and is common.",
+  },
+  {
+    id: 58,
+    topic: "Detection",
+    question: "What could indicate data exfiltration via cloud sync?",
+    options: [
+      "Large uploads to personal cloud accounts",
+      "Normal access to company cloud storage",
+      "Local backups to tape",
+      "Routine OS updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Personal cloud uploads can indicate data leakage.",
+  },
+  {
+    id: 59,
+    topic: "Prevention",
+    question: "Why use endpoint monitoring for file access?",
+    options: [
+      "To detect unusual bulk reads of sensitive files",
+      "To disable auditing",
+      "To prevent updates",
+      "To remove encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Bulk access can indicate staging for exfiltration.",
+  },
+  {
+    id: 60,
+    topic: "Basics",
+    question: "Exfiltration typically occurs after:",
+    options: [
+      "Data collection and staging",
+      "Incident recovery",
+      "System reboots",
+      "Patch installation",
+    ],
+    correctAnswer: 0,
+    explanation: "Attackers often collect and stage data before exfiltration.",
+  },
+  {
+    id: 61,
+    topic: "Detection",
+    question: "Why monitor for new processes using network sockets?",
+    options: [
+      "Unusual processes may be sending data out",
+      "It always indicates normal operations",
+      "It disables encryption",
+      "It prevents logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Unexpected network activity can indicate exfiltration.",
+  },
+  {
+    id: 62,
+    topic: "Prevention",
+    question: "Why restrict outbound access from servers?",
+    options: [
+      "Servers usually do not need broad internet access",
+      "It improves CPU performance",
+      "It disables logging",
+      "It enables malware",
+    ],
+    correctAnswer: 0,
+    explanation: "Server egress restrictions limit exfiltration paths.",
+  },
+  {
+    id: 63,
+    topic: "Detection",
+    question: "Why correlate endpoint and network telemetry?",
+    options: [
+      "It links data transfers to specific processes and users",
+      "It disables alerts",
+      "It removes logging",
+      "It prevents patching",
+    ],
+    correctAnswer: 0,
+    explanation: "Correlation improves investigation accuracy.",
+  },
+  {
+    id: 64,
+    topic: "Detection",
+    question: "Why monitor for bulk access to file shares?",
+    options: [
+      "Bulk access can indicate staging for exfiltration",
+      "It indicates normal browsing",
+      "It always indicates backups",
+      "It disables encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Large read operations often precede exfiltration.",
+  },
+  {
+    id: 65,
+    topic: "Prevention",
+    question: "Why enforce strong logging retention?",
+    options: [
+      "Exfiltration investigations often need historical data",
+      "It disables monitoring",
+      "It prevents backups",
+      "It removes encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Longer retention supports investigations after discovery.",
+  },
+  {
+    id: 66,
+    topic: "Channels",
+    question: "Why is FTP less common for exfiltration today?",
+    options: [
+      "It is often blocked and lacks encryption",
+      "It is faster than HTTPS",
+      "It is required for all backups",
+      "It is used only on internal networks",
+    ],
+    correctAnswer: 0,
+    explanation: "FTP is often blocked and unencrypted, making it less viable.",
+  },
+  {
+    id: 67,
+    topic: "Detection",
+    question: "What can indicate exfiltration via API abuse?",
+    options: [
+      "Large volumes of API downloads",
+      "Normal API usage patterns",
+      "Routine token refreshes",
+      "Single API call per day",
+    ],
+    correctAnswer: 0,
+    explanation: "Large API data pulls can indicate data theft.",
+  },
+  {
+    id: 68,
+    topic: "Prevention",
+    question: "Why enforce API rate limiting?",
+    options: [
+      "It reduces large-scale data extraction",
+      "It disables monitoring",
+      "It increases attack surface",
+      "It removes authentication",
+    ],
+    correctAnswer: 0,
+    explanation: "Rate limits make large data pulls harder.",
+  },
+  {
+    id: 69,
+    topic: "Detection",
+    question: "Why inspect outbound traffic for unusual user agents?",
+    options: [
+      "Malicious tools may use non-standard user agents",
+      "User agents are always encrypted",
+      "User agents are never logged",
+      "User agents disable TLS",
+    ],
+    correctAnswer: 0,
+    explanation: "Unusual user agents can signal custom exfil tools.",
+  },
+  {
+    id: 70,
+    topic: "Prevention",
+    question: "Why adopt data loss prevention policies for email?",
+    options: [
+      "To block sensitive data leaving via attachments",
+      "To disable all email",
+      "To remove MFA",
+      "To prevent logging",
+    ],
+    correctAnswer: 0,
+    explanation: "Email DLP reduces exfiltration via attachments.",
+  },
+  {
+    id: 71,
+    topic: "Basics",
+    question: "Which statement best summarizes exfiltration risk?",
+    options: [
+      "Sensitive data can leave the environment through many channels",
+      "Exfiltration only happens via USB drives",
+      "Exfiltration is always obvious",
+      "Exfiltration is impossible with encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Exfiltration can occur via many channels and often blends in.",
+  },
+  {
+    id: 72,
+    topic: "Detection",
+    question: "What is a suspicious outbound pattern?",
+    options: [
+      "Repeated uploads to a new domain with no business use",
+      "Routine traffic to known vendors",
+      "Local DNS caching",
+      "Standard Windows updates",
+    ],
+    correctAnswer: 0,
+    explanation: "New domains with repeated uploads can indicate exfiltration.",
+  },
+  {
+    id: 73,
+    topic: "Prevention",
+    question: "Why enforce strong access logs on file systems?",
+    options: [
+      "To trace who accessed sensitive files before exfiltration",
+      "To disable auditing",
+      "To prevent backups",
+      "To remove encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Access logs help identify the source of data theft.",
+  },
+  {
+    id: 74,
+    topic: "Detection",
+    question: "Why review outbound bandwidth by host?",
+    options: [
+      "A single host with high outbound volume may indicate exfiltration",
+      "Bandwidth is never relevant",
+      "It only shows inbound traffic",
+      "It disables alerting",
+    ],
+    correctAnswer: 0,
+    explanation: "Outlier hosts often indicate suspicious transfers.",
+  },
+  {
+    id: 75,
+    topic: "Prevention",
+    question: "What is a strong immediate action during suspected exfiltration?",
+    options: [
+      "Contain the host and preserve evidence",
+      "Ignore the alert",
+      "Delete all logs",
+      "Reboot all servers immediately",
+    ],
+    correctAnswer: 0,
+    explanation: "Containment stops data loss and preserves evidence.",
+  },
+];
 
 const DataExfiltrationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -686,9 +1669,15 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
     <LearnPageLayout pageTitle="Data Exfiltration" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
       <Container maxWidth="lg">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learn Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <CloudUploadIcon sx={{ fontSize: 42, color: "#0ea5e9" }} />
@@ -1613,6 +2602,28 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
           </TabPanel>
         </Paper>
 
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Data Exfiltration Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
@@ -1620,7 +2631,7 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#0ea5e9", color: "#0ea5e9" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

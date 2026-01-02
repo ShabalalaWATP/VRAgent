@@ -1,5 +1,27 @@
-import React, { useMemo } from "react";
-import { Box, Link, Typography, styled } from "@mui/material";
+import React, { useMemo, useState, useCallback } from "react";
+import { Box, Link, Typography, styled, IconButton, Tooltip, alpha } from "@mui/material";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import CheckIcon from "@mui/icons-material/Check";
+import Prism from "prismjs";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-css";
+import "prismjs/components/prism-sql";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-c";
+import "prismjs/components/prism-cpp";
+import "prismjs/components/prism-csharp";
+import "prismjs/components/prism-go";
+import "prismjs/components/prism-rust";
+import "prismjs/components/prism-ruby";
+import "prismjs/components/prism-php";
+import "prismjs/components/prism-yaml";
+import "prismjs/components/prism-markdown";
+import "prismjs/components/prism-jsx";
+import "prismjs/components/prism-tsx";
 
 // Types
 interface MentionInfo {
@@ -21,22 +43,65 @@ const InlineCode = styled("code")(({ theme }) => ({
   backgroundColor: theme.palette.mode === "dark" ? "#2d2d2d" : "#f5f5f5",
   padding: "2px 6px",
   borderRadius: 4,
-  fontFamily: "monospace",
+  fontFamily: "'Fira Code', 'Consolas', 'Monaco', monospace",
   fontSize: "0.875em",
   color: theme.palette.primary.main,
 }));
 
-const CodeBlock = styled("pre")(({ theme }) => ({
-  backgroundColor: theme.palette.mode === "dark" ? "#1e1e1e" : "#f5f5f5",
-  padding: theme.spacing(1.5),
-  borderRadius: theme.shape.borderRadius,
-  overflow: "auto",
-  fontFamily: "monospace",
-  fontSize: "0.85em",
+const CodeBlockWrapper = styled(Box)(({ theme }) => ({
+  position: "relative",
   margin: theme.spacing(1, 0),
+  borderRadius: theme.shape.borderRadius,
+  overflow: "hidden",
+  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+}));
+
+const CodeBlockHeader = styled(Box)(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: theme.spacing(0.5, 1),
+  backgroundColor: theme.palette.mode === "dark" ? "#252526" : "#e8e8e8",
+  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+}));
+
+const CodeBlockPre = styled("pre")(({ theme }) => ({
+  backgroundColor: theme.palette.mode === "dark" ? "#1e1e1e" : "#f8f8f8",
+  padding: theme.spacing(1.5),
+  margin: 0,
+  overflow: "auto",
+  fontFamily: "'Fira Code', 'Consolas', 'Monaco', monospace",
+  fontSize: "0.85em",
+  lineHeight: 1.5,
   "& code": {
     backgroundColor: "transparent",
     padding: 0,
+    fontFamily: "inherit",
+  },
+  // Prism theme styles
+  "& .token.comment, & .token.prolog, & .token.doctype, & .token.cdata": {
+    color: theme.palette.mode === "dark" ? "#6a9955" : "#008000",
+  },
+  "& .token.punctuation": {
+    color: theme.palette.mode === "dark" ? "#d4d4d4" : "#393a34",
+  },
+  "& .token.property, & .token.tag, & .token.boolean, & .token.number, & .token.constant, & .token.symbol": {
+    color: theme.palette.mode === "dark" ? "#b5cea8" : "#36acaa",
+  },
+  "& .token.selector, & .token.attr-name, & .token.string, & .token.char, & .token.builtin": {
+    color: theme.palette.mode === "dark" ? "#ce9178" : "#e3116c",
+  },
+  "& .token.operator, & .token.entity, & .token.url, & .language-css .token.string, & .style .token.string": {
+    color: theme.palette.mode === "dark" ? "#d4d4d4" : "#393a34",
+  },
+  "& .token.atrule, & .token.attr-value, & .token.keyword": {
+    color: theme.palette.mode === "dark" ? "#569cd6" : "#00a4db",
+  },
+  "& .token.function, & .token.class-name": {
+    color: theme.palette.mode === "dark" ? "#dcdcaa" : "#9a050f",
+  },
+  "& .token.regex, & .token.important, & .token.variable": {
+    color: theme.palette.mode === "dark" ? "#d16969" : "#e90",
   },
 }));
 
@@ -65,6 +130,95 @@ const MentionSpan = styled("span")<{ isCurrentUser?: boolean }>(
     },
   })
 );
+
+// Language display names
+const LANGUAGE_NAMES: Record<string, string> = {
+  js: "JavaScript",
+  javascript: "JavaScript",
+  ts: "TypeScript",
+  typescript: "TypeScript",
+  jsx: "JSX",
+  tsx: "TSX",
+  py: "Python",
+  python: "Python",
+  bash: "Bash",
+  sh: "Shell",
+  shell: "Shell",
+  json: "JSON",
+  css: "CSS",
+  sql: "SQL",
+  java: "Java",
+  c: "C",
+  cpp: "C++",
+  csharp: "C#",
+  cs: "C#",
+  go: "Go",
+  rust: "Rust",
+  rs: "Rust",
+  ruby: "Ruby",
+  rb: "Ruby",
+  php: "PHP",
+  yaml: "YAML",
+  yml: "YAML",
+  md: "Markdown",
+  markdown: "Markdown",
+  html: "HTML",
+  xml: "XML",
+};
+
+// Syntax highlighted code block component
+const SyntaxHighlightedCodeBlock: React.FC<{ code: string; language?: string }> = ({ code, language }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  }, [code]);
+
+  // Get highlighted HTML
+  const highlightedCode = useMemo(() => {
+    const lang = language?.toLowerCase();
+    const grammar = lang && Prism.languages[lang];
+    if (grammar) {
+      return Prism.highlight(code, grammar, lang);
+    }
+    // Fallback to plain text
+    return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }, [code, language]);
+
+  const displayLanguage = language ? (LANGUAGE_NAMES[language.toLowerCase()] || language) : "Code";
+
+  return (
+    <CodeBlockWrapper>
+      <CodeBlockHeader>
+        <Typography variant="caption" sx={{ fontFamily: "monospace", opacity: 0.8 }}>
+          {displayLanguage}
+        </Typography>
+        <Tooltip title={copied ? "Copied!" : "Copy code"}>
+          <IconButton
+            size="small"
+            onClick={handleCopy}
+            sx={{ p: 0.5 }}
+          >
+            {copied ? (
+              <CheckIcon sx={{ fontSize: 16, color: "success.main" }} />
+            ) : (
+              <ContentCopyIcon sx={{ fontSize: 16, opacity: 0.7 }} />
+            )}
+          </IconButton>
+        </Tooltip>
+      </CodeBlockHeader>
+      <CodeBlockPre>
+        <code dangerouslySetInnerHTML={{ __html: highlightedCode }} />
+      </CodeBlockPre>
+    </CodeBlockWrapper>
+  );
+};
 
 // Token types for parsing
 type Token =
@@ -309,9 +463,11 @@ function renderToken(
 
     case "codeBlock":
       return (
-        <CodeBlock key={index}>
-          <code>{token.content}</code>
-        </CodeBlock>
+        <SyntaxHighlightedCodeBlock
+          key={index}
+          code={token.content}
+          language={token.language}
+        />
       );
 
     case "link":

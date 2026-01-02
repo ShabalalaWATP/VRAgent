@@ -120,16 +120,6 @@ class BinaryMetadataResponse(BaseModel):
     elf_program_headers: List[Dict[str, Any]] = []
 
 
-class HexViewResponse(BaseModel):
-    """Response for hex viewer."""
-    offset: int
-    length: int
-    total_size: int
-    hex_data: str  # Hex representation
-    ascii_preview: str  # ASCII printable chars
-    rows: List[Dict[str, Any]]  # Structured hex rows
-
-
 class SecretResponse(BaseModel):
     """A potential secret found."""
     type: str
@@ -285,6 +275,38 @@ class DockerSecurityIssueResponse(BaseModel):
     severity: str
     description: str
     command: Optional[str] = None
+    attack_vector: Optional[str] = None  # Offensive security context
+    rule_id: Optional[str] = None
+
+
+class AdjudicationResult(BaseModel):
+    """Result of AI false positive adjudication."""
+    verdict: str  # "confirmed" or "false_positive"
+    reason: str
+
+
+class BaseImageIntelligenceResponse(BaseModel):
+    """Base image intelligence finding."""
+    image: str
+    category: str  # eol, compromised, vulnerable, discouraged, typosquatting, untrusted
+    severity: str
+    message: str
+    attack_vector: str = ""
+    recommendation: str = ""
+
+
+class LayerSecretResponse(BaseModel):
+    """Secret found in image layer (deep scan)."""
+    layer_id: str
+    layer_index: int
+    file_path: str
+    file_type: str
+    severity: str
+    size_bytes: int
+    is_deleted: bool  # True = file was "deleted" but still recoverable!
+    content_preview: Optional[str] = None
+    entropy: Optional[float] = None
+    attack_vector: str = ""
 
 
 class DockerAnalysisResponse(BaseModel):
@@ -301,6 +323,17 @@ class DockerAnalysisResponse(BaseModel):
     security_issues: List[DockerSecurityIssueResponse]
     ai_analysis: Optional[str] = None
     error: Optional[str] = None
+    # AI False Positive Adjudication
+    adjudication_enabled: bool = False
+    adjudication_summary: Optional[str] = None
+    rejected_findings: List[Dict[str, Any]] = []
+    adjudication_stats: Optional[Dict[str, int]] = None
+    # Base Image Intelligence
+    base_image_intel: List[BaseImageIntelligenceResponse] = []
+    # Layer Deep Scan (recoverable secrets)
+    layer_secrets: List[LayerSecretResponse] = []
+    layer_scan_metadata: Optional[Dict[str, Any]] = None
+    deleted_secrets_count: int = 0
 
 
 class StatusResponse(BaseModel):
@@ -4579,17 +4612,29 @@ async def analyze_apk(
 async def analyze_docker_image(
     image_name: str,
     include_ai: bool = Query(True, description="Include AI-powered analysis"),
+    adjudicate_findings: bool = Query(True, description="Use AI to filter false positives (recommended)"),
+    skepticism_level: str = Query("high", description="How aggressively to filter: 'high' (default), 'medium', or 'low'"),
+    deep_layer_scan: bool = Query(True, description="Extract and scan image layers for recoverable secrets"),
+    check_base_image: bool = Query(True, description="Check base image against intelligence database (EOL, compromised, etc.)"),
 ):
     """
     Analyze Docker image layers for secrets and security issues.
-    
+
     Examines:
     - Image history and layer commands
     - ENV/ARG secrets
     - Hardcoded credentials in RUN commands
     - Security misconfigurations (root user, chmod 777, etc.)
     - Suspicious operations (curl | sh, sensitive file access)
-    
+
+    Features:
+    - Semantic Dockerfile parsing (handles multi-line instructions)
+    - Multi-stage build awareness (only flags final stage for runtime issues)
+    - Entropy-based secret detection (catches high-entropy strings)
+    - AI False Positive Adjudicator (filters out noise with high skepticism)
+    - **Layer Deep Scan**: Extract layers and find secrets in "deleted" files
+    - **Base Image Intelligence**: Check for EOL, compromised, typosquatting images
+
     Note: Requires Docker to be installed and the image must be pulled locally.
     """
     if not check_docker_available():
@@ -4597,20 +4642,129 @@ async def analyze_docker_image(
             status_code=503,
             detail="Docker is not available. Please install Docker to use this feature."
         )
-    
+
     logger.info(f"Analyzing Docker image: {image_name}")
-    
+
     try:
         # Perform analysis
         result = re_service.analyze_docker_image(image_name)
-        
+
         if result.error:
             raise HTTPException(status_code=400, detail=result.error)
-        
+
         # Run AI analysis if requested
         if include_ai:
             result.ai_analysis = await re_service.analyze_docker_with_ai(result)
-        
+
+        # Prepare security issues for potential adjudication
+        security_issues = result.security_issues.copy()
+        adjudication_summary = None
+        rejected_findings = []
+        adjudication_stats = None
+
+        # Run AI False Positive Adjudication if enabled
+        if adjudicate_findings and security_issues:
+            try:
+                from backend.services.docker_scan_service import ai_false_positive_adjudicator
+
+                # Convert security issues to dict format for adjudicator
+                issues_as_dicts = [
+                    {
+                        "rule_id": issue.get("rule_id", "N/A"),
+                        "severity": issue.get("severity", "unknown"),
+                        "message": issue.get("description", ""),
+                        "category": issue.get("category", ""),
+                        "command": issue.get("command", ""),
+                    }
+                    for issue in security_issues
+                ]
+
+                # Build context for adjudicator (reconstruct from layers)
+                dockerfile_context = "\n".join([
+                    f"# Layer: {layer.get('command', '')}"
+                    for layer in result.layers
+                ])
+
+                confirmed, rejected, summary = await ai_false_positive_adjudicator(
+                    findings=issues_as_dicts,
+                    dockerfile_content=dockerfile_context,
+                    skepticism_level=skepticism_level,
+                )
+
+                # Filter security_issues to only confirmed
+                confirmed_rules = {f.get("message") for f in confirmed}
+                security_issues = [
+                    issue for issue in security_issues
+                    if issue.get("description") in confirmed_rules
+                ]
+
+                adjudication_summary = summary
+                rejected_findings = rejected
+                adjudication_stats = {
+                    "confirmed": len(confirmed),
+                    "rejected": len(rejected),
+                    "total": len(issues_as_dicts),
+                }
+
+                logger.info(f"Adjudication complete: {len(confirmed)} confirmed, {len(rejected)} rejected")
+
+            except Exception as e:
+                logger.warning(f"Adjudication failed, returning all findings: {e}")
+                adjudication_summary = f"Adjudication failed: {e}"
+
+        # Base Image Intelligence check
+        base_image_intel = []
+        if check_base_image and result.base_image:
+            try:
+                from backend.services.docker_scan_service import check_base_image_intelligence
+                intel_findings = check_base_image_intelligence(result.base_image)
+                base_image_intel = [
+                    BaseImageIntelligenceResponse(
+                        image=f.image,
+                        category=f.category,
+                        severity=f.severity,
+                        message=f.message,
+                        attack_vector=f.attack_vector,
+                        recommendation=f.recommendation,
+                    )
+                    for f in intel_findings
+                ]
+                if intel_findings:
+                    logger.info(f"Base image intelligence: {len(intel_findings)} findings for {result.base_image}")
+            except Exception as e:
+                logger.warning(f"Base image intelligence check failed: {e}")
+
+        # Layer Deep Scan for recoverable secrets
+        layer_secrets = []
+        layer_scan_metadata = None
+        deleted_secrets_count = 0
+        if deep_layer_scan:
+            try:
+                from backend.services.docker_scan_service import extract_and_scan_layers
+                secrets_found, scan_meta = extract_and_scan_layers(image_name, max_layers=20)
+                layer_secrets = [
+                    LayerSecretResponse(
+                        layer_id=s.layer_id,
+                        layer_index=s.layer_index,
+                        file_path=s.file_path,
+                        file_type=s.file_type,
+                        severity=s.severity,
+                        size_bytes=s.size_bytes,
+                        is_deleted=s.is_deleted,
+                        content_preview=s.content_preview[:100] if s.content_preview else None,
+                        entropy=s.entropy,
+                        attack_vector=s.attack_vector,
+                    )
+                    for s in secrets_found
+                ]
+                layer_scan_metadata = scan_meta
+                deleted_secrets_count = scan_meta.get("deleted_secrets_found", 0)
+                if secrets_found:
+                    logger.info(f"Layer deep scan: {len(secrets_found)} secrets found, {deleted_secrets_count} in 'deleted' files")
+            except Exception as e:
+                logger.warning(f"Layer deep scan failed: {e}")
+                layer_scan_metadata = {"error": str(e)}
+
         # Convert to response model
         return DockerAnalysisResponse(
             image_name=result.image_name,
@@ -4646,18 +4800,590 @@ async def analyze_docker_image(
                     severity=issue["severity"],
                     description=issue["description"],
                     command=issue.get("command"),
+                    attack_vector=issue.get("attack_vector"),
+                    rule_id=issue.get("rule_id"),
                 )
-                for issue in result.security_issues
+                for issue in security_issues
             ],
             ai_analysis=result.ai_analysis,
             error=result.error,
+            adjudication_enabled=adjudicate_findings,
+            adjudication_summary=adjudication_summary,
+            rejected_findings=rejected_findings,
+            adjudication_stats=adjudication_stats,
+            # New fields
+            base_image_intel=base_image_intel,
+            layer_secrets=layer_secrets,
+            layer_scan_metadata=layer_scan_metadata,
+            deleted_secrets_count=deleted_secrets_count,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Docker analysis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+# =============================================================================
+# Docker Export Endpoint - Comprehensive formatted exports
+# =============================================================================
+
+class DockerExportRequest(BaseModel):
+    """Request body for Docker export."""
+    image_name: str
+    image_id: str
+    total_layers: int
+    total_size: int
+    total_size_human: str
+    base_image: Optional[str] = None
+    layers: List[Dict[str, Any]] = []
+    secrets: List[Dict[str, Any]] = []
+    deleted_files: List[Dict[str, Any]] = []
+    security_issues: List[Dict[str, Any]] = []
+    ai_analysis: Optional[str] = None
+    adjudication_enabled: bool = False
+    adjudication_summary: Optional[str] = None
+    rejected_findings: List[Dict[str, Any]] = []
+    adjudication_stats: Optional[Dict[str, int]] = None
+    base_image_intel: List[Dict[str, Any]] = []
+    layer_secrets: List[Dict[str, Any]] = []
+    layer_scan_metadata: Optional[Dict[str, Any]] = None
+    deleted_secrets_count: int = 0
+
+
+@router.post("/docker/export")
+async def export_docker_analysis(
+    request: DockerExportRequest,
+    format: str = Query(..., description="Export format: markdown, pdf, docx"),
+):
+    """
+    Export Docker analysis results to Markdown, PDF, or Word format.
+
+    Features properly formatted exports with:
+    - Executive summary with risk assessment
+    - Base image intelligence findings (EOL, typosquatting, etc.)
+    - Security issues with attack vectors
+    - Layer deep scan results (recoverable secrets)
+    - AI analysis and false positive adjudication summary
+    """
+    from fastapi.responses import Response
+    from io import BytesIO
+    from datetime import datetime
+
+    if format not in ["markdown", "pdf", "docx"]:
+        raise HTTPException(status_code=400, detail="Invalid format. Use: markdown, pdf, docx")
+
+    try:
+        # Generate comprehensive markdown content
+        md_content = _generate_docker_export_markdown(request)
+
+        # Return based on format
+        base_name = request.image_name.replace('/', '_').replace(':', '_')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        if format == "markdown":
+            return Response(
+                content=md_content.encode('utf-8'),
+                media_type="text/markdown",
+                headers={"Content-Disposition": f'attachment; filename="{base_name}_docker_analysis_{timestamp}.md"'}
+            )
+        elif format == "pdf":
+            pdf_content = _generate_docker_pdf(md_content, request)
+            return Response(
+                content=pdf_content,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{base_name}_docker_analysis_{timestamp}.pdf"'}
+            )
+        elif format == "docx":
+            docx_content = _generate_docker_docx(md_content, request)
+            return Response(
+                content=docx_content,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={"Content-Disposition": f'attachment; filename="{base_name}_docker_analysis_{timestamp}.docx"'}
+            )
+
+    except Exception as e:
+        logger.error(f"Docker export failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+def _generate_docker_export_markdown(request: DockerExportRequest) -> str:
+    """Generate comprehensive markdown export for Docker analysis."""
+    from datetime import datetime
+
+    # Calculate risk metrics
+    critical_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'critical')
+    high_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'high')
+    medium_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'medium')
+    low_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'low')
+
+    # Calculate risk score
+    risk_score = critical_count * 40 + high_count * 25 + medium_count * 10 + low_count * 3
+    risk_level = "Critical" if risk_score >= 100 else "High" if risk_score >= 50 else "Medium" if risk_score >= 20 else "Low"
+
+    md = f"""# Docker Security Analysis Report
+
+**Image:** `{request.image_name}`
+**Image ID:** `{request.image_id[:12]}`
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Analysis Tool:** VRAgent Docker Inspector
+
+---
+
+## Executive Summary
+
+| Metric | Value |
+|--------|-------|
+| **Risk Level** | **{risk_level}** ({risk_score}/100) |
+| **Total Layers** | {request.total_layers} |
+| **Image Size** | {request.total_size_human} |
+| **Base Image** | `{request.base_image or 'Unknown'}` |
+| **Security Issues** | {len(request.security_issues)} |
+| **Secrets Found** | {len(request.secrets) + len(request.layer_secrets)} |
+| **Deleted but Recoverable** | {request.deleted_secrets_count} |
+
+### Risk Breakdown
+
+| Severity | Count | Impact |
+|----------|-------|--------|
+| Critical | {critical_count} | Immediate exploitation possible |
+| High | {high_count} | High-value attack targets |
+| Medium | {medium_count} | Secondary targets |
+| Low | {low_count} | Opportunistic |
+
+"""
+
+    # Base Image Intelligence Section
+    if request.base_image_intel:
+        md += """---
+
+## Base Image Intelligence
+
+*Findings from automated intelligence checks on the base image.*
+
+"""
+        for intel in request.base_image_intel:
+            severity_icon = "🔴" if intel.get('severity') == 'critical' else "🟠" if intel.get('severity') == 'high' else "🟡" if intel.get('severity') == 'medium' else "🟢"
+            md += f"""### {severity_icon} {intel.get('category', 'Unknown').upper()}: {intel.get('message', '')}
+
+- **Image:** `{intel.get('image', 'N/A')}`
+- **Severity:** {intel.get('severity', 'N/A').upper()}
+- **Attack Vector:** {intel.get('attack_vector', 'N/A')}
+- **Recommendation:** {intel.get('recommendation', 'N/A')}
+
+"""
+
+    # Security Issues Section
+    if request.security_issues:
+        md += """---
+
+## Security Issues
+
+*Identified security vulnerabilities and misconfigurations.*
+
+"""
+        # Group by severity
+        for severity in ['critical', 'high', 'medium', 'low']:
+            issues = [i for i in request.security_issues if i.get('severity', '').lower() == severity]
+            if issues:
+                severity_title = severity.upper()
+                md += f"### {severity_title} Severity ({len(issues)})\n\n"
+                for issue in issues:
+                    md += f"""#### {issue.get('category', 'Unknown')}
+
+- **Description:** {issue.get('description', 'N/A')}
+- **Rule ID:** `{issue.get('rule_id', 'N/A')}`
+"""
+                    if issue.get('attack_vector'):
+                        md += f"- **Attack Vector:** {issue.get('attack_vector')}\n"
+                    if issue.get('command'):
+                        md += f"- **Command:** `{issue.get('command')[:100]}...`\n"
+                    md += "\n"
+
+    # Layer Secrets Section (Deep Scan)
+    if request.layer_secrets:
+        md += """---
+
+## Layer Deep Scan - Recoverable Secrets
+
+*Sensitive files found in image layers, including "deleted" files that are still recoverable.*
+
+"""
+        # Highlight deleted but recoverable
+        deleted_secrets = [s for s in request.layer_secrets if s.get('is_deleted')]
+        if deleted_secrets:
+            md += f"""### ⚠️ CRITICAL: {len(deleted_secrets)} Deleted But Recoverable Secrets
+
+These files were "deleted" in later layers but **can still be extracted** from the image using `docker save`.
+
+| Layer | File | Type | Severity |
+|-------|------|------|----------|
+"""
+            for secret in deleted_secrets:
+                md += f"| {secret.get('layer_index', '?')} | `{secret.get('file_path', 'N/A')[:50]}` | {secret.get('file_type', 'N/A')} | {secret.get('severity', 'N/A').upper()} |\n"
+            md += "\n"
+
+        # All layer secrets
+        md += f"""### All Sensitive Files ({len(request.layer_secrets)})
+
+| Layer | File Path | Type | Deleted? | Severity |
+|-------|-----------|------|----------|----------|
+"""
+        for secret in request.layer_secrets[:30]:
+            deleted_mark = "⚠️ YES" if secret.get('is_deleted') else "No"
+            md += f"| {secret.get('layer_index', '?')} | `{secret.get('file_path', 'N/A')[:40]}` | {secret.get('file_type', 'N/A')} | {deleted_mark} | {secret.get('severity', 'N/A').upper()} |\n"
+
+        if len(request.layer_secrets) > 30:
+            md += f"\n*...and {len(request.layer_secrets) - 30} more secrets*\n"
+        md += "\n"
+
+    # Traditional Secrets Section
+    if request.secrets:
+        md += """---
+
+## Secrets in Image History
+
+*Secrets detected in Docker image build commands and environment variables.*
+
+"""
+        for secret in request.secrets:
+            md += f"""### {secret.get('secret_type', 'Unknown')} ({secret.get('severity', 'N/A').upper()})
+
+- **Layer:** `{secret.get('layer_id', 'N/A')[:12]}`
+- **Context:** {secret.get('context', 'N/A')}
+- **Value (masked):** `{secret.get('masked_value', 'N/A')}`
+
+"""
+
+    # AI Analysis Section
+    if request.ai_analysis:
+        md += f"""---
+
+## AI Security Analysis
+
+{request.ai_analysis}
+
+"""
+
+    # Adjudication Summary
+    if request.adjudication_enabled and request.adjudication_summary:
+        md += f"""---
+
+## False Positive Adjudication
+
+*AI-powered filtering of false positives with high skepticism.*
+
+**Summary:** {request.adjudication_summary}
+
+"""
+        if request.adjudication_stats:
+            stats = request.adjudication_stats
+            md += f"""| Metric | Count |
+|--------|-------|
+| Total Findings | {stats.get('total', 0)} |
+| Confirmed Real | {stats.get('confirmed', 0)} |
+| Rejected as False Positive | {stats.get('rejected', 0)} |
+
+"""
+
+        if request.rejected_findings:
+            md += """### Rejected Findings (False Positives)
+
+| Finding | Reason |
+|---------|--------|
+"""
+            for finding in request.rejected_findings[:10]:
+                reason = finding.get('_adjudication', {}).get('reason', 'N/A')[:60]
+                message = finding.get('message', 'N/A')[:40]
+                md += f"| {message} | {reason} |\n"
+            md += "\n"
+
+    # Layer History Section
+    if request.layers:
+        md += """---
+
+## Image Layer History
+
+*Build commands that created each layer.*
+
+| Layer | Command | Size |
+|-------|---------|------|
+"""
+        for i, layer in enumerate(request.layers[:20]):
+            cmd = layer.get('command', 'N/A')[:60]
+            size = layer.get('size', 0)
+            md += f"| {i} | `{cmd}` | {size} |\n"
+
+        if len(request.layers) > 20:
+            md += f"\n*...and {len(request.layers) - 20} more layers*\n"
+        md += "\n"
+
+    # Footer
+    md += """---
+
+## Report Information
+
+- **Tool:** VRAgent Docker Inspector
+- **Features Used:** Semantic parsing, entropy detection, multi-stage awareness, AI adjudication, layer deep scan, base image intelligence
+- **Offensive Focus:** Container escape, privilege escalation, secrets extraction, supply chain risks
+
+*This report was generated with an offensive security perspective, emphasizing exploitable weaknesses and attack vectors.*
+"""
+
+    return md
+
+
+def _generate_docker_pdf(md_content: str, request: DockerExportRequest) -> bytes:
+    """Generate PDF from Docker analysis with proper formatting."""
+    from io import BytesIO
+
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        styles = getSampleStyleSheet()
+
+        # Custom styles
+        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, spaceAfter=20, textColor=colors.HexColor('#1a1a2e'))
+        h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=14, spaceBefore=15, spaceAfter=10, textColor=colors.HexColor('#16213e'))
+        h3_style = ParagraphStyle('H3', parent=styles['Heading3'], fontSize=12, spaceBefore=10, spaceAfter=8, textColor=colors.HexColor('#0f3460'))
+        body_style = ParagraphStyle('Body', parent=styles['Normal'], fontSize=10, spaceAfter=6)
+        code_style = ParagraphStyle('Code', parent=styles['Code'], fontSize=9, backColor=colors.HexColor('#f0f0f0'))
+
+        elements = []
+
+        # Title
+        elements.append(Paragraph("Docker Security Analysis Report", title_style))
+        elements.append(Paragraph(f"<b>Image:</b> {request.image_name}", body_style))
+        elements.append(Paragraph(f"<b>Image ID:</b> {request.image_id[:12]}", body_style))
+        elements.append(Spacer(1, 0.2*inch))
+
+        # Risk Summary Table
+        critical_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'critical')
+        high_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'high')
+        medium_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'medium')
+        low_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'low')
+        risk_score = critical_count * 40 + high_count * 25 + medium_count * 10 + low_count * 3
+
+        elements.append(Paragraph("Executive Summary", h2_style))
+
+        summary_data = [
+            ['Metric', 'Value'],
+            ['Risk Score', f"{risk_score}/100"],
+            ['Total Layers', str(request.total_layers)],
+            ['Image Size', request.total_size_human],
+            ['Security Issues', str(len(request.security_issues))],
+            ['Deleted Secrets', str(request.deleted_secrets_count)],
+        ]
+        summary_table = Table(summary_data, colWidths=[2*inch, 3*inch])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(summary_table)
+        elements.append(Spacer(1, 0.2*inch))
+
+        # Base Image Intelligence
+        if request.base_image_intel:
+            elements.append(Paragraph("Base Image Intelligence", h2_style))
+            for intel in request.base_image_intel:
+                sev = intel.get('severity', 'N/A').upper()
+                elements.append(Paragraph(f"<b>{sev}:</b> {intel.get('message', 'N/A')}", body_style))
+                elements.append(Paragraph(f"<i>Recommendation:</i> {intel.get('recommendation', 'N/A')}", body_style))
+            elements.append(Spacer(1, 0.1*inch))
+
+        # Security Issues
+        if request.security_issues:
+            elements.append(Paragraph("Security Issues", h2_style))
+            issues_data = [['Severity', 'Category', 'Description']]
+            for issue in request.security_issues[:15]:
+                issues_data.append([
+                    issue.get('severity', 'N/A').upper(),
+                    issue.get('category', 'N/A')[:20],
+                    issue.get('description', 'N/A')[:50] + '...' if len(issue.get('description', '')) > 50 else issue.get('description', 'N/A')
+                ])
+            issues_table = Table(issues_data, colWidths=[1*inch, 1.5*inch, 4*inch])
+            issues_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e94560')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(issues_table)
+            elements.append(Spacer(1, 0.2*inch))
+
+        # Layer Secrets
+        if request.layer_secrets:
+            elements.append(Paragraph("Layer Deep Scan - Recoverable Secrets", h2_style))
+            secrets_data = [['Layer', 'File Path', 'Type', 'Deleted?']]
+            for secret in request.layer_secrets[:15]:
+                secrets_data.append([
+                    str(secret.get('layer_index', '?')),
+                    secret.get('file_path', 'N/A')[:35],
+                    secret.get('file_type', 'N/A'),
+                    'YES' if secret.get('is_deleted') else 'No'
+                ])
+            secrets_table = Table(secrets_data, colWidths=[0.6*inch, 3.5*inch, 1.2*inch, 0.8*inch])
+            secrets_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#ff6b6b')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            elements.append(secrets_table)
+
+        doc.build(elements)
+        return buffer.getvalue()
+
+    except ImportError as e:
+        logger.warning(f"PDF generation requires reportlab: {e}")
+        # Fallback: return markdown as plain text
+        return md_content.encode('utf-8')
+
+
+def _generate_docker_docx(md_content: str, request: DockerExportRequest) -> bytes:
+    """Generate Word document from Docker analysis with proper formatting."""
+    from io import BytesIO
+
+    try:
+        from docx import Document
+        from docx.shared import Inches, Pt, RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.enum.table import WD_TABLE_ALIGNMENT
+
+        doc = Document()
+
+        # Title
+        title = doc.add_heading('Docker Security Analysis Report', 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Image info
+        doc.add_paragraph(f"Image: {request.image_name}", style='Intense Quote')
+        doc.add_paragraph(f"Image ID: {request.image_id[:12]}")
+        doc.add_paragraph(f"Base Image: {request.base_image or 'Unknown'}")
+
+        # Executive Summary
+        doc.add_heading('Executive Summary', level=1)
+
+        critical_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'critical')
+        high_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'high')
+        medium_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'medium')
+        low_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'low')
+        risk_score = critical_count * 40 + high_count * 25 + medium_count * 10 + low_count * 3
+
+        summary_table = doc.add_table(rows=6, cols=2)
+        summary_table.style = 'Table Grid'
+        summary_data = [
+            ('Metric', 'Value'),
+            ('Risk Score', f'{risk_score}/100'),
+            ('Total Layers', str(request.total_layers)),
+            ('Security Issues', str(len(request.security_issues))),
+            ('Secrets Found', str(len(request.secrets) + len(request.layer_secrets))),
+            ('Deleted but Recoverable', str(request.deleted_secrets_count)),
+        ]
+        for i, (key, value) in enumerate(summary_data):
+            summary_table.rows[i].cells[0].text = key
+            summary_table.rows[i].cells[1].text = value
+            if i == 0:
+                for cell in summary_table.rows[i].cells:
+                    cell.paragraphs[0].runs[0].bold = True
+
+        # Base Image Intelligence
+        if request.base_image_intel:
+            doc.add_heading('Base Image Intelligence', level=1)
+            for intel in request.base_image_intel:
+                p = doc.add_paragraph()
+                run = p.add_run(f"{intel.get('severity', 'N/A').upper()}: ")
+                run.bold = True
+                if intel.get('severity', '').lower() == 'critical':
+                    run.font.color.rgb = RGBColor(220, 53, 69)
+                p.add_run(intel.get('message', 'N/A'))
+                doc.add_paragraph(f"Recommendation: {intel.get('recommendation', 'N/A')}", style='List Bullet')
+
+        # Security Issues
+        if request.security_issues:
+            doc.add_heading('Security Issues', level=1)
+            issues_table = doc.add_table(rows=1, cols=3)
+            issues_table.style = 'Table Grid'
+            hdr_cells = issues_table.rows[0].cells
+            hdr_cells[0].text = 'Severity'
+            hdr_cells[1].text = 'Category'
+            hdr_cells[2].text = 'Description'
+            for cell in hdr_cells:
+                cell.paragraphs[0].runs[0].bold = True
+
+            for issue in request.security_issues[:20]:
+                row_cells = issues_table.add_row().cells
+                row_cells[0].text = issue.get('severity', 'N/A').upper()
+                row_cells[1].text = issue.get('category', 'N/A')
+                row_cells[2].text = issue.get('description', 'N/A')[:80]
+
+        # Layer Secrets
+        if request.layer_secrets:
+            doc.add_heading('Layer Deep Scan - Recoverable Secrets', level=1)
+            deleted_count = sum(1 for s in request.layer_secrets if s.get('is_deleted'))
+            if deleted_count > 0:
+                warn_p = doc.add_paragraph()
+                warn_run = warn_p.add_run(f"WARNING: {deleted_count} files were deleted but are still recoverable!")
+                warn_run.bold = True
+                warn_run.font.color.rgb = RGBColor(220, 53, 69)
+
+            secrets_table = doc.add_table(rows=1, cols=4)
+            secrets_table.style = 'Table Grid'
+            hdr = secrets_table.rows[0].cells
+            hdr[0].text = 'Layer'
+            hdr[1].text = 'File Path'
+            hdr[2].text = 'Type'
+            hdr[3].text = 'Deleted?'
+            for cell in hdr:
+                cell.paragraphs[0].runs[0].bold = True
+
+            for secret in request.layer_secrets[:20]:
+                row = secrets_table.add_row().cells
+                row[0].text = str(secret.get('layer_index', '?'))
+                row[1].text = secret.get('file_path', 'N/A')[:40]
+                row[2].text = secret.get('file_type', 'N/A')
+                row[3].text = 'YES' if secret.get('is_deleted') else 'No'
+
+        # AI Analysis
+        if request.ai_analysis:
+            doc.add_heading('AI Security Analysis', level=1)
+            doc.add_paragraph(request.ai_analysis)
+
+        # Footer
+        doc.add_heading('Report Information', level=2)
+        doc.add_paragraph('Generated by VRAgent Docker Inspector', style='List Bullet')
+        doc.add_paragraph('Features: Semantic parsing, entropy detection, layer deep scan, base image intelligence', style='List Bullet')
+
+        buffer = BytesIO()
+        doc.save(buffer)
+        return buffer.getvalue()
+
+    except ImportError as e:
+        logger.warning(f"DOCX generation requires python-docx: {e}")
+        return md_content.encode('utf-8')
 
 
 @router.get("/docker-images")
@@ -4703,223 +5429,6 @@ async def list_local_docker_images():
         raise HTTPException(status_code=504, detail="Docker command timed out")
     except Exception as e:
         logger.error(f"Failed to list Docker images: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ============================================================================
-# Hex Viewer Endpoint
-# ============================================================================
-
-# Store uploaded files temporarily for hex viewing
-_hex_view_cache: Dict[str, Path] = {}
-
-
-@router.post("/hex-upload")
-async def upload_for_hex_view(
-    file: UploadFile = File(..., description="Binary file to view in hex"),
-):
-    """
-    Upload a file for hex viewing. Returns a file ID for subsequent hex view requests.
-    """
-    import uuid
-    
-    filename = file.filename or "unknown"
-    file_id = str(uuid.uuid4())
-    
-    tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_hex_"))
-    tmp_path = tmp_dir / filename
-    
-    file_size = 0
-    with tmp_path.open("wb") as f:
-        while chunk := await file.read(65536):
-            file_size += len(chunk)
-            if file_size > MAX_FILE_SIZE:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
-                )
-            f.write(chunk)
-    
-    _hex_view_cache[file_id] = tmp_path
-    
-    logger.info(f"Uploaded file for hex view: {filename} ({file_size:,} bytes), ID: {file_id}")
-    
-    return {
-        "file_id": file_id,
-        "filename": filename,
-        "file_size": file_size,
-    }
-
-
-@router.get("/hex/{file_id}", response_model=HexViewResponse)
-async def get_hex_view(
-    file_id: str,
-    offset: int = Query(0, ge=0, description="Byte offset to start from"),
-    length: int = Query(512, ge=16, le=4096, description="Number of bytes to return"),
-):
-    """
-    Get hex view of an uploaded file.
-    
-    Returns hex dump with:
-    - Offset, hex bytes, and ASCII preview
-    - Structured rows (16 bytes per row)
-    """
-    if file_id not in _hex_view_cache:
-        raise HTTPException(status_code=404, detail="File not found. Upload a file first.")
-    
-    file_path = _hex_view_cache[file_id]
-    
-    if not file_path.exists():
-        del _hex_view_cache[file_id]
-        raise HTTPException(status_code=404, detail="File no longer available. Please re-upload.")
-    
-    try:
-        total_size = file_path.stat().st_size
-        
-        # Ensure offset is valid
-        if offset >= total_size:
-            offset = max(0, total_size - length)
-        
-        # Read the requested chunk
-        with file_path.open("rb") as f:
-            f.seek(offset)
-            data = f.read(length)
-        
-        # Build hex rows (16 bytes per row)
-        rows = []
-        row_offset = offset
-        for i in range(0, len(data), 16):
-            row_data = data[i:i+16]
-            hex_bytes = ' '.join(f'{b:02x}' for b in row_data)
-            # Pad hex to align columns
-            hex_bytes = hex_bytes.ljust(47)  # 16*2 + 15 spaces
-            
-            # ASCII preview (printable chars only)
-            ascii_chars = ''.join(
-                chr(b) if 32 <= b < 127 else '.'
-                for b in row_data
-            )
-            
-            rows.append({
-                "offset": row_offset,
-                "offset_hex": f"{row_offset:08x}",
-                "hex": hex_bytes,
-                "ascii": ascii_chars,
-                "bytes": list(row_data),
-            })
-            row_offset += 16
-        
-        # Full hex and ASCII for the chunk
-        hex_data = ' '.join(f'{b:02x}' for b in data)
-        ascii_preview = ''.join(chr(b) if 32 <= b < 127 else '.' for b in data)
-        
-        return HexViewResponse(
-            offset=offset,
-            length=len(data),
-            total_size=total_size,
-            hex_data=hex_data,
-            ascii_preview=ascii_preview,
-            rows=rows,
-        )
-        
-    except Exception as e:
-        logger.error(f"Hex view error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
-
-
-@router.get("/hex/{file_id}/search")
-async def search_hex(
-    file_id: str,
-    query: str = Query(..., min_length=1, max_length=100, description="Search string (text or hex)"),
-    search_type: str = Query("text", description="Search type: 'text' or 'hex'"),
-    max_results: int = Query(50, ge=1, le=200, description="Maximum results to return"),
-):
-    """
-    Search for a pattern in the hex file.
-    
-    Supports:
-    - Text search (ASCII)
-    - Hex pattern search (e.g., "4d5a" or "4d 5a 90")
-    """
-    if file_id not in _hex_view_cache:
-        raise HTTPException(status_code=404, detail="File not found.")
-    
-    file_path = _hex_view_cache[file_id]
-    
-    if not file_path.exists():
-        del _hex_view_cache[file_id]
-        raise HTTPException(status_code=404, detail="File no longer available.")
-    
-    try:
-        with file_path.open("rb") as f:
-            data = f.read()
-        
-        # Prepare search pattern
-        if search_type == "hex":
-            # Parse hex string (remove spaces)
-            hex_clean = query.replace(" ", "").replace("-", "")
-            try:
-                pattern = bytes.fromhex(hex_clean)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid hex pattern")
-        else:
-            pattern = query.encode('utf-8')
-        
-        # Find all occurrences
-        results = []
-        start = 0
-        while len(results) < max_results:
-            pos = data.find(pattern, start)
-            if pos == -1:
-                break
-            
-            # Get context around the match
-            ctx_start = max(0, pos - 16)
-            ctx_end = min(len(data), pos + len(pattern) + 16)
-            context = data[ctx_start:ctx_end]
-            
-            results.append({
-                "offset": pos,
-                "offset_hex": f"{pos:08x}",
-                "match_length": len(pattern),
-                "context_hex": ' '.join(f'{b:02x}' for b in context),
-                "context_ascii": ''.join(chr(b) if 32 <= b < 127 else '.' for b in context),
-                "match_offset_in_context": pos - ctx_start,
-            })
-            
-            start = pos + 1
-        
-        return {
-            "query": query,
-            "search_type": search_type,
-            "pattern_hex": pattern.hex(),
-            "total_matches": len(results),
-            "results": results,
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Hex search error: {e}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
-
-
-@router.delete("/hex/{file_id}")
-async def delete_hex_file(file_id: str):
-    """Delete an uploaded hex view file to free resources."""
-    if file_id not in _hex_view_cache:
-        raise HTTPException(status_code=404, detail="File not found.")
-    
-    file_path = _hex_view_cache[file_id]
-    
-    try:
-        if file_path.exists():
-            shutil.rmtree(file_path.parent, ignore_errors=True)
-        del _hex_view_cache[file_id]
-        return {"message": "File deleted", "file_id": file_id}
-    except Exception as e:
-        logger.error(f"Failed to delete hex file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -8634,6 +9143,9 @@ async def unified_apk_scan(
                         )
                         raw_findings = code_scan_results.get("findings", [])
                         
+                        # FIX #3: Normalize field names for consistent processing
+                        raw_findings = re_service.normalize_findings_batch(raw_findings, source="pattern")
+                        
                         # Apply deduplication to remove duplicate findings
                         yield make_progress("Deduplicating findings...", 80)
                         if raw_findings:
@@ -8751,21 +9263,42 @@ async def unified_apk_scan(
                         if libraries:
                             yield make_progress(f"Looking up CVEs for {len(libraries)} libraries...", 60)
                             cves = await re_service.lookup_apk_cves(libraries)
-                            cve_results["cves"] = cves
+                            
+                            # FIX #1: Verify CVE reachability before adding to results
+                            if cves:
+                                yield make_progress(f"Verifying {len(cves)} CVE reachability...", 80)
+                                cve_verification = await re_service.verify_cve_reachability(
+                                    cve_findings=cves,
+                                    sources_dir=sources_dir,
+                                    package_name=result.package_name
+                                )
+                                
+                                # Use only reachable CVEs in main results
+                                verified_cves = cve_verification.get("verified_cves", cves)
+                                unreachable_cves = cve_verification.get("unreachable_cves", [])
+                                
+                                cve_results["cves"] = verified_cves
+                                cve_results["unreachable_cves"] = unreachable_cves
+                                cve_results["reachability_stats"] = cve_verification.get("verification_stats", {})
+                            else:
+                                cve_results["cves"] = cves
+                            
                             cve_results["stats"] = {
                                 "total_libraries": len(libraries),
                                 "high_risk_libraries": sum(1 for lib in libraries if lib.is_high_risk),
-                                "total_cves": len(cves),
-                                "critical_cves": sum(1 for cve in cves if cve.get("severity", "").lower() == "critical"),
-                                "high_cves": sum(1 for cve in cves if cve.get("severity", "").lower() == "high"),
+                                "total_cves": len(cve_results["cves"]),
+                                "unreachable_cves": len(cve_results.get("unreachable_cves", [])),
+                                "critical_cves": sum(1 for cve in cve_results["cves"] if cve.get("severity", "").lower() == "critical"),
+                                "high_cves": sum(1 for cve in cve_results["cves"] if cve.get("severity", "").lower() == "high"),
                             }
                             
                             # Store CVE results in the scan result
                             result.cve_scan_results = cve_results
                             
+                            unreachable_msg = f", {cve_results['stats']['unreachable_cves']} unreachable filtered" if cve_results['stats']['unreachable_cves'] > 0 else ""
                             update_phase("cve_lookup", "completed", 
-                                f"Found {len(cves)} CVEs ({cve_results['stats']['critical_cves']} critical, {cve_results['stats']['high_cves']} high)")
-                            logger.info(f"CVE lookup found {len(cves)} CVEs in {len(libraries)} libraries")
+                                f"Found {len(cve_results['cves'])} reachable CVEs ({cve_results['stats']['critical_cves']} critical, {cve_results['stats']['high_cves']} high){unreachable_msg}")
+                            logger.info(f"CVE lookup found {len(cve_results['cves'])} reachable CVEs in {len(libraries)} libraries")
                         else:
                             update_phase("cve_lookup", "completed", "No third-party libraries detected")
                     else:
@@ -8811,6 +9344,10 @@ async def unified_apk_scan(
                             if vuln_hunt_result_data:
                                 result.vuln_hunt_result = vuln_hunt_result_data
                                 vuln_hunt_findings = vuln_hunt_result_data.get("vulnerabilities", [])
+                                
+                                # FIX #3: Normalize vuln hunt findings
+                                vuln_hunt_findings = re_service.normalize_findings_batch(vuln_hunt_findings, source="vuln_hunt")
+                                
                                 vuln_count = len(vuln_hunt_findings)
                                 critical_count = sum(
                                     1 for v in vuln_hunt_findings
@@ -8866,6 +9403,39 @@ async def unified_apk_scan(
                             if verification_result:
                                 verified_findings = verification_result.get("verified_findings", [])
                                 verification_stats = verification_result.get("verification_stats", {})
+                                
+                                # FIX #2: Merge sensitive data filtered_out with main verification results
+                                if result.sensitive_data_findings:
+                                    sensitive_filtered = result.sensitive_data_findings.get("filtered_out", [])
+                                    if sensitive_filtered:
+                                        # Normalize and add to main filtered_out
+                                        normalized_sensitive_filtered = re_service.normalize_findings_batch(
+                                            sensitive_filtered, source="sensitive_data"
+                                        )
+                                        existing_filtered = verification_result.get("filtered_out", [])
+                                        verification_result["filtered_out"] = existing_filtered + normalized_sensitive_filtered
+                                        
+                                        # Update stats
+                                        verification_stats["sensitive_data_filtered"] = len(sensitive_filtered)
+                                        verification_stats["filtered"] = verification_stats.get("filtered", 0) + len(sensitive_filtered)
+                                        logger.info(f"Merged {len(sensitive_filtered)} sensitive data false positives into verification results")
+                                
+                                # FIX #2: Also merge CVE unreachable findings
+                                if result.cve_scan_results:
+                                    unreachable_cves = result.cve_scan_results.get("unreachable_cves", [])
+                                    if unreachable_cves:
+                                        # Normalize and add to main filtered_out
+                                        normalized_unreachable = re_service.normalize_findings_batch(
+                                            unreachable_cves, source="cve_unreachable"
+                                        )
+                                        existing_filtered = verification_result.get("filtered_out", [])
+                                        verification_result["filtered_out"] = existing_filtered + normalized_unreachable
+                                        
+                                        # Update stats
+                                        verification_stats["cve_unreachable_filtered"] = len(unreachable_cves)
+                                        verification_stats["filtered"] = verification_stats.get("filtered", 0) + len(unreachable_cves)
+                                        logger.info(f"Merged {len(unreachable_cves)} unreachable CVEs into verification filtered results")
+                                
                                 result.verification_results = verification_result
                                 
                                 # Update the original findings with verified versions
@@ -8930,11 +9500,13 @@ async def unified_apk_scan(
                     if not verified_findings:
                         all_findings.extend(vuln_hunt_findings)
                     
-                    # Pass ALL findings (pattern + vuln hunt) for comprehensive AI reports
+                    # Pass ALL findings (pattern + vuln hunt) AND verification results for comprehensive AI reports
+                    # The verification_results contains FP-filtered findings and confidence scores
                     ai_reports = await re_service.analyze_apk_with_ai(
                         apk_result, 
                         jadx_output_path,
-                        decompiled_findings=all_findings
+                        decompiled_findings=all_findings,
+                        verification_results=result.verification_results
                     )
                     
                     update_phase("ai_analysis", "completed", "Deep analysis pipeline complete")

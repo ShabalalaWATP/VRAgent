@@ -184,12 +184,12 @@ const ApkAnalysisGuidePage: React.FC = () => {
   ];
 
   const securityFeatures = [
-    { feature: "Library CVE Scan", description: "Detect vulnerable libraries with CVE database lookup", icon: <BugReportIcon />, color: "#ef4444" },
-    { feature: "Enhanced Security Scan", description: "Comprehensive security assessment with 50+ checks", icon: <SecurityIcon />, color: "#f59e0b" },
+    { feature: "Library CVE Scan", description: "Detect vulnerable libraries with version extraction & confidence scoring", icon: <BugReportIcon />, color: "#ef4444" },
+    { feature: "Enhanced Security Scan", description: "Comprehensive security assessment with 70+ checks and context-aware filtering", icon: <SecurityIcon />, color: "#f59e0b" },
     { feature: "Crypto Audit", description: "Analyze cryptographic implementations for weaknesses", icon: <VpnKeyIcon />, color: "#8b5cf6" },
     { feature: "Permission Analysis", description: "Deep dive into requested permissions and their risks", icon: <LockIcon />, color: "#3b82f6" },
     { feature: "Network Endpoints", description: "Extract and analyze all network URLs and APIs", icon: <NetworkCheckIcon />, color: "#06b6d4" },
-    { feature: "Attack Surface Map", description: "Visual map of all exploitable entry points", icon: <MapIcon />, color: "#22c55e" },
+    { feature: "Attack Surface Map", description: "Visual map of all exploitable entry points with exported detection", icon: <MapIcon />, color: "#22c55e" },
   ];
 
   const visualizationFeatures = [
@@ -807,6 +807,33 @@ Java.perform(function() {
             ))}
           </Grid>
 
+          {/* False Positive Reduction */}
+          <Paper sx={{ p: 3, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2, mb: 4, border: "1px solid rgba(59, 130, 246, 0.2)" }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 2, fontWeight: 700 }}>
+              🎯 False Positive Reduction (v2.5+)
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.300", mb: 2 }}>
+              VRAgent's APK analyzer includes sophisticated false positive reduction to ensure you focus on real vulnerabilities:
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { title: "Advisory Severity", desc: "Hardening suggestions (no pinning, no root detection, no obfuscation) are classified as 'advisory' (blue) not vulnerabilities", color: "#3b82f6" },
+                { title: "Version-Aware CVEs", desc: "Extracts library versions from pom.properties, BuildConfig.java, and build.gradle with confidence scoring (high/medium/low)", color: "#22c55e" },
+                { title: "Exported Detection", desc: "Properly parses android:exported attribute from manifest instead of relying on intent filter heuristics (handles targetSdk < 31)", color: "#f59e0b" },
+                { title: "Context-Aware Patterns", desc: "Skips test files (*Test.java), ignores commented code, and adds confidence hints based on surrounding code context", color: "#8b5cf6" },
+                { title: "AI Report Filtering", desc: "AI-generated reports use verified findings only, separating advisory items from actual vulnerabilities", color: "#ef4444" },
+                { title: "Expanded Limits", desc: "Increased context caps (800 files, 500 cross-refs, 150 classes) for better analysis coverage on large APKs", color: "#06b6d4" },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} key={item.title}>
+                  <Box sx={{ p: 2, bgcolor: alpha(item.color, 0.1), borderRadius: 1, border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                    <Typography sx={{ color: item.color, fontWeight: 600, mb: 0.5 }}>{item.title}</Typography>
+                    <Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
           {/* Visualization Features */}
           <Typography variant="h6" sx={{ color: "#22c55e", mb: 2, fontWeight: 700 }}>
             📊 Visualization & Export
@@ -983,6 +1010,18 @@ Java.perform(function() {
             </Grid>
           </Grid>
         </TabPanel>
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </Box>
     </LearnPageLayout>

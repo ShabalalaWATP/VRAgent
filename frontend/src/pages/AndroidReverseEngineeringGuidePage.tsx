@@ -48,7 +48,7 @@ import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import QuizIcon from "@mui/icons-material/Quiz";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 // Quiz question type
@@ -1065,13 +1065,15 @@ const AndroidReverseEngineeringGuidePage: React.FC = () => {
       <Container maxWidth="lg">
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Button
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ mb: 2, color: "#22c55e" }}
-          >
-            Back to Learning Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 2, color: "#22c55e", borderColor: "#22c55e" }}
+          />
           
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
             <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.1) }}>

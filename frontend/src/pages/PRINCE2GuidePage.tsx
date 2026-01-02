@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -17,6 +18,8 @@ import {
   useMediaQuery,
   Drawer,
   Fab,
+  Button,
+  Divider,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -27,6 +30,7 @@ import {
   TableHead,
   TableRow,
 } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ArrowRightIcon from "@mui/icons-material/ArrowRight";
@@ -686,6 +690,7 @@ const sections = [
 ];
 
 export default function PRINCE2GuidePage() {
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [activeSection, setActiveSection] = useState("introduction");
@@ -843,6 +848,16 @@ export default function PRINCE2GuidePage() {
 
         {/* Main Content */}
         <Box sx={{ flex: 1, maxWidth: 900, mx: "auto", p: { xs: 2, md: 4 } }}>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
+
           {/* Hero Section */}
           <Paper
             id="introduction"
@@ -1773,6 +1788,19 @@ export default function PRINCE2GuidePage() {
               title="PRINCE2 Knowledge Check"
               description="Test your understanding of PRINCE2 with these questions covering fundamentals, themes, processes, roles, and management products."
             />
+          </Box>
+
+          <Divider sx={{ my: 4 }} />
+
+          <Box sx={{ display: "flex", justifyContent: "center" }}>
+            <Button
+              variant="contained"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{ bgcolor: ACCENT_COLOR, "&:hover": { bgcolor: "#6d28d9" }, px: 4, py: 1.5, fontWeight: 700 }}
+            >
+              Back to Learning Hub
+            </Button>
           </Box>
         </Box>
       </Box>

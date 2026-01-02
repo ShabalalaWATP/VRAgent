@@ -18,8 +18,9 @@ import {
   LinearProgress,
   Tooltip,
   Divider,
+  Button,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -239,9 +240,9 @@ const scanPhases: ScanPhase[] = [
       "AI-guided multi-pass deep analysis that uses CVE and SAST context to intelligently prioritize and analyze code for vulnerabilities.",
     details: [
       "Receives external intelligence from CVE/SAST phases before analyzing code",
-      "Pass 1: Triage (60 files × 3K chars; Enhanced: 80 × 4K) - quick security scoring",
-      "Pass 2: Focused (20 files × 7K chars; Enhanced: 30 × 10K) - deeper file inspection",
-      "Pass 3: Deep (8 files × 18K chars; Enhanced: 12 × 30K) - full file analysis",
+      "Pass 1: Triage (120 files × 5K chars; Enhanced: 150 × 6K) - quick security scoring",
+      "Pass 2: Focused (40 files × 12K chars; Enhanced: 60 × 16K) - deeper file inspection",
+      "Pass 3: Deep (15 files × 50K chars; Enhanced: 20 × 100K) - full file analysis",
       "Progressive depth: AI sees more content per file as passes narrow down",
       "AI-guided data flow tracing across function calls and file boundaries",
       "Synthesis phase: Correlates findings across all passes, deduplicates, scores confidence",
@@ -553,9 +554,15 @@ export default function ScanningPage() {
     <LearnPageLayout pageTitle="VRAgent Scanning" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
-      <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-        <ArrowBackIcon />
-      </IconButton>
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
 
       {/* Header */}
       <Box sx={{ mb: 5 }}>
@@ -673,10 +680,10 @@ export default function ScanningPage() {
       {/* Scanning Pipeline */}
       <Paper sx={{ p: 4, mb: 5, borderRadius: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 4 }}>
-          📊 The 10-Phase Scanning Pipeline
+          📊 The 11-Phase Scanning Pipeline
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Phases 1-3 run sequentially (extraction → parsing → embeddings). <strong>Phase 4 runs SAST/Docker/IaC/Deps in parallel</strong> using ThreadPoolExecutor with ParallelPhaseTracker. Phases 5-10 run sequentially for dedup, enrichment, and AI analysis.
+          Phases 1-3 run sequentially (extraction → parsing → embeddings). <strong>Phase 4 runs SAST/Docker/IaC/Deps in parallel</strong> using ThreadPoolExecutor with ParallelPhaseTracker. Phases 5-11 run sequentially for dedup, enrichment, and AI analysis.
         </Typography>
 
         <Stepper orientation="vertical">
@@ -870,7 +877,17 @@ export default function ScanningPage() {
           ))}
         </Grid>
       </Paper>
-    </Container>
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>    </Container>
     </LearnPageLayout>
   );
 }

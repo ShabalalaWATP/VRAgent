@@ -26,7 +26,7 @@ import {
   Button,
 } from "@mui/material";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import MemoryIcon from "@mui/icons-material/Memory";
@@ -42,6 +42,8 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import StorageIcon from "@mui/icons-material/Storage";
 import ArrowRightIcon from "@mui/icons-material/ArrowRight";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 // CodeBlock component for syntax highlighting
 function CodeBlock({ children, title }: { children: string; title?: string }) {
@@ -292,8 +294,619 @@ const preventionMethods = [
   },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#8b5cf6";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "A buffer overflow happens when:",
+    options: [
+      "More data is written than a buffer can hold",
+      "A file is encrypted",
+      "A user logs in",
+      "A process forks",
+    ],
+    correctAnswer: 0,
+    explanation: "Overflows occur when writes exceed buffer boundaries.",
+  },
+  {
+    id: 2,
+    topic: "Stack",
+    question: "A stack-based overflow often targets:",
+    options: ["The return address", "The disk cache", "The GPU driver", "The DNS resolver"],
+    correctAnswer: 0,
+    explanation: "Overwriting the return address can redirect execution.",
+  },
+  {
+    id: 3,
+    topic: "Heap",
+    question: "A heap-based overflow typically corrupts:",
+    options: ["Heap metadata or adjacent allocations", "Only CPU registers", "Kernel modules", "Stack canaries"],
+    correctAnswer: 0,
+    explanation: "Heap overflows corrupt heap chunks or metadata.",
+  },
+  {
+    id: 4,
+    topic: "Types",
+    question: "An integer overflow can lead to:",
+    options: ["Too-small allocations", "Perfect bounds checks", "Stronger ASLR", "Faster syscalls"],
+    correctAnswer: 0,
+    explanation: "Wrapped values can cause undersized buffers.",
+  },
+  {
+    id: 5,
+    topic: "Types",
+    question: "An off-by-one bug writes:",
+    options: ["One byte past the boundary", "Zero bytes", "A full page", "Only headers"],
+    correctAnswer: 0,
+    explanation: "Off-by-one errors exceed the buffer by one byte.",
+  },
+  {
+    id: 6,
+    topic: "Types",
+    question: "A format string vulnerability occurs when:",
+    options: ["User input is used as a format string", "Inputs are encrypted", "Only integers are parsed", "Logs are compressed"],
+    correctAnswer: 0,
+    explanation: "User-controlled format strings can read or write memory.",
+  },
+  {
+    id: 7,
+    topic: "Types",
+    question: "A use-after-free happens when:",
+    options: ["Memory is accessed after being freed", "A string is copied safely", "A buffer is cleared", "A pointer is set to null"],
+    correctAnswer: 0,
+    explanation: "Use-after-free accesses memory after it is released.",
+  },
+  {
+    id: 8,
+    topic: "Unsafe APIs",
+    question: "Which C function is unsafe because it has no bounds checks?",
+    options: ["strcpy()", "strncpy()", "snprintf()", "fgets()"],
+    correctAnswer: 0,
+    explanation: "strcpy does not check destination size.",
+  },
+  {
+    id: 9,
+    topic: "Unsafe APIs",
+    question: "Which C function is deprecated and unsafe for input?",
+    options: ["gets()", "fgets()", "read()", "scanf with width"],
+    correctAnswer: 0,
+    explanation: "gets is unsafe and removed from modern standards.",
+  },
+  {
+    id: 10,
+    topic: "Safe APIs",
+    question: "Which function provides a size limit for formatting?",
+    options: ["snprintf()", "sprintf()", "strcpy()", "strcat()"],
+    correctAnswer: 0,
+    explanation: "snprintf takes a maximum buffer size.",
+  },
+  {
+    id: 11,
+    topic: "Protections",
+    question: "Stack canaries are designed to:",
+    options: ["Detect stack smashing", "Increase heap size", "Disable ASLR", "Encrypt strings"],
+    correctAnswer: 0,
+    explanation: "Canaries detect stack corruption before returning.",
+  },
+  {
+    id: 12,
+    topic: "Protections",
+    question: "ASLR works by:",
+    options: ["Randomizing memory addresses", "Making all memory executable", "Disabling canaries", "Compressing binaries"],
+    correctAnswer: 0,
+    explanation: "ASLR randomizes memory layout to make exploitation harder.",
+  },
+  {
+    id: 13,
+    topic: "Protections",
+    question: "NX/DEP prevents:",
+    options: ["Executing code from data regions", "Heap allocations", "Symbol loading", "Stack growth"],
+    correctAnswer: 0,
+    explanation: "NX blocks execution from data pages like the stack.",
+  },
+  {
+    id: 14,
+    topic: "Protections",
+    question: "PIE enables:",
+    options: ["Randomized code addresses", "Fixed code addresses", "Disabled relocations", "Kernel-only execution"],
+    correctAnswer: 0,
+    explanation: "PIE makes the main binary relocatable for ASLR.",
+  },
+  {
+    id: 15,
+    topic: "Protections",
+    question: "RELRO primarily protects the:",
+    options: ["GOT", "Heap", "Stack", "Environment variables"],
+    correctAnswer: 0,
+    explanation: "RELRO hardens the Global Offset Table.",
+  },
+  {
+    id: 16,
+    topic: "Protections",
+    question: "CFI stands for:",
+    options: ["Control Flow Integrity", "Core File Inspection", "Compiler Flag Index", "Code Fragment Injection"],
+    correctAnswer: 0,
+    explanation: "CFI restricts illegal control-flow transfers.",
+  },
+  {
+    id: 17,
+    topic: "Exploitation",
+    question: "Overwriting the return address allows:",
+    options: ["Control of instruction flow", "Automatic patching", "Stronger validation", "Faster IO"],
+    correctAnswer: 0,
+    explanation: "Attackers redirect execution by overwriting the return address.",
+  },
+  {
+    id: 18,
+    topic: "Exploitation",
+    question: "A NOP sled is used to:",
+    options: ["Increase shellcode landing reliability", "Block syscalls", "Compress payloads", "Fix heap metadata"],
+    correctAnswer: 0,
+    explanation: "NOP sleds make it easier to jump into shellcode.",
+  },
+  {
+    id: 19,
+    topic: "Exploitation",
+    question: "ret2libc typically uses:",
+    options: ["Existing libc functions like system()", "Only kernel syscalls", "Only stack canaries", "Only shell scripts"],
+    correctAnswer: 0,
+    explanation: "ret2libc reuses libc code to bypass NX.",
+  },
+  {
+    id: 20,
+    topic: "Exploitation",
+    question: "ROP chains are built from:",
+    options: ["Short gadgets ending in ret", "Only inline assembly", "Only Java bytecode", "Only kernel modules"],
+    correctAnswer: 0,
+    explanation: "ROP uses gadgets already present in memory.",
+  },
+  {
+    id: 21,
+    topic: "Exploitation",
+    question: "JOP uses:",
+    options: ["Jump-oriented gadgets", "Only return instructions", "Only syscalls", "Only signal handlers"],
+    correctAnswer: 0,
+    explanation: "JOP chains gadgets connected by jumps.",
+  },
+  {
+    id: 22,
+    topic: "Exploitation",
+    question: "Stack pivoting means:",
+    options: ["Changing the stack pointer to attacker-controlled memory", "Encrypting the stack", "Deleting stack frames", "Randomizing the heap"],
+    correctAnswer: 0,
+    explanation: "Stack pivots move RSP to attacker-controlled data.",
+  },
+  {
+    id: 23,
+    topic: "Testing",
+    question: "Fuzzing is used to:",
+    options: ["Find crashes and memory errors", "Encrypt binaries", "Disable logs", "Remove mitigations"],
+    correctAnswer: 0,
+    explanation: "Fuzzers generate inputs to trigger bugs.",
+  },
+  {
+    id: 24,
+    topic: "Testing",
+    question: "AddressSanitizer is used to:",
+    options: ["Detect memory corruption", "Patch binaries", "Disable ASLR", "Compile kernels"],
+    correctAnswer: 0,
+    explanation: "ASan finds out-of-bounds and use-after-free bugs.",
+  },
+  {
+    id: 25,
+    topic: "Testing",
+    question: "Valgrind helps detect:",
+    options: ["Invalid memory access", "Network latency", "Disk partitions", "GPU drivers"],
+    correctAnswer: 0,
+    explanation: "Valgrind reports memory access errors.",
+  },
+  {
+    id: 26,
+    topic: "Stack",
+    question: "A stack frame usually contains:",
+    options: ["Local variables and return address", "Only heap metadata", "Only kernel state", "Only network buffers"],
+    correctAnswer: 0,
+    explanation: "Stack frames store locals and saved return info.",
+  },
+  {
+    id: 27,
+    topic: "Protections",
+    question: "Which flag enables stack canaries in GCC?",
+    options: ["-fstack-protector", "-fno-plt", "-Wl,-z,now", "-O0"],
+    correctAnswer: 0,
+    explanation: "GCC uses -fstack-protector for canaries.",
+  },
+  {
+    id: 28,
+    topic: "Protections",
+    question: "Which macro enables glibc fortify checks?",
+    options: ["-D_FORTIFY_SOURCE=2", "-fno-omit-frame-pointer", "-fno-stack-protector", "-z execstack"],
+    correctAnswer: 0,
+    explanation: "FORTIFY_SOURCE adds lightweight bounds checks.",
+  },
+  {
+    id: 29,
+    topic: "Protections",
+    question: "Which linker option marks the stack non-executable?",
+    options: ["-z noexecstack", "-z execstack", "-Wl,--strip-all", "-Wl,-z,norelro"],
+    correctAnswer: 0,
+    explanation: "-z noexecstack enables NX on the stack.",
+  },
+  {
+    id: 30,
+    topic: "Protections",
+    question: "Which compiler flags enable PIE?",
+    options: ["-fPIE -pie", "-fno-pie", "-static", "-Winvalid-pch"],
+    correctAnswer: 0,
+    explanation: "PIE is enabled with -fPIE -pie.",
+  },
+  {
+    id: 31,
+    topic: "Tools",
+    question: "checksec is used to:",
+    options: ["Report binary mitigations", "Encrypt files", "Generate payloads", "Edit symbols"],
+    correctAnswer: 0,
+    explanation: "checksec reports mitigations like NX and PIE.",
+  },
+  {
+    id: 32,
+    topic: "Signals",
+    question: "A segmentation fault typically raises:",
+    options: ["SIGSEGV", "SIGKILL", "SIGALRM", "SIGCHLD"],
+    correctAnswer: 0,
+    explanation: "SIGSEGV is raised on invalid memory access.",
+  },
+  {
+    id: 33,
+    topic: "Registers",
+    question: "On x86, the instruction pointer register is:",
+    options: ["EIP/RIP", "ESP", "EAX", "EBX"],
+    correctAnswer: 0,
+    explanation: "EIP/RIP holds the next instruction address.",
+  },
+  {
+    id: 34,
+    topic: "Exploitation",
+    question: "Endianness matters because:",
+    options: ["Addresses must be written in the correct byte order", "It disables ASLR", "It adds stack canaries", "It fixes overflows"],
+    correctAnswer: 0,
+    explanation: "Incorrect byte order breaks address overwrites.",
+  },
+  {
+    id: 35,
+    topic: "Exploitation",
+    question: "On x86, a NOP instruction is:",
+    options: ["0x90", "0xCC", "0xFF", "0x00"],
+    correctAnswer: 0,
+    explanation: "0x90 is the x86 NOP opcode.",
+  },
+  {
+    id: 36,
+    topic: "Heap",
+    question: "Heap spraying is used to:",
+    options: ["Increase the chance of landing on shellcode", "Clear the heap", "Disable ASLR", "Fix double frees"],
+    correctAnswer: 0,
+    explanation: "Spraying fills memory with predictable payloads.",
+  },
+  {
+    id: 37,
+    topic: "Exploitation",
+    question: "A GOT overwrite can:",
+    options: ["Redirect function calls", "Fix stack canaries", "Disable NX", "Patch binaries safely"],
+    correctAnswer: 0,
+    explanation: "Overwriting the GOT can hijack indirect calls.",
+  },
+  {
+    id: 38,
+    topic: "Protections",
+    question: "The error 'stack smashing detected' indicates:",
+    options: ["A canary check failed", "A kernel panic", "A successful exploit", "A log rotation event"],
+    correctAnswer: 0,
+    explanation: "A canary mismatch triggers a stack smashing error.",
+  },
+  {
+    id: 39,
+    topic: "Prevention",
+    question: "A safer alternative to strcpy is:",
+    options: ["strncpy()", "gets()", "sprintf()", "strcat()"],
+    correctAnswer: 0,
+    explanation: "strncpy provides a length limit.",
+  },
+  {
+    id: 40,
+    topic: "Prevention",
+    question: "Input validation should include:",
+    options: ["Checking lengths before copy", "Trusting user claims", "Removing logs", "Disabling canaries"],
+    correctAnswer: 0,
+    explanation: "Length checks prevent overflows.",
+  },
+  {
+    id: 41,
+    topic: "Testing",
+    question: "ASan is enabled with:",
+    options: ["-fsanitize=address", "-fno-plt", "-Wl,-z,now", "-static"],
+    correctAnswer: 0,
+    explanation: "Use -fsanitize=address for AddressSanitizer.",
+  },
+  {
+    id: 42,
+    topic: "Protections",
+    question: "Bypassing canaries often requires:",
+    options: ["An information leak", "Only a NOP sled", "A bigger buffer", "No changes"],
+    correctAnswer: 0,
+    explanation: "You must know the canary value to preserve it.",
+  },
+  {
+    id: 43,
+    topic: "Protections",
+    question: "ASLR bypass commonly uses:",
+    options: ["An info leak to reveal addresses", "Disabling logging", "A compiler warning", "A longer password"],
+    correctAnswer: 0,
+    explanation: "Leaked addresses defeat ASLR.",
+  },
+  {
+    id: 44,
+    topic: "Protections",
+    question: "NX is typically bypassed with:",
+    options: ["ROP or ret2libc", "Bigger buffers", "Shorter inputs", "Kernel updates only"],
+    correctAnswer: 0,
+    explanation: "ROP and ret2libc avoid executing injected code.",
+  },
+  {
+    id: 45,
+    topic: "Protections",
+    question: "Full RELRO makes the GOT:",
+    options: ["Read-only after relocation", "Always writable", "Removed entirely", "Mapped on the stack"],
+    correctAnswer: 0,
+    explanation: "Full RELRO prevents GOT overwrites at runtime.",
+  },
+  {
+    id: 46,
+    topic: "Protections",
+    question: "Partial RELRO leaves the GOT:",
+    options: ["Writable for lazy binding", "Read-only always", "Encrypted", "In kernel memory"],
+    correctAnswer: 0,
+    explanation: "Partial RELRO keeps GOT writable for lazy binding.",
+  },
+  {
+    id: 47,
+    topic: "Heap",
+    question: "A double free means:",
+    options: ["free() called twice on the same pointer", "Two allocations succeed", "Two stacks are created", "Two threads exit"],
+    correctAnswer: 0,
+    explanation: "Double free corrupts heap state.",
+  },
+  {
+    id: 48,
+    topic: "Heap",
+    question: "Corrupting heap metadata can lead to:",
+    options: ["Arbitrary write primitives", "Automatic patching", "Stronger ASLR", "More canaries"],
+    correctAnswer: 0,
+    explanation: "Heap metadata corruption can allow controlled writes.",
+  },
+  {
+    id: 49,
+    topic: "Heap",
+    question: "malloc returns:",
+    options: ["A pointer to heap memory", "A file descriptor", "A syscall number", "A stack frame"],
+    correctAnswer: 0,
+    explanation: "malloc returns a pointer to allocated heap space.",
+  },
+  {
+    id: 50,
+    topic: "Heap",
+    question: "free() typically:",
+    options: ["Does not zero memory", "Zeroes all memory", "Encrypts memory", "Moves memory to disk"],
+    correctAnswer: 0,
+    explanation: "free() usually leaves data intact.",
+  },
+  {
+    id: 51,
+    topic: "Stack",
+    question: "Stack overflows often corrupt:",
+    options: ["Saved return address or base pointer", "Only heap metadata", "Only registers", "Only disk buffers"],
+    correctAnswer: 0,
+    explanation: "Overflow data can overwrite saved control data.",
+  },
+  {
+    id: 52,
+    topic: "Types",
+    question: "An off-by-one null byte can:",
+    options: ["Alter adjacent metadata or pointers", "Fix all bugs", "Disable ASLR", "Remove canaries"],
+    correctAnswer: 0,
+    explanation: "A single byte can corrupt adjacent data.",
+  },
+  {
+    id: 53,
+    topic: "Types",
+    question: "The %n format specifier can:",
+    options: ["Write to memory", "Only print integers", "Encrypt strings", "Disable logging"],
+    correctAnswer: 0,
+    explanation: "%n writes the number of bytes printed.",
+  },
+  {
+    id: 54,
+    topic: "Prevention",
+    question: "Memory-safe languages help by:",
+    options: ["Preventing unsafe memory access", "Disabling ASLR", "Reducing logging", "Removing patching"],
+    correctAnswer: 0,
+    explanation: "Memory-safe languages enforce bounds checks and safety.",
+  },
+  {
+    id: 55,
+    topic: "Risk",
+    question: "Overflows in SUID binaries can cause:",
+    options: ["Privilege escalation", "Lower CPU usage", "Smaller binaries", "Stronger encryption"],
+    correctAnswer: 0,
+    explanation: "Exploiting SUID binaries can grant higher privileges.",
+  },
+  {
+    id: 56,
+    topic: "Debugging",
+    question: "Core dumps are useful for:",
+    options: ["Post-crash analysis", "Disabling ASLR", "Encrypting data", "Changing permissions"],
+    correctAnswer: 0,
+    explanation: "Core dumps capture process memory at crash time.",
+  },
+  {
+    id: 57,
+    topic: "Memory",
+    question: "A typical process layout includes:",
+    options: ["Stack, heap, shared libraries, code", "Only kernel memory", "Only GPU buffers", "Only network sockets"],
+    correctAnswer: 0,
+    explanation: "Processes map code, data, heap, stack, and shared libs.",
+  },
+  {
+    id: 58,
+    topic: "Exploitation",
+    question: "A gadget is:",
+    options: ["A short instruction sequence ending in ret", "A device driver", "A debugger", "A patch"],
+    correctAnswer: 0,
+    explanation: "ROP gadgets end in ret to chain execution.",
+  },
+  {
+    id: 59,
+    topic: "Exploitation",
+    question: "Control of RIP means you can:",
+    options: ["Redirect execution", "Disable logging", "Patch the kernel", "Update drivers"],
+    correctAnswer: 0,
+    explanation: "RIP control lets you choose the next instruction.",
+  },
+  {
+    id: 60,
+    topic: "Exploitation",
+    question: "Shellcode is:",
+    options: ["Injected executable payload", "A memory allocator", "A compiler flag", "A crash log"],
+    correctAnswer: 0,
+    explanation: "Shellcode is the payload run by the exploit.",
+  },
+  {
+    id: 61,
+    topic: "Exploitation",
+    question: "NOP sleds improve:",
+    options: ["Exploit reliability", "ASLR strength", "Heap checks", "Symbol resolution"],
+    correctAnswer: 0,
+    explanation: "A sled increases the landing zone for control flow.",
+  },
+  {
+    id: 62,
+    topic: "Exploitation",
+    question: "Environment variables can be used to:",
+    options: ["Store predictable payloads", "Disable ASLR", "Encrypt traffic", "Enable CFI"],
+    correctAnswer: 0,
+    explanation: "Large env variables can hold shellcode or data.",
+  },
+  {
+    id: 63,
+    topic: "Terminology",
+    question: "Stack canaries are also called:",
+    options: ["Stack cookies", "Heap guards", "TLS keys", "Thread IDs"],
+    correctAnswer: 0,
+    explanation: "Canaries are often called stack cookies.",
+  },
+  {
+    id: 64,
+    topic: "Protections",
+    question: "A non-executable stack means:",
+    options: ["Injected code on the stack will not run", "All code is blocked", "ASLR is disabled", "Heap is encrypted"],
+    correctAnswer: 0,
+    explanation: "NX prevents execution from the stack region.",
+  },
+  {
+    id: 65,
+    topic: "Protections",
+    question: "ASLR is generally stronger on:",
+    options: ["64-bit systems", "16-bit systems", "DOS", "Microcontrollers"],
+    correctAnswer: 0,
+    explanation: "64-bit address space provides more entropy.",
+  },
+  {
+    id: 66,
+    topic: "Debugging",
+    question: "Crash triage should include:",
+    options: ["Reproduction with the same input", "Deleting logs", "Ignoring stack traces", "Disabling symbols"],
+    correctAnswer: 0,
+    explanation: "Repro steps confirm the issue and help fix it.",
+  },
+  {
+    id: 67,
+    topic: "Prevention",
+    question: "Static analysis tools help by:",
+    options: ["Finding risky memory operations", "Creating payloads", "Disabling mitigations", "Skipping reviews"],
+    correctAnswer: 0,
+    explanation: "Static analysis flags unsafe memory use.",
+  },
+  {
+    id: 68,
+    topic: "Prevention",
+    question: "Code review should focus on:",
+    options: ["Copy operations and length checks", "UI colors", "Build server names", "License headers"],
+    correctAnswer: 0,
+    explanation: "Reviewing copy and length logic finds overflow risks.",
+  },
+  {
+    id: 69,
+    topic: "Protections",
+    question: "FORTIFY_SOURCE is most effective when:",
+    options: ["Optimization is enabled", "Debug symbols are removed", "ASLR is disabled", "No libc is used"],
+    correctAnswer: 0,
+    explanation: "Fortify relies on compile-time size info with optimization.",
+  },
+  {
+    id: 70,
+    topic: "Prevention",
+    question: "Using Rust or Go helps because they:",
+    options: ["Enforce memory safety checks", "Disable ASLR", "Remove system calls", "Eliminate input validation"],
+    correctAnswer: 0,
+    explanation: "Memory-safe languages reduce overflow risk.",
+  },
+  {
+    id: 71,
+    topic: "Heap",
+    question: "A heap overflow can overwrite:",
+    options: ["Function pointers or vtables", "CPU registers only", "The kernel image", "BIOS settings"],
+    correctAnswer: 0,
+    explanation: "Overwriting function pointers can hijack control flow.",
+  },
+  {
+    id: 72,
+    topic: "Types",
+    question: "Use-after-free can lead to:",
+    options: ["Type confusion and code execution", "Automatic patching", "Stronger canaries", "Only log noise"],
+    correctAnswer: 0,
+    explanation: "Dangling pointers can be abused after reuse.",
+  },
+  {
+    id: 73,
+    topic: "Types",
+    question: "Off-by-one bugs are dangerous because:",
+    options: ["A single byte can corrupt critical metadata", "They only affect logs", "They improve performance", "They trigger safe defaults"],
+    correctAnswer: 0,
+    explanation: "A one-byte overwrite can still redirect control.",
+  },
+  {
+    id: 74,
+    topic: "Safe APIs",
+    question: "Bounds-checked functions still require:",
+    options: ["Correct length values", "No testing", "No review", "No validation"],
+    correctAnswer: 0,
+    explanation: "Passing the wrong size can still be unsafe.",
+  },
+  {
+    id: 75,
+    topic: "Fundamentals",
+    question: "The key difference between stack and heap is:",
+    options: ["Stack is for call frames; heap is for dynamic allocations", "Heap is always executable", "Stack is only for strings", "Heap is only for code"],
+    correctAnswer: 0,
+    explanation: "The stack holds call frames; the heap stores dynamic data.",
+  },
+];
+
 export default function BufferOverflowGuidePage() {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -987,6 +1600,40 @@ p.interactive()`}
             </Paper>
           </Box>
         )}
+
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Buffer Overflow Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Box>
     </Box>
     </LearnPageLayout>

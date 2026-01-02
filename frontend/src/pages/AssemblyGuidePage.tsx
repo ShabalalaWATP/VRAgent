@@ -45,7 +45,7 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import CloseIcon from "@mui/icons-material/Close";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 // ==================== QUIZ SECTION ====================
@@ -741,13 +741,15 @@ export default function AssemblyGuidePage() {
         {/* Main Content */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
         {/* Back Button */}
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3 }}
-        >
-          Back to Learning Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 3 }}
+        />
 
         {/* Hero Banner */}
         <Paper

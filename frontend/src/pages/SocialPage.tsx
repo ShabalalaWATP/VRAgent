@@ -21,6 +21,8 @@ import UserSearchTab from '../components/social/UserSearchTab';
 import FriendRequestsTab from '../components/social/FriendRequestsTab';
 import FriendsListTab from '../components/social/FriendsListTab';
 import MessagesTab from '../components/social/MessagesTab';
+import { StatusSelector } from '../components/social/StatusSelector';
+import { PresenceStatus } from '../components/social/PresenceIndicator';
 import { socialApi, FriendRequestListResponse, UnreadCountResponse } from '../api/client';
 
 interface TabPanelProps {
@@ -51,6 +53,13 @@ export default function SocialPage() {
   const [unreadCounts, setUnreadCounts] = useState<UnreadCountResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Presence state
+  const [myPresence, setMyPresence] = useState<{
+    status: PresenceStatus;
+    custom_status?: string;
+    status_emoji?: string;
+  }>({ status: 'online' });
 
   const loadCounts = useCallback(async () => {
     try {
@@ -71,10 +80,59 @@ export default function SocialPage() {
 
   useEffect(() => {
     loadCounts();
+    loadMyPresence();
     // Refresh counts every 30 seconds
     const interval = setInterval(loadCounts, 30000);
     return () => clearInterval(interval);
   }, [loadCounts]);
+  
+  const loadMyPresence = async () => {
+    try {
+      const response = await fetch('/api/social/presence/me', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMyPresence({
+          status: data.status || 'online',
+          custom_status: data.custom_status,
+          status_emoji: data.status_emoji,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load presence:', err);
+    }
+  };
+  
+  const handleStatusChange = async (
+    status: PresenceStatus,
+    customStatus?: string,
+    statusEmoji?: string,
+    durationMinutes?: number
+  ) => {
+    try {
+      const response = await fetch('/api/social/presence/me', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status,
+          custom_status: customStatus,
+          status_emoji: statusEmoji,
+          duration_minutes: durationMinutes,
+        }),
+      });
+      if (response.ok) {
+        setMyPresence({ status, custom_status: customStatus, status_emoji: statusEmoji });
+      }
+    } catch (err) {
+      console.error('Failed to update presence:', err);
+    }
+  };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -94,9 +152,17 @@ export default function SocialPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-        Social Hub
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h4" sx={{ fontWeight: 600 }}>
+          Social Hub
+        </Typography>
+        <StatusSelector
+          currentStatus={myPresence.status}
+          customStatus={myPresence.custom_status}
+          statusEmoji={myPresence.status_emoji}
+          onStatusChange={handleStatusChange}
+        />
+      </Box>
 
       <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
         <Tabs
@@ -124,12 +190,12 @@ export default function SocialPage() {
                 <RequestsIcon />
               </Badge>
             }
-            label="Friend Requests"
+            label="Contact Requests"
             iconPosition="start"
           />
           <Tab
             icon={<PeopleIcon />}
-            label="Friends"
+            label="Contacts"
             iconPosition="start"
           />
           <Tab

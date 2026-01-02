@@ -193,10 +193,10 @@ Complete guides to VRAgent's tools and capabilities:
 | **API Endpoint Tester Guide** | AI Auto-Test with CIDR scanning, JWT/WebSocket testing |
 | **Fuzzer Tool Guide** | Smart Detection, session management, payload modes |
 | **MITM Workbench Guide** | Traffic interception, AI-powered rule creation |
-| **Reverse Engineering Hub Guide** | APK analysis, binary inspection, Docker forensics |
+| **Reverse Engineering Hub Guide** | APK analysis, binary inspection, Docker Inspector, AI reports |
 | **APK Analysis Guide** | Permissions, certificates, manifest parsing, attack surface |
 | **Binary Analysis Guide** | PE/ELF inspection, strings, imports, disassembly |
-| **Docker Layer Analysis Guide** | Layer inspection, secret detection, Dockerfile reconstruction |
+| **Docker Inspector Guide** | Layer inventory, secrets detection, attack vectors, AI analysis |
 
 #### 🌐 Network Security (4 topics)
 Advanced network security concepts:
@@ -377,6 +377,48 @@ Core technology foundations for security professionals:
 - **Background Processing**: Asynchronous scans via Redis Queue
 - **REST API**: Full API for programmatic access
 - **Project Management**: Create, view, and delete projects with history
+
+### Social Hub
+VRAgent includes a **Social Hub** for collaboration and communication between security professionals:
+
+#### Features
+- **Friends System**: Send and accept friend requests, manage your connections
+- **Direct Messaging**: Real-time encrypted messaging with other users
+- **Groups**: Create or join groups for team collaboration
+  - Group chat with all members
+  - Share findings and discuss security topics
+  - Role-based permissions (admin/member)
+- **Online Status**: See who's currently active
+- **User Profiles**: View other users' public profiles and activity
+
+#### Authentication & Token Management
+The Social Hub uses JWT (JSON Web Token) authentication with automatic token refresh:
+
+| Token Type | Default Expiry | Purpose |
+|------------|----------------|---------|
+| **Access Token** | 240 minutes | Short-lived token for API requests |
+| **Refresh Token** | 7 days | Long-lived token for obtaining new access tokens |
+
+**How Token Refresh Works:**
+1. When you login, you receive both an access token and a refresh token
+2. The access token is used for all API requests
+3. When the access token expires, the frontend automatically:
+   - Detects the 401 "Unauthorized" response
+   - Calls `/auth/refresh` with your refresh token
+   - Receives new access and refresh tokens
+   - Retries the original request with the new token
+4. This happens seamlessly in the background - no re-login required
+
+**Configuration:**
+```env
+# Add to your .env file to customize token expiry
+ACCESS_TOKEN_EXPIRE_MINUTES=240    # Default: 240 (4 hours)
+REFRESH_TOKEN_EXPIRE_DAYS=7        # Default: 7 days
+```
+
+> 💡 **Tip**: If you get "Could not validate credentials" errors, your access token may have expired. The auto-refresh should handle this, but if issues persist, try logging out and back in.
+
+> ⚠️ **Note**: Token refresh requires the backend to be running. If you're running VRAgent locally via Docker, ensure all containers are up (`docker-compose ps`).
 
 ### Network Security Analysis
 
@@ -781,15 +823,22 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
   - **Phase 1**: Manifest Analysis - Package info, permissions, components
   - **Phase 2**: Secret Detection - Hardcoded secrets, URLs, API keys
   - **Phase 3**: JADX Decompilation - Full Java source code recovery
-  - **Phase 4**: Code Security Scan - Pattern-based vulnerability scanning (60+ patterns)
+  - **Phase 4**: Code Security Scan - Pattern-based vulnerability scanning (70+ patterns) with context-aware filtering
   - **Phase 5**: Sensitive Data Discovery - AI-verified PII, passwords, credentials
-  - **Phase 6**: CVE Database Lookup - OSV.dev + NVD for library vulnerabilities
+  - **Phase 6**: CVE Database Lookup - OSV.dev + NVD with version extraction and confidence scoring
   - **Phase 7**: AI Vulnerability Hunt - Multi-pass AI-guided deep analysis (5 passes, 50 targets/pass)
-  - **Phase 8**: AI Finding Verification - Confidence scoring, false positive elimination
-  - **Phase 9**: AI Deep Analysis - Cross-reference analysis and code sampling
-  - **Phase 10**: AI Report Generation - Functionality, security, architecture, attack surface reports
+  - **Phase 8**: AI Finding Verification - Confidence scoring, false positive elimination, advisory separation
+  - **Phase 9**: AI Deep Analysis - Cross-reference analysis and code sampling (expanded context limits)
+  - **Phase 10**: AI Report Generation - Uses verified findings only, excludes advisory items
   - Real-time progress streaming via SSE
   - Cancelable long-running scans
+- **False Positive Reduction** (v2.5+):
+  - **Advisory Severity**: Hardening suggestions (no pinning, no root detection, no obfuscation, no tampering protection) are classified as "advisory" not vulnerabilities
+  - **Version-Aware CVE Lookup**: Extracts library versions from `pom.properties`, `pom.xml`, `BuildConfig.java`, `build.gradle` with confidence scoring
+  - **CVE Reachability Verification**: Checks if CVE-affected library code is actually imported/used in the application before flagging
+  - **Exported Component Detection**: Properly parses `android:exported` attribute from manifest (handles targetSdk < 31 implicit export rules)
+  - **Context-Aware Pattern Matching**: Skips test files (`*Test.java`, `*Tests.java`), ignores commented code, adds confidence hints based on code context
+  - **Expanded Context Limits**: 800 files (up from 500), 500 cross-references (up from 300), 150 classes (up from 80) for better analysis coverage
 - **JADX Decompilation**: Full Java source code recovery
   - Browse decompiled class files
   - Search across decompiled code
@@ -849,9 +898,10 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
     - Insecure random number usage
     - Certificate pinning analysis
   - **Library CVE Scanner**: Third-party library vulnerabilities
-    - Detect embedded libraries
-    - OSV database lookup for CVEs
-    - Version-specific vulnerability matching
+    - Detect embedded libraries from dex classes
+    - Version extraction from `META-INF/pom.properties`, `pom.xml`, `BuildConfig.java`, `build.gradle`
+    - OSV database lookup for CVEs with confidence scoring (high/medium/low)
+    - Version-specific vulnerability matching with fixed version info
   - **Enhanced Security Scan**: Combined deep analysis
     - All security checks in one scan
     - Exportable detailed reports
@@ -869,30 +919,22 @@ VRAgent includes a dedicated **Reverse Engineering Hub** for analyzing binaries,
   - Export chat conversations
   - Export enhanced security results
 
-#### Docker Layer Analysis
-- **Image Inspection**: Pull and analyze Docker images
-  - Layer-by-layer breakdown
-  - Layer size and command history
-  - Created/modified timestamps
-- **Secret Detection**: Scan all layers for sensitive data
-  - Environment variables with secrets
-  - Hardcoded credentials in files
-  - API keys and tokens
-  - Private keys and certificates
-  - 50+ secret patterns
-- **Dockerfile Reconstruction**: Reverse-engineer the original Dockerfile
-  - Command history extraction
-  - Base image identification
-  - Build argument analysis
-- **Supply Chain Analysis**:
-  - Base image vulnerability assessment
-  - Package manifest extraction
-  - Outdated dependency detection
-- **AI Analysis**: Gemini AI security assessment
-  - Security posture evaluation
-  - Container hardening recommendations
-  - Best practice violations
-- **Export Options**: Download analysis as Markdown, PDF, or DOCX
+#### Docker Inspector
+- **Image Inventory**: Analyze locally available Docker images
+  - Image ID, size, base image, layer count
+  - Layer command history and size breakdown
+- **Secrets Detection**: Scan layer commands and metadata
+  - Tokens, API keys, private keys
+  - Environment/config leaks
+- **Security Issues & Attack Vectors**:
+  - Container escape, privilege escalation, lateral movement
+  - Network exposure and supply chain indicators
+- **Risk Scoring**:
+  - Aggregated critical/high counts
+  - Offensive risk summary for triage
+- **AI Analysis**: Gemini security assessment
+  - Actionable recommendations and hardening notes
+- **Report Options**: Save analysis and export as Markdown, PDF, or DOCX
 
 #### Learning Resources
 - Comprehensive guides at `/learn/reverse-hub`, `/learn/apk-analysis`, `/learn/binary-analysis`, `/learn/docker-forensics`
@@ -974,16 +1016,19 @@ VRAgent supports multi-user authentication with role-based access control:
   - Suspend or reactivate accounts
   - Change user roles (user/admin)
   - Reset user passwords
+- **Social Hub**: Connect with other users via friends, messaging, and groups (see [Social Hub](#social-hub) for details)
 
 **Environment Variables for Authentication:**
 ```env
 # Add these to your .env file
 SECRET_KEY=your-secure-random-key-change-in-production
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
+ACCESS_TOKEN_EXPIRE_MINUTES=240   # Default: 240 minutes (4 hours)
+REFRESH_TOKEN_EXPIRE_DAYS=7       # Default: 7 days
 ```
 
 > ⚠️ **Important**: Always change `SECRET_KEY` in production! Use a long random string.
+
+> 💡 **Token Refresh**: Access tokens automatically refresh when expired. See [Social Hub Authentication](#authentication--token-management) for details.
 
 ### Docker Services
 
@@ -1941,6 +1986,30 @@ The frontend will be available at http://localhost:5173
 | `POST` | `/projects/{id}/webhooks` | Register webhook |
 | `GET` | `/projects/{id}/webhooks` | List project webhooks |
 | `DELETE` | `/projects/{id}/webhooks` | Remove all webhooks |
+
+### Social Hub
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/social/profile` | Get current user's profile |
+| `PUT` | `/social/profile` | Update profile |
+| `GET` | `/social/users` | Search users |
+| `GET` | `/social/users/{id}` | Get user profile |
+| `POST` | `/social/friends/request/{id}` | Send friend request |
+| `GET` | `/social/friends` | List friends |
+| `GET` | `/social/friends/requests` | List pending requests |
+| `POST` | `/social/friends/accept/{id}` | Accept friend request |
+| `POST` | `/social/friends/reject/{id}` | Reject friend request |
+| `DELETE` | `/social/friends/{id}` | Remove friend |
+| `GET` | `/social/messages/{user_id}` | Get messages with user |
+| `POST` | `/social/messages/{user_id}` | Send direct message |
+| `GET` | `/social/groups` | List user's groups |
+| `POST` | `/social/groups` | Create new group |
+| `GET` | `/social/groups/{id}` | Get group details |
+| `POST` | `/social/groups/{id}/join` | Join a group |
+| `POST` | `/social/groups/{id}/leave` | Leave a group |
+| `GET` | `/social/groups/{id}/messages` | Get group messages |
+| `POST` | `/social/groups/{id}/messages` | Send group message |
 
 ### WebSocket
 

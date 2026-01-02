@@ -296,6 +296,10 @@ class ExternalIntelligence:
     - Known CVEs in dependencies
     - SAST scanner findings
     - Dependency relationships
+    - Application description and architecture
+    - Security findings from other scanners
+    - Codebase mapping data
+    - Exploitability and attack surface analysis
     """
     # CVE/Vulnerability data
     cve_findings: List[Dict[str, Any]] = field(default_factory=list)
@@ -322,6 +326,48 @@ class ExternalIntelligence:
     # Files with vulnerable dependency imports
     vulnerable_import_files: List[Dict[str, Any]] = field(default_factory=list)
     # Format: [{"file": "api.py", "package": "requests", "cve": "CVE-2023-XXX"}]
+    
+    # ========== NEW: Rich Context Fields ==========
+    
+    # What Does This App Do - AI-generated app description
+    app_description: Optional[str] = None
+    # Format: "This is a web application that handles user authentication..."
+    
+    # Code Architecture Diagram (Mermaid format)
+    architecture_diagram: Optional[str] = None
+    # Format: "graph TD; A[Frontend] --> B[API]; B --> C[Database]..."
+    
+    # Security Findings Summary from all scanners
+    security_findings_summary: Optional[str] = None
+    # Format: "Found 5 critical, 12 high, 23 medium severity issues..."
+    
+    # Detailed security findings list
+    security_findings: List[Dict[str, Any]] = field(default_factory=list)
+    # Format: [{"type": "SQL Injection", "file": "api.py", "line": 45, "severity": "critical"}]
+    
+    # Codebase Mapper data - file relationships and structure
+    codebase_map: Optional[str] = None
+    # Format: Structured description of how files relate to each other
+    
+    # Codebase Mapper diagram (Mermaid format)
+    codebase_diagram: Optional[str] = None
+    # Format: "graph TD; api.py --> db.py; db.py --> models.py..."
+    
+    # Exploitability assessment
+    exploitability_assessment: Optional[str] = None
+    # Format: "High exploitability due to unauthenticated endpoints..."
+    
+    # Attack Surface Map (Mermaid format)
+    attack_surface_map: Optional[str] = None
+    # Format: "graph LR; Internet --> WAF --> API --> Database..."
+    
+    # Attack surface summary
+    attack_surface_summary: Optional[str] = None
+    # Format: "12 public endpoints, 3 unauthenticated, 2 file upload points..."
+    
+    # Entry points identified by other analysis
+    identified_entry_points: List[Dict[str, Any]] = field(default_factory=list)
+    # Format: [{"route": "/api/upload", "method": "POST", "auth": false, "risk": "high"}]
     
     def get_priority_files(self) -> List[str]:
         """Get files that should be prioritized for analysis."""
@@ -412,11 +458,20 @@ class CodeChunker:
         r'(generated|dist|bundle|min\.)': 5,
     }
     
-    def __init__(self, adaptive: bool = True):
+    def __init__(self, adaptive: bool = True, enhanced_mode: bool = False):
         self.chunks: Dict[str, CodeChunk] = {}
         self.adaptive = adaptive
+        self.enhanced_mode = enhanced_mode
         self._file_count = 0
         self._chunk_size = self.MAX_CHUNK_LINES
+        
+        # Enhanced mode: 100% increase in limits (2x standard)
+        if enhanced_mode:
+            self.MAX_FILES = 225       # 2x the 112 standard
+            self.MAX_CHUNKS = 180      # 2x the 90 standard
+        else:
+            self.MAX_FILES = 112       # Standard: 50% increase from 75
+            self.MAX_CHUNKS = 90       # Standard: 50% increase from 60
     
     def chunk_project(self, project_path: str, file_extensions: List[str]) -> List[CodeChunk]:
         """Break the entire project into chunks with adaptive sizing"""
@@ -786,7 +841,7 @@ class AgenticAnalyzer:
     - Dependency relationships help trace data flows
     """
     
-    def __init__(self, external_intel: Optional[ExternalIntelligence] = None):
+    def __init__(self, external_intel: Optional[ExternalIntelligence] = None, enhanced_mode: bool = False):
         self.client = genai_client
         self.model_name = settings.gemini_model_id
         self.chunks: Dict[str, CodeChunk] = {}
@@ -798,15 +853,24 @@ class AgenticAnalyzer:
         self.multi_pass_results: List[MultiPassAnalysisResult] = []
         # External intelligence (CVEs, SAST findings, etc.)
         self.external_intel = external_intel or ExternalIntelligence()
-        # Multi-pass file limits (configurable for enhanced mode)
-        self.pass1_limit = 90   # Default: 90 files (was 60)
-        self.pass2_limit = 30   # Default: 30 files (was 20)
-        self.pass3_limit = 15   # Default: 15 files (was 8)
+        self.enhanced_mode = enhanced_mode
+        
+        # Multi-pass file limits: Standard (+50%) vs Enhanced (+100%/2x)
+        if enhanced_mode:
+            # Enhanced: 100% increase (2x standard)
+            self.pass1_limit = 240   # 2x standard (was 120)
+            self.pass2_limit = 80    # 2x standard (was 40)
+            self.pass3_limit = 30    # 2x standard (was 15)
+        else:
+            # Standard: 50% increase from original values
+            self.pass1_limit = 180   # +50% (was 120)
+            self.pass2_limit = 60    # +50% (was 40)
+            self.pass3_limit = 22    # +50% (was 15)
         # Content depth limits per pass (how much of each file the AI sees)
         self.content_limits = {
-            "quick": 4500,      # Pass 1: 4.5K chars per file (was 3K)
-            "detailed": 10500,  # Pass 2: 10.5K chars per file (was 7K)
-            "full": 27000       # Pass 3: 27K chars (was 18K)
+            "quick": 5000,       # Pass 1: 5K chars per file
+            "detailed": 12000,   # Pass 2: 12K chars per file
+            "full": 50000        # Pass 3: 50K chars (full file analysis)
         }
         # Project structure context (built during triage)
         self.project_structure: Optional[str] = None
@@ -917,22 +981,94 @@ class AgenticAnalyzer:
         logger.info(f"AgenticScan: Loaded external intelligence - "
                    f"{len(intel.cve_findings)} CVEs, {len(intel.sast_findings)} SAST findings")
     
-    def _build_intel_context_for_prompt(self, file_path: Optional[str] = None) -> str:
-        """Build external intelligence context string for AI prompts."""
+    def _build_intel_context_for_prompt(self, file_path: Optional[str] = None, include_full_context: bool = False) -> str:
+        """Build external intelligence context string for AI prompts.
+        
+        Args:
+            file_path: Optional file path to get file-specific SAST findings
+            include_full_context: If True, includes full rich context (app description, diagrams, etc.)
+        """
         if not self.external_intel:
             return ""
         
         parts = []
         
-        # High severity CVEs summary
+        # ========== RICH CONTEXT (App Description, Architecture, Attack Surface) ==========
+        if include_full_context:
+            # What Does This App Do
+            if self.external_intel.app_description:
+                parts.append("## 📋 APPLICATION OVERVIEW:")
+                parts.append(self.external_intel.app_description)
+            
+            # Code Architecture Diagram
+            if self.external_intel.architecture_diagram:
+                parts.append("\n## 🏗️ CODE ARCHITECTURE:")
+                parts.append("```mermaid")
+                parts.append(self.external_intel.architecture_diagram)
+                parts.append("```")
+            
+            # Security Findings Summary
+            if self.external_intel.security_findings_summary:
+                parts.append("\n## 🔒 SECURITY FINDINGS SUMMARY:")
+                parts.append(self.external_intel.security_findings_summary)
+            
+            # Detailed Security Findings
+            if self.external_intel.security_findings:
+                parts.append("\n## 🚨 DETAILED SECURITY FINDINGS:")
+                for finding in self.external_intel.security_findings[:15]:  # Top 15
+                    severity = finding.get('severity', 'unknown').upper()
+                    parts.append(f"- [{severity}] {finding.get('type', 'Unknown')}: "
+                               f"{finding.get('file', '?')}:{finding.get('line', '?')} - "
+                               f"{finding.get('message', '')[:150]}")
+            
+            # Codebase Map
+            if self.external_intel.codebase_map:
+                parts.append("\n## 🗺️ CODEBASE STRUCTURE:")
+                parts.append(self.external_intel.codebase_map)
+            
+            # Codebase Diagram
+            if self.external_intel.codebase_diagram:
+                parts.append("\n## 📊 CODEBASE RELATIONSHIP DIAGRAM:")
+                parts.append("```mermaid")
+                parts.append(self.external_intel.codebase_diagram)
+                parts.append("```")
+            
+            # Exploitability Assessment
+            if self.external_intel.exploitability_assessment:
+                parts.append("\n## ⚔️ EXPLOITABILITY ASSESSMENT:")
+                parts.append(self.external_intel.exploitability_assessment)
+            
+            # Attack Surface Map
+            if self.external_intel.attack_surface_map:
+                parts.append("\n## 🎯 ATTACK SURFACE MAP:")
+                parts.append("```mermaid")
+                parts.append(self.external_intel.attack_surface_map)
+                parts.append("```")
+            
+            # Attack Surface Summary
+            if self.external_intel.attack_surface_summary:
+                parts.append("\n## 🌐 ATTACK SURFACE SUMMARY:")
+                parts.append(self.external_intel.attack_surface_summary)
+            
+            # Identified Entry Points
+            if self.external_intel.identified_entry_points:
+                parts.append("\n## 🚪 IDENTIFIED ENTRY POINTS:")
+                for ep in self.external_intel.identified_entry_points[:20]:
+                    auth_status = "🔓 NO AUTH" if not ep.get('auth', True) else "🔐 Auth required"
+                    risk = ep.get('risk', 'medium').upper()
+                    parts.append(f"- [{risk}] {ep.get('method', 'GET')} {ep.get('route', '/')} - {auth_status}")
+        
+        # ========== CVE/VULNERABILITY CONTEXT (always included) ==========
         high_cves = self.external_intel.get_high_severity_cves()
         if high_cves:
-            parts.append("## KNOWN VULNERABILITIES IN DEPENDENCIES:")
+            parts.append("\n## ⚠️ KNOWN VULNERABILITIES IN DEPENDENCIES:")
             for cve in high_cves[:10]:  # Limit to top 10
-                kev_flag = " ⚠️ ACTIVELY EXPLOITED" if cve.get("in_kev") else ""
+                kev_flag = " 🔴 ACTIVELY EXPLOITED" if cve.get("in_kev") else ""
+                epss = cve.get('epss_score', 0)
+                epss_str = f"{epss:.1%}" if epss else "N/A"
                 parts.append(f"- {cve.get('external_id')}: {cve.get('package')} "
                            f"(CVSS: {cve.get('cvss_score', 'N/A')}, "
-                           f"EPSS: {cve.get('epss_score', 'N/A'):.1%}){kev_flag}")
+                           f"EPSS: {epss_str}){kev_flag}")
                 if cve.get("affected_functions"):
                     parts.append(f"  Affected functions: {', '.join(cve['affected_functions'][:5])}")
         
@@ -940,14 +1076,14 @@ class AgenticAnalyzer:
         if file_path:
             sast = self.external_intel.get_sast_findings_for_file(file_path)
             if sast:
-                parts.append(f"\n## SAST SCANNER FLAGS FOR THIS FILE:")
+                parts.append(f"\n## 🔍 SAST SCANNER FLAGS FOR THIS FILE:")
                 for finding in sast[:5]:
                     parts.append(f"- Line {finding.get('line', '?')}: {finding.get('type')} "
                                f"({finding.get('severity')}) - {finding.get('message', '')[:100]}")
         
         # Files importing vulnerable packages
         if self.external_intel.vulnerable_import_files:
-            parts.append("\n## FILES IMPORTING VULNERABLE PACKAGES:")
+            parts.append("\n## 📦 FILES IMPORTING VULNERABLE PACKAGES:")
             for item in self.external_intel.vulnerable_import_files[:10]:
                 parts.append(f"- {item.get('file')}: imports {item.get('package')} "
                            f"(affected by {item.get('cve')})")
@@ -1491,25 +1627,20 @@ Be thorough - files importing vulnerable dependencies need review even if their 
         if self.project_structure:
             project_context = f"\n{self.project_structure}\n"
         
-        # Build external intelligence context for each file
-        intel_context = ""
+        # Build external intelligence context - include FULL context for Pass 2 and 3
+        include_full = analysis_depth in ("detailed", "full")  # Pass 2 and 3 get full context
+        intel_context = self._build_intel_context_for_prompt(include_full_context=include_full)
+        
+        # Add per-file SAST context
         if self.external_intel:
-            intel_parts = []
+            file_intel_parts = []
             for fc in files_content:
                 file_sast = self.external_intel.get_sast_findings_for_file(fc["path"])
                 if file_sast:
-                    intel_parts.append(f"**{fc['path']}** - SAST flagged: {', '.join(f['type'] for f in file_sast[:3])}")
+                    file_intel_parts.append(f"**{fc['path']}** - SAST flagged: {', '.join(f['type'] for f in file_sast[:3])}")
             
-            # Add CVE context
-            high_cves = self.external_intel.get_high_severity_cves()[:5]
-            if high_cves:
-                intel_parts.append("\n**Known CVEs in dependencies:**")
-                for cve in high_cves:
-                    funcs = ", ".join(cve.get("affected_functions", [])[:3]) if cve.get("affected_functions") else "unknown"
-                    intel_parts.append(f"- {cve.get('package')}: {cve.get('external_id')} (affects: {funcs})")
-            
-            if intel_parts:
-                intel_context = "\n## EXTERNAL INTELLIGENCE:\n" + "\n".join(intel_parts) + "\n"
+            if file_intel_parts:
+                intel_context += "\n\n## 🔍 FILE-SPECIFIC SAST FINDINGS:\n" + "\n".join(file_intel_parts)
         
         files_text = ""
         for idx, fc in enumerate(files_content):
@@ -1672,6 +1803,9 @@ Be thorough - files importing vulnerable dependencies need review even if their 
                 key_recommendations=[]
             )
         
+        # Build FULL external intelligence context (includes app description, architecture, attack surface)
+        full_intel_context = self._build_intel_context_for_prompt(include_full_context=True)
+        
         # Build synthesis prompt
         findings_summary = f"""
 ## Analysis Summary:
@@ -1684,77 +1818,44 @@ Be thorough - files importing vulnerable dependencies need review even if their 
 - Confirmed vulnerabilities: {len(vulnerabilities)}
 
 ## High-Risk Files:
-{chr(10).join([f"- {r.file_path} (score: {r.security_score})" for r in high_score_files[:15]])}
+{chr(10).join([f"- {r.file_path} (score: {r.security_score})" for r in high_score_files[:20]])}
 
 ## Key Observations from Analysis:
-{chr(10).join([f"- {obs}" for obs in all_observations[:30]])}
+{chr(10).join([f"- {obs}" for obs in all_observations[:40]])}
 
 ## Potential Vulnerabilities Found:
-{chr(10).join([f"- {v.get('type', 'Unknown')}: {v.get('description', '')[:100]}" for v in all_potential_vulns[:20]])}
+{chr(10).join([f"- {v.get('type', 'Unknown')}: {v.get('description', '')[:150]}" for v in all_potential_vulns[:25]])}
 """
-        
-        # Add external intelligence context
-        intel_summary = ""
-        if self.external_intel:
-            intel_parts = []
-            
-            # High-severity CVEs
-            high_cves = self.external_intel.get_high_severity_cves()
-            if high_cves:
-                intel_parts.append("## Known CVEs in Dependencies:")
-                for cve in high_cves[:8]:
-                    severity = cve.get("severity", "UNKNOWN")
-                    epss = cve.get("epss_score", 0)
-                    epss_str = f" (EPSS: {epss:.1%})" if epss else ""
-                    intel_parts.append(f"- {cve.get('external_id')}: {cve.get('package')} - {severity}{epss_str}")
-            
-            # SAST findings summary
-            sast_by_type = {}
-            for f in self.external_intel.sast_findings:
-                t = f.get("type", "unknown")
-                sast_by_type[t] = sast_by_type.get(t, 0) + 1
-            if sast_by_type:
-                intel_parts.append("\n## SAST Scanner Findings:")
-                for t, count in sorted(sast_by_type.items(), key=lambda x: -x[1])[:10]:
-                    intel_parts.append(f"- {t}: {count} occurrences")
-            
-            # Files flagged by both SAST and importing vulnerable deps
-            priority_files = self.external_intel.get_priority_files()
-            if priority_files:
-                intel_parts.append(f"\n## High-Priority Files (flagged by external intel): {len(priority_files)}")
-                for f in priority_files[:5]:
-                    intel_parts.append(f"- {f}")
-            
-            if intel_parts:
-                intel_summary = "\n" + "\n".join(intel_parts) + "\n"
 
-        prompt = f"""You are an objective security analyst synthesizing findings from a multi-pass code review.
+        prompt = f"""You are an expert security analyst synthesizing findings from a comprehensive multi-pass code review.
+
+{full_intel_context}
 
 {findings_summary}
-{intel_summary}
 
 ## Your Task:
-1. Review all findings and assess their validity
-2. **Correlate AI findings with CVE/SAST data** - do AI findings match known issues?
-3. Identify any cross-file relationships IF they exist
-4. Provide an honest overall security assessment
-5. Give actionable recommendations (can include "code looks secure" if appropriate)
+1. Review all findings considering the APPLICATION CONTEXT (what does the app do, its architecture)
+2. Consider the ATTACK SURFACE and ENTRY POINTS identified above
+3. **Correlate AI findings with CVE/SAST data** - do AI findings match known issues?
+4. Identify cross-file attack chains considering the codebase map and relationships
+5. Provide an honest overall security assessment
+6. Give actionable, prioritized recommendations
 
 ## Response Format (JSON):
 {{
-  "overall_assessment": "honest summary - can be positive if no issues found",
+  "overall_assessment": "honest summary considering app context - can be positive if secure",
   "risk_level": "CRITICAL|HIGH|MEDIUM|LOW|MINIMAL",
   "cve_correlation": [
-    {{"cve": "CVE-XXXX", "verified_in_code": true/false, "details": "whether vulnerable code paths exist"}}
+    {{"cve": "CVE-XXXX", "verified_in_code": true/false, "details": "whether vulnerable code paths exist given the attack surface"}}
   ],
   "attack_chains": [
-    {{"name": "chain name", "files": ["file1", "file2"], "description": "how attack flows", "severity": "HIGH"}}
+    {{"name": "chain name", "files": ["file1", "file2"], "entry_point": "how attacker enters", "description": "how attack flows through the architecture", "severity": "HIGH"}}
   ],
   "priority_issues": [
-    {{"issue": "description", "severity": "HIGH", "remediation": "what to fix"}}
+    {{"issue": "description", "severity": "HIGH", "affected_component": "which part of architecture", "remediation": "what to fix"}}
   ],
-  "patterns_found": ["patterns identified - can be empty if none"],
-  "recommendations": ["actionable recommendations"]
+  "patterns_found": ["security patterns identified - can be empty if none"],
+  "recommendations": ["actionable recommendations prioritized by impact"]
 }}
 
 **IMPORTANT**: 
@@ -1762,7 +1863,8 @@ Be thorough - files importing vulnerable dependencies need review even if their 
 - Empty arrays for attack_chains, priority_issues, and patterns_found are acceptable.
 - Do NOT manufacture issues. If the codebase appears secure, report that finding.
 - For CVE correlation: just because a package has a CVE doesn't mean the app is vulnerable - verify the vulnerable functions are actually used.
-- Recommendations can include positive observations like "authentication implementation follows best practices"."""
+- Consider the architecture and attack surface when assessing real-world exploitability.
+- Recommendations should be specific and reference the application's architecture."""
 
         try:
             from google.genai import types
@@ -1773,7 +1875,7 @@ Be thorough - files importing vulnerable dependencies need review even if their 
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         temperature=0.3,
-                        max_output_tokens=3000
+                        max_output_tokens=4000
                     )
                 )
             
@@ -1781,7 +1883,7 @@ Be thorough - files importing vulnerable dependencies need review even if their 
                 make_request,
                 max_retries=3,
                 base_delay=2.0,
-                timeout_seconds=90.0,
+                timeout_seconds=120.0,
                 operation_name="AgenticScan synthesis"
             )
             
@@ -2196,7 +2298,10 @@ Sink format (only if genuinely concerning):
         context_chunks = self._gather_context(entry_point, sink)
         context_code = self._build_context_string(context_chunks)
         
-        # Build CVE context if available
+        # Build FULL external intelligence context (includes app description, attack surface, etc.)
+        full_intel_context = self._build_intel_context_for_prompt(include_full_context=True)
+        
+        # Build CVE context specific to this flow
         cve_context = ""
         if self.external_intel:
             relevant_cves = []
@@ -2207,7 +2312,7 @@ Sink format (only if genuinely concerning):
                     relevant_cves.append(cve)
             
             if relevant_cves:
-                cve_context = "\n## KNOWN CVES IN CODE:\n"
+                cve_context = "\n## 🔴 CVEs RELEVANT TO THIS FLOW:\n"
                 for cve in relevant_cves[:3]:
                     funcs = ", ".join(cve.get("affected_functions", [])[:3]) if cve.get("affected_functions") else "various"
                     cve_context += f"- **{cve.get('external_id')}** in {cve.get('package')}: {cve.get('description', 'N/A')[:100]}\n"
@@ -2216,6 +2321,7 @@ Sink format (only if genuinely concerning):
         
         prompt = f"""Determine whether user input from this entry point can actually reach this sink in an exploitable way.
 
+{full_intel_context}
 {cve_context}
 ENTRY POINT:
 File: {entry_point.file_path}
@@ -2224,7 +2330,7 @@ Type: {entry_point.entry_type}
 Variable: {entry_point.variable_name}
 Code:
 ```
-{entry_chunk.content[:1500]}
+{entry_chunk.content[:2000]}
 ```
 
 SINK:
@@ -2235,7 +2341,7 @@ Function: {sink.function_name}
 Potential Vulnerability: {sink.vulnerability_type}
 Code:
 ```
-{sink_chunk.content[:1500]}
+{sink_chunk.content[:2000]}
 ```
 
 ADDITIONAL CONTEXT:
@@ -2246,6 +2352,7 @@ ANALYZE OBJECTIVELY:
 2. Is there sanitization/validation that PREVENTS exploitation?
 3. Is this sink actually dangerous in this context?
 4. **If known CVEs are listed above**: Does the code actually use the vulnerable functions?
+5. **Consider the attack surface and entry points** provided in the context above
 
 **IMPORTANT - Default to NO vulnerability unless you have clear evidence:**
 - If data is validated/sanitized before reaching sink -> NOT exploitable
@@ -2472,7 +2579,12 @@ Now complete the analysis with this additional context."""
             # Return basic vulnerability without LLM analysis
             return self._create_basic_vulnerability(flow)
         
+        # Build FULL external intelligence context
+        full_intel_context = self._build_intel_context_for_prompt(include_full_context=True)
+        
         prompt = f"""Generate an accurate vulnerability report for this potential data flow issue.
+
+{full_intel_context}
 
 POTENTIAL ISSUE TYPE: {flow.sink.vulnerability_type}
 INITIAL SEVERITY ASSESSMENT: {flow.sink.severity}
@@ -2495,13 +2607,14 @@ DATA FLOW:
 SANITIZATION ANALYSIS:
 {flow.sanitization_analysis}
 
-Generate an HONEST report. If after review this doesn't appear to be a real vulnerability, indicate that with high false_positive_likelihood.
+Generate an HONEST report. Consider the application context, architecture, and attack surface provided above.
+If after review this doesn't appear to be a real vulnerability, indicate that with high false_positive_likelihood.
 
 JSON Response:
 {{
   "title": "<Brief, accurate title>",
   "description": "<Factual description - include mitigating factors if present>",
-  "exploit_scenario": "<Realistic exploit scenario, or 'Exploitation unlikely due to...' if not exploitable>",
+  "exploit_scenario": "<Realistic exploit scenario considering the attack surface, or 'Exploitation unlikely due to...' if not exploitable>",
   "remediation": "<Specific fixes, or 'No action needed' if false positive>",
   "code_fix": "<Example fix or null if not needed>",
   "owasp_category": "<OWASP category>",
@@ -2724,6 +2837,9 @@ Be conservative - if there's doubt, lean toward higher false_positive_likelihood
         verified = []
         filtered_out = []
         
+        # Build FULL external intelligence context
+        full_intel_context = self._build_intel_context_for_prompt(include_full_context=True)
+        
         # Build batch verification prompt
         findings_text = ""
         for idx, vuln in enumerate(batch):
@@ -2732,15 +2848,15 @@ Be conservative - if there's doubt, lean toward higher false_positive_likelihood
                 flow_info = f"""
   Entry: {vuln.flow.entry_point.file_path}:{vuln.flow.entry_point.line_number} ({vuln.flow.entry_point.entry_type})
   Sink: {vuln.flow.sink.file_path}:{vuln.flow.sink.line_number} ({vuln.flow.sink.function_name})
-  Code at entry: {vuln.flow.entry_point.code_snippet[:100] if vuln.flow.entry_point.code_snippet else 'N/A'}
-  Code at sink: {vuln.flow.sink.code_snippet[:100] if vuln.flow.sink.code_snippet else 'N/A'}"""
+  Code at entry: {vuln.flow.entry_point.code_snippet[:150] if vuln.flow.entry_point.code_snippet else 'N/A'}
+  Code at sink: {vuln.flow.sink.code_snippet[:150] if vuln.flow.sink.code_snippet else 'N/A'}"""
             
             findings_text += f"""
 ### Finding {idx + 1}: {vuln.vulnerability_type} ({vuln.severity})
 - Title: {vuln.title}
 - CWE: {vuln.cwe_id}
 - Current confidence: {vuln.confidence:.0%}
-- Description: {vuln.description[:300] if vuln.description else 'N/A'}
+- Description: {vuln.description[:400] if vuln.description else 'N/A'}
 {flow_info}
 """
 
@@ -2748,15 +2864,19 @@ Be conservative - if there's doubt, lean toward higher false_positive_likelihood
 
 Assume findings may be false positives until proven otherwise.
 
+{full_intel_context}
+
 ## Findings to Verify:
 {findings_text}
 
 ## Verification Approach:
-For each finding, ask yourself:
-1. Is there CONCRETE evidence of exploitability, or just theoretical risk?
-2. Are there sanitization/validation mechanisms I might have missed?
-3. Is this a safe pattern that looks dangerous (e.g., parameterized queries, ORM usage)?
-4. Would a real attacker actually be able to exploit this?
+For each finding, consider:
+1. The APPLICATION CONTEXT (what does this app do? what's its architecture?)
+2. The ATTACK SURFACE (how would an attacker reach this code?)
+3. Is there CONCRETE evidence of exploitability, or just theoretical risk?
+4. Are there sanitization/validation mechanisms I might have missed?
+5. Is this a safe pattern that looks dangerous (e.g., parameterized queries, ORM usage)?
+6. Would a real attacker actually be able to exploit this given the identified entry points?
 
 ## Verdicts:
 - **FALSE_POSITIVE**: Not exploitable - safe pattern, sanitization present, trusted data source, or theoretical-only risk
@@ -2771,7 +2891,7 @@ Respond with JSON:
       "index": 1,
       "verdict": "FALSE_POSITIVE|UNCERTAIN|LIKELY_TRUE|TRUE_POSITIVE",
       "confidence": 0.0-1.0,
-      "reasoning": "<specific explanation with evidence>",
+      "reasoning": "<specific explanation with evidence, referencing app context/attack surface>",
       "severity_adjustment": "none|upgrade|downgrade",
       "new_severity": "<only if adjustment needed>"
     }}
@@ -2889,21 +3009,27 @@ class AgenticScanService:
         progress_callback: Optional[callable] = None,
         use_multi_pass: bool = True,  # Enable smart multi-pass by default
         external_intel: Optional[ExternalIntelligence] = None,  # CVE/SAST/dependency context
-        enhanced_mode: bool = False  # Enhanced: 120→40→20 files vs default 90→30→15
+        enhanced_mode: bool = False  # Enhanced: 150→60→20 files vs default 120→40→15
     ) -> str:
         """
         Start a new agentic scan with smart multi-pass file selection.
         
-        The scan now uses intelligent AI-driven file triage:
+        The scan now uses intelligent AI-driven file triage with RICH CONTEXT:
         - Pass 0: AI examines ALL file names to select security-relevant files
-        - Pass 1: Initial analysis of ~90 files (or ~120 in enhanced mode)
-        - Pass 2: Focused analysis of ~30 files (or ~40 in enhanced mode)
-        - Pass 3: Deep analysis of ~15 files (or ~20 in enhanced mode)
-        - Synthesis: AI combines findings from all passes
+        - Pass 1: Initial analysis of ~120 files (or ~150 in enhanced mode) - 5K/6K chars each
+        - Pass 2: Focused analysis of ~40 files (or ~60 in enhanced mode) - 12K/16K chars each
+        - Pass 3: Deep analysis of ~15 files (or ~20 in enhanced mode) - 50K/100K chars each
+        - Flow Tracing, Vulnerability Analysis, FP Filtering: All receive FULL context including:
+          - App description and architecture diagram
+          - Security findings summary
+          - Codebase map and diagram
+          - Exploitability assessment and attack surface map
+        - Synthesis: AI combines findings from all passes with full context
         
         Args:
             enhanced_mode: If True, increases file limits for more thorough analysis
-            external_intel: CVE, SAST, and dependency data for AI context
+            external_intel: CVE, SAST, dependency data PLUS app description, architecture diagram,
+                          codebase map, attack surface map, and exploitability assessment
         
         Returns the scan_id for tracking.
         """
@@ -2914,20 +3040,20 @@ class AgenticScanService:
         # Enhanced mode: more files AND more content per file
         if enhanced_mode:
             self.analyzer.set_multi_pass_limits(
-                pass1=120, pass2=40, pass3=20,          # Files per pass (increased)
-                quick_chars=6000,                       # Pass 1: 6K chars (50% more)
-                detailed_chars=15000,                   # Pass 2: 15K chars (50% more)
-                full_chars=45000                        # Pass 3: 45K chars (full file, 50% more)
+                pass1=150, pass2=60, pass3=20,          # Files per pass (enhanced)
+                quick_chars=6000,                       # Pass 1: 6K chars
+                detailed_chars=16000,                   # Pass 2: 16K chars
+                full_chars=100000                       # Pass 3: 100K chars (very deep analysis)
             )
-            logger.info("AgenticScan: Enhanced mode enabled (120→40→20 files, 6K→15K→45K chars)")
+            logger.info("AgenticScan: Enhanced mode enabled (150→60→20 files, 6K→16K→100K chars)")
         else:
             self.analyzer.set_multi_pass_limits(
-                pass1=90, pass2=30, pass3=15,           # Files per pass (increased)
-                quick_chars=4500,                       # Pass 1: 4.5K chars (50% more)
-                detailed_chars=10500,                   # Pass 2: 10.5K chars (50% more)
-                full_chars=27000                        # Pass 3: 27K chars (50% more)
+                pass1=120, pass2=40, pass3=15,          # Files per pass (standard)
+                quick_chars=5000,                       # Pass 1: 5K chars
+                detailed_chars=12000,                   # Pass 2: 12K chars
+                full_chars=50000                        # Pass 3: 50K chars
             )
-            logger.info("AgenticScan: Standard mode (90→30→15 files, 4.5K→10.5K→27K chars)")
+            logger.info("AgenticScan: Standard mode (120→40→15 files, 5K→12K→50K chars)")
         
         # Inject external intelligence into analyzer if provided
         if external_intel:

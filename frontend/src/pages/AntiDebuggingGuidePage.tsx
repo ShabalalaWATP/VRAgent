@@ -46,7 +46,7 @@ import AndroidIcon from "@mui/icons-material/Android";
 import QuizIcon from "@mui/icons-material/Quiz";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 // Question bank for the quiz (75 questions)
 interface QuizQuestion {
@@ -1597,13 +1597,15 @@ export default function AntiDebuggingGuidePage() {
     <LearnPageLayout pageTitle="Anti-Debugging & Anti-Analysis Techniques" pageContext={pageContext}>
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Back Button */}
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3 }}
-        >
-          Back to Learning Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 3 }}
+        />
 
         {/* Hero Banner */}
         <Paper
@@ -5382,6 +5384,18 @@ Interceptor.attach(ntdll, {
             ))}
           </Grid>
         </Paper>
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </LearnPageLayout>
   );

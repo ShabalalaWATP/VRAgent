@@ -103,6 +103,7 @@ const severityColors: Record<string, string> = {
   high: "#f97316",
   medium: "#eab308",
   low: "#22c55e",
+  advisory: "#3b82f6", // Blue for hardening suggestions
   info: "#3b82f6",
 };
 

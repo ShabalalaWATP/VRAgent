@@ -69,7 +69,7 @@ import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import TimerIcon from "@mui/icons-material/Timer";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import ListAltIcon from "@mui/icons-material/ListAlt";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 // ==================== QUIZ SECTION ====================
@@ -776,9 +776,15 @@ export default function PythonFundamentalsPage() {
 
         {/* Main Content */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 3 }}>
-          Back to Learning Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 3 }}
+        />
 
         {/* ==================== HERO SECTION ==================== */}
         <Paper

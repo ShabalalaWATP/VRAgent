@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -42,7 +43,8 @@ import CodeIcon from "@mui/icons-material/Code";
 import BuildIcon from "@mui/icons-material/Build";
 import LockIcon from "@mui/icons-material/Lock";
 import TuneIcon from "@mui/icons-material/Tune";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -106,6 +108,611 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
     </Paper>
   );
 };
+
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#2563eb";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "ROP stands for:",
+    options: ["Return-Oriented Programming", "Register Optimization Path", "Runtime Object Policy", "Remote Operation Protocol"],
+    correctAnswer: 0,
+    explanation: "ROP is Return-Oriented Programming.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "ROP is commonly used to bypass:",
+    options: ["NX/DEP", "TLS", "DNSSEC", "MFA"],
+    correctAnswer: 0,
+    explanation: "ROP reuses executable code to bypass non-executable memory.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "A ROP gadget is:",
+    options: ["A short instruction sequence ending in ret", "A kernel module", "A compiler flag", "A runtime patch"],
+    correctAnswer: 0,
+    explanation: "Gadgets are small code snippets ending in a return.",
+  },
+  {
+    id: 4,
+    topic: "Fundamentals",
+    question: "ROP chains are typically stored on the:",
+    options: ["Stack", "GPU", "Disk", "Network interface"],
+    correctAnswer: 0,
+    explanation: "ROP chains are usually placed on the stack.",
+  },
+  {
+    id: 5,
+    topic: "Entry Points",
+    question: "ROP usually requires control over:",
+    options: ["The return address", "CPU temperature", "Log rotation", "DNS cache"],
+    correctAnswer: 0,
+    explanation: "ROP needs control of the return address to start the chain.",
+  },
+  {
+    id: 6,
+    topic: "Addressing",
+    question: "ASLR makes ROP harder by:",
+    options: ["Randomizing gadget addresses", "Removing gadgets", "Encrypting the stack", "Disabling syscalls"],
+    correctAnswer: 0,
+    explanation: "ASLR randomizes memory layout so gadget addresses change.",
+  },
+  {
+    id: 7,
+    topic: "Addressing",
+    question: "A common ROP prerequisite is:",
+    options: ["An information leak", "A bigger buffer", "A faster CPU", "A new kernel"],
+    correctAnswer: 0,
+    explanation: "Leaks reveal addresses needed to build the chain.",
+  },
+  {
+    id: 8,
+    topic: "Addressing",
+    question: "PIE helps because it:",
+    options: ["Randomizes the main binary base", "Disables canaries", "Enables JOP", "Removes relocations"],
+    correctAnswer: 0,
+    explanation: "PIE makes the main binary relocatable under ASLR.",
+  },
+  {
+    id: 9,
+    topic: "Gadgets",
+    question: "A common gadget to set the first argument on x86-64 is:",
+    options: ["pop rdi; ret", "pop rsp; ret", "syscall; ret", "int3; ret"],
+    correctAnswer: 0,
+    explanation: "The first argument is passed in RDI.",
+  },
+  {
+    id: 10,
+    topic: "Calling Conventions",
+    question: "SysV x86-64 argument order starts with:",
+    options: ["RDI, RSI, RDX", "RAX, RBX, RCX", "RSP, RBP, RDI", "RCX, R8, R9"],
+    correctAnswer: 0,
+    explanation: "Arguments use RDI, RSI, RDX, RCX, R8, R9.",
+  },
+  {
+    id: 11,
+    topic: "Technique",
+    question: "ret2libc is a technique that:",
+    options: ["Reuses libc functions like system()", "Uses only inline shellcode", "Disables ASLR", "Rewrites binaries"],
+    correctAnswer: 0,
+    explanation: "ret2libc redirects execution into libc.",
+  },
+  {
+    id: 12,
+    topic: "Technique",
+    question: "A common ROP goal is to call:",
+    options: ["mprotect to make memory executable", "chmod to hide files", "fsync to flush logs", "chdir to change directories"],
+    correctAnswer: 0,
+    explanation: "mprotect can mark a page as executable for payloads.",
+  },
+  {
+    id: 13,
+    topic: "Technique",
+    question: "ROP differs from shellcode injection because it:",
+    options: ["Uses existing code in memory", "Requires new executable pages", "Uses only network packets", "Does not require a bug"],
+    correctAnswer: 0,
+    explanation: "ROP reuses code that already exists.",
+  },
+  {
+    id: 14,
+    topic: "Tools",
+    question: "A tool commonly used to find gadgets is:",
+    options: ["ROPgadget", "tcpdump", "rsync", "systemctl"],
+    correctAnswer: 0,
+    explanation: "ROPgadget scans binaries for gadgets.",
+  },
+  {
+    id: 15,
+    topic: "Tools",
+    question: "Another gadget finder is:",
+    options: ["ropper", "curl", "tar", "uname"],
+    correctAnswer: 0,
+    explanation: "ropper is a popular gadget finding tool.",
+  },
+  {
+    id: 16,
+    topic: "Stack",
+    question: "A stack pivot changes:",
+    options: ["The stack pointer to attacker-controlled data", "The heap allocator", "The syscall table", "The kernel version"],
+    correctAnswer: 0,
+    explanation: "Stack pivots redirect RSP to a controlled buffer.",
+  },
+  {
+    id: 17,
+    topic: "Stack",
+    question: "Stack alignment is important because:",
+    options: ["Some ABI calls require 16-byte alignment", "It disables ASLR", "It removes canaries", "It prevents syscalls"],
+    correctAnswer: 0,
+    explanation: "Misaligned stacks can crash or break function calls.",
+  },
+  {
+    id: 18,
+    topic: "Variants",
+    question: "JOP stands for:",
+    options: ["Jump-Oriented Programming", "Java Object Protocol", "Join Operations Plan", "Kernel Object Policy"],
+    correctAnswer: 0,
+    explanation: "JOP chains gadgets with jumps instead of returns.",
+  },
+  {
+    id: 19,
+    topic: "Variants",
+    question: "SROP stands for:",
+    options: ["Sigreturn-Oriented Programming", "Stack Return Optimization", "Symbol Resolution Override", "Secure ROP"],
+    correctAnswer: 0,
+    explanation: "SROP abuses sigreturn to control registers.",
+  },
+  {
+    id: 20,
+    topic: "Variants",
+    question: "SROP relies on:",
+    options: ["A sigreturn frame on the stack", "A writable kernel module", "A disabled NX bit", "A static binary only"],
+    correctAnswer: 0,
+    explanation: "SROP crafts a signal frame to load registers.",
+  },
+  {
+    id: 21,
+    topic: "Mitigations",
+    question: "CFI mitigates ROP by:",
+    options: ["Restricting indirect control flow targets", "Removing the stack", "Disabling syscalls", "Encrypting memory"],
+    correctAnswer: 0,
+    explanation: "CFI blocks invalid jumps and calls.",
+  },
+  {
+    id: 22,
+    topic: "Mitigations",
+    question: "Intel CET helps prevent ROP using:",
+    options: ["A shadow stack", "A new heap allocator", "A bigger stack", "A custom linker"],
+    correctAnswer: 0,
+    explanation: "CET uses a shadow stack to protect return addresses.",
+  },
+  {
+    id: 23,
+    topic: "Mitigations",
+    question: "Stack canaries primarily protect against:",
+    options: ["Stack smashing", "Heap spraying", "ASLR bypass", "Symbol stripping"],
+    correctAnswer: 0,
+    explanation: "Canaries detect stack corruption.",
+  },
+  {
+    id: 24,
+    topic: "Mitigations",
+    question: "A canary bypass usually needs:",
+    options: ["A leak of the canary value", "A new compiler", "A shorter buffer", "A kernel module"],
+    correctAnswer: 0,
+    explanation: "Without the canary value, the check fails.",
+  },
+  {
+    id: 25,
+    topic: "Mitigations",
+    question: "Full RELRO helps ROP by:",
+    options: ["Preventing GOT overwrites", "Disabling ASLR", "Enabling JOP", "Removing symbols"],
+    correctAnswer: 0,
+    explanation: "Full RELRO makes the GOT read-only after relocation.",
+  },
+  {
+    id: 26,
+    topic: "Chains",
+    question: "A ROP chain is a series of:",
+    options: ["Gadget addresses and data", "Kernel modules", "Threads", "Passwords"],
+    correctAnswer: 0,
+    explanation: "Chains are gadget addresses with arguments on the stack.",
+  },
+  {
+    id: 27,
+    topic: "Chains",
+    question: "A common first step in building a chain is:",
+    options: ["Finding a control-flow overwrite", "Disabling the network", "Removing logs", "Reinstalling libc"],
+    correctAnswer: 0,
+    explanation: "You need control of RIP before building a chain.",
+  },
+  {
+    id: 28,
+    topic: "Chains",
+    question: "Leaking libc addresses allows you to:",
+    options: ["Compute the libc base", "Disable NX", "Remove CFI", "Increase entropy"],
+    correctAnswer: 0,
+    explanation: "You can calculate gadget addresses from the base.",
+  },
+  {
+    id: 29,
+    topic: "Chains",
+    question: "ret2plt is used to:",
+    options: ["Call a PLT entry for a function", "Patch the kernel", "Encrypt payloads", "Disable ASLR"],
+    correctAnswer: 0,
+    explanation: "ret2plt uses PLT stubs to call functions.",
+  },
+  {
+    id: 30,
+    topic: "Chains",
+    question: "ret2csu refers to:",
+    options: ["Using __libc_csu_init gadgets to set registers", "Turning off canaries", "Randomizing stacks", "Using only syscalls"],
+    correctAnswer: 0,
+    explanation: "ret2csu uses common gadgets in __libc_csu_init.",
+  },
+  {
+    id: 31,
+    topic: "Gadgets",
+    question: "A gadget ending in ret is useful because:",
+    options: ["ret pops the next address from the stack", "ret encrypts memory", "ret clears the heap", "ret disables ASLR"],
+    correctAnswer: 0,
+    explanation: "ret uses the stack to chain execution.",
+  },
+  {
+    id: 32,
+    topic: "Gadgets",
+    question: "Gadgets are often found in:",
+    options: ["libc and the main binary", "Only the kernel", "Only the network stack", "Only scripts"],
+    correctAnswer: 0,
+    explanation: "libc is a rich source of gadgets.",
+  },
+  {
+    id: 33,
+    topic: "Gadgets",
+    question: "A gadget chain typically avoids:",
+    options: ["Bad bytes in addresses", "All memory reads", "All registers", "All syscalls"],
+    correctAnswer: 0,
+    explanation: "Bad bytes can break string-based payloads.",
+  },
+  {
+    id: 34,
+    topic: "Execution",
+    question: "ROP can execute a syscall by:",
+    options: ["Setting registers and using a syscall gadget", "Editing the kernel", "Modifying ASLR", "Disabling NX"],
+    correctAnswer: 0,
+    explanation: "Chains can set registers and invoke syscall.",
+  },
+  {
+    id: 35,
+    topic: "Execution",
+    question: "execve('/bin/sh') is often used to:",
+    options: ["Spawn a shell", "List files", "Rotate logs", "Update packages"],
+    correctAnswer: 0,
+    explanation: "execve launches a new process like a shell.",
+  },
+  {
+    id: 36,
+    topic: "Execution",
+    question: "A ROP chain can call system() if it:",
+    options: ["Sets up arguments in the correct registers", "Changes file permissions only", "Writes to disk only", "Updates libc only"],
+    correctAnswer: 0,
+    explanation: "The correct calling convention is required.",
+  },
+  {
+    id: 37,
+    topic: "Detection",
+    question: "A detection clue for ROP is:",
+    options: ["Repeated returns into non-call sites", "Normal HTTP traffic", "Stable stack traces", "Regular file reads"],
+    correctAnswer: 0,
+    explanation: "ROP can show unusual return patterns.",
+  },
+  {
+    id: 38,
+    topic: "Detection",
+    question: "CFI violations often produce:",
+    options: ["Security exceptions or crashes", "Successful logins", "Faster performance", "Lower memory usage"],
+    correctAnswer: 0,
+    explanation: "CFI detects invalid control flow and can terminate.",
+  },
+  {
+    id: 39,
+    topic: "Detection",
+    question: "Unexpected syscalls after a crash may indicate:",
+    options: ["A ROP chain", "A normal shutdown", "A compiler update", "A network issue"],
+    correctAnswer: 0,
+    explanation: "ROP chains often invoke syscalls after hijacking control.",
+  },
+  {
+    id: 40,
+    topic: "Response",
+    question: "A good response step after a ROP alert is to:",
+    options: ["Collect crash dumps and logs", "Ignore the event", "Disable ASLR", "Remove patches"],
+    correctAnswer: 0,
+    explanation: "Crash data helps confirm exploitation paths.",
+  },
+  {
+    id: 41,
+    topic: "Hardening",
+    question: "PIE and ASLR together:",
+    options: ["Randomize the main binary and libraries", "Disable stack canaries", "Prevent all bugs", "Remove relocations"],
+    correctAnswer: 0,
+    explanation: "PIE enables ASLR for the main binary.",
+  },
+  {
+    id: 42,
+    topic: "Hardening",
+    question: "Disabling symbol stripping helps defenders by:",
+    options: ["Providing better crash backtraces", "Increasing exploitability", "Removing debug data", "Reducing logs"],
+    correctAnswer: 0,
+    explanation: "Symbols improve debugging and analysis.",
+  },
+  {
+    id: 43,
+    topic: "Hardening",
+    question: "Memory-safe languages help prevent ROP because they:",
+    options: ["Reduce memory corruption bugs", "Disable ASLR", "Remove syscalls", "Ignore bounds checks"],
+    correctAnswer: 0,
+    explanation: "ROP needs memory corruption to control flow.",
+  },
+  {
+    id: 44,
+    topic: "Hardening",
+    question: "The best long-term fix for ROP risk is:",
+    options: ["Eliminate memory corruption bugs", "Disable logging", "Remove ASLR", "Block all traffic"],
+    correctAnswer: 0,
+    explanation: "ROP is a symptom of memory safety bugs.",
+  },
+  {
+    id: 45,
+    topic: "ROP Basics",
+    question: "ROP is considered a form of:",
+    options: ["Code-reuse attack", "SQL injection", "Authentication bypass", "Phishing"],
+    correctAnswer: 0,
+    explanation: "ROP reuses existing code instead of injecting new code.",
+  },
+  {
+    id: 46,
+    topic: "ROP Basics",
+    question: "A typical ROP chain ends by:",
+    options: ["Returning into a function or syscall", "Erasing the stack", "Closing the terminal", "Changing file ownership"],
+    correctAnswer: 0,
+    explanation: "Chains often end by calling a target function.",
+  },
+  {
+    id: 47,
+    topic: "ROP Basics",
+    question: "A ret instruction does what?",
+    options: ["Pops an address from the stack and jumps", "Pushes a value to the stack", "Clears registers", "Allocates memory"],
+    correctAnswer: 0,
+    explanation: "ret uses the stack to continue execution.",
+  },
+  {
+    id: 48,
+    topic: "ROP Basics",
+    question: "A typical ROP chain uses:",
+    options: ["Existing executable pages", "Injected new code pages", "Only data pages", "Only kernel pages"],
+    correctAnswer: 0,
+    explanation: "ROP uses existing executable code.",
+  },
+  {
+    id: 49,
+    topic: "ROP Basics",
+    question: "Gadget addresses are often relative to:",
+    options: ["A module base (like libc base)", "The DNS server", "The CPU cache", "The NIC driver"],
+    correctAnswer: 0,
+    explanation: "Gadgets are found within modules like libc.",
+  },
+  {
+    id: 50,
+    topic: "ROP Basics",
+    question: "A ROP chain can be constructed to:",
+    options: ["Call functions with chosen arguments", "Only print text", "Only crash", "Only exit immediately"],
+    correctAnswer: 0,
+    explanation: "ROP chains can set registers and call functions.",
+  },
+  {
+    id: 51,
+    topic: "Mitigations",
+    question: "SafeStack aims to:",
+    options: ["Separate safe and unsafe stack data", "Disable ASLR", "Remove canaries", "Stop syscalls"],
+    correctAnswer: 0,
+    explanation: "SafeStack isolates unsafe stack objects.",
+  },
+  {
+    id: 52,
+    topic: "Mitigations",
+    question: "Stack unwinding for CFI relies on:",
+    options: ["Valid return addresses", "Large buffers", "Disabled NX", "Missing symbols"],
+    correctAnswer: 0,
+    explanation: "CFI checks ensure return targets are valid.",
+  },
+  {
+    id: 53,
+    topic: "Mitigations",
+    question: "A shadow stack stores:",
+    options: ["Protected copies of return addresses", "Heap metadata", "Kernel logs", "TLS secrets"],
+    correctAnswer: 0,
+    explanation: "Shadow stacks protect return addresses from tampering.",
+  },
+  {
+    id: 54,
+    topic: "Mitigations",
+    question: "A common ROP defense is:",
+    options: ["Fine-grained CFI", "Disabling updates", "Removing patches", "Increasing buffer sizes"],
+    correctAnswer: 0,
+    explanation: "CFI limits allowed control-flow targets.",
+  },
+  {
+    id: 55,
+    topic: "Mitigations",
+    question: "ASLR entropy is higher on:",
+    options: ["64-bit systems", "16-bit systems", "DOS", "Microcontrollers"],
+    correctAnswer: 0,
+    explanation: "64-bit address space provides more randomization.",
+  },
+  {
+    id: 56,
+    topic: "Operations",
+    question: "A reliable ROP chain requires:",
+    options: ["Stable gadget addresses", "Only slower CPUs", "Disabled logging", "No debugging"],
+    correctAnswer: 0,
+    explanation: "Address stability or leaks are needed for reliable chains.",
+  },
+  {
+    id: 57,
+    topic: "Operations",
+    question: "A ROP chain is usually built after:",
+    options: ["Finding a memory corruption bug", "Changing DNS", "Installing updates", "Enabling logging"],
+    correctAnswer: 0,
+    explanation: "ROP is a post-exploitation technique.",
+  },
+  {
+    id: 58,
+    topic: "Operations",
+    question: "A common early step is to:",
+    options: ["Find the overflow offset to RIP", "Disable ASLR permanently", "Strip symbols", "Remove protections"],
+    correctAnswer: 0,
+    explanation: "You must locate the offset to control RIP.",
+  },
+  {
+    id: 59,
+    topic: "Operations",
+    question: "A ROP chain can be used to:",
+    options: ["Call write() to leak addresses", "Only reboot systems", "Only change themes", "Only read config files"],
+    correctAnswer: 0,
+    explanation: "Leaking addresses is common to bypass ASLR.",
+  },
+  {
+    id: 60,
+    topic: "Operations",
+    question: "A ret sled is often used to:",
+    options: ["Align the stack before a call", "Disable canaries", "Encrypt payloads", "Remove logs"],
+    correctAnswer: 0,
+    explanation: "Ret sleds can fix alignment issues.",
+  },
+  {
+    id: 61,
+    topic: "Variants",
+    question: "Call-Oriented Programming (COP) chains:",
+    options: ["Use call instructions and call-preceded gadgets", "Use only syscalls", "Use only returns", "Use only jumps"],
+    correctAnswer: 0,
+    explanation: "COP uses call-based gadget chains.",
+  },
+  {
+    id: 62,
+    topic: "Variants",
+    question: "A ROP chain that uses syscall directly is called:",
+    options: ["Syscall-oriented ROP", "Heap spraying", "Format string abuse", "Pointer authentication"],
+    correctAnswer: 0,
+    explanation: "Chains can end in a syscall gadget.",
+  },
+  {
+    id: 63,
+    topic: "Debugging",
+    question: "GDB helps ROP analysis by:",
+    options: ["Inspecting registers and stack state", "Encrypting memory", "Disabling ASLR permanently", "Changing CPU microcode"],
+    correctAnswer: 0,
+    explanation: "GDB shows registers and memory needed for chain building.",
+  },
+  {
+    id: 64,
+    topic: "Debugging",
+    question: "A crash after a gadget may indicate:",
+    options: ["Incorrect stack alignment or bad addresses", "Successful exploit", "No bug present", "Only a UI issue"],
+    correctAnswer: 0,
+    explanation: "Bad addresses or alignment often cause crashes.",
+  },
+  {
+    id: 65,
+    topic: "Debugging",
+    question: "If a gadget address contains a null byte, it may:",
+    options: ["Break string-based payloads", "Increase reliability", "Bypass canaries", "Disable ASLR"],
+    correctAnswer: 0,
+    explanation: "Null bytes terminate strings in many payloads.",
+  },
+  {
+    id: 66,
+    topic: "Defense",
+    question: "The strongest defense against ROP is:",
+    options: ["Memory-safe coding and bug elimination", "Only logging", "Only WAF rules", "Only antivirus"],
+    correctAnswer: 0,
+    explanation: "ROP depends on memory corruption bugs.",
+  },
+  {
+    id: 67,
+    topic: "Defense",
+    question: "Keeping libc updated helps because:",
+    options: ["It changes gadget layouts and fixes bugs", "It disables ASLR", "It removes stack canaries", "It avoids syscalls"],
+    correctAnswer: 0,
+    explanation: "Updates can fix vulnerabilities and alter gadget offsets.",
+  },
+  {
+    id: 68,
+    topic: "Defense",
+    question: "Removing unused libraries helps by:",
+    options: ["Reducing available gadgets", "Increasing gadget count", "Disabling ASLR", "Breaking logs"],
+    correctAnswer: 0,
+    explanation: "Fewer libraries means fewer gadgets.",
+  },
+  {
+    id: 69,
+    topic: "Defense",
+    question: "Hardening flags like -fstack-protector help by:",
+    options: ["Detecting stack corruption", "Creating gadgets", "Disabling CFI", "Removing PIE"],
+    correctAnswer: 0,
+    explanation: "Canaries detect stack smashing before control flow hijack.",
+  },
+  {
+    id: 70,
+    topic: "Defense",
+    question: "Using full RELRO helps mitigate:",
+    options: ["GOT overwrite attacks", "DNS poisoning", "SQL injection", "Phishing"],
+    correctAnswer: 0,
+    explanation: "Full RELRO makes the GOT read-only.",
+  },
+  {
+    id: 71,
+    topic: "ROP Basics",
+    question: "ROP typically follows a bug like:",
+    options: ["Stack buffer overflow", "XSS only", "SQL injection only", "CSRF only"],
+    correctAnswer: 0,
+    explanation: "ROP requires memory corruption like a buffer overflow.",
+  },
+  {
+    id: 72,
+    topic: "ROP Basics",
+    question: "A gadget chain must respect:",
+    options: ["Calling conventions and stack layout", "Only DNS records", "Only UI state", "Only file permissions"],
+    correctAnswer: 0,
+    explanation: "ROP must follow ABI rules to work.",
+  },
+  {
+    id: 73,
+    topic: "ROP Basics",
+    question: "ROP is more feasible when:",
+    options: ["Address randomization is weak or leaked", "All symbols are removed", "All libraries are stripped", "All inputs are validated"],
+    correctAnswer: 0,
+    explanation: "Weak ASLR or leaks make gadget addresses predictable.",
+  },
+  {
+    id: 74,
+    topic: "ROP Basics",
+    question: "A typical ROP chain uses data from:",
+    options: ["The stack and memory pages", "Only registers", "Only CPU cache", "Only BIOS"],
+    correctAnswer: 0,
+    explanation: "ROP uses stack data and gadget addresses in memory.",
+  },
+  {
+    id: 75,
+    topic: "ROP Basics",
+    question: "ROP is best described as:",
+    options: ["Chaining existing code to perform attacker-chosen actions", "Writing new code into the kernel", "Only a denial-of-service technique", "A network protocol"],
+    correctAnswer: 0,
+    explanation: "ROP reuses existing code to execute attacker logic.",
+  },
+];
 
 const ReturnOrientedProgrammingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -357,9 +964,15 @@ rg -n "\\+\\+|--|\\[.*\\]" src`;
     <LearnPageLayout pageTitle="Return-Oriented Programming (ROP)" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
       <Container maxWidth="lg">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2, color: "grey.400" }}>
-          Back to Learn Hub
-        </Button>
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 2 }}
+        />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
           <MemoryIcon sx={{ fontSize: 42, color: "#2563eb" }} />
@@ -931,6 +1544,28 @@ rg -n "\\+\\+|--|\\[.*\\]" src`;
           </TabPanel>
         </Paper>
 
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${QUIZ_ACCENT_COLOR}33`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="Return-Oriented Programming Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
@@ -938,7 +1573,7 @@ rg -n "\\+\\+|--|\\[.*\\]" src`;
             onClick={() => navigate("/learn")}
             sx={{ borderColor: "#2563eb", color: "#2563eb" }}
           >
-            Back to Learn Hub
+            Back to Learning Hub
           </Button>
         </Box>
       </Container>

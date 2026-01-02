@@ -35,7 +35,7 @@ import {
   StepLabel,
   StepContent,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ApiIcon from "@mui/icons-material/Api";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -211,11 +211,19 @@ export default function APITestingGuidePage() {
   return (
     <LearnPageLayout pageTitle="API Endpoint Tester Guide" pageContext={pageContext}>
     <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* Back Button */}
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
+
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-        <IconButton onClick={() => navigate("/learn")} color="primary">
-          <ArrowBackIcon />
-        </IconButton>
         <ApiIcon sx={{ fontSize: 48, color: "#22c55e" }} />
         <Box>
           <Typography variant="h3" fontWeight="bold">
@@ -770,6 +778,18 @@ export default function APITestingGuidePage() {
           </Grid>
         </Grid>
       </TabPanel>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

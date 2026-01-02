@@ -25,8 +25,9 @@ import {
   Breadcrumbs,
   Link as MuiLink,
   Divider,
+  Button,
 } from "@mui/material";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -138,6 +139,7 @@ const ZONE_TRANSFER_INFO = {
 
 export default function DNSGuidePage() {
   const theme = useTheme();
+  const navigate = useNavigate();
 
   const pageContext = `This page covers DNS reconnaissance and security including:
 - DNS record types: A, AAAA, MX, NS, TXT, CNAME, SOA, SRV, PTR, CAA
@@ -838,6 +840,18 @@ whois -h whois.verisign-grs.com example.com`}
           ))}
         </Grid>
       </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

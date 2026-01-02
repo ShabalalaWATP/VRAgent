@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -9,12 +10,18 @@ import {
   Chip,
   alpha,
   useTheme,
+  useMediaQuery,
   Divider,
   Button,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
+  Fab,
+  Drawer,
+  IconButton,
+  Tooltip,
+  LinearProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import StorageIcon from "@mui/icons-material/Storage";
@@ -38,7 +45,11 @@ import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import WarningIcon from "@mui/icons-material/Warning";
 import SchoolIcon from "@mui/icons-material/School";
 import WorkIcon from "@mui/icons-material/Work";
-import { useNavigate } from "react-router-dom";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 // ========== COURSE OUTLINE SECTIONS ==========
 const outlineSections = [
@@ -180,23 +191,988 @@ const quickStats = [
   { value: "∞", label: "Coffee Required", color: "#f59e0b" },
 ];
 
+const ACCENT_COLOR = "#3b82f6";
+const QUIZ_QUESTION_COUNT = 10;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
+  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "What is the primary goal of systems administration?",
+    options: [
+      "Keep systems reliable and available",
+      "Design user interfaces",
+      "Write only application code",
+      "Sell hardware and licenses",
+    ],
+    correctAnswer: 0,
+    explanation: "Sysadmins focus on uptime, reliability, and operations.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "An SLA of 99.9% uptime allows about how much downtime per year?",
+    options: ["About 8.8 hours", "About 1 hour", "About 1 day", "About 1 week"],
+    correctAnswer: 0,
+    explanation: "99.9% uptime equates to roughly 8.8 hours of downtime annually.",
+  },
+  {
+    id: 3,
+    topic: "Backup & DR",
+    question: "RPO (Recovery Point Objective) is the:",
+    options: [
+      "Maximum acceptable data loss measured in time",
+      "Time to restore service",
+      "Number of backups stored",
+      "Cost of downtime",
+    ],
+    correctAnswer: 0,
+    explanation: "RPO defines how much data loss is acceptable in time.",
+  },
+  {
+    id: 4,
+    topic: "Backup & DR",
+    question: "RTO (Recovery Time Objective) is the:",
+    options: [
+      "Target time to restore service after an outage",
+      "Maximum data loss window",
+      "Number of replicas required",
+      "Time between backups",
+    ],
+    correctAnswer: 0,
+    explanation: "RTO sets the time goal to bring services back online.",
+  },
+  {
+    id: 5,
+    topic: "Backup & DR",
+    question: "The 3-2-1 backup rule means:",
+    options: [
+      "3 copies, 2 media types, 1 offsite copy",
+      "3 backups per day, 2 per week, 1 per month",
+      "3 servers, 2 switches, 1 firewall",
+      "3 disks, 2 RAID cards, 1 spare",
+    ],
+    correctAnswer: 0,
+    explanation: "3-2-1 ensures redundancy across media and location.",
+  },
+  {
+    id: 6,
+    topic: "Storage & Hardware",
+    question: "RAID 1 provides:",
+    options: ["Mirroring for redundancy", "Striping with no redundancy", "Parity across disks only", "A single disk volume"],
+    correctAnswer: 0,
+    explanation: "RAID 1 mirrors data to provide redundancy.",
+  },
+  {
+    id: 7,
+    topic: "Storage & Hardware",
+    question: "RAID 5 can tolerate:",
+    options: ["One disk failure", "Two disk failures", "No disk failures", "Only controller failure"],
+    correctAnswer: 0,
+    explanation: "RAID 5 uses parity and tolerates one disk failure.",
+  },
+  {
+    id: 8,
+    topic: "Storage & Hardware",
+    question: "RAID 10 is best described as:",
+    options: ["Stripe of mirrors", "Mirror of stripes", "Parity with striping", "Single large disk"],
+    correctAnswer: 0,
+    explanation: "RAID 10 combines striping and mirroring for performance and redundancy.",
+  },
+  {
+    id: 9,
+    topic: "Storage & Hardware",
+    question: "RAID 0 provides:",
+    options: ["No redundancy, improved performance", "Mirroring only", "Parity and mirroring", "Automatic backups"],
+    correctAnswer: 0,
+    explanation: "RAID 0 stripes data with no redundancy.",
+  },
+  {
+    id: 10,
+    topic: "Storage & Hardware",
+    question: "ECC memory is used to:",
+    options: ["Detect and correct memory errors", "Increase storage capacity", "Improve GPU performance", "Encrypt disks"],
+    correctAnswer: 0,
+    explanation: "ECC reduces the impact of memory errors.",
+  },
+  {
+    id: 11,
+    topic: "Storage & Hardware",
+    question: "Hot-swappable drives allow you to:",
+    options: [
+      "Replace a drive without shutting down the server",
+      "Increase CPU speed instantly",
+      "Run containers faster",
+      "Avoid backups",
+    ],
+    correctAnswer: 0,
+    explanation: "Hot swap enables hardware replacement without downtime.",
+  },
+  {
+    id: 12,
+    topic: "Hardware",
+    question: "A 1U rack unit is approximately:",
+    options: ["1.75 inches tall", "1 inch tall", "2.5 inches tall", "4 inches tall"],
+    correctAnswer: 0,
+    explanation: "1U equals 1.75 inches in rack height.",
+  },
+  {
+    id: 13,
+    topic: "Identity & Access",
+    question: "Active Directory is primarily used for:",
+    options: ["Centralized authentication and management", "Web hosting", "DNS caching only", "Disk encryption"],
+    correctAnswer: 0,
+    explanation: "Active Directory centralizes identity and access control.",
+  },
+  {
+    id: 14,
+    topic: "Identity & Access",
+    question: "LDAP is a protocol for:",
+    options: ["Directory services and authentication", "File transfers", "Routing packets", "Web APIs"],
+    correctAnswer: 0,
+    explanation: "LDAP is commonly used for directory and auth services.",
+  },
+  {
+    id: 15,
+    topic: "Operating Systems",
+    question: "The root user in Linux is:",
+    options: ["The superuser with full privileges", "A standard user", "A guest account", "A read-only account"],
+    correctAnswer: 0,
+    explanation: "Root has unrestricted access to the system.",
+  },
+  {
+    id: 16,
+    topic: "Operating Systems",
+    question: "The sudo command is used to:",
+    options: ["Run commands with elevated privileges", "Create new disks", "Start the GUI", "Encrypt files automatically"],
+    correctAnswer: 0,
+    explanation: "sudo runs commands as another user, typically root.",
+  },
+  {
+    id: 17,
+    topic: "Operating Systems",
+    question: "On systemd-based Linux systems, services are managed with:",
+    options: ["systemctl", "init.d only", "taskmgr", "regedit"],
+    correctAnswer: 0,
+    explanation: "systemctl controls systemd services.",
+  },
+  {
+    id: 18,
+    topic: "Network Services",
+    question: "DNS is responsible for:",
+    options: ["Resolving names to IP addresses", "Assigning IPs to hosts", "Encrypting traffic", "Filtering spam"],
+    correctAnswer: 0,
+    explanation: "DNS maps human-friendly names to IP addresses.",
+  },
+  {
+    id: 19,
+    topic: "Network Services",
+    question: "DHCP is responsible for:",
+    options: ["Automatically assigning IP configuration", "Resolving hostnames", "Synchronizing time", "Logging events"],
+    correctAnswer: 0,
+    explanation: "DHCP assigns IP settings to clients.",
+  },
+  {
+    id: 20,
+    topic: "Network Services",
+    question: "NTP is used to:",
+    options: ["Synchronize system clocks", "Route network packets", "Back up files", "Compress logs"],
+    correctAnswer: 0,
+    explanation: "NTP keeps system time in sync.",
+  },
+  {
+    id: 21,
+    topic: "Network Services",
+    question: "A load balancer:",
+    options: ["Distributes traffic across servers", "Stores backups", "Manages user accounts", "Provides disk parity"],
+    correctAnswer: 0,
+    explanation: "Load balancers spread traffic for availability and scale.",
+  },
+  {
+    id: 22,
+    topic: "Network Services",
+    question: "A firewall is used to:",
+    options: ["Allow or block network traffic", "Detect malware signatures only", "Provide DNS resolution", "Balance CPU load"],
+    correctAnswer: 0,
+    explanation: "Firewalls enforce network access rules.",
+  },
+  {
+    id: 23,
+    topic: "Network Services",
+    question: "A VLAN is used to:",
+    options: ["Segment networks logically", "Encrypt data at rest", "Create backups", "Increase disk speed"],
+    correctAnswer: 0,
+    explanation: "VLANs separate traffic at the network layer.",
+  },
+  {
+    id: 24,
+    topic: "Storage",
+    question: "NAS typically provides:",
+    options: ["File-level storage over the network", "Block-level storage only", "Local-only storage", "GPU acceleration"],
+    correctAnswer: 0,
+    explanation: "NAS exposes shared files over the network.",
+  },
+  {
+    id: 25,
+    topic: "Storage",
+    question: "LVM allows you to:",
+    options: ["Resize and manage logical volumes flexibly", "Disable file permissions", "Replace CPUs live", "Create DNS zones"],
+    correctAnswer: 0,
+    explanation: "LVM adds flexible volume management.",
+  },
+  {
+    id: 26,
+    topic: "Storage",
+    question: "NTFS is a filesystem commonly used by:",
+    options: ["Windows", "Linux only", "macOS only", "Network switches"],
+    correctAnswer: 0,
+    explanation: "NTFS is the default filesystem for Windows.",
+  },
+  {
+    id: 27,
+    topic: "Storage",
+    question: "ext4 is a filesystem commonly used by:",
+    options: ["Linux", "Windows only", "macOS only", "Routers"],
+    correctAnswer: 0,
+    explanation: "ext4 is a common Linux filesystem.",
+  },
+  {
+    id: 28,
+    topic: "Storage",
+    question: "iSCSI is primarily used for:",
+    options: ["Block storage over IP networks", "File sharing over SMB", "Email transfer", "VPN tunneling only"],
+    correctAnswer: 0,
+    explanation: "iSCSI carries block storage over IP.",
+  },
+  {
+    id: 29,
+    topic: "Monitoring",
+    question: "Which is an example of a metric?",
+    options: ["CPU utilization percentage", "System event log", "Audit log entry", "Email body"],
+    correctAnswer: 0,
+    explanation: "Metrics are numeric measurements like CPU usage.",
+  },
+  {
+    id: 30,
+    topic: "Monitoring",
+    question: "A SIEM is used to:",
+    options: ["Aggregate and analyze security logs", "Provision VMs", "Manage DNS zones", "Run backups only"],
+    correctAnswer: 0,
+    explanation: "SIEMs collect and analyze security events.",
+  },
+  {
+    id: 31,
+    topic: "Monitoring",
+    question: "SNMP is commonly used for:",
+    options: ["Monitoring network devices", "Encrypting disks", "Deploying containers", "Managing user groups"],
+    correctAnswer: 0,
+    explanation: "SNMP provides monitoring for network equipment.",
+  },
+  {
+    id: 32,
+    topic: "Monitoring",
+    question: "Log rotation helps prevent:",
+    options: ["Disks filling up from log files", "User logins", "CPU spikes", "Network latency"],
+    correctAnswer: 0,
+    explanation: "Rotation controls log growth and disk usage.",
+  },
+  {
+    id: 33,
+    topic: "Monitoring",
+    question: "A good way to reduce alert fatigue is to:",
+    options: ["Tune alerts and remove noisy rules", "Disable all monitoring", "Send every alert to everyone", "Ignore false positives"],
+    correctAnswer: 0,
+    explanation: "Alert tuning focuses attention on meaningful signals.",
+  },
+  {
+    id: 34,
+    topic: "Security",
+    question: "Least privilege means:",
+    options: ["Users get only the access they need", "All users are admins", "Access is never reviewed", "Permissions are shared broadly"],
+    correctAnswer: 0,
+    explanation: "Least privilege limits access to reduce risk.",
+  },
+  {
+    id: 35,
+    topic: "Security",
+    question: "MFA improves security by:",
+    options: ["Requiring a second verification factor", "Doubling CPU cores", "Encrypting RAM", "Stopping backups"],
+    correctAnswer: 0,
+    explanation: "MFA adds another layer beyond passwords.",
+  },
+  {
+    id: 36,
+    topic: "Security",
+    question: "Patch management is important because it:",
+    options: ["Fixes vulnerabilities and bugs", "Increases storage size", "Replaces hardware", "Disables logging"],
+    correctAnswer: 0,
+    explanation: "Patching removes known weaknesses and issues.",
+  },
+  {
+    id: 37,
+    topic: "Security",
+    question: "A security baseline is:",
+    options: ["A standard configuration used to harden systems", "A backup schedule", "A monitoring dashboard", "A network cable type"],
+    correctAnswer: 0,
+    explanation: "Baselines define secure default configurations.",
+  },
+  {
+    id: 38,
+    topic: "Security",
+    question: "Defense in depth means:",
+    options: ["Using multiple layers of security controls", "Only a firewall", "Only antivirus", "Only encryption"],
+    correctAnswer: 0,
+    explanation: "Multiple layers reduce single points of failure.",
+  },
+  {
+    id: 39,
+    topic: "Automation",
+    question: "Ansible is known for being:",
+    options: ["Agentless and push-based", "Agent-only and pull-based", "A database engine", "A hypervisor"],
+    correctAnswer: 0,
+    explanation: "Ansible uses SSH and pushes configuration without agents.",
+  },
+  {
+    id: 40,
+    topic: "Automation",
+    question: "Puppet typically works by:",
+    options: ["Using agents to pull configuration", "Running only in browsers", "Managing DNS only", "Providing backup storage"],
+    correctAnswer: 0,
+    explanation: "Puppet agents pull configuration from the master.",
+  },
+  {
+    id: 41,
+    topic: "Automation",
+    question: "Infrastructure as Code is best stored in:",
+    options: ["Version control", "A printer", "Email threads", "Temporary folders"],
+    correctAnswer: 0,
+    explanation: "IaC should be versioned like software.",
+  },
+  {
+    id: 42,
+    topic: "Automation",
+    question: "PowerShell is primarily used for:",
+    options: ["Windows automation and scripting", "GPU programming", "Web design", "Database replication"],
+    correctAnswer: 0,
+    explanation: "PowerShell automates Windows administration.",
+  },
+  {
+    id: 43,
+    topic: "Automation",
+    question: "Cron is used to:",
+    options: ["Schedule recurring tasks on Unix-like systems", "Manage DNS caches", "Start GUI sessions", "Encrypt disks"],
+    correctAnswer: 0,
+    explanation: "Cron schedules recurring jobs on Unix-like systems.",
+  },
+  {
+    id: 44,
+    topic: "Automation",
+    question: "Windows Task Scheduler is used to:",
+    options: ["Schedule jobs and scripts", "Manage RAID arrays", "Create DNS records", "Run containers"],
+    correctAnswer: 0,
+    explanation: "Task Scheduler runs tasks at scheduled times.",
+  },
+  {
+    id: 45,
+    topic: "Virtualization",
+    question: "A Type 1 hypervisor runs:",
+    options: ["Directly on hardware", "Inside a guest VM", "Only on a router", "Only with containers"],
+    correctAnswer: 0,
+    explanation: "Type 1 hypervisors run on bare metal.",
+  },
+  {
+    id: 46,
+    topic: "Virtualization",
+    question: "A VM snapshot is:",
+    options: ["A point-in-time copy of a VM state", "A live migration", "A backup tape", "A disk format"],
+    correctAnswer: 0,
+    explanation: "Snapshots capture the VM state at a point in time.",
+  },
+  {
+    id: 47,
+    topic: "Containers",
+    question: "Containers differ from VMs because they:",
+    options: ["Share the host OS kernel", "Require separate hardware", "Cannot be moved", "Only run Windows"],
+    correctAnswer: 0,
+    explanation: "Containers share the host kernel for efficiency.",
+  },
+  {
+    id: 48,
+    topic: "Containers",
+    question: "Kubernetes is used to:",
+    options: ["Orchestrate and scale containers", "Manage RAID arrays", "Provide DNS only", "Encrypt backups"],
+    correctAnswer: 0,
+    explanation: "Kubernetes manages container deployment and scaling.",
+  },
+  {
+    id: 49,
+    topic: "Containers",
+    question: "A Docker image is:",
+    options: ["A template for creating containers", "A running container", "A VM snapshot", "A backup schedule"],
+    correctAnswer: 0,
+    explanation: "Images are templates for container instances.",
+  },
+  {
+    id: 50,
+    topic: "Web Services",
+    question: "HTTPS provides security using:",
+    options: ["TLS encryption", "DNS caching", "DHCP leases", "NTP sync"],
+    correctAnswer: 0,
+    explanation: "HTTPS secures traffic using TLS.",
+  },
+  {
+    id: 51,
+    topic: "Web Services",
+    question: "A reverse proxy:",
+    options: ["Sits in front of servers and forwards requests", "Runs only on desktops", "Creates backups", "Stores passwords"],
+    correctAnswer: 0,
+    explanation: "Reverse proxies front-end services and route requests.",
+  },
+  {
+    id: 52,
+    topic: "Web Services",
+    question: "Apache and Nginx are:",
+    options: ["Web servers", "Database engines", "Hypervisors", "DNS clients"],
+    correctAnswer: 0,
+    explanation: "Apache and Nginx are common web servers.",
+  },
+  {
+    id: 53,
+    topic: "Web Services",
+    question: "IIS is a web server on:",
+    options: ["Windows", "Linux only", "macOS only", "Network switches"],
+    correctAnswer: 0,
+    explanation: "IIS is Microsoft's web server for Windows.",
+  },
+  {
+    id: 54,
+    topic: "Databases",
+    question: "SQL databases typically use:",
+    options: ["Structured schemas and tables", "Only key-value pairs", "Only files", "No queries"],
+    correctAnswer: 0,
+    explanation: "SQL databases use tables with defined schemas.",
+  },
+  {
+    id: 55,
+    topic: "Databases",
+    question: "In ACID, Atomicity means:",
+    options: ["Transactions are all-or-nothing", "Transactions are fast", "Data is encrypted", "Queries are cached"],
+    correctAnswer: 0,
+    explanation: "Atomicity ensures full success or full rollback.",
+  },
+  {
+    id: 56,
+    topic: "Backup & DR",
+    question: "A differential backup includes changes:",
+    options: ["Since the last full backup", "Since the last incremental backup", "From all time", "Only from today"],
+    correctAnswer: 0,
+    explanation: "Differential backups capture changes since the last full backup.",
+  },
+  {
+    id: 57,
+    topic: "Documentation",
+    question: "A runbook is:",
+    options: ["Step-by-step operational instructions", "A hardware inventory", "A DNS zone file", "A container image"],
+    correctAnswer: 0,
+    explanation: "Runbooks describe procedures for operations.",
+  },
+  {
+    id: 58,
+    topic: "Change Management",
+    question: "Change management often uses:",
+    options: ["Maintenance windows", "Always-on changes with no notice", "No approvals", "No documentation"],
+    correctAnswer: 0,
+    explanation: "Maintenance windows reduce risk during changes.",
+  },
+  {
+    id: 59,
+    topic: "Operations",
+    question: "A ticketing system is used to:",
+    options: ["Track work requests and incidents", "Store backups", "Run antivirus scans", "Load balance traffic"],
+    correctAnswer: 0,
+    explanation: "Tickets track work and incidents for accountability.",
+  },
+  {
+    id: 60,
+    topic: "Operations",
+    question: "A post-incident review helps teams:",
+    options: ["Learn and prevent future issues", "Avoid logging", "Increase downtime", "Delete evidence"],
+    correctAnswer: 0,
+    explanation: "Postmortems capture lessons and improvements.",
+  },
+  {
+    id: 61,
+    topic: "Troubleshooting",
+    question: "A good first troubleshooting step is to:",
+    options: ["Identify and define the problem", "Reinstall the OS immediately", "Ignore user reports", "Change multiple things at once"],
+    correctAnswer: 0,
+    explanation: "Clear problem definition guides efficient troubleshooting.",
+  },
+  {
+    id: 62,
+    topic: "Troubleshooting",
+    question: "The ping command is used to:",
+    options: ["Test basic network connectivity", "List running processes", "Create user accounts", "Rotate logs"],
+    correctAnswer: 0,
+    explanation: "Ping checks reachability and latency.",
+  },
+  {
+    id: 63,
+    topic: "Troubleshooting",
+    question: "Traceroute (tracert) is used to:",
+    options: ["Show the path packets take across the network", "Change DNS zones", "Encrypt traffic", "Mount disks"],
+    correctAnswer: 0,
+    explanation: "Traceroute shows each hop along a network path.",
+  },
+  {
+    id: 64,
+    topic: "Troubleshooting",
+    question: "netstat is commonly used to:",
+    options: ["View network connections and listening ports", "Edit files", "Compress logs", "Schedule tasks"],
+    correctAnswer: 0,
+    explanation: "netstat lists active connections and ports.",
+  },
+  {
+    id: 65,
+    topic: "Network Services",
+    question: "SSH typically uses port:",
+    options: ["22", "25", "80", "443"],
+    correctAnswer: 0,
+    explanation: "SSH default port is 22.",
+  },
+  {
+    id: 66,
+    topic: "Network Services",
+    question: "RDP typically uses port:",
+    options: ["3389", "22", "53", "161"],
+    correctAnswer: 0,
+    explanation: "RDP default port is 3389.",
+  },
+  {
+    id: 67,
+    topic: "Monitoring",
+    question: "Syslog is:",
+    options: ["A standard for logging messages", "A firewall rule", "A backup appliance", "A filesystem"],
+    correctAnswer: 0,
+    explanation: "Syslog standardizes logging formats and transport.",
+  },
+  {
+    id: 68,
+    topic: "Identity & Access",
+    question: "Centralized authentication (AD/LDAP) helps by:",
+    options: ["Managing users in one place", "Eliminating passwords entirely", "Replacing backups", "Speeding up storage"],
+    correctAnswer: 0,
+    explanation: "Centralized identity simplifies access control.",
+  },
+  {
+    id: 69,
+    topic: "Backup & DR",
+    question: "Backups should be tested to ensure:",
+    options: ["They can be restored successfully", "They never change", "They use more CPU", "They are always incremental"],
+    correctAnswer: 0,
+    explanation: "Only tested backups are reliable.",
+  },
+  {
+    id: 70,
+    topic: "Capacity Planning",
+    question: "Capacity planning involves:",
+    options: ["Forecasting resource growth and needs", "Disabling monitoring", "Removing logs", "Avoiding upgrades"],
+    correctAnswer: 0,
+    explanation: "Planning keeps infrastructure ahead of demand.",
+  },
+  {
+    id: 71,
+    topic: "Availability",
+    question: "High availability is achieved through:",
+    options: ["Redundancy and failover", "Single points of failure", "Manual recovery only", "No monitoring"],
+    correctAnswer: 0,
+    explanation: "Redundancy and failover reduce downtime.",
+  },
+  {
+    id: 72,
+    topic: "Hardware",
+    question: "A UPS provides:",
+    options: ["Battery backup power", "Network routing", "Disk encryption", "CPU scheduling"],
+    correctAnswer: 0,
+    explanation: "UPS systems keep equipment powered during outages.",
+  },
+  {
+    id: 73,
+    topic: "Security",
+    question: "RBAC stands for:",
+    options: ["Role-Based Access Control", "Remote Backup and Cache", "Rapid Build and Configure", "Routing Between Access Circuits"],
+    correctAnswer: 0,
+    explanation: "RBAC assigns permissions based on roles.",
+  },
+  {
+    id: 74,
+    topic: "Availability",
+    question: "Clustering is commonly used for:",
+    options: ["Failover and high availability", "Encrypting files", "User training", "DNS resolution"],
+    correctAnswer: 0,
+    explanation: "Clusters provide redundancy and failover.",
+  },
+  {
+    id: 75,
+    topic: "Security",
+    question: "A service account should generally be:",
+    options: ["Non-interactive with least-privilege access", "Shared by all users", "Used for email", "Given domain admin by default"],
+    correctAnswer: 0,
+    explanation: "Service accounts should be scoped and non-interactive.",
+  },
+];
+
+
 export default function SystemsAdministrationPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [quizPool] = useState<QuizQuestion[]>(() =>
+    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
+  );
+
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+
+  // Module navigation items
+  const moduleNavItems = [
+    { id: "what-is-sysadmin", label: "What is SysAdmin?", icon: "🖥️" },
+    { id: "server-hardware", label: "Server Hardware", icon: "🔧" },
+    { id: "operating-systems", label: "Server OS", icon: "💻" },
+    { id: "user-management", label: "User Management", icon: "👥" },
+    { id: "networking-services", label: "Network Services", icon: "🌐" },
+    { id: "storage-management", label: "Storage", icon: "💾" },
+    { id: "backup-recovery", label: "Backup & DR", icon: "🔄" },
+    { id: "monitoring-logging", label: "Monitoring", icon: "📊" },
+    { id: "security-hardening", label: "Security", icon: "🔒" },
+    { id: "automation-scripting", label: "Automation", icon: "⚙️" },
+    { id: "virtualization", label: "Virtualization", icon: "☁️" },
+    { id: "web-services", label: "Web Services", icon: "🌍" },
+    { id: "database-admin", label: "Database Admin", icon: "🗃️" },
+    { id: "documentation", label: "Documentation", icon: "📝" },
+    { id: "troubleshooting", label: "Troubleshooting", icon: "🔍" },
+    { id: "career-certs", label: "Career & Certs", icon: "🎓" },
+    { id: "quiz", label: "Quiz", icon: "❓" },
+  ];
+
+  // Scroll to section
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  // Track active section on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = moduleNavItems.map(item => item.id);
+      let currentSection = "";
+      
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll(); // Initial check
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Scroll to top helper
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // Calculate progress based on active section
+  const currentIndex = moduleNavItems.findIndex(item => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / moduleNavItems.length) * 100 : 0;
+
+  // Desktop sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(ACCENT_COLOR, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(ACCENT_COLOR, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: ACCENT_COLOR, display: "flex", alignItems: "center", gap: 1 }}>
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Progress</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: ACCENT_COLOR }}>{Math.round(progressPercent)}%</Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(ACCENT_COLOR, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: ACCENT_COLOR,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {moduleNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(ACCENT_COLOR, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? ACCENT_COLOR : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   const pageContext = `Systems Administration comprehensive guide covering server management, infrastructure, and IT operations. Topics include: server hardware (rack/blade servers, RAID, data centers), server operating systems (Windows Server, Linux), user and group management (Active Directory, LDAP), network services (DNS, DHCP, firewalls), storage management (NAS, SAN, LVM), backup and disaster recovery (3-2-1 rule, RPO/RTO), monitoring and logging (SIEM, alerting), security hardening (patching, baselines), automation (Ansible, PowerShell, Bash), virtualization (VMware, Hyper-V, Docker, Kubernetes), web services (Apache, Nginx, IIS, SSL/TLS), database administration, documentation best practices, troubleshooting methodology, and career certifications (CompTIA Server+, RHCSA, MCSA).`;
 
   return (
     <LearnPageLayout pageTitle="Systems Administration" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Back Button */}
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ mb: 3 }}
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: ACCENT_COLOR,
+            "&:hover": { bgcolor: "#2563eb" },
+            boxShadow: `0 4px 20px ${alpha(ACCENT_COLOR, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
         >
-          Back to Learning Hub
-        </Button>
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(ACCENT_COLOR, 0.15),
+            color: ACCENT_COLOR,
+            "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: ACCENT_COLOR }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(ACCENT_COLOR, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: ACCENT_COLOR }}>{Math.round(progressPercent)}%</Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(ACCENT_COLOR, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: ACCENT_COLOR,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {moduleNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(ACCENT_COLOR, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? ACCENT_COLOR : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(ACCENT_COLOR, 0.2),
+                      color: ACCENT_COLOR,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(ACCENT_COLOR, 0.3), color: ACCENT_COLOR }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(ACCENT_COLOR, 0.3), color: ACCENT_COLOR }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {/* Desktop Sidebar */}
+        {sidebarNav}
+
+        {/* Main Content */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+        {/* Back Button */}
+        <Chip
+          component={Link}
+          to="/learn"
+          icon={<ArrowBackIcon />}
+          label="Back to Learning Hub"
+          clickable
+          variant="outlined"
+          sx={{ borderRadius: 2, mb: 3 }}
+        />
 
         {/* Hero Banner */}
         <Paper
@@ -294,78 +1270,80 @@ export default function SystemsAdministrationPage() {
           </Box>
         </Paper>
 
-        {/* Quick Navigation */}
-        <Paper
-          sx={{
-            p: 2,
-            mb: 4,
-            borderRadius: 3,
-            position: "sticky",
-            top: 70,
-            zIndex: 100,
-            backdropFilter: "blur(10px)",
-            bgcolor: alpha(theme.palette.background.paper, 0.9),
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            boxShadow: `0 4px 20px ${alpha("#000", 0.1)}`,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
-            <Chip
-              label="← Learning Hub"
-              size="small"
-              clickable
-              onClick={() => navigate("/learn")}
-              sx={{
-                fontWeight: 700,
-                fontSize: "0.75rem",
-                bgcolor: alpha("#3b82f6", 0.1),
-                color: "#3b82f6",
-                "&:hover": {
-                  bgcolor: alpha("#3b82f6", 0.2),
-                },
-              }}
-            />
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.secondary" }}>
-              Quick Navigation
-            </Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {[
-              { label: "What is SysAdmin?", id: "what-is-sysadmin" },
-              { label: "Server Hardware", id: "server-hardware" },
-              { label: "Server OS", id: "operating-systems" },
-              { label: "User Management", id: "user-management" },
-              { label: "Network Services", id: "networking-services" },
-              { label: "Storage", id: "storage-management" },
-              { label: "Backup & DR", id: "backup-recovery" },
-              { label: "Monitoring", id: "monitoring-logging" },
-              { label: "Security", id: "security-hardening" },
-              { label: "Automation", id: "automation-scripting" },
-              { label: "Virtualization", id: "virtualization" },
-              { label: "Web Services", id: "web-services" },
-              { label: "Database Admin", id: "database-admin" },
-              { label: "Documentation", id: "documentation" },
-              { label: "Troubleshooting", id: "troubleshooting" },
-              { label: "Career Paths", id: "career-certs" },
-            ].map((nav) => (
-              <Chip
-                key={nav.id}
-                label={nav.label}
-                size="small"
-                clickable
-                onClick={() => document.getElementById(nav.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        {/* ==================== COURSE OUTLINE (Moved to top) ==================== */}
+        <Box id="outline" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, scrollMarginTop: 80 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>
+            📚 Course Outline
+          </Typography>
+          <Chip label={`${outlineSections.length} Sections`} size="small" color="primary" variant="outlined" />
+        </Box>
+
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {outlineSections.map((section, index) => (
+            <Grid item xs={12} sm={6} md={4} key={section.id}>
+              <Paper
                 sx={{
-                  fontWeight: 600,
-                  fontSize: "0.75rem",
-                  "&:hover": {
-                    bgcolor: alpha("#3b82f6", 0.15),
-                    color: "#3b82f6",
-                  },
+                  p: 2,
+                  borderRadius: 3,
+                  border: `1px solid ${alpha(section.color, 0.2)}`,
+                  cursor: section.status === "Complete" ? "pointer" : "default",
+                  transition: "all 0.2s",
+                  "&:hover": section.status === "Complete" ? {
+                    borderColor: section.color,
+                    transform: "translateY(-2px)",
+                    boxShadow: `0 4px 12px ${alpha(section.color, 0.15)}`,
+                  } : {},
                 }}
-              />
-            ))}
-          </Box>
-        </Paper>
+                onClick={() => {
+                  if (section.status === "Complete") {
+                    document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
+                  <Box sx={{ 
+                    p: 1, 
+                    borderRadius: 2, 
+                    bgcolor: alpha(section.color, 0.1),
+                    color: section.color,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    {section.icon}
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                        {String(index + 1).padStart(2, "0")}
+                      </Typography>
+                      <Chip
+                        label={section.status}
+                        size="small"
+                        icon={section.status === "Complete" ? <CheckCircleIcon sx={{ fontSize: 14 }} /> : <RadioButtonUncheckedIcon sx={{ fontSize: 14 }} />}
+                        sx={{
+                          fontSize: "0.6rem",
+                          height: 20,
+                          bgcolor: section.status === "Complete" ? alpha("#10b981", 0.1) : alpha("#6b7280", 0.1),
+                          color: section.status === "Complete" ? "#10b981" : "#6b7280",
+                          "& .MuiChip-icon": {
+                            color: section.status === "Complete" ? "#10b981" : "#6b7280",
+                          },
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5, lineHeight: 1.3 }}>
+                      {section.title}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.4 }}>
+                      {section.description}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
 
         {/* ==================== WHAT IS SYSTEMS ADMINISTRATION ==================== */}
         <Typography id="what-is-sysadmin" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
@@ -2593,89 +3571,6 @@ export default function SystemsAdministrationPage() {
           </Grid>
         </Paper>
 
-        {/* ==================== COURSE OUTLINE ==================== */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            COURSE OUTLINE
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        <Typography id="outline" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
-          📚 Course Outline
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Topics we'll cover in this comprehensive guide (content coming soon)
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 5 }}>
-          {outlineSections.map((section, index) => (
-            <Grid item xs={12} sm={6} md={4} key={section.id}>
-              <Paper
-                sx={{
-                  p: 2.5,
-                  height: "100%",
-                  borderRadius: 3,
-                  border: `1px solid ${alpha(section.color, section.status === "Complete" ? 0.3 : 0.15)}`,
-                  bgcolor: section.status === "Complete" ? alpha(section.color, 0.03) : "transparent",
-                  opacity: section.status === "Complete" ? 1 : 0.75,
-                  transition: "all 0.2s ease",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    borderColor: section.color,
-                    opacity: 1,
-                    boxShadow: `0 8px 24px ${alpha(section.color, 0.15)}`,
-                  },
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 1 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 1.5,
-                        bgcolor: alpha(section.color, 0.1),
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: section.color,
-                      }}
-                    >
-                      {section.icon}
-                    </Box>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
-                      {String(index + 1).padStart(2, "0")}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label={section.status}
-                    size="small"
-                    icon={section.status === "Complete" ? <CheckCircleIcon sx={{ fontSize: 14 }} /> : <RadioButtonUncheckedIcon sx={{ fontSize: 14 }} />}
-                    sx={{
-                      fontSize: "0.65rem",
-                      height: 22,
-                      bgcolor: section.status === "Complete" ? alpha("#10b981", 0.1) : alpha("#6b7280", 0.1),
-                      color: section.status === "Complete" ? "#10b981" : "#6b7280",
-                      "& .MuiChip-icon": {
-                        color: section.status === "Complete" ? "#10b981" : "#6b7280",
-                      },
-                    }}
-                  />
-                </Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  {section.title}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.5 }}>
-                  {section.description}
-                </Typography>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* ==================== PREREQUISITES ==================== */}
         <Typography id="prerequisites" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           📋 Prerequisites
         </Typography>
@@ -2829,6 +3724,17 @@ export default function SystemsAdministrationPage() {
           </Grid>
         </Paper>
 
+        {/* Quiz Section */}
+        <Box id="quiz" sx={{ mt: 5 }}>
+          <QuizSection
+            questions={quizPool}
+            accentColor={ACCENT_COLOR}
+            title="Systems Administration Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Box>
+
         {/* Footer Navigation */}
         <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
           <Button
@@ -2852,7 +3758,8 @@ export default function SystemsAdministrationPage() {
             Return to Learning Hub
           </Button>
         </Box>
-      </Container>
+      </Box>
+      </Box>
     </LearnPageLayout>
   );
 }

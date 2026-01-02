@@ -52,6 +52,9 @@ import {
   Bookmark as BookmarkIcon,
   BookmarkBorder as BookmarkOutlineIcon,
   History as HistoryIcon,
+  BugReport as BugReportIcon,
+  Assessment as AssessmentIcon,
+  Forum as ThreadIcon,
   // File type icons
   PictureAsPdf as PdfIcon,
   Description as DocIcon,
@@ -88,6 +91,7 @@ import { MessageSearchDialog } from "./social/MessageSearchDialog";
 import { BookmarksDialog } from "./social/BookmarksDialog";
 import { EditHistoryDialog } from "./social/EditHistoryDialog";
 import { ImageGallery } from "./social/ImageGallery";
+import { ThreadViewDialog } from "./social/ThreadViewDialog";
 
 // Common emoji reactions
 const COMMON_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🎉'];
@@ -151,6 +155,137 @@ interface ProjectTeamChatTabProps {
   projectName: string;
 }
 
+// Shared Finding Card Component
+const SharedFindingCard = ({ data, isOwn }: { data: Record<string, any>; isOwn: boolean }) => {
+  const theme = useTheme();
+  
+  const getSeverityColor = (severity: string) => {
+    switch (severity?.toLowerCase()) {
+      case 'critical': return theme.palette.error.main;
+      case 'high': return '#ff5722';
+      case 'medium': return theme.palette.warning.main;
+      case 'low': return theme.palette.info.main;
+      default: return theme.palette.grey[500];
+    }
+  };
+
+  return (
+    <Card 
+      elevation={0} 
+      sx={{ 
+        mt: 1,
+        bgcolor: isOwn 
+          ? alpha(theme.palette.primary.main, 0.1) 
+          : alpha(theme.palette.background.paper, 0.8),
+        border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+        borderRadius: 2,
+        overflow: 'hidden',
+      }}
+    >
+      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Box
+            sx={{
+              p: 0.75,
+              borderRadius: 1,
+              bgcolor: alpha(getSeverityColor(data.severity || 'medium'), 0.15),
+              color: getSeverityColor(data.severity || 'medium'),
+            }}
+          >
+            <BugReportIcon fontSize="small" />
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Shared Finding
+            </Typography>
+            <Typography variant="body2" fontWeight={500} noWrap>
+              {data.title || 'Finding'}
+            </Typography>
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
+              <Chip
+                size="small"
+                label={data.severity || 'Medium'}
+                sx={{
+                  height: 18,
+                  fontSize: '0.65rem',
+                  bgcolor: alpha(getSeverityColor(data.severity || 'medium'), 0.15),
+                  color: getSeverityColor(data.severity || 'medium'),
+                }}
+              />
+              {data.category && (
+                <Chip
+                  size="small"
+                  label={data.category}
+                  variant="outlined"
+                  sx={{ height: 18, fontSize: '0.65rem' }}
+                />
+              )}
+            </Stack>
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Shared Report Card Component
+const SharedReportCard = ({ data, isOwn }: { data: Record<string, any>; isOwn: boolean }) => {
+  const theme = useTheme();
+
+  return (
+    <Card 
+      elevation={0} 
+      sx={{ 
+        mt: 1,
+        bgcolor: isOwn 
+          ? alpha(theme.palette.primary.main, 0.1) 
+          : alpha(theme.palette.background.paper, 0.8),
+        border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+        borderRadius: 2,
+        overflow: 'hidden',
+      }}
+    >
+      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Box
+            sx={{
+              p: 0.75,
+              borderRadius: 1,
+              bgcolor: alpha(theme.palette.info.main, 0.15),
+              color: theme.palette.info.main,
+            }}
+          >
+            <AssessmentIcon fontSize="small" />
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Shared Report
+            </Typography>
+            <Typography variant="body2" fontWeight={500} noWrap>
+              {data.title || 'Report'}
+            </Typography>
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
+              {data.scan_type && (
+                <Chip
+                  size="small"
+                  label={data.scan_type}
+                  variant="outlined"
+                  sx={{ height: 18, fontSize: '0.65rem' }}
+                />
+              )}
+              {data.finding_count !== undefined && (
+                <Typography variant="caption" color="text.secondary">
+                  {data.finding_count} findings
+                </Typography>
+              )}
+            </Stack>
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+};
+
 export default function ProjectTeamChatTab({ projectId, projectName }: ProjectTeamChatTabProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -184,6 +319,10 @@ export default function ProjectTeamChatTab({ projectId, projectName }: ProjectTe
   const [mentionSuggestions, setMentionSuggestions] = useState<ConversationParticipant[]>([]);
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
+  
+  // Thread view state
+  const [showThreadView, setShowThreadView] = useState(false);
+  const [threadParentMessage, setThreadParentMessage] = useState<SocialMessage | null>(null);
 
   // Get or create the team chat
   const teamChatQuery = useQuery({
@@ -787,6 +926,10 @@ export default function ProjectTeamChatTab({ projectId, projectName }: ProjectTe
                 onPin={() => handlePinMessage(msg.id)}
                 onBookmark={() => handleBookmarkMessage(msg.id)}
                 onViewEditHistory={() => handleViewEditHistory(msg)}
+                onViewThread={() => {
+                  setThreadParentMessage(msg);
+                  setShowThreadView(true);
+                }}
                 onImageClick={() => handleImageClick(msg.id)}
                 isPinned={pinnedMessages.some(p => p.message_id === msg.id)}
                 readBy={getReadByForMessage(msg.id)}
@@ -1070,6 +1213,20 @@ export default function ProjectTeamChatTab({ projectId, projectName }: ProjectTe
         onClose={() => setImageGalleryOpen(false)}
         initialIndex={imageGalleryIndex}
       />
+
+      {/* Thread View Dialog */}
+      {conversationId && threadParentMessage && (
+        <ThreadViewDialog
+          open={showThreadView}
+          onClose={() => {
+            setShowThreadView(false);
+            setThreadParentMessage(null);
+          }}
+          conversationId={conversationId}
+          parentMessage={threadParentMessage}
+          currentUserId={user?.id || 0}
+        />
+      )}
     </Box>
   );
 }
@@ -1083,6 +1240,7 @@ function MessageBubble({
   onPin,
   onBookmark,
   onViewEditHistory,
+  onViewThread,
   onImageClick,
   isPinned,
   readBy,
@@ -1098,6 +1256,7 @@ function MessageBubble({
   onPin: () => void;
   onBookmark: () => void;
   onViewEditHistory: () => void;
+  onViewThread: () => void;
   onImageClick: () => void;
   isPinned: boolean;
   readBy: ReadReceiptInfo[];
@@ -1271,8 +1430,18 @@ function MessageBubble({
               </Box>
             )}
 
-            {/* Message Content with Markdown */}
-            {(message.message_type !== 'file' && message.message_type !== 'poll' || message.is_deleted || (message.message_type === 'poll' && !poll)) && (
+            {/* Shared Finding Display */}
+            {message.message_type === 'finding_share' && message.attachment_data && !message.is_deleted && (
+              <SharedFindingCard data={message.attachment_data} isOwn={isOwn} />
+            )}
+
+            {/* Shared Report Display */}
+            {message.message_type === 'report_share' && message.attachment_data && !message.is_deleted && (
+              <SharedReportCard data={message.attachment_data} isOwn={isOwn} />
+            )}
+
+            {/* Message Content with Markdown - skip for files, polls, shared findings/reports */}
+            {(message.message_type !== 'file' && message.message_type !== 'poll' && message.message_type !== 'finding_share' && message.message_type !== 'report_share' || message.is_deleted || (message.message_type === 'poll' && !poll)) && (
               <Box sx={{ '& > span': { wordBreak: 'break-word' } }}>
                 <MarkdownRenderer content={message.content} currentUserId={currentUserId} />
               </Box>
@@ -1357,6 +1526,15 @@ function MessageBubble({
                   <BookmarkOutlineIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+              {message.reply_count && message.reply_count > 0 && (
+                <Tooltip title={`View Thread (${message.reply_count} ${message.reply_count === 1 ? 'reply' : 'replies'})`}>
+                  <IconButton size="small" onClick={onViewThread}>
+                    <Badge badgeContent={message.reply_count} color="primary" max={99}>
+                      <ThreadIcon fontSize="small" />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+              )}
               {message.is_edited && (
                 <Tooltip title="View Edit History">
                   <IconButton size="small" onClick={onViewEditHistory}>

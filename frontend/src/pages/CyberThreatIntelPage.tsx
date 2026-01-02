@@ -32,9 +32,10 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  Button,
 } from "@mui/material";
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SearchIcon from "@mui/icons-material/Search";
 import LaunchIcon from "@mui/icons-material/Launch";
@@ -45,7 +46,9 @@ import TrendingFlatIcon from "@mui/icons-material/TrendingFlat";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WarningIcon from "@mui/icons-material/Warning";
 import SecurityIcon from "@mui/icons-material/Security";
+import QuizIcon from "@mui/icons-material/Quiz";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
 // Page context for AI chat
 const pageContext = `This is a comprehensive Cyber Threat Intelligence (CTI) page covering:
@@ -107,6 +110,966 @@ import {
   reportTemplates,
 } from "../data/ctiData";
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#dc2626";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "Cyber threat intelligence (CTI) is best described as:",
+    options: [
+      "A list of antivirus vendors",
+      "Evidence-based knowledge about threats used to reduce risk",
+      "A firewall configuration",
+      "A vulnerability scan report",
+    ],
+    correctAnswer: 1,
+    explanation: "CTI focuses on evidence-based insights that support decisions and defenses.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "The intelligence cycle follows which order?",
+    options: [
+      "Analysis, Dissemination, Collection, Processing, Direction",
+      "Direction, Collection, Processing, Analysis, Dissemination",
+      "Collection, Direction, Dissemination, Analysis, Processing",
+      "Processing, Collection, Dissemination, Direction, Analysis",
+    ],
+    correctAnswer: 1,
+    explanation: "The standard order is direction, collection, processing, analysis, dissemination.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "Strategic intelligence primarily focuses on:",
+    options: [
+      "Immediate IOCs for blocking",
+      "Long-term trends and business risk",
+      "Exploit development",
+      "Packet capture analysis",
+    ],
+    correctAnswer: 1,
+    explanation: "Strategic intel informs leadership decisions and long-term planning.",
+  },
+  {
+    id: 4,
+    topic: "Fundamentals",
+    question: "Tactical intelligence commonly includes:",
+    options: [
+      "Budget forecasts",
+      "Hash values, IPs, and domains",
+      "Annual strategy reports",
+      "Vendor contracts",
+    ],
+    correctAnswer: 1,
+    explanation: "Tactical intel focuses on indicators used for detection and blocking.",
+  },
+  {
+    id: 5,
+    topic: "Fundamentals",
+    question: "Operational intelligence is most concerned with:",
+    options: [
+      "Campaign details and adversary procedures",
+      "Only malware hashes",
+      "Company financials",
+      "Static firewall rules",
+    ],
+    correctAnswer: 0,
+    explanation: "Operational intel covers how and when attackers operate in campaigns.",
+  },
+  {
+    id: 6,
+    topic: "Fundamentals",
+    question: "An IOC is:",
+    options: [
+      "A behavior indicating an attack in progress",
+      "An artifact that indicates a potential compromise",
+      "A legal approval for monitoring",
+      "A user authentication token",
+    ],
+    correctAnswer: 1,
+    explanation: "IOCs are artifacts like hashes, IPs, or domains linked to compromise.",
+  },
+  {
+    id: 7,
+    topic: "Fundamentals",
+    question: "TTP stands for:",
+    options: [
+      "Tools, Tactics, Plans",
+      "Tactics, Techniques, and Procedures",
+      "Threat Tracking Protocol",
+      "Telemetry Transfer Process",
+    ],
+    correctAnswer: 1,
+    explanation: "TTPs describe how adversaries operate.",
+  },
+  {
+    id: 8,
+    topic: "Fundamentals",
+    question: "MITRE ATT&CK is:",
+    options: [
+      "A vulnerability scanner",
+      "A knowledge base of adversary tactics and techniques",
+      "An antivirus engine",
+      "A network firewall",
+    ],
+    correctAnswer: 1,
+    explanation: "ATT&CK documents real-world adversary behaviors.",
+  },
+  {
+    id: 9,
+    topic: "Fundamentals",
+    question: "The Cyber Kill Chain includes which stage?",
+    options: ["Encryption", "Weaponization", "Patch management", "Service discovery"],
+    correctAnswer: 1,
+    explanation: "Weaponization is a standard kill chain stage.",
+  },
+  {
+    id: 10,
+    topic: "Fundamentals",
+    question: "The Diamond Model focuses on relationships between:",
+    options: [
+      "Users, passwords, and tokens",
+      "Adversary, capability, infrastructure, and victim",
+      "Servers, clients, and routers",
+      "Policies, audits, and controls",
+    ],
+    correctAnswer: 1,
+    explanation: "The Diamond Model links adversary, capability, infrastructure, and victim.",
+  },
+  {
+    id: 11,
+    topic: "Standards",
+    question: "STIX is used to:",
+    options: [
+      "Encrypt files",
+      "Structure and represent threat intelligence",
+      "Scan endpoints",
+      "Block web traffic",
+    ],
+    correctAnswer: 1,
+    explanation: "STIX standardizes the representation of threat intel data.",
+  },
+  {
+    id: 12,
+    topic: "Standards",
+    question: "TAXII provides:",
+    options: [
+      "Transport for sharing threat intelligence",
+      "A malware sandbox",
+      "A cryptographic algorithm",
+      "A password manager",
+    ],
+    correctAnswer: 0,
+    explanation: "TAXII is the transport mechanism for sharing STIX data.",
+  },
+  {
+    id: 13,
+    topic: "Standards",
+    question: "TLP Red means:",
+    options: [
+      "Share freely",
+      "Share within community",
+      "Share only with named recipients",
+      "Share with vendors only",
+    ],
+    correctAnswer: 2,
+    explanation: "TLP Red is the most restrictive and limited to named recipients.",
+  },
+  {
+    id: 14,
+    topic: "Standards",
+    question: "TLP Amber indicates:",
+    options: [
+      "Public information",
+      "Limited sharing within an organization and trusted partners",
+      "Share on social media",
+      "No sharing restrictions",
+    ],
+    correctAnswer: 1,
+    explanation: "Amber restricts sharing to need-to-know recipients.",
+  },
+  {
+    id: 15,
+    topic: "Standards",
+    question: "TLP Green typically allows sharing with:",
+    options: [
+      "The general public",
+      "The broader community but not publicly",
+      "Only one analyst",
+      "No one",
+    ],
+    correctAnswer: 1,
+    explanation: "Green allows limited community sharing but not public release.",
+  },
+  {
+    id: 16,
+    topic: "Standards",
+    question: "TLP White (or Clear) means:",
+    options: [
+      "Share freely without restrictions",
+      "Do not share at all",
+      "Share only with vendors",
+      "Share only with law enforcement",
+    ],
+    correctAnswer: 0,
+    explanation: "White/Clear allows unrestricted sharing.",
+  },
+  {
+    id: 17,
+    topic: "Standards",
+    question: "The Admiralty Code is used for:",
+    options: [
+      "Ranking malware families",
+      "Rating source reliability and information credibility",
+      "Classifying vulnerabilities",
+      "Encoding indicators",
+    ],
+    correctAnswer: 1,
+    explanation: "Admiralty Code combines source reliability with info credibility.",
+  },
+  {
+    id: 18,
+    topic: "Standards",
+    question: "In the Admiralty Code, an A1 rating means:",
+    options: [
+      "Unreliable source, unlikely info",
+      "Reliable source, confirmed information",
+      "Unknown source, possible info",
+      "Reliable source, false info",
+    ],
+    correctAnswer: 1,
+    explanation: "A1 indicates a reliable source and confirmed information.",
+  },
+  {
+    id: 19,
+    topic: "Standards",
+    question: "MISP is best described as:",
+    options: [
+      "A threat intelligence sharing platform",
+      "A password vault",
+      "A backup system",
+      "A firewall",
+    ],
+    correctAnswer: 0,
+    explanation: "MISP supports sharing and managing threat intelligence.",
+  },
+  {
+    id: 20,
+    topic: "Standards",
+    question: "Traffic Light Protocol is used to:",
+    options: [
+      "Measure network latency",
+      "Control handling and sharing of intelligence",
+      "Encrypt communications",
+      "Detect phishing",
+    ],
+    correctAnswer: 1,
+    explanation: "TLP provides handling guidance for information sharing.",
+  },
+  {
+    id: 21,
+    topic: "Sources",
+    question: "OSINT stands for:",
+    options: [
+      "Open Source Intelligence",
+      "Operational Security Intelligence",
+      "Outbound System Integration",
+      "Online Security Intercepts",
+    ],
+    correctAnswer: 0,
+    explanation: "OSINT comes from publicly available sources.",
+  },
+  {
+    id: 22,
+    topic: "Sources",
+    question: "HUMINT refers to:",
+    options: [
+      "Human intelligence from people or insiders",
+      "Hardware monitoring",
+      "HTTP metadata",
+      "Hypervisor telemetry",
+    ],
+    correctAnswer: 0,
+    explanation: "HUMINT is intelligence gathered from human sources.",
+  },
+  {
+    id: 23,
+    topic: "Sources",
+    question: "SIGINT refers to:",
+    options: [
+      "Signals and communications intelligence",
+      "Signature-based antivirus",
+      "Security information goals",
+      "System integrity metrics",
+    ],
+    correctAnswer: 0,
+    explanation: "SIGINT focuses on signals and communications data.",
+  },
+  {
+    id: 24,
+    topic: "Sources",
+    question: "A common internal telemetry source for CTI is:",
+    options: [
+      "EDR and SIEM logs",
+      "Employee badge data only",
+      "Printer queues",
+      "Desktop wallpapers",
+    ],
+    correctAnswer: 0,
+    explanation: "EDR and SIEM data are core sources for threat intelligence.",
+  },
+  {
+    id: 25,
+    topic: "Sources",
+    question: "Malware sandboxing helps by providing:",
+    options: [
+      "Behavioral indicators and artifacts",
+      "Only file sizes",
+      "Only password hashes",
+      "Only DNS records",
+    ],
+    correctAnswer: 0,
+    explanation: "Sandboxes reveal behavior such as network calls and file changes.",
+  },
+  {
+    id: 26,
+    topic: "Sources",
+    question: "Sinkhole data is useful for:",
+    options: [
+      "Identifying victims and infected hosts",
+      "Creating backups",
+      "Encrypting traffic",
+      "Blocking phishing emails",
+    ],
+    correctAnswer: 0,
+    explanation: "Sinkholes collect connections from infected hosts.",
+  },
+  {
+    id: 27,
+    topic: "Sources",
+    question: "Honeypots are used to:",
+    options: [
+      "Attract attackers and observe behavior",
+      "Patch systems",
+      "Replace firewalls",
+      "Store backups",
+    ],
+    correctAnswer: 0,
+    explanation: "Honeypots provide intelligence on attacker tactics.",
+  },
+  {
+    id: 28,
+    topic: "Sources",
+    question: "Passive DNS is helpful for:",
+    options: [
+      "Historical domain to IP resolution tracking",
+      "Blocking malware locally",
+      "Encrypting DNS queries",
+      "Scanning ports",
+    ],
+    correctAnswer: 0,
+    explanation: "Passive DNS reveals historical infrastructure relationships.",
+  },
+  {
+    id: 29,
+    topic: "Sources",
+    question: "A threat feed is:",
+    options: [
+      "A streaming source of indicators and intel",
+      "A firewall rule set",
+      "A data backup service",
+      "An antivirus quarantine",
+    ],
+    correctAnswer: 0,
+    explanation: "Feeds deliver indicators or intel for automated use.",
+  },
+  {
+    id: 30,
+    topic: "Sources",
+    question: "Collection requirements should be driven by:",
+    options: [
+      "Stakeholder questions and decisions",
+      "Random sampling",
+      "Only vendor recommendations",
+      "Available storage space",
+    ],
+    correctAnswer: 0,
+    explanation: "Requirements define what intel is needed to make decisions.",
+  },
+  {
+    id: 31,
+    topic: "Analysis",
+    question: "ACH stands for:",
+    options: [
+      "Analysis of Competing Hypotheses",
+      "Automated Correlation Hub",
+      "Adversary Chain History",
+      "Advanced Cyber Heuristics",
+    ],
+    correctAnswer: 0,
+    explanation: "ACH is a structured method to reduce bias in analysis.",
+  },
+  {
+    id: 32,
+    topic: "Analysis",
+    question: "Link analysis is used to:",
+    options: [
+      "Identify relationships between entities",
+      "Encrypt intel reports",
+      "Scan file hashes",
+      "Configure proxies",
+    ],
+    correctAnswer: 0,
+    explanation: "Link analysis connects actors, infrastructure, and events.",
+  },
+  {
+    id: 33,
+    topic: "Analysis",
+    question: "Mapping behaviors to the Kill Chain helps:",
+    options: [
+      "Identify attack stages and control gaps",
+      "Increase password complexity",
+      "Compress logs",
+      "Speed up scanning",
+    ],
+    correctAnswer: 0,
+    explanation: "Kill Chain mapping highlights where defenses can break the chain.",
+  },
+  {
+    id: 34,
+    topic: "Analysis",
+    question: "The top of the Pyramid of Pain represents:",
+    options: ["File hashes", "IP addresses", "TTPs", "Domains"],
+    correctAnswer: 2,
+    explanation: "TTPs are hardest for adversaries to change.",
+  },
+  {
+    id: 35,
+    topic: "Analysis",
+    question: "The bottom of the Pyramid of Pain represents:",
+    options: ["TTPs", "Tools", "File hashes", "Network patterns"],
+    correctAnswer: 2,
+    explanation: "Hashes are easy for attackers to change.",
+  },
+  {
+    id: 36,
+    topic: "Analysis",
+    question: "Confirmation bias is:",
+    options: [
+      "Favoring evidence that supports existing beliefs",
+      "Testing multiple hypotheses",
+      "Ignoring all prior context",
+      "A method for sharing intel",
+    ],
+    correctAnswer: 0,
+    explanation: "Confirmation bias can skew analysis toward expected outcomes.",
+  },
+  {
+    id: 37,
+    topic: "Analysis",
+    question: "Anchoring bias occurs when analysts:",
+    options: [
+      "Rely too heavily on the first piece of information",
+      "Ignore all evidence",
+      "Only use automated tools",
+      "Share data publicly",
+    ],
+    correctAnswer: 0,
+    explanation: "Anchoring bias overweights initial information.",
+  },
+  {
+    id: 38,
+    topic: "Analysis",
+    question: "Confidence levels should be based on:",
+    options: [
+      "Source reliability and corroboration",
+      "Personal opinions",
+      "Number of pages in the report",
+      "Vendor branding",
+    ],
+    correctAnswer: 0,
+    explanation: "Higher confidence requires reliable, corroborated evidence.",
+  },
+  {
+    id: 39,
+    topic: "Analysis",
+    question: "Attribution should be made when:",
+    options: [
+      "Multiple independent lines of evidence align",
+      "One IP address matches",
+      "The malware name is familiar",
+      "A single tweet claims it",
+    ],
+    correctAnswer: 0,
+    explanation: "Attribution needs multiple corroborated indicators.",
+  },
+  {
+    id: 40,
+    topic: "Analysis",
+    question: "A common attribution pitfall is:",
+    options: [
+      "Infrastructure reuse by multiple actors",
+      "Using timelines",
+      "Documenting sources",
+      "Validating evidence",
+    ],
+    correctAnswer: 0,
+    explanation: "Shared infrastructure can mislead attribution.",
+  },
+  {
+    id: 41,
+    topic: "Indicators",
+    question: "Which is an example of an IOC?",
+    options: [
+      "Process injection behavior",
+      "A file hash tied to malware",
+      "A phishing tactic",
+      "User awareness training",
+    ],
+    correctAnswer: 1,
+    explanation: "File hashes are classic indicators of compromise.",
+  },
+  {
+    id: 42,
+    topic: "Indicators",
+    question: "Which is an example of an IOA?",
+    options: [
+      "Suspicious PowerShell execution pattern",
+      "A static IP address",
+      "A file hash",
+      "A domain registration record",
+    ],
+    correctAnswer: 0,
+    explanation: "IOAs describe behaviors that indicate an attack in progress.",
+  },
+  {
+    id: 43,
+    topic: "Indicators",
+    question: "High-fidelity indicators are those that:",
+    options: [
+      "Generate low false positives",
+      "Are easy for attackers to change",
+      "Never expire",
+      "Only appear in reports",
+    ],
+    correctAnswer: 0,
+    explanation: "High-fidelity indicators are reliable and specific.",
+  },
+  {
+    id: 44,
+    topic: "Indicators",
+    question: "Low-fidelity indicators often:",
+    options: [
+      "Produce many false positives",
+      "Are always unique",
+      "Never overlap with benign activity",
+      "Replace TTP analysis",
+    ],
+    correctAnswer: 0,
+    explanation: "Low-fidelity indicators can be noisy.",
+  },
+  {
+    id: 45,
+    topic: "Indicators",
+    question: "Enrichment adds value to indicators by:",
+    options: [
+      "Adding context like WHOIS, geolocation, or reputation",
+      "Removing context entirely",
+      "Encrypting the indicator",
+      "Shortening the indicator",
+    ],
+    correctAnswer: 0,
+    explanation: "Context helps analysts assess relevance and risk.",
+  },
+  {
+    id: 46,
+    topic: "Indicators",
+    question: "Indicator decay means:",
+    options: [
+      "Indicators lose usefulness over time",
+      "Indicators never expire",
+      "Indicators become more reliable",
+      "Indicators are encrypted",
+    ],
+    correctAnswer: 0,
+    explanation: "Indicators can become outdated as adversaries change infrastructure.",
+  },
+  {
+    id: 47,
+    topic: "Indicators",
+    question: "Which is generally harder for attackers to change?",
+    options: ["File hash", "IP address", "TTPs", "Domain name"],
+    correctAnswer: 2,
+    explanation: "TTPs are more durable than specific infrastructure.",
+  },
+  {
+    id: 48,
+    topic: "Indicators",
+    question: "Detection engineering uses CTI to:",
+    options: [
+      "Create detections and rules from intel",
+      "Reduce log storage",
+      "Disable monitoring",
+      "Replace incident response",
+    ],
+    correctAnswer: 0,
+    explanation: "CTI can be translated into detection logic.",
+  },
+  {
+    id: 49,
+    topic: "Indicators",
+    question: "YARA rules are primarily used for:",
+    options: [
+      "Pattern matching in files or memory",
+      "DNS resolution",
+      "Port scanning",
+      "Packet filtering",
+    ],
+    correctAnswer: 0,
+    explanation: "YARA identifies patterns in files and memory.",
+  },
+  {
+    id: 50,
+    topic: "Indicators",
+    question: "Sigma rules are designed for:",
+    options: [
+      "SIEM detection portability",
+      "Encryption",
+      "Network routing",
+      "Endpoint isolation",
+    ],
+    correctAnswer: 0,
+    explanation: "Sigma provides a generic rule format for SIEM detections.",
+  },
+  {
+    id: 51,
+    topic: "Reporting",
+    question: "An executive summary should be:",
+    options: [
+      "Highly technical and long",
+      "Concise and focused on impact and actions",
+      "Only a list of IPs",
+      "A dump of log files",
+    ],
+    correctAnswer: 1,
+    explanation: "Executives need concise impact and recommendations.",
+  },
+  {
+    id: 52,
+    topic: "Reporting",
+    question: "An intelligence requirement is:",
+    options: [
+      "A question that intelligence must answer",
+      "A malware signature",
+      "A firewall rule",
+      "A backup policy",
+    ],
+    correctAnswer: 0,
+    explanation: "Requirements define what information stakeholders need.",
+  },
+  {
+    id: 53,
+    topic: "Reporting",
+    question: "A collection plan outlines:",
+    options: [
+      "Sources, methods, and timing for gathering intel",
+      "Only the final report format",
+      "Employee job roles",
+      "Patch schedules",
+    ],
+    correctAnswer: 0,
+    explanation: "Collection plans map where and how intel will be gathered.",
+  },
+  {
+    id: 54,
+    topic: "Reporting",
+    question: "Dissemination means:",
+    options: [
+      "Sharing intelligence with the right audience",
+      "Deleting indicators",
+      "Encrypting logs",
+      "Blocking a domain",
+    ],
+    correctAnswer: 0,
+    explanation: "Dissemination is the distribution of intelligence outputs.",
+  },
+  {
+    id: 55,
+    topic: "Reporting",
+    question: "Actionable intelligence should include:",
+    options: [
+      "Recommended actions or decisions",
+      "Only raw data",
+      "No context",
+      "Only screenshots",
+    ],
+    correctAnswer: 0,
+    explanation: "Actionable intel informs a decision or response.",
+  },
+  {
+    id: 56,
+    topic: "Reporting",
+    question: "Confidence scores help consumers:",
+    options: [
+      "Understand how much to trust the assessment",
+      "Ignore the report",
+      "Increase data volume",
+      "Delete logs",
+    ],
+    correctAnswer: 0,
+    explanation: "Confidence communicates evidence strength.",
+  },
+  {
+    id: 57,
+    topic: "Reporting",
+    question: "The feedback loop in the intel cycle is used to:",
+    options: [
+      "Refine requirements and improve future reporting",
+      "Replace collection",
+      "Delete intelligence",
+      "Stop dissemination",
+    ],
+    correctAnswer: 0,
+    explanation: "Feedback helps improve future intelligence outputs.",
+  },
+  {
+    id: 58,
+    topic: "Reporting",
+    question: "Audience-specific reporting means:",
+    options: [
+      "Tailoring detail and language to the audience",
+      "Using the same report for everyone",
+      "Removing context",
+      "Only using charts",
+    ],
+    correctAnswer: 0,
+    explanation: "Different stakeholders require different levels of detail.",
+  },
+  {
+    id: 59,
+    topic: "Reporting",
+    question: "STIX and TAXII automation mainly improves:",
+    options: [
+      "Machine-readable sharing and processing",
+      "Password strength",
+      "Endpoint performance",
+      "Disk encryption",
+    ],
+    correctAnswer: 0,
+    explanation: "Automation supports faster, standardized sharing.",
+  },
+  {
+    id: 60,
+    topic: "Reporting",
+    question: "TLP markings should be:",
+    options: [
+      "Preserved when sharing intelligence",
+      "Removed to simplify reports",
+      "Ignored by recipients",
+      "Replaced with colors not in the standard",
+    ],
+    correctAnswer: 0,
+    explanation: "Handling instructions must remain intact.",
+  },
+  {
+    id: 61,
+    topic: "Operational Use",
+    question: "Strategic intelligence is used for:",
+    options: [
+      "Long-term risk and investment decisions",
+      "Immediate blocking rules",
+      "Regex tuning",
+      "Endpoint isolation",
+    ],
+    correctAnswer: 0,
+    explanation: "Strategic intel supports leadership and planning.",
+  },
+  {
+    id: 62,
+    topic: "Operational Use",
+    question: "Tactical intelligence is used for:",
+    options: [
+      "Immediate detection and response actions",
+      "Long-term budgeting",
+      "Vendor contract reviews",
+      "Security awareness posters",
+    ],
+    correctAnswer: 0,
+    explanation: "Tactical intel helps defenders take quick action.",
+  },
+  {
+    id: 63,
+    topic: "Operational Use",
+    question: "Operational intelligence supports:",
+    options: [
+      "Campaign tracking and adversary tradecraft",
+      "Only hash blocking",
+      "Printer maintenance",
+      "Firewall firmware updates",
+    ],
+    correctAnswer: 0,
+    explanation: "Operational intel provides mid-term campaign context.",
+  },
+  {
+    id: 64,
+    topic: "Operational Use",
+    question: "Threat hunting hypotheses are:",
+    options: [
+      "Testable ideas based on known adversary behavior",
+      "Random searches without focus",
+      "Backups of logs",
+      "Public press releases",
+    ],
+    correctAnswer: 0,
+    explanation: "Hunting uses hypotheses to guide focused searches.",
+  },
+  {
+    id: 65,
+    topic: "Operational Use",
+    question: "Mapping detections to MITRE ATT&CK helps:",
+    options: [
+      "Standardize coverage and identify gaps",
+      "Hide detection logic",
+      "Increase alert noise",
+      "Replace incident response",
+    ],
+    correctAnswer: 0,
+    explanation: "ATT&CK mapping shows coverage and missing techniques.",
+  },
+  {
+    id: 66,
+    topic: "Operational Use",
+    question: "A detection priority matrix is used to:",
+    options: [
+      "Focus monitoring on high-risk techniques",
+      "Choose antivirus vendors",
+      "Compress logs",
+      "Block all traffic",
+    ],
+    correctAnswer: 0,
+    explanation: "It guides where to focus detection investment.",
+  },
+  {
+    id: 67,
+    topic: "Operational Use",
+    question: "Actor profiling typically includes:",
+    options: [
+      "Motivation, targets, capabilities, and tools",
+      "Only the malware hash",
+      "Only the country name",
+      "Only CVE lists",
+    ],
+    correctAnswer: 0,
+    explanation: "Profiles summarize actor behavior and objectives.",
+  },
+  {
+    id: 68,
+    topic: "Operational Use",
+    question: "Infrastructure overlap can indicate:",
+    options: [
+      "Related campaigns or shared tooling",
+      "Improved password strength",
+      "A clean system",
+      "No meaningful relationship",
+    ],
+    correctAnswer: 0,
+    explanation: "Shared infrastructure can link activity clusters.",
+  },
+  {
+    id: 69,
+    topic: "Operational Use",
+    question: "A key attribution pitfall is:",
+    options: [
+      "Assuming tool reuse proves identity",
+      "Using multiple sources",
+      "Validating evidence",
+      "Documenting confidence",
+    ],
+    correctAnswer: 0,
+    explanation: "Tools can be reused or shared by different actors.",
+  },
+  {
+    id: 70,
+    topic: "Operational Use",
+    question: "Sharing IOCs without context can lead to:",
+    options: [
+      "Misprioritization and false positives",
+      "Guaranteed blocking success",
+      "Automatic attribution",
+      "Fewer alerts",
+    ],
+    correctAnswer: 0,
+    explanation: "Context is needed to assess relevance and impact.",
+  },
+  {
+    id: 71,
+    topic: "Governance",
+    question: "Data classification in CTI ensures:",
+    options: [
+      "Handling rules match sensitivity",
+      "All intel is public",
+      "Indicators never expire",
+      "Only tools are used",
+    ],
+    correctAnswer: 0,
+    explanation: "Classification controls who can access and share intel.",
+  },
+  {
+    id: 72,
+    topic: "Governance",
+    question: "Deconfliction in CTI means:",
+    options: [
+      "Avoiding duplicate or conflicting efforts",
+      "Deleting evidence",
+      "Ignoring sources",
+      "Only sharing public data",
+    ],
+    correctAnswer: 0,
+    explanation: "Deconfliction prevents overlap and protects sensitive operations.",
+  },
+  {
+    id: 73,
+    topic: "Governance",
+    question: "Disrupting earlier kill chain stages generally:",
+    options: [
+      "Reduces overall impact",
+      "Has no effect",
+      "Increases dwell time",
+      "Blocks only DNS",
+    ],
+    correctAnswer: 0,
+    explanation: "Earlier disruption reduces attacker progress and damage.",
+  },
+  {
+    id: 74,
+    topic: "Governance",
+    question: "Low confidence assessments indicate:",
+    options: [
+      "Limited or weak supporting evidence",
+      "Certain attribution",
+      "Confirmed intelligence",
+      "No analysis required",
+    ],
+    correctAnswer: 0,
+    explanation: "Low confidence means the evidence is limited or uncertain.",
+  },
+  {
+    id: 75,
+    topic: "Governance",
+    question: "The Pyramid of Pain encourages defenders to:",
+    options: [
+      "Focus on detections that are harder for attackers to change",
+      "Only track file hashes",
+      "Ignore behavior analytics",
+      "Disable detection tools",
+    ],
+    correctAnswer: 0,
+    explanation: "Moving up the pyramid increases attacker cost and disruption.",
+  },
+];
+
 export default function CyberThreatIntelPage() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -145,9 +1108,15 @@ export default function CyberThreatIntelPage() {
     <LearnPageLayout pageTitle="Cyber Threat Intelligence" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
-      <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-        <ArrowBackIcon />
-      </IconButton>
+      <Chip
+        component={RouterLink}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
 
       {/* Header */}
       <Box sx={{ mb: 5 }}>
@@ -1347,6 +2316,41 @@ export default function CyberThreatIntelPage() {
           </Paper>
         </>
       )}
+
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 5,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          bgcolor: alpha(QUIZ_ACCENT_COLOR, 0.03),
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={QUIZ_ACCENT_COLOR}
+          title="Cyber Threat Intelligence Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

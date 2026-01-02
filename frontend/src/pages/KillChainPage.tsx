@@ -17,10 +17,12 @@ import {
   ListItemIcon,
   ListItemText,
   Alert,
+  Button,
 } from "@mui/material";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import GpsFixedIcon from "@mui/icons-material/GpsFixed";
@@ -32,6 +34,7 @@ import SettingsRemoteIcon from "@mui/icons-material/SettingsRemote";
 import FlagIcon from "@mui/icons-material/Flag";
 import ShieldIcon from "@mui/icons-material/Shield";
 import WarningIcon from "@mui/icons-material/Warning";
+import QuizIcon from "@mui/icons-material/Quiz";
 
 interface KillChainPhase {
   id: number;
@@ -261,6 +264,611 @@ const killChainPhases: KillChainPhase[] = [
   },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#f59e0b";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "The Cyber Kill Chain is a framework for:",
+    options: ["Describing stages of a cyberattack", "Encrypting data at rest", "Replacing firewalls", "Managing patch cycles"],
+    correctAnswer: 0,
+    explanation: "It outlines the phases of a targeted attack.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "The Kill Chain was popularized by:",
+    options: ["Lockheed Martin", "OWASP", "NIST", "CIS"],
+    correctAnswer: 0,
+    explanation: "The model is known as the Lockheed Martin Kill Chain.",
+  },
+  {
+    id: 3,
+    topic: "Fundamentals",
+    question: "The Kill Chain includes how many phases?",
+    options: ["7", "5", "6", "9"],
+    correctAnswer: 0,
+    explanation: "The model defines seven phases.",
+  },
+  {
+    id: 4,
+    topic: "Phases",
+    question: "The first phase is:",
+    options: ["Reconnaissance", "Weaponization", "Delivery", "Exploitation"],
+    correctAnswer: 0,
+    explanation: "Reconnaissance is the initial phase.",
+  },
+  {
+    id: 5,
+    topic: "Phases",
+    question: "The second phase is:",
+    options: ["Weaponization", "Delivery", "Exploitation", "Installation"],
+    correctAnswer: 0,
+    explanation: "Weaponization follows reconnaissance.",
+  },
+  {
+    id: 6,
+    topic: "Phases",
+    question: "The third phase is:",
+    options: ["Delivery", "Installation", "Actions on Objectives", "Reconnaissance"],
+    correctAnswer: 0,
+    explanation: "Delivery is when the payload reaches the target.",
+  },
+  {
+    id: 7,
+    topic: "Phases",
+    question: "The fourth phase is:",
+    options: ["Exploitation", "Weaponization", "Delivery", "Actions on Objectives"],
+    correctAnswer: 0,
+    explanation: "Exploitation triggers the vulnerability or action.",
+  },
+  {
+    id: 8,
+    topic: "Phases",
+    question: "The fifth phase is:",
+    options: ["Installation", "Reconnaissance", "Delivery", "Weaponization"],
+    correctAnswer: 0,
+    explanation: "Installation places malware or implants.",
+  },
+  {
+    id: 9,
+    topic: "Phases",
+    question: "The sixth phase is:",
+    options: ["Command and Control (C2)", "Exploitation", "Reconnaissance", "Delivery"],
+    correctAnswer: 0,
+    explanation: "C2 establishes remote control.",
+  },
+  {
+    id: 10,
+    topic: "Phases",
+    question: "The seventh phase is:",
+    options: ["Actions on Objectives", "Weaponization", "Installation", "Exploitation"],
+    correctAnswer: 0,
+    explanation: "This is where the attacker achieves goals.",
+  },
+  {
+    id: 11,
+    topic: "Reconnaissance",
+    question: "Reconnaissance focuses on:",
+    options: ["Gathering information about the target", "Installing malware", "Exfiltrating data", "Encrypting files"],
+    correctAnswer: 0,
+    explanation: "Attackers research the target environment.",
+  },
+  {
+    id: 12,
+    topic: "Reconnaissance",
+    question: "A reconnaissance activity is:",
+    options: ["OSINT and scanning", "Dropping a backdoor", "Encrypting backups", "Blocking traffic"],
+    correctAnswer: 0,
+    explanation: "Recon uses public data and scanning.",
+  },
+  {
+    id: 13,
+    topic: "Reconnaissance",
+    question: "A common recon indicator is:",
+    options: ["Unusual DNS enumeration or port scans", "User login success", "Normal backups", "Patch installs"],
+    correctAnswer: 0,
+    explanation: "Scanning and enumeration are common signals.",
+  },
+  {
+    id: 14,
+    topic: "Weaponization",
+    question: "Weaponization involves:",
+    options: ["Building the exploit and payload", "Delivering the payload", "Running a phishing test", "Changing firewall rules"],
+    correctAnswer: 0,
+    explanation: "Attackers prepare the malicious package.",
+  },
+  {
+    id: 15,
+    topic: "Weaponization",
+    question: "Weaponization is often hard to detect because it:",
+    options: ["Happens outside the victim network", "Uses only internal logs", "Requires user clicks", "Always triggers alerts"],
+    correctAnswer: 0,
+    explanation: "This stage usually occurs off-network.",
+  },
+  {
+    id: 16,
+    topic: "Delivery",
+    question: "Delivery refers to:",
+    options: ["Transmitting the payload to the target", "Executing the payload", "Exfiltrating data", "Installing patches"],
+    correctAnswer: 0,
+    explanation: "Delivery is how the payload reaches the victim.",
+  },
+  {
+    id: 17,
+    topic: "Delivery",
+    question: "A common delivery method is:",
+    options: ["Spear-phishing email", "Memory scraping", "Credential dumping", "Log tampering"],
+    correctAnswer: 0,
+    explanation: "Phishing is a common delivery vector.",
+  },
+  {
+    id: 18,
+    topic: "Delivery",
+    question: "A defensive control for delivery is:",
+    options: ["Email filtering and sandboxing", "Disabling backups", "Removing logs", "Ignoring attachments"],
+    correctAnswer: 0,
+    explanation: "Filtering reduces malicious payloads.",
+  },
+  {
+    id: 19,
+    topic: "Exploitation",
+    question: "Exploitation is when:",
+    options: ["A vulnerability is triggered to run code", "A target is scanned", "A payload is built", "A report is written"],
+    correctAnswer: 0,
+    explanation: "Exploitation triggers the bug or behavior.",
+  },
+  {
+    id: 20,
+    topic: "Exploitation",
+    question: "A defense against exploitation is:",
+    options: ["Rapid patching and hardening", "Disabling logging", "Lowering alerting", "Removing backups"],
+    correctAnswer: 0,
+    explanation: "Patching removes exploitable vulnerabilities.",
+  },
+  {
+    id: 21,
+    topic: "Installation",
+    question: "Installation refers to:",
+    options: ["Placing malware or a backdoor", "Sending the payload", "Scanning the target", "Creating phishing sites"],
+    correctAnswer: 0,
+    explanation: "Installation is when malware is placed on the host.",
+  },
+  {
+    id: 22,
+    topic: "Installation",
+    question: "A common installation goal is:",
+    options: ["Persistence", "Shorter log files", "Faster backups", "DNS hardening"],
+    correctAnswer: 0,
+    explanation: "Attackers want persistence after initial access.",
+  },
+  {
+    id: 23,
+    topic: "Installation",
+    question: "A defensive control for installation is:",
+    options: ["Application allowlisting and EDR", "Disable MFA", "Allow macros", "Turn off logging"],
+    correctAnswer: 0,
+    explanation: "Allowlisting and EDR can block implants.",
+  },
+  {
+    id: 24,
+    topic: "C2",
+    question: "Command and Control (C2) is:",
+    options: ["A channel for remote control of malware", "A backup system", "A patch pipeline", "A DNS cache"],
+    correctAnswer: 0,
+    explanation: "C2 allows attackers to control infected hosts.",
+  },
+  {
+    id: 25,
+    topic: "C2",
+    question: "A common C2 indicator is:",
+    options: ["Regular beaconing to external domains", "Normal software updates", "Internal backups", "User training"],
+    correctAnswer: 0,
+    explanation: "Beaconing suggests remote control traffic.",
+  },
+  {
+    id: 26,
+    topic: "C2",
+    question: "A defensive control against C2 is:",
+    options: ["Egress filtering and DNS monitoring", "Disabling endpoints", "Stopping backups", "Removing SIEM"],
+    correctAnswer: 0,
+    explanation: "Egress controls limit outbound C2 traffic.",
+  },
+  {
+    id: 27,
+    topic: "Actions",
+    question: "Actions on Objectives includes:",
+    options: ["Data theft, disruption, or fraud", "Payload creation", "Email delivery", "Port scanning"],
+    correctAnswer: 0,
+    explanation: "This phase achieves the attacker goal.",
+  },
+  {
+    id: 28,
+    topic: "Actions",
+    question: "A defensive control for actions on objectives is:",
+    options: ["DLP, backups, and monitoring", "Disable logging", "Allow all traffic", "Turn off MFA"],
+    correctAnswer: 0,
+    explanation: "DLP and monitoring can detect exfiltration.",
+  },
+  {
+    id: 29,
+    topic: "Strategy",
+    question: "The Kill Chain helps defenders by:",
+    options: ["Mapping where to detect and disrupt attacks", "Replacing threat intel", "Eliminating logging", "Avoiding patching"],
+    correctAnswer: 0,
+    explanation: "It shows where to break the attack sequence.",
+  },
+  {
+    id: 30,
+    topic: "Strategy",
+    question: "Stopping attacks earlier in the chain:",
+    options: ["Reduces impact and cost", "Has no effect", "Increases damage", "Always delays response"],
+    correctAnswer: 0,
+    explanation: "Early detection limits attacker progress.",
+  },
+  {
+    id: 31,
+    topic: "Strategy",
+    question: "The Kill Chain assumes attacks are:",
+    options: ["Multi-stage with sequential steps", "Single-step only", "Only internal", "Only automated"],
+    correctAnswer: 0,
+    explanation: "The model breaks attacks into stages.",
+  },
+  {
+    id: 32,
+    topic: "Strategy",
+    question: "Attackers may:",
+    options: ["Skip or combine phases", "Always follow a perfect sequence", "Only use one phase", "Ignore delivery"],
+    correctAnswer: 0,
+    explanation: "Real attacks can skip or merge phases.",
+  },
+  {
+    id: 33,
+    topic: "Reconnaissance",
+    question: "Reducing recon success includes:",
+    options: ["Minimizing public exposure of details", "Publishing internal diagrams", "Sharing credentials", "Allowing public admin panels"],
+    correctAnswer: 0,
+    explanation: "Limit public information to reduce recon value.",
+  },
+  {
+    id: 34,
+    topic: "Reconnaissance",
+    question: "Threat intel can help by:",
+    options: ["Identifying recon patterns and targets", "Disabling patches", "Stopping logs", "Removing alerts"],
+    correctAnswer: 0,
+    explanation: "Intel reveals common recon behaviors.",
+  },
+  {
+    id: 35,
+    topic: "Weaponization",
+    question: "Weaponization often includes:",
+    options: ["Creating malicious documents or payloads", "Blocking emails", "Encrypting backups", "Deploying EDR"],
+    correctAnswer: 0,
+    explanation: "Attackers craft payloads for the target.",
+  },
+  {
+    id: 36,
+    topic: "Weaponization",
+    question: "A macro-enabled document is typically used in:",
+    options: ["Delivery and weaponization", "Only reconnaissance", "Only C2", "Only actions on objectives"],
+    correctAnswer: 0,
+    explanation: "Weaponized docs are delivered to victims.",
+  },
+  {
+    id: 37,
+    topic: "Delivery",
+    question: "A watering hole attack is part of:",
+    options: ["Delivery", "Installation", "C2", "Actions on Objectives"],
+    correctAnswer: 0,
+    explanation: "Watering holes deliver payloads via compromised sites.",
+  },
+  {
+    id: 38,
+    topic: "Delivery",
+    question: "USB drop attacks fit into:",
+    options: ["Delivery", "Exploitation", "C2", "Reconnaissance"],
+    correctAnswer: 0,
+    explanation: "USB drops deliver payloads to targets.",
+  },
+  {
+    id: 39,
+    topic: "Exploitation",
+    question: "User-driven exploitation often involves:",
+    options: ["Opening a malicious attachment", "Only kernel bugs", "Only DNS spoofing", "Only password resets"],
+    correctAnswer: 0,
+    explanation: "Users trigger exploits via malicious files or links.",
+  },
+  {
+    id: 40,
+    topic: "Exploitation",
+    question: "Exploit kits are used to:",
+    options: ["Automate exploitation via drive-by attacks", "Patch systems", "Detect malware", "Encrypt traffic"],
+    correctAnswer: 0,
+    explanation: "Exploit kits deliver and trigger vulnerabilities.",
+  },
+  {
+    id: 41,
+    topic: "Installation",
+    question: "Persistence mechanisms include:",
+    options: ["Startup services and scheduled tasks", "Firewall rule removal", "HTTPS enforcement", "Log rotation"],
+    correctAnswer: 0,
+    explanation: "Persistence keeps malware running after reboot.",
+  },
+  {
+    id: 42,
+    topic: "Installation",
+    question: "A common indicator of installation is:",
+    options: ["New autorun entries or services", "Normal OS updates", "User password change", "DNS cache flush"],
+    correctAnswer: 0,
+    explanation: "New persistence entries are suspicious.",
+  },
+  {
+    id: 43,
+    topic: "C2",
+    question: "C2 traffic often uses:",
+    options: ["HTTP, HTTPS, or DNS", "Only SMTP", "Only SMB", "Only ICMP"],
+    correctAnswer: 0,
+    explanation: "Common protocols help blend with normal traffic.",
+  },
+  {
+    id: 44,
+    topic: "C2",
+    question: "Beaconing is:",
+    options: ["Regular periodic communication to a server", "Large file transfer only", "A patch process", "A user login event"],
+    correctAnswer: 0,
+    explanation: "Beaconing is periodic C2 traffic.",
+  },
+  {
+    id: 45,
+    topic: "Actions",
+    question: "Actions on objectives may include:",
+    options: ["Data exfiltration", "Only reconnaissance", "Only delivery", "Only exploitation"],
+    correctAnswer: 0,
+    explanation: "Data theft is a common objective.",
+  },
+  {
+    id: 46,
+    topic: "Actions",
+    question: "Ransomware impact typically falls under:",
+    options: ["Actions on Objectives", "Reconnaissance", "Weaponization", "Delivery"],
+    correctAnswer: 0,
+    explanation: "Ransomware executes the attacker goal.",
+  },
+  {
+    id: 47,
+    topic: "Defenses",
+    question: "Defense in depth means:",
+    options: ["Controls at multiple phases", "Only perimeter defense", "Only endpoint defense", "Only logging"],
+    correctAnswer: 0,
+    explanation: "Layered defenses reduce single points of failure.",
+  },
+  {
+    id: 48,
+    topic: "Defenses",
+    question: "Endpoint detection and response (EDR) helps with:",
+    options: ["Installation and post-exploitation detection", "Weaponization", "Recon only", "Patch deployment only"],
+    correctAnswer: 0,
+    explanation: "EDR detects malicious behavior on hosts.",
+  },
+  {
+    id: 49,
+    topic: "Defenses",
+    question: "Network monitoring helps detect:",
+    options: ["Recon and C2 activity", "Only local file access", "Only kernel updates", "Only backups"],
+    correctAnswer: 0,
+    explanation: "Network telemetry shows scanning and beaconing.",
+  },
+  {
+    id: 50,
+    topic: "Defenses",
+    question: "User awareness training helps reduce:",
+    options: ["Phishing delivery success", "Patch failures", "ASLR entropy", "Disk fragmentation"],
+    correctAnswer: 0,
+    explanation: "Training reduces click rates on phishing.",
+  },
+  {
+    id: 51,
+    topic: "Defenses",
+    question: "Application allowlisting helps prevent:",
+    options: ["Unauthorized malware execution", "DNS lookups", "Patch installs", "Log rotation"],
+    correctAnswer: 0,
+    explanation: "Allowlisting blocks unknown executables.",
+  },
+  {
+    id: 52,
+    topic: "Defenses",
+    question: "Segmentation helps reduce:",
+    options: ["Lateral movement and impact", "Patch speed", "DNS resolution", "Email delivery"],
+    correctAnswer: 0,
+    explanation: "Segmentation limits attacker spread.",
+  },
+  {
+    id: 53,
+    topic: "Defenses",
+    question: "Backups are most helpful in:",
+    options: ["Recovering from actions on objectives", "Preventing recon", "Building payloads", "Email delivery"],
+    correctAnswer: 0,
+    explanation: "Backups support recovery from ransomware.",
+  },
+  {
+    id: 54,
+    topic: "Mapping",
+    question: "Mapping alerts to the Kill Chain helps:",
+    options: ["Prioritize response by phase", "Disable triage", "Remove alerts", "Avoid documentation"],
+    correctAnswer: 0,
+    explanation: "Phase mapping guides response urgency.",
+  },
+  {
+    id: 55,
+    topic: "Mapping",
+    question: "Kill Chain is often used with:",
+    options: ["MITRE ATT&CK for tactics and techniques", "Only OSI model", "Only CVSS scoring", "Only CVE lists"],
+    correctAnswer: 0,
+    explanation: "ATT&CK provides detailed technique mapping.",
+  },
+  {
+    id: 56,
+    topic: "Reconnaissance",
+    question: "Recon mitigation includes:",
+    options: ["Monitoring brand abuse and leaks", "Disabling AV", "Allowing directory listing", "Disabling DNS logs"],
+    correctAnswer: 0,
+    explanation: "Brand and leak monitoring reduces recon success.",
+  },
+  {
+    id: 57,
+    topic: "Weaponization",
+    question: "Threat actors may reuse:",
+    options: ["Known exploits and commodity malware", "Only internal tools", "Only blue team tools", "Only open proxies"],
+    correctAnswer: 0,
+    explanation: "Commodity tooling is common in weaponization.",
+  },
+  {
+    id: 58,
+    topic: "Delivery",
+    question: "Drive-by downloads are part of:",
+    options: ["Delivery", "Reconnaissance", "C2", "Actions on Objectives"],
+    correctAnswer: 0,
+    explanation: "They deliver payloads via compromised sites.",
+  },
+  {
+    id: 59,
+    topic: "Exploitation",
+    question: "Exploit mitigation includes:",
+    options: ["Patching and exploit prevention", "Only logs", "Only DNS filtering", "Only backups"],
+    correctAnswer: 0,
+    explanation: "Mitigations reduce exploit success.",
+  },
+  {
+    id: 60,
+    topic: "Installation",
+    question: "Malware installation often creates:",
+    options: ["Persistence artifacts", "Firewall rules only", "DNS zones", "TLS certificates"],
+    correctAnswer: 0,
+    explanation: "Persistence ensures malware survives reboots.",
+  },
+  {
+    id: 61,
+    topic: "C2",
+    question: "C2 over DNS is used to:",
+    options: ["Blend with common traffic", "Disable logging", "Patch systems", "Change passwords"],
+    correctAnswer: 0,
+    explanation: "DNS is often allowed and can be abused.",
+  },
+  {
+    id: 62,
+    topic: "Actions",
+    question: "Data staging before exfiltration occurs in:",
+    options: ["Actions on Objectives", "Reconnaissance", "Weaponization", "Delivery"],
+    correctAnswer: 0,
+    explanation: "Staging is part of achieving objectives.",
+  },
+  {
+    id: 63,
+    topic: "Strategy",
+    question: "Disrupting any phase of the chain:",
+    options: ["Can stop the attack progression", "Has no effect", "Always increases impact", "Only delays patching"],
+    correctAnswer: 0,
+    explanation: "Breaking one phase can halt the attack.",
+  },
+  {
+    id: 64,
+    topic: "Strategy",
+    question: "Kill Chain limitations include:",
+    options: ["Not covering all modern attack patterns", "Being too detailed", "Replacing ATT&CK", "Only for insiders"],
+    correctAnswer: 0,
+    explanation: "Some attacks skip phases or move non-linearly.",
+  },
+  {
+    id: 65,
+    topic: "Strategy",
+    question: "The model is most useful for:",
+    options: ["Targeted intrusion campaigns", "Only commodity malware", "Only insider threats", "Only physical attacks"],
+    correctAnswer: 0,
+    explanation: "It was designed for targeted intrusions.",
+  },
+  {
+    id: 66,
+    topic: "Indicators",
+    question: "Indicators for delivery include:",
+    options: ["Phishing emails and malicious links", "Kernel panics", "Normal backups", "Time sync events"],
+    correctAnswer: 0,
+    explanation: "Suspicious emails and links are delivery signs.",
+  },
+  {
+    id: 67,
+    topic: "Indicators",
+    question: "Indicators for exploitation include:",
+    options: ["Crash logs or exploit signatures", "Routine logins", "Healthy backups", "Patch success"],
+    correctAnswer: 0,
+    explanation: "Crashes and exploit patterns can indicate exploitation.",
+  },
+  {
+    id: 68,
+    topic: "Indicators",
+    question: "Indicators for installation include:",
+    options: ["New services or startup entries", "Normal OS updates", "Printer events", "DNS cache flushes"],
+    correctAnswer: 0,
+    explanation: "New persistence artifacts are suspicious.",
+  },
+  {
+    id: 69,
+    topic: "Indicators",
+    question: "Indicators for C2 include:",
+    options: ["Periodic outbound beacons", "Local log rotation", "User logoff events", "Backup completion"],
+    correctAnswer: 0,
+    explanation: "Regular beacons suggest C2 activity.",
+  },
+  {
+    id: 70,
+    topic: "Indicators",
+    question: "Indicators for actions on objectives include:",
+    options: ["Large outbound data transfers", "Normal patching", "Printer use", "User onboarding"],
+    correctAnswer: 0,
+    explanation: "Large outbound transfers can indicate exfiltration.",
+  },
+  {
+    id: 71,
+    topic: "Response",
+    question: "During response, mapping to phases helps:",
+    options: ["Identify where to contain first", "Disable alerts", "Avoid documentation", "Ignore telemetry"],
+    correctAnswer: 0,
+    explanation: "Phase mapping clarifies response priorities.",
+  },
+  {
+    id: 72,
+    topic: "Response",
+    question: "If you detect delivery, a strong response is to:",
+    options: ["Block the payload and isolate targets", "Wait for exploitation", "Disable all logging", "Ignore alerts"],
+    correctAnswer: 0,
+    explanation: "Stopping delivery prevents later phases.",
+  },
+  {
+    id: 73,
+    topic: "Response",
+    question: "If you detect C2 traffic, you should:",
+    options: ["Contain the host and block the channel", "Do nothing", "Disable backups", "Delete logs"],
+    correctAnswer: 0,
+    explanation: "Containment stops attacker control.",
+  },
+  {
+    id: 74,
+    topic: "Response",
+    question: "Incident reports should include:",
+    options: ["Kill Chain phase mapping and evidence", "Only a summary line", "Only ticket numbers", "No timestamps"],
+    correctAnswer: 0,
+    explanation: "Phase mapping improves understanding and response.",
+  },
+  {
+    id: 75,
+    topic: "Summary",
+    question: "The key idea of the Kill Chain is to:",
+    options: ["Break the attack sequence at any phase", "Only focus on the last phase", "Ignore early signals", "Replace all other frameworks"],
+    correctAnswer: 0,
+    explanation: "Disrupting any phase can stop the attack.",
+  },
+];
+
 export default function KillChainPage() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -272,9 +880,15 @@ export default function KillChainPage() {
     <LearnPageLayout pageTitle="Cyber Kill Chain" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
-      <IconButton onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-        <ArrowBackIcon />
-      </IconButton>
+      <Chip
+        component={Link}
+        to="/learn"
+        icon={<ArrowBackIcon />}
+        label="Back to Learning Hub"
+        clickable
+        variant="outlined"
+        sx={{ borderRadius: 2, mb: 3 }}
+      />
 
       {/* Header */}
       <Box sx={{ mb: 5 }}>
@@ -547,6 +1161,40 @@ export default function KillChainPage() {
           ))}
         </Grid>
       </Paper>
+
+      <Paper
+        id="quiz-section"
+        sx={{
+          mt: 4,
+          p: 4,
+          borderRadius: 3,
+          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+          Knowledge Check
+        </Typography>
+        <QuizSection
+          questions={quizQuestions}
+          accentColor={QUIZ_ACCENT_COLOR}
+          title="Cyber Kill Chain Knowledge Check"
+          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+          questionsPerQuiz={QUIZ_QUESTION_COUNT}
+        />
+      </Paper>
+
+      {/* Bottom Navigation */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/learn")}
+          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        >
+          Back to Learning Hub
+        </Button>
+      </Box>
     </Container>
     </LearnPageLayout>
   );

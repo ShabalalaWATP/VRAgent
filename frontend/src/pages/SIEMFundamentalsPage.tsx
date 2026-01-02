@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
+import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
   Container,
@@ -48,7 +49,8 @@ import WarningIcon from "@mui/icons-material/Warning";
 import SpeedIcon from "@mui/icons-material/Speed";
 import ScienceIcon from "@mui/icons-material/Science";
 import DnsIcon from "@mui/icons-material/Dns";
-import { useNavigate } from "react-router-dom";
+import QuizIcon from "@mui/icons-material/Quiz";
+import { Link, useNavigate } from "react-router-dom";
 
 // CodeBlock component
 const CodeBlock: React.FC<{ code: string; language?: string; title?: string }> = ({
@@ -467,6 +469,686 @@ const architectureComponents = [
   },
 ];
 
+const QUIZ_QUESTION_COUNT = 10;
+const QUIZ_ACCENT_COLOR = "#3b82f6";
+const quizQuestions: QuizQuestion[] = [
+  {
+    id: 1,
+    topic: "Fundamentals",
+    question: "What does SIEM stand for?",
+    options: [
+      "Security Information and Event Management",
+      "System Integrity and Endpoint Monitoring",
+      "Secure Identity and Encryption Model",
+      "Signal Intelligence and Evidence Management",
+    ],
+    correctAnswer: 0,
+    explanation: "SIEM stands for Security Information and Event Management.",
+  },
+  {
+    id: 2,
+    topic: "Fundamentals",
+    question: "The primary goal of a SIEM is to:",
+    options: [
+      "Replace antivirus tools",
+      "Centralize, correlate, and alert on security events",
+      "Manage software licenses",
+      "Patch operating systems",
+    ],
+    correctAnswer: 1,
+    explanation: "SIEMs aggregate logs, correlate events, and generate security alerts.",
+  },
+  {
+    id: 3,
+    topic: "Normalization",
+    question: "Log normalization is the process of:",
+    options: [
+      "Compressing logs",
+      "Deleting duplicates",
+      "Parsing and mapping fields to a common schema",
+      "Encrypting log storage",
+    ],
+    correctAnswer: 2,
+    explanation: "Normalization maps different log formats to consistent field names.",
+  },
+  {
+    id: 4,
+    topic: "Correlation",
+    question: "Event correlation is used to:",
+    options: [
+      "Link related events across sources to identify patterns",
+      "Lower storage costs",
+      "Disable noisy alerts",
+      "Update agent versions",
+    ],
+    correctAnswer: 0,
+    explanation: "Correlation connects events to reveal multi-stage activity.",
+  },
+  {
+    id: 5,
+    topic: "Alerting",
+    question: "SIEM alerting triggers when:",
+    options: [
+      "Any log is ingested",
+      "Detection rules match defined conditions",
+      "Monthly reports are generated",
+      "Agents reboot",
+    ],
+    correctAnswer: 1,
+    explanation: "Alerts fire when rules match the configured logic.",
+  },
+  {
+    id: 6,
+    topic: "Retention",
+    question: "Log retention is primarily used for:",
+    options: [
+      "Reducing CPU usage",
+      "Disabling alerts",
+      "Compliance and forensics",
+      "Replacing backups",
+    ],
+    correctAnswer: 2,
+    explanation: "Retention supports investigations and regulatory requirements.",
+  },
+  {
+    id: 7,
+    topic: "Log Sources",
+    question: "Which is a common endpoint log source?",
+    options: ["Windows Event Logs", "BGP tables", "CDN cache metrics", "Printer toner alerts"],
+    correctAnswer: 0,
+    explanation: "Windows Event Logs are a core endpoint telemetry source.",
+  },
+  {
+    id: 8,
+    topic: "Log Sources",
+    question: "Which is a common network log source?",
+    options: ["HR payroll exports", "Firewall logs", "Notebook battery logs", "Screen brightness"],
+    correctAnswer: 1,
+    explanation: "Firewalls provide network allow/deny and traffic data.",
+  },
+  {
+    id: 9,
+    topic: "Log Sources",
+    question: "Which is a common identity log source?",
+    options: ["Active Directory authentication logs", "CPU temperature", "Browser bookmarks", "UPS status"],
+    correctAnswer: 0,
+    explanation: "AD authentication logs are critical for identity monitoring.",
+  },
+  {
+    id: 10,
+    topic: "Log Sources",
+    question: "Which is a common cloud log source?",
+    options: ["Local syslog only", "Spreadsheet exports", "AWS CloudTrail", "Printer queues"],
+    correctAnswer: 2,
+    explanation: "CloudTrail records AWS API activity.",
+  },
+  {
+    id: 11,
+    topic: "Endpoint Telemetry",
+    question: "Sysmon is used to collect:",
+    options: [
+      "Disk defragmentation reports",
+      "Detailed process and network events on Windows",
+      "BIOS updates only",
+      "Email filtering results",
+    ],
+    correctAnswer: 1,
+    explanation: "Sysmon provides rich process, file, and network events.",
+  },
+  {
+    id: 12,
+    topic: "Capacity",
+    question: "EPS stands for:",
+    options: ["Events per second", "Encrypted packet stream", "Endpoint policy status", "External proxy service"],
+    correctAnswer: 0,
+    explanation: "EPS measures log ingestion volume.",
+  },
+  {
+    id: 13,
+    topic: "Correlation",
+    question: "Time synchronization is important because it:",
+    options: [
+      "Reduces storage",
+      "Improves color themes",
+      "Disables alerts",
+      "Enables accurate correlation across sources",
+    ],
+    correctAnswer: 3,
+    explanation: "Accurate timestamps are required to align events.",
+  },
+  {
+    id: 14,
+    topic: "Enrichment",
+    question: "Enrichment adds:",
+    options: [
+      "Random noise",
+      "Only compression",
+      "Context like GeoIP, asset owner, criticality",
+      "Firmware updates",
+    ],
+    correctAnswer: 2,
+    explanation: "Enrichment adds context to improve triage decisions.",
+  },
+  {
+    id: 15,
+    topic: "Storage",
+    question: "Hot storage is used for:",
+    options: ["Archived long-term data", "Recent data with fast search", "Data disposal", "Backup only"],
+    correctAnswer: 1,
+    explanation: "Hot storage keeps recent data for quick searches.",
+  },
+  {
+    id: 16,
+    topic: "Storage",
+    question: "Cold storage is typically used for:",
+    options: ["Low-cost archival retention", "Real-time analytics", "Low latency alerts", "Only test data"],
+    correctAnswer: 0,
+    explanation: "Cold storage is cheaper and slower for long-term retention.",
+  },
+  {
+    id: 17,
+    topic: "Normalization",
+    question: "A key benefit of normalization is:",
+    options: ["More passwords", "Less visibility", "Fewer fields", "Consistent queries across diverse sources"],
+    correctAnswer: 3,
+    explanation: "Consistent fields enable reusable queries.",
+  },
+  {
+    id: 18,
+    topic: "Detection",
+    question: "Brute force detection often looks for:",
+    options: [
+      "Single successful login",
+      "Disk usage spikes",
+      "High count of failed logins in a window",
+      "Antivirus updates",
+    ],
+    correctAnswer: 2,
+    explanation: "Multiple failed logins in a short time suggest brute force.",
+  },
+  {
+    id: 19,
+    topic: "Windows Logs",
+    question: "Windows Event ID 4625 indicates:",
+    options: ["Successful logon", "Failed Windows logon", "Service stopped", "USB insert"],
+    correctAnswer: 1,
+    explanation: "Event 4625 is a failed logon.",
+  },
+  {
+    id: 20,
+    topic: "Correlation",
+    question: "A correlation window refers to the:",
+    options: ["Time range to link related events", "Retention period", "Compression ratio", "Index name"],
+    correctAnswer: 0,
+    explanation: "Correlation windows define the time span for linking events.",
+  },
+  {
+    id: 21,
+    topic: "Tuning",
+    question: "A false positive is an alert that:",
+    options: ["Never triggers", "Confirms an attack", "Causes data loss", "Is triggered by benign activity"],
+    correctAnswer: 3,
+    explanation: "False positives are alerts without real malicious activity.",
+  },
+  {
+    id: 22,
+    topic: "Tuning",
+    question: "Detection tuning aims to:",
+    options: ["Disable all alerts", "Reduce noise while preserving detection", "Delete logs", "Increase false positives"],
+    correctAnswer: 1,
+    explanation: "Tuning reduces noise while keeping real signals.",
+  },
+  {
+    id: 23,
+    topic: "Platforms",
+    question: "Which SIEM uses SPL for queries?",
+    options: ["Splunk", "Sentinel", "QRadar", "Chronicle"],
+    correctAnswer: 0,
+    explanation: "Splunk uses the SPL query language.",
+  },
+  {
+    id: 24,
+    topic: "Platforms",
+    question: "Which SIEM uses KQL?",
+    options: ["Splunk", "Wazuh", "Microsoft Sentinel", "QRadar"],
+    correctAnswer: 2,
+    explanation: "Microsoft Sentinel uses KQL.",
+  },
+  {
+    id: 25,
+    topic: "Platforms",
+    question: "Which SIEM uses AQL?",
+    options: ["Elastic", "IBM QRadar", "Chronicle", "Wazuh"],
+    correctAnswer: 1,
+    explanation: "QRadar uses the AQL query language.",
+  },
+  {
+    id: 26,
+    topic: "Platforms",
+    question: "Which platform uses YARA-L for detections?",
+    options: ["SPL", "KQL", "AQL", "YARA-L"],
+    correctAnswer: 3,
+    explanation: "Google Chronicle uses YARA-L.",
+  },
+  {
+    id: 27,
+    topic: "Pipeline",
+    question: "A common log shipper is:",
+    options: ["Wireshark", "Notepad", "Logstash or Fluentd", "Docker Desktop"],
+    correctAnswer: 2,
+    explanation: "Logstash and Fluentd are used to ship and parse logs.",
+  },
+  {
+    id: 28,
+    topic: "Collection",
+    question: "Syslog is commonly used for:",
+    options: ["Network device logs", "Game telemetry", "Audio levels", "GPU drivers"],
+    correctAnswer: 0,
+    explanation: "Network devices often forward logs via syslog.",
+  },
+  {
+    id: 29,
+    topic: "Parsing",
+    question: "Parsing errors can cause:",
+    options: ["More accurate alerts", "Missing fields and weaker detections", "Faster responses", "More storage"],
+    correctAnswer: 1,
+    explanation: "Missing fields reduce detection quality.",
+  },
+  {
+    id: 30,
+    topic: "Storage",
+    question: "Data tiering is used to:",
+    options: ["Disable retention", "Store only in hot storage", "Balance cost and performance", "Encrypt backups only"],
+    correctAnswer: 2,
+    explanation: "Tiering reduces cost while keeping useful data accessible.",
+  },
+  {
+    id: 31,
+    topic: "Correlation",
+    question: "Which is a correlation example?",
+    options: [
+      "Single DNS query",
+      "One successful login",
+      "Patch installation",
+      "Suspicious PowerShell plus network beaconing",
+    ],
+    correctAnswer: 3,
+    explanation: "Correlation links multiple signals into a higher-confidence alert.",
+  },
+  {
+    id: 32,
+    topic: "Analytics",
+    question: "UEBA stands for:",
+    options: [
+      "User and Entity Behavior Analytics",
+      "Unified Event Backup Archive",
+      "User Email Blocking Agent",
+      "Universal Endpoint Baseline Analyzer",
+    ],
+    correctAnswer: 0,
+    explanation: "UEBA detects anomalous behavior by users and entities.",
+  },
+  {
+    id: 33,
+    topic: "Analytics",
+    question: "UEBA is useful for detecting:",
+    options: ["Hardware failures", "Anomalous user behavior", "Software licensing", "Patch updates only"],
+    correctAnswer: 1,
+    explanation: "UEBA highlights behavioral anomalies.",
+  },
+  {
+    id: 34,
+    topic: "Detection",
+    question: "A well-documented detection rule should include:",
+    options: ["No context", "Only a name", "Documented false positives", "Only a screenshot"],
+    correctAnswer: 2,
+    explanation: "False positive expectations help analysts tune alerts.",
+  },
+  {
+    id: 35,
+    topic: "Coverage",
+    question: "Mapping detections to MITRE ATT&CK helps:",
+    options: ["Reduce storage", "Disable alerts", "Hide risks", "Track coverage gaps"],
+    correctAnswer: 3,
+    explanation: "ATT&CK mapping shows what techniques are covered or missing.",
+  },
+  {
+    id: 36,
+    topic: "Detection",
+    question: "DNS tunneling detection often looks for:",
+    options: [
+      "Short normal domains",
+      "Long subdomains and high query volume",
+      "No DNS traffic",
+      "Only ICMP",
+    ],
+    correctAnswer: 1,
+    explanation: "DNS tunneling often uses long, frequent subdomains.",
+  },
+  {
+    id: 37,
+    topic: "Detection",
+    question: "Kerberoasting indicators include:",
+    options: ["Single password reset", "USB insert", "Many 4769 requests with RC4", "Printer errors"],
+    correctAnswer: 2,
+    explanation: "Event 4769 with RC4 and many service ticket requests is suspicious.",
+  },
+  {
+    id: 38,
+    topic: "Detection",
+    question: "Credential dumping detection often targets:",
+    options: ["LSASS access or procdump indicators", "New wallpaper", "Screen lock", "CPU temperature"],
+    correctAnswer: 0,
+    explanation: "LSASS access can indicate credential dumping attempts.",
+  },
+  {
+    id: 39,
+    topic: "Correlation",
+    question: "Correlation across sources requires:",
+    options: ["Randomized fields", "Consistent timestamps and fields", "No parsing", "No NTP"],
+    correctAnswer: 1,
+    explanation: "Consistent timestamps and fields make cross-source correlation possible.",
+  },
+  {
+    id: 40,
+    topic: "Retention",
+    question: "Retention periods should be based on:",
+    options: ["Random choice", "UI theme", "Vendor defaults only", "Compliance and investigation needs"],
+    correctAnswer: 3,
+    explanation: "Retention is set by regulatory and operational requirements.",
+  },
+  {
+    id: 41,
+    topic: "Metrics",
+    question: "A common SIEM KPI is:",
+    options: ["Screen resolution", "Keyboard layout", "Alerts by severity over time", "Printer queue length"],
+    correctAnswer: 2,
+    explanation: "Alerts by severity show detection trends and workload.",
+  },
+  {
+    id: 42,
+    topic: "Metrics",
+    question: "MTTD stands for:",
+    options: ["Mean Time to Detect", "Monthly Trend Tracking Dashboard", "Message Trace Data", "Managed Threat Tuning Data"],
+    correctAnswer: 0,
+    explanation: "MTTD measures detection speed.",
+  },
+  {
+    id: 43,
+    topic: "Metrics",
+    question: "MTTR stands for:",
+    options: ["Mean Time to Restore", "Mean Time to Respond", "Monthly Triage Rate", "Mitigation Task Ratio"],
+    correctAnswer: 1,
+    explanation: "MTTR measures response speed.",
+  },
+  {
+    id: 44,
+    topic: "Operations",
+    question: "Alert fatigue is usually caused by:",
+    options: [
+      "Too many high-quality alerts",
+      "No alerts",
+      "Too many low-quality alerts",
+      "Perfect detections",
+    ],
+    correctAnswer: 2,
+    explanation: "Excess low-quality alerts exhaust analysts.",
+  },
+  {
+    id: 45,
+    topic: "Architecture",
+    question: "Indexing strategy should consider:",
+    options: ["Monitor size only", "Random naming", "Only storage cost", "Data volume and query patterns"],
+    correctAnswer: 3,
+    explanation: "Index design impacts search performance and cost.",
+  },
+  {
+    id: 46,
+    topic: "Integrity",
+    question: "Log integrity controls help:",
+    options: ["Ensure evidence is trustworthy", "Hide incidents", "Reduce correlation", "Disable retention"],
+    correctAnswer: 0,
+    explanation: "Integrity measures protect evidence and audit trails.",
+  },
+  {
+    id: 47,
+    topic: "Access",
+    question: "Role-based access control helps:",
+    options: ["Expose all logs to everyone", "Limit sensitive log access", "Increase false positives", "Disable monitoring"],
+    correctAnswer: 1,
+    explanation: "RBAC limits access to sensitive data.",
+  },
+  {
+    id: 48,
+    topic: "Capacity",
+    question: "EPS capacity planning is about:",
+    options: ["Password policy", "Malware removal", "Sizing ingestion and storage", "DNS caching"],
+    correctAnswer: 2,
+    explanation: "EPS determines ingestion and storage requirements.",
+  },
+  {
+    id: 49,
+    topic: "Parsing",
+    question: "Field extraction enables:",
+    options: ["Only raw viewing", "Compression", "Archiving", "Structured queries and filtering"],
+    correctAnswer: 3,
+    explanation: "Extracted fields allow structured search and filtering.",
+  },
+  {
+    id: 50,
+    topic: "Reliability",
+    question: "Log drop risk leads to:",
+    options: ["Blind spots in detection", "Faster searches", "Better coverage", "Lower MTTD"],
+    correctAnswer: 0,
+    explanation: "Dropped logs create visibility gaps.",
+  },
+  {
+    id: 51,
+    topic: "Baselines",
+    question: "A baseline in SIEM refers to:",
+    options: ["Security patch list", "Normal behavior profile", "Firewall allow list", "Disk cleanup job"],
+    correctAnswer: 1,
+    explanation: "Baselines describe expected activity.",
+  },
+  {
+    id: 52,
+    topic: "Detection",
+    question: "Correlation rules are especially useful to:",
+    options: ["Only count logs", "Disable alarms", "Detect multi-step attacks", "Reduce storage"],
+    correctAnswer: 2,
+    explanation: "Correlation rules capture multi-stage behavior.",
+  },
+  {
+    id: 53,
+    topic: "Enrichment",
+    question: "Which is an enrichment example?",
+    options: ["GeoIP lookup on source IP", "Delete IPs", "Remove timestamps", "Compress with zip"],
+    correctAnswer: 0,
+    explanation: "GeoIP adds geographic context to alerts.",
+  },
+  {
+    id: 54,
+    topic: "Collection",
+    question: "A log forwarding agent example is:",
+    options: ["Splunk Universal Forwarder", "Browser plugin", "Registry editor", "Screen recorder"],
+    correctAnswer: 0,
+    explanation: "Forwarders ship logs from endpoints to the SIEM.",
+  },
+  {
+    id: 55,
+    topic: "Storage",
+    question: "Archive tiers are usually:",
+    options: ["Faster and hotter", "No different from hot", "Only for backups", "Colder, slower, cheaper"],
+    correctAnswer: 3,
+    explanation: "Archive tiers trade speed for lower cost.",
+  },
+  {
+    id: 56,
+    topic: "Use Cases",
+    question: "A SIEM use case example is:",
+    options: ["Change wallpapers", "Rotate keys daily", "Detect abnormal outbound data volume", "Update OS fonts"],
+    correctAnswer: 2,
+    explanation: "Abnormal outbound volume can indicate exfiltration.",
+  },
+  {
+    id: 57,
+    topic: "Normalization",
+    question: "Normalization steps often include:",
+    options: ["Timestamp normalization", "User training", "Procurement approvals", "Cable management"],
+    correctAnswer: 0,
+    explanation: "Consistent timestamps are part of normalization.",
+  },
+  {
+    id: 58,
+    topic: "Alerting",
+    question: "Alert enrichment should add:",
+    options: ["Only emojis", "Asset criticality and owner", "Less context", "Hidden fields"],
+    correctAnswer: 1,
+    explanation: "Context like asset criticality speeds triage.",
+  },
+  {
+    id: 59,
+    topic: "Operations",
+    question: "A playbook provides:",
+    options: ["SIEM license files", "Firewall configs", "Guided response steps for alerts", "Password vaults"],
+    correctAnswer: 2,
+    explanation: "Playbooks document response steps for recurring alerts.",
+  },
+  {
+    id: 60,
+    topic: "Collection",
+    question: "Log source onboarding should include:",
+    options: ["Only install the agent", "Only add a dashboard", "Only add an index", "Validation that events are ingested and parsed"],
+    correctAnswer: 3,
+    explanation: "You must validate ingestion and parsing for new sources.",
+  },
+  {
+    id: 61,
+    topic: "Log Sources",
+    question: "MFA logs are typically part of:",
+    options: ["Identity logs", "Network logs", "Application logs", "Hardware logs"],
+    correctAnswer: 0,
+    explanation: "MFA events belong to identity telemetry.",
+  },
+  {
+    id: 62,
+    topic: "Log Sources",
+    question: "Proxy logs are useful for:",
+    options: ["CPU temperature", "Web traffic and URL analysis", "Printer errors", "Battery stats"],
+    correctAnswer: 1,
+    explanation: "Proxy logs show web destinations and user agents.",
+  },
+  {
+    id: 63,
+    topic: "Windows Logs",
+    question: "Windows Event ID 4672 indicates:",
+    options: ["Account locked", "Password changed", "Special privileges assigned", "USB inserted"],
+    correctAnswer: 2,
+    explanation: "Event 4672 signals special privileges assigned.",
+  },
+  {
+    id: 64,
+    topic: "Collection",
+    question: "SaaS logs are often collected via:",
+    options: ["Only syslog", "Only agents", "Local registry", "APIs or connectors"],
+    correctAnswer: 3,
+    explanation: "Cloud and SaaS logs are commonly pulled via APIs.",
+  },
+  {
+    id: 65,
+    topic: "Metrics",
+    question: "A SOC dashboard KPI example is:",
+    options: ["MTTD and MTTR trends", "Monitor brightness", "Mouse DPI", "Laptop temperature"],
+    correctAnswer: 0,
+    explanation: "MTTD and MTTR trends show detection and response performance.",
+  },
+  {
+    id: 66,
+    topic: "Tuning",
+    question: "Reducing correlation rule false positives often involves:",
+    options: ["Removing filters", "Adding context and thresholds", "Ignoring logs", "Disabling correlation"],
+    correctAnswer: 1,
+    explanation: "Thresholds and context reduce noisy correlations.",
+  },
+  {
+    id: 67,
+    topic: "Collection",
+    question: "Log source priority should favor:",
+    options: ["Random systems", "Only dev machines", "Critical systems and security controls", "Only printers"],
+    correctAnswer: 2,
+    explanation: "High-value systems provide the most security value.",
+  },
+  {
+    id: 68,
+    topic: "Retention",
+    question: "Compliance retention requirements often mean:",
+    options: ["Shorter storage periods", "No logs", "No access controls", "Longer storage periods"],
+    correctAnswer: 3,
+    explanation: "Regulations commonly require longer log retention.",
+  },
+  {
+    id: 69,
+    topic: "Pipeline",
+    question: "Data pipeline filtering is used to:",
+    options: ["Drop noisy events before indexing", "Encrypt nothing", "Disable parsing", "Duplicate events"],
+    correctAnswer: 0,
+    explanation: "Filtering reduces noise and storage costs.",
+  },
+  {
+    id: 70,
+    topic: "Correlation",
+    question: "Cross-cloud correlation requires:",
+    options: ["Only on-prem data", "Consistent schema and identity mapping", "No timestamps", "Different time zones"],
+    correctAnswer: 1,
+    explanation: "Consistent schemas and identities enable cross-environment correlation.",
+  },
+  {
+    id: 71,
+    topic: "Coverage",
+    question: "Detection coverage gaps are identified by:",
+    options: ["Random guessing", "Adding noise", "ATT&CK mapping and rule review", "Removing logs"],
+    correctAnswer: 2,
+    explanation: "Mapping rules to ATT&CK highlights missing coverage.",
+  },
+  {
+    id: 72,
+    topic: "Detection",
+    question: "Suspicious PowerShell detections often look for:",
+    options: ["Only version number", "Signed binaries only", "Uptime", "Encoded commands and download strings"],
+    correctAnswer: 3,
+    explanation: "Encoded commands and download strings are common abuse patterns.",
+  },
+  {
+    id: 73,
+    topic: "Alerting",
+    question: "A good SIEM alert should include:",
+    options: ["Who, what, when, where, why", "Only a title", "Only severity", "Only ticket number"],
+    correctAnswer: 0,
+    explanation: "Complete context helps analysts triage quickly.",
+  },
+  {
+    id: 74,
+    topic: "Detection",
+    question: "Cloud storage exfiltration detection often uses:",
+    options: ["System reboots", "Large uploads to personal storage", "Normal backups", "Printer activity"],
+    correctAnswer: 1,
+    explanation: "Unusual large uploads to personal storage can signal exfiltration.",
+  },
+  {
+    id: 75,
+    topic: "Storage",
+    question: "Which is a reasonable retention tiering example?",
+    options: [
+      "All hot forever",
+      "No storage",
+      "7 days hot, 90 days warm, 1 year cold",
+      "Delete after 1 hour",
+    ],
+    correctAnswer: 2,
+    explanation: "Tiering keeps recent data hot and older data in cheaper tiers.",
+  },
+];
+
 export default function SIEMFundamentalsPage() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -479,9 +1161,15 @@ export default function SIEMFundamentalsPage() {
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/learn")} sx={{ mb: 2 }}>
-            Back to Learning Hub
-          </Button>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 2 }}
+          />
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <Box
               sx={{
@@ -1156,6 +1844,40 @@ export default function SIEMFundamentalsPage() {
             <Chip label="Log Analysis →" clickable onClick={() => navigate("/learn/log-analysis")} sx={{ fontWeight: 600 }} />
           </Box>
         </Paper>
+
+        <Paper
+          id="quiz-section"
+          sx={{
+            mt: 4,
+            p: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+            Knowledge Check
+          </Typography>
+          <QuizSection
+            questions={quizQuestions}
+            accentColor={QUIZ_ACCENT_COLOR}
+            title="SIEM Fundamentals Knowledge Check"
+            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+            questionsPerQuiz={QUIZ_QUESTION_COUNT}
+          />
+        </Paper>
+
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
       </Container>
     </LearnPageLayout>
   );

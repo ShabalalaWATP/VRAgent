@@ -45,7 +45,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 export default function CProgrammingPage() {
@@ -710,11 +710,13 @@ export default function CProgrammingPage() {
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Chip
+            component={Link}
+            to="/learn"
             icon={<ArrowBackIcon />}
             label="Back to Learning Hub"
-            onClick={() => navigate("/learn")}
-            sx={{ mb: 3, fontWeight: 600, cursor: "pointer" }}
             clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
           />
 
           {/* Hero Section */}
@@ -1213,6 +1215,18 @@ export default function CProgrammingPage() {
               ))}
             </Box>
           </Paper>
+
+          {/* Bottom Navigation */}
+          <Box sx={{ mt: 4, textAlign: "center" }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+            >
+              Back to Learning Hub
+            </Button>
+          </Box>
         </Box>
       </Box>
     </LearnPageLayout>

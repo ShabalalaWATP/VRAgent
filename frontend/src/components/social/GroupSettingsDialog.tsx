@@ -357,7 +357,7 @@ export default function GroupSettingsDialog({
           <TabPanel value={tab} index={2}>
             {friendsNotInGroup.length === 0 ? (
               <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                All your friends are already in this group
+                All your contacts are already in this group
               </Typography>
             ) : (
               <List>

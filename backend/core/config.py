@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     
     # Authentication settings
     secret_key: str = Field("vragent-change-this-in-production-2024", validation_alias="SECRET_KEY")
-    access_token_expire_minutes: int = Field(30, validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+    access_token_expire_minutes: int = Field(240, validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(7, validation_alias="REFRESH_TOKEN_EXPIRE_DAYS")
     
     # Ollama settings for air-gapped environments

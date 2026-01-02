@@ -10,6 +10,8 @@ export type User = {
   username: string;
   first_name?: string;
   last_name?: string;
+  bio?: string;
+  avatar_url?: string;
   role: UserRole;
   status: AccountStatus;
   created_at: string;
@@ -31,6 +33,7 @@ type AuthContextType = {
   logout: () => void;
   register: (email: string, username: string, firstName: string, lastName: string, password: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   refreshAuth: () => Promise<boolean>;
+  refreshUser: () => Promise<void>;
   getAccessToken: () => string | null;
 };
 
@@ -43,6 +46,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
   register: async () => ({ success: false }),
   refreshAuth: async () => false,
+  refreshUser: async () => {},
   getAccessToken: () => null,
 });
 
@@ -140,6 +144,17 @@ export function AuthProvider({ children }: Props) {
       return false;
     }
   }, [fetchCurrentUser]);
+
+  // Refresh user data (after profile update)
+  const refreshUser = useCallback(async (): Promise<void> => {
+    const token = getAccessToken();
+    if (token) {
+      const userData = await fetchCurrentUser(token);
+      if (userData) {
+        setUser(userData);
+      }
+    }
+  }, [fetchCurrentUser, getAccessToken]);
 
   // Initialize auth state on mount
   useEffect(() => {
@@ -258,6 +273,7 @@ export function AuthProvider({ children }: Props) {
     logout,
     register,
     refreshAuth,
+    refreshUser,
     getAccessToken,
   };
 

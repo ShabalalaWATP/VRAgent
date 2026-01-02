@@ -127,7 +127,7 @@ interface CategorySection {
 const appCards: LearnCard[] = [
   {
     title: "How Scanning Works",
-    description: "Discover the 9-step pipeline VRAgent uses to scan your code, from git cloning through AI analysis.",
+    description: "Discover the 11-phase pipeline VRAgent uses to scan your code, from git cloning through AI analysis.",
     icon: <SecurityIcon sx={{ fontSize: 40 }} />,
     path: "/learn/scanning",
     color: "#3b82f6",
@@ -224,7 +224,7 @@ const appCards: LearnCard[] = [
   },
   {
     title: "Reverse Engineering Hub Guide",
-    description: "VRAgent's RE Hub: APK analysis, binary inspection, Docker layer analysis, and AI-powered insights.",
+    description: "VRAgent's RE Hub: APK analysis, binary inspection, Docker Inspector, and AI-powered insights.",
     icon: <BuildIcon sx={{ fontSize: 40 }} />,
     path: "/learn/reverse-engineering",
     color: "#a855f7",
@@ -247,12 +247,12 @@ const appCards: LearnCard[] = [
     tags: ["PE", "ELF", "Disassembly"],
   },
   {
-    title: "Docker Layer Analysis Guide",
-    description: "VRAgent's Docker Analyzer: layer-by-layer inspection, secret detection, Dockerfile reconstruction, and supply chain security.",
+    title: "Docker Inspector Guide",
+    description: "VRAgent's Docker Inspector: layer inventory, secrets detection, attack vectors, and AI security analysis.",
     icon: <LayersIcon sx={{ fontSize: 40 }} />,
     path: "/learn/docker-forensics",
     color: "#0ea5e9",
-    tags: ["Layers", "Secrets", "Supply Chain"],
+    tags: ["Layers", "Secrets", "Risk"],
   },
 ];
 
