@@ -9,6 +9,7 @@ from sqlalchemy import func
 from backend import models
 from backend.core.database import get_db
 from backend.core.logging import get_logger
+from backend.core.auth import get_current_user
 from backend.core.mermaid_icons import WEBAPP_DIAGRAM_ICONS, get_webapp_diagram_prompt_icons
 from backend.services import export_service, sbom_service
 from backend.schemas import Report, Finding
@@ -43,17 +44,46 @@ def _get_report(db: Session, report_id: int) -> models.Report:
     return report
 
 
+def _verify_report_access(db: Session, report_id: int, user_id: int) -> models.Report:
+    """Verify user has access to the report's project and return the report."""
+    report = _get_report(db, report_id)
+    
+    # Get the project
+    project = db.query(models.Project).filter(models.Project.id == report.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check access
+    if project.owner_id == user_id:
+        return report
+    
+    collaborator = db.query(models.ProjectCollaborator).filter(
+        models.ProjectCollaborator.project_id == project.id,
+        models.ProjectCollaborator.user_id == user_id
+    ).first()
+    
+    if not collaborator:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    return report
+
+
 @router.get("/{report_id}", response_model=Report)
-def get_report(report_id: int, db: Session = Depends(get_db)):
+def get_report(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """Get a single report by ID."""
-    return _get_report(db, report_id)
+    return _verify_report_access(db, report_id, current_user.id)
 
 
 @router.get("/{report_id}/findings", response_model=list[Finding])
 def get_report_findings(
     report_id: int, 
     include_duplicates: bool = False,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """Get all findings for a report.
     
@@ -61,7 +91,7 @@ def get_report_findings(
         report_id: The report ID
         include_duplicates: If True, include findings marked as duplicates (default: False)
     """
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     query = db.query(models.Finding).filter(
         models.Finding.scan_run_id == report.scan_run_id
     )
@@ -75,9 +105,13 @@ def get_report_findings(
 
 
 @router.delete("/{report_id}")
-def delete_report(report_id: int, db: Session = Depends(get_db)):
+def delete_report(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """Delete a report and its associated findings."""
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     
     # Delete associated exploit scenarios
     db.query(models.ExploitScenario).filter(
@@ -102,14 +136,15 @@ def get_finding_code_snippet(
     report_id: int, 
     finding_id: int, 
     context_lines: int = Query(5, ge=0, le=20, description="Number of context lines before and after"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Get the code snippet for a specific finding.
     
     Returns the vulnerable code with surrounding context lines.
     """
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     
     finding = db.query(models.Finding).filter(
         models.Finding.id == finding_id,
@@ -165,8 +200,13 @@ def get_finding_code_snippet(
 
 
 @router.get("/{report_id}/export/markdown")
-def export_markdown(report_id: int, db: Session = Depends(get_db)):
+def export_markdown(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """Export report as Markdown with full AI summaries and exploit scenarios."""
+    _verify_report_access(db, report_id, current_user.id)
     try:
         report, findings, filtered_findings = export_service.get_report_with_findings(db, report_id)
         content = export_service.generate_markdown(
@@ -184,8 +224,13 @@ def export_markdown(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/export/pdf")
-def export_pdf(report_id: int, db: Session = Depends(get_db)):
+def export_pdf(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """Export report as PDF with full AI summaries and exploit scenarios."""
+    _verify_report_access(db, report_id, current_user.id)
     try:
         report, findings, filtered_findings = export_service.get_report_with_findings(db, report_id)
         content = export_service.generate_pdf(
@@ -203,8 +248,13 @@ def export_pdf(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/export/docx")
-def export_docx(report_id: int, db: Session = Depends(get_db)):
+def export_docx(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """Export report as DOCX with full AI summaries and exploit scenarios."""
+    _verify_report_access(db, report_id, current_user.id)
     try:
         report, findings, filtered_findings = export_service.get_report_with_findings(db, report_id)
         content = export_service.generate_docx(
@@ -225,7 +275,8 @@ def export_docx(report_id: int, db: Session = Depends(get_db)):
 def export_sbom_cyclonedx(
     report_id: int,
     include_vulnerabilities: bool = Query(True, description="Include vulnerability data in SBOM"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Export project SBOM in CycloneDX 1.5 format.
@@ -233,9 +284,7 @@ def export_sbom_cyclonedx(
     CycloneDX is a lightweight SBOM standard designed for security contexts.
     Includes dependency inventory and optionally vulnerability data.
     """
-    report = db.get(models.Report, report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    report = _verify_report_access(db, report_id, current_user.id)
     
     try:
         sbom = sbom_service.get_sbom(db, report.project_id, "cyclonedx", include_vulnerabilities)
@@ -251,15 +300,17 @@ def export_sbom_cyclonedx(
 
 
 @router.get("/{report_id}/export/sbom/spdx")
-def export_sbom_spdx(report_id: int, db: Session = Depends(get_db)):
+def export_sbom_spdx(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Export project SBOM in SPDX 2.3 format.
     
     SPDX is an ISO standard (ISO/IEC 5962:2021) for software bill of materials.
     """
-    report = db.get(models.Report, report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    report = _verify_report_access(db, report_id, current_user.id)
     
     try:
         sbom = sbom_service.get_sbom(db, report.project_id, "spdx")
@@ -275,19 +326,28 @@ def export_sbom_spdx(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/codebase/summary")
-async def get_codebase_ai_summary(report_id: int, db: Session = Depends(get_db)):
+async def get_codebase_ai_summary(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+    force_regenerate: bool = False
+):
     """
-    Get an AI-generated summary of the codebase.
+    Get an AI-generated COMPREHENSIVE summary of the codebase.
     
-    Uses Gemini to analyze the codebase structure and provide insights about:
-    - What the project does
-    - Main technologies and frameworks
-    - Code quality observations
-    - Basic statistics
+    Uses Gemini to analyze the codebase structure and provide detailed insights matching
+    the quality of APK Analyzer reports, including:
+    - What the project does (detailed feature analysis)
+    - Technology stack and architecture
+    - Security findings with attack scenarios and PoC ideas
+    - Attack chains and exploitation strategies
+    
+    Query Parameters:
+    - force_regenerate: If true, regenerates the AI summaries even if cached
     """
     from backend.core.config import settings
     
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     project_id = report.project_id
     
     # Get project info
@@ -343,47 +403,131 @@ async def get_codebase_ai_summary(report_id: int, db: Session = Depends(get_db))
         ftype = f.type or "unknown"
         finding_types[ftype] = finding_types.get(ftype, 0) + 1
     
-    # Build the prompt for app/codebase summary - DETAILED VERSION
-    app_prompt = f"""You are a senior software architect analyzing a codebase. Provide a comprehensive overview of what this application does.
+    # Build the prompt for app/codebase summary - COMPREHENSIVE VERSION (matching APK Analyzer quality)
+    app_prompt = f"""You are an expert software architect and code analyst. Your task is to provide a COMPREHENSIVE analysis of what this application does based on DEEP code inspection.
 
+## PROJECT INFORMATION
 Project Name: {project.name if project else 'Unknown'}
+Total Code Chunks Analyzed: {len(chunks)}
+Languages Detected: {', '.join(f'{k}: {v} files' for k, v in sorted(languages.items(), key=lambda x: -x[1]))}
+Total Files: {total_files}
+Total Lines: {total_lines:,}
 
-FILES ANALYZED ({total_files} files, {total_lines:,} lines of code):
+## FILE STRUCTURE
 {chr(10).join(sample_paths)}
 {"..." if len(file_metadata) > 30 else ""}
 
-LANGUAGE BREAKDOWN:
-{chr(10).join(f"- {lang}: {count} files" for lang, count in sorted(languages.items(), key=lambda x: -x[1]))}
-
-SAMPLE CODE SNIPPETS:
+## CODE SAMPLES
 {chr(10).join(f"--- {s['path']} ({s['language']}) ---{chr(10)}{s['preview']}..." for s in sample_code)}
 
-Write a detailed, well-structured analysis. Format your response EXACTLY like this example:
+## YOUR TASK
+Perform a THOROUGH analysis of the codebase by:
+1. Reading ALL provided source code carefully
+2. Tracing data flows and feature implementations
+3. Identifying ALL major features and capabilities
+4. Understanding how different components work together
+5. Noting any hidden or non-obvious functionality
 
-**Purpose & Functionality**
-A brief 2-3 sentence description of what this application does and its target users.
+Generate a DETAILED, COMPREHENSIVE report. Use HTML formatting.
 
-**Technology Stack**
-• Frontend: React, TypeScript
-• Backend: Python, FastAPI
-• Database: PostgreSQL
-• Other: Docker, Redis
+FORMAT YOUR RESPONSE AS CLEAN HTML (no markdown, no code blocks):
+- Use <h3> for section headers
+- Use <h4> for sub-sections
+- Use <ul> and <li> for bullet points
+- Use <strong> for emphasis
+- Use <p> for paragraphs
+- Use <code> for class/method names
 
-**Architecture**
-Describe the overall structure in 2-3 sentences, then list key patterns:
-• Pattern 1 - brief explanation
-• Pattern 2 - brief explanation
+REQUIRED SECTIONS (BE THOROUGH):
 
-**Key Components**
-• **Component Name** - what it does
-• **Another Component** - what it does
-• **Third Component** - what it does
+<h3>📱 Application Overview</h3>
+<p>[2-3 sentences describing what this application is, its purpose, and target audience - base this on actual code analysis]</p>
 
-FORMATTING RULES:
-- Use **bold** only for section headers and component names
-- Use • bullet points for lists
-- Keep descriptions concise - one line per item
-- No numbered lists in this section"""
+<h3>🎯 Core Features & Functionality</h3>
+<p>Based on deep code analysis, this application provides the following features:</p>
+
+<h4>Main Features</h4>
+<ul>
+<li><strong>[Feature Name]:</strong> [Detailed description of what it does, HOW it works based on the code you see, which classes/modules implement it]</li>
+[List ALL major features you can identify from the code]
+</ul>
+
+<h4>User Interface & Navigation</h4>
+<ul>
+<li>[Describe the app's UI patterns, components, pages/views, and navigation flow based on code analysis]</li>
+</ul>
+
+<h3>🔐 Authentication & User Management</h3>
+<ul>
+<li><strong>Authentication:</strong> [How authentication works - JWT? OAuth? Session-based? API keys?]</li>
+<li><strong>Authorization:</strong> [Role-based? Permission system? Access control patterns?]</li>
+<li><strong>Session Management:</strong> [How sessions/tokens are handled]</li>
+<li><strong>User Data:</strong> [What user data is collected/stored]</li>
+</ul>
+
+<h3>📡 API & Network Communication</h3>
+<h4>API Endpoints</h4>
+<ul>
+<li><strong>Endpoint Patterns:</strong> [REST? GraphQL? WebSocket?]</li>
+<li><strong>Key Routes:</strong> [List important API endpoints found in code]</li>
+<li><strong>Data Formats:</strong> [JSON? XML? How is data serialized?]</li>
+</ul>
+
+<h4>External Services</h4>
+<ul>
+<li>[Third-party APIs, cloud services, external dependencies]</li>
+</ul>
+
+<h3>💾 Data Storage & Persistence</h3>
+<ul>
+<li><strong>Database:</strong> [SQL? NoSQL? What ORM/driver? Schema patterns?]</li>
+<li><strong>Caching:</strong> [Redis? Memcached? In-memory?]</li>
+<li><strong>File Storage:</strong> [Local files? Cloud storage? How files are handled?]</li>
+<li><strong>Data Models:</strong> [Key entities and relationships]</li>
+</ul>
+
+<h3>⚙️ Technology Stack</h3>
+<ul>
+<li><strong>Languages:</strong> [Programming languages with specific versions if apparent]</li>
+<li><strong>Frameworks:</strong> [Web frameworks, libraries used]</li>
+<li><strong>Build Tools:</strong> [Package managers, build systems]</li>
+<li><strong>Runtime:</strong> [Node.js? Python? Docker?]</li>
+</ul>
+
+<h3>🏗️ Architecture & Design Patterns</h3>
+<ul>
+<li><strong>Architecture Style:</strong> [Monolith? Microservices? MVC? Clean Architecture?]</li>
+<li><strong>Design Patterns:</strong> [Repository? Factory? Observer? etc.]</li>
+<li><strong>Code Organization:</strong> [How is the codebase structured?]</li>
+<li><strong>Module Boundaries:</strong> [How do components interact?]</li>
+</ul>
+
+<h3>🔌 Background Processing & Jobs</h3>
+<ul>
+<li>[Scheduled tasks? Message queues? Worker processes? Cron jobs?]</li>
+</ul>
+
+<h3>🔗 Integrations & External Dependencies</h3>
+<ul>
+<li>[Email services? Payment processors? Analytics? Logging?]</li>
+</ul>
+
+<h3>🔍 Notable Implementation Details</h3>
+<ul>
+<li>[Interesting technical patterns you noticed in the code]</li>
+<li>[Unique approaches or clever solutions]</li>
+<li>[Technical debt or areas that could be improved]</li>
+</ul>
+
+<h3>📊 Application Complexity Assessment</h3>
+<p>[Simple utility / Medium complexity / Complex enterprise application - justify based on code analysis]</p>
+<ul>
+<li><strong>Lines of Code:</strong> {total_lines:,}</li>
+<li><strong>File Count:</strong> {total_files}</li>
+<li><strong>Technical Sophistication:</strong> [Basic / Intermediate / Advanced]</li>
+</ul>
+
+BE THOROUGH AND SPECIFIC. Reference actual classes, functions, and files you see in the code. Don't make assumptions - only report what you can verify from the code."""
 
     # Build findings details for security summary
     findings_details = []
@@ -402,66 +546,223 @@ FORMATTING RULES:
                 detail["secret_type"] = f.details["secret_type"]
         findings_details.append(detail)
 
-    security_prompt = f"""You are an elite penetration tester and red team operator. Analyze these vulnerabilities and explain how an attacker would exploit this application.
+    security_prompt = f"""You are an elite RED TEAM OPERATOR performing offensive security assessment of this codebase. Your goal is to find EXPLOITABLE vulnerabilities and demonstrate HOW to attack this application.
 
+Think like an ATTACKER, not a compliance auditor. Focus on:
+- What can I ACTUALLY exploit?
+- How do I chain vulnerabilities together?
+- What's the realistic attack path to compromise the system?
+- What would I do FIRST if I wanted to hack this app?
+
+## CODEBASE CONTEXT
 Project: {project.name if project else 'Unknown'}
-Total Files Scanned: {total_files}
+Total Files Analyzed: {total_files}
+Total Lines of Code: {total_lines:,}
 
-FINDINGS SUMMARY:
+## SECURITY FINDINGS IDENTIFIED
+
+### Severity Distribution
 - Critical: {severity_counts['critical']}
 - High: {severity_counts['high']}
 - Medium: {severity_counts['medium']}
 - Low: {severity_counts['low']}
 - Info: {severity_counts['info']}
-Total: {len(findings)} findings
+Total: {len(findings)} security weaknesses identified
 
-Finding Types: {', '.join(f"{k} ({v})" for k, v in sorted(finding_types.items(), key=lambda x: -x[1]))}
+### Findings by Category
+{', '.join(f"{k} ({v})" for k, v in sorted(finding_types.items(), key=lambda x: -x[1]))}
 
-DETAILED FINDINGS:
+### Detailed Top Findings
 {chr(10).join(f"- [{f['severity'].upper()}] {f['type']}: {f['summary']} (in {f['file']}:{f.get('line', '?')})" for f in findings_details)}
 
-Write from an attacker's perspective. Format your response EXACTLY like this:
+## YOUR MISSION
+Perform an OFFENSIVE security assessment:
+1. Identify the ATTACK SURFACE - where can an attacker get in?
+2. Find EXPLOITABLE vulnerabilities with working attack scenarios
+3. Build ATTACK CHAINS - how do multiple weaknesses combine?
+4. Prioritize by REAL-WORLD EXPLOITABILITY, not theoretical risk
+5. Provide PROOF-OF-CONCEPT ideas for each finding
+6. Consider both REMOTE attacks (network) and LOCAL attacks (insider, supply chain)
 
-**Overall Risk Assessment**
-RISK LEVEL: CRITICAL/HIGH/MEDIUM/LOW
-One sentence justification of the risk level.
+Generate an ATTACKER-FOCUSED security report. Use HTML formatting.
 
-**Primary Attack Vectors**
-• **Vector Name** - Brief description of the attack surface
-• **Another Vector** - Brief description
-• **Third Vector** - Brief description
+FORMAT YOUR RESPONSE AS CLEAN HTML (no markdown, no code blocks):
+- Use <h3> for section headers
+- Use <h4> for sub-sections
+- Use <ul> and <li> for bullet points
+- Use <strong> for emphasis
+- Use <code> for code/commands
+- Severity badges: <span style="color: #dc2626; font-weight: bold;">CRITICAL</span>, <span style="color: #ea580c; font-weight: bold;">HIGH</span>, <span style="color: #ca8a04; font-weight: bold;">MEDIUM</span>, <span style="color: #16a34a; font-weight: bold;">LOW</span>
 
-**Exploitation Strategy**
-Step-by-step attack plan:
-1. **Initial Access** - How to get in (specific vulnerability)
-2. **Establish Foothold** - What to do once inside
-3. **Privilege Escalation** - How to gain more access
-4. **Achieve Objective** - Final goal (data exfil, RCE, etc.)
+REQUIRED SECTIONS:
 
-**Potential Impact**
-• Data Exposure: What sensitive data is at risk
-• System Compromise: Level of access achievable
-• Business Impact: Real-world consequences
+<h3>⚔️ Attack Summary</h3>
+<p><strong>Hackability Score:</strong> [X/10] - How easy is this application to compromise?</p>
+<p><strong>Most Dangerous Finding:</strong> [One-liner of the worst issue]</p>
+<p><strong>Recommended Attack Path:</strong> [The attack chain I would use]</p>
+<p><strong>Attacker Value:</strong> [What's worth stealing? User data? Credentials? Money? Business logic?]</p>
 
-**Quick Wins**
-Easiest exploits for immediate results:
-1. First easy exploit - why it's easy
-2. Second easy exploit - why it's easy
-3. Third easy exploit - why it's easy
+<h3>🎯 Attack Surface Analysis</h3>
+<h4>Entry Points (How I Get In)</h4>
+<ul>
+<li><strong>API Endpoints:</strong> [Which endpoints are vulnerable? Authentication bypasses?]</li>
+<li><strong>User Input:</strong> [Form fields, file uploads, query parameters at risk]</li>
+<li><strong>Authentication:</strong> [Login weaknesses, session handling issues]</li>
+<li><strong>File Operations:</strong> [Path traversal, file upload, file inclusion risks]</li>
+<li><strong>Database Queries:</strong> [SQL injection, NoSQL injection points]</li>
+<li><strong>External Dependencies:</strong> [Vulnerable libraries, supply chain risks]</li>
+</ul>
 
-FORMATTING RULES:
-- Use **bold** for section headers and key terms only
-- Use • bullets for unordered lists
-- Use numbered lists (1. 2. 3.) for sequential steps
-- Be specific about techniques, no generic advice
-- Think like a hacker. No remediation advice."""
+<h4>Sensitive Assets (What I Want)</h4>
+<ul>
+<li>[User credentials, tokens, personal data, financial info, business data]</li>
+<li>[Where is each asset stored? How is it protected?]</li>
+</ul>
+
+<h3>💀 Critical Exploits</h3>
+<p>Vulnerabilities I can exploit RIGHT NOW:</p>
+
+<h4>Exploit 1: [Catchy Attack Name]</h4>
+<ul>
+<li><span style="color: #dc2626; font-weight: bold;">CRITICAL</span> or appropriate severity</li>
+<li><strong>What:</strong> [Technical description]</li>
+<li><strong>Where:</strong> <code>[File:Line or Component]</code></li>
+<li><strong>Vulnerable Code:</strong> <pre><code>[The actual vulnerable code snippet]</code></pre></li>
+<li><strong>Attack Scenario:</strong> [Step-by-step how I would exploit this]</li>
+<li><strong>PoC Idea:</strong> <code>[curl command / payload / script snippet]</code></li>
+<li><strong>Impact:</strong> [What I gain - RCE? Data theft? Account takeover? Privilege escalation?]</li>
+<li><strong>Difficulty:</strong> [Easy/Medium/Hard] - [Why]</li>
+</ul>
+
+[Repeat for top 3-5 most critical exploits]
+
+<h3>🔗 Attack Chains</h3>
+<p>How I combine multiple weaknesses for maximum impact:</p>
+
+<h4>Chain 1: [Attack Chain Name]</h4>
+<ol>
+<li><strong>Step 1:</strong> [First exploit/technique - initial access]</li>
+<li><strong>Step 2:</strong> [Second exploit/technique - escalation]</li>
+<li><strong>Step 3:</strong> [Third technique - lateral movement or data access]</li>
+<li><strong>Result:</strong> [What attacker achieves - full compromise, data exfil, etc.]</li>
+</ol>
+
+<h3>🔓 Authentication & Session Attacks</h3>
+<ul>
+<li><strong>Token Weakness:</strong> [Can I forge/steal/reuse tokens?]</li>
+<li><strong>Session Hijacking:</strong> [How would I steal a session?]</li>
+<li><strong>Credential Extraction:</strong> [Where are creds stored? Can I get them?]</li>
+<li><strong>Privilege Escalation:</strong> [Can regular user become admin?]</li>
+<li><strong>Password Reset:</strong> [Flaws in password reset flow?]</li>
+</ul>
+
+<h3>💉 Injection Attack Vectors</h3>
+<ul>
+<li><strong>SQL Injection:</strong> [Where? PoC query?]</li>
+<li><strong>Command Injection:</strong> [Any exec/system calls?]</li>
+<li><strong>XSS (Cross-Site Scripting):</strong> [User input reflected unsanitized?]</li>
+<li><strong>Template Injection:</strong> [SSTI opportunities?]</li>
+<li><strong>Path Traversal:</strong> [File operations I can abuse?]</li>
+<li><strong>LDAP/XML/Header Injection:</strong> [Other injection points?]</li>
+</ul>
+
+<h3>🔑 Secrets & Sensitive Data Exposure</h3>
+<ul>
+<li><strong>[Secret Type]:</strong> <code>[Location]</code>
+  <ul>
+  <li>Risk: [What access does this give me?]</li>
+  <li>Exploitation: [How I'd extract and use this]</li>
+  </ul>
+</li>
+</ul>
+
+<h3>📦 Vulnerable Dependencies</h3>
+<ul>
+<li><strong>[Library Name] v[X.X]:</strong> [Known CVEs or issues]
+  <ul>
+  <li>Exploitability: [Can I actually exploit this in context?]</li>
+  <li>Attack: [How would I leverage this vulnerability?]</li>
+  </ul>
+</li>
+</ul>
+
+<h3>🌐 Network & API Attack Vectors</h3>
+<ul>
+<li><strong>MITM Possibility:</strong> [Insecure communications?]</li>
+<li><strong>API Abuse:</strong> [Rate limiting? IDOR? Broken access control?]</li>
+<li><strong>SSRF:</strong> [Can I make the server fetch internal resources?]</li>
+<li><strong>Request Smuggling:</strong> [HTTP parsing issues?]</li>
+</ul>
+
+<h3>⚙️ Business Logic Flaws</h3>
+<ul>
+<li>[Logic bypasses, workflow manipulation, race conditions]</li>
+<li>[Price manipulation, discount abuse, feature abuse]</li>
+</ul>
+
+<h3>📋 Attack Playbook</h3>
+<p>If I had 1 hour to hack this application, I would:</p>
+<ol>
+<li><strong>[First 15 min]:</strong> [Initial reconnaissance and access technique]</li>
+<li><strong>[Next 15 min]:</strong> [Privilege escalation / deeper access]</li>
+<li><strong>[Next 15 min]:</strong> [Data exfiltration / persistence]</li>
+<li><strong>[Final 15 min]:</strong> [Cover tracks / maximize impact]</li>
+</ol>
+
+<h3>🛡️ Security Controls I'd Need to Bypass</h3>
+<ul>
+<li><strong>Authentication:</strong> [Strength assessment, bypass techniques]</li>
+<li><strong>Authorization:</strong> [Access control gaps]</li>
+<li><strong>Input Validation:</strong> [What's not being validated?]</li>
+<li><strong>Rate Limiting:</strong> [Present? Bypassable?]</li>
+<li><strong>Logging/Monitoring:</strong> [Would my attacks be detected?]</li>
+</ul>
+
+<h3>🎯 Bug Bounty Priority List</h3>
+<p>If this app had a bug bounty, I'd focus on:</p>
+<ol>
+<li>[Highest-impact vulnerability class] - [Why it's exploitable here]</li>
+<li>[Second target] - [Specific weakness and approach]</li>
+<li>[Third target] - [Attack vector and expected payout]</li>
+</ol>
+
+<h3>⚠️ Quick Wins for Defenders</h3>
+<p>Immediate fixes that would significantly reduce risk:</p>
+<ol>
+<li>[Critical fix #1 with specific code location]</li>
+<li>[Critical fix #2 with implementation guidance]</li>
+<li>[Critical fix #3 with detection/prevention tips]</li>
+</ol>
+
+## CRITICAL: REAL EXPLOITS ONLY
+- Only report vulnerabilities you could ACTUALLY EXPLOIT based on the findings
+- Provide SPECIFIC attack scenarios, not theoretical risks
+- Include PROOF-OF-CONCEPT ideas (payloads, curl commands, scripts)
+- Rate by EXPLOITABILITY (Easy/Medium/Hard), not just severity
+- Skip compliance issues that aren't really attackable
+- Focus on REAL, EXPLOITABLE issues that would affect users
+
+BE EXHAUSTIVE but ACCURATE. Analyze all provided findings. Reference specific code locations and files."""
 
     # Call Gemini if available
     app_summary = None
     security_summary = None
     
-    # Check if we have cached summaries in report.data
-    if report.data and report.data.get("ai_summaries"):
+    # Helper function to clean markdown wrappers from AI response
+    def clean_html_response(text: str) -> str:
+        if not text:
+            return text
+        text = text.strip()
+        if text.startswith("```html"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        return text.strip()
+    
+    # Check if we have cached summaries in report.data (skip if force_regenerate)
+    if not force_regenerate and report.data and report.data.get("ai_summaries"):
         cached = report.data["ai_summaries"]
         app_summary = cached.get("app_summary")
         security_summary = cached.get("security_summary")
@@ -478,7 +779,7 @@ FORMATTING RULES:
                 contents=app_prompt
             )
             if response and response.text:
-                app_summary = response.text
+                app_summary = clean_html_response(response.text)
                 logger.info(f"Generated app summary for report {report_id}")
             
             # Generate security summary (only if there are findings)
@@ -488,7 +789,7 @@ FORMATTING RULES:
                     contents=security_prompt
                 )
                 if response and response.text:
-                    security_summary = response.text
+                    security_summary = clean_html_response(response.text)
                     logger.info(f"Generated security summary for report {report_id}")
             
             # Cache the summaries in report.data
@@ -499,6 +800,8 @@ FORMATTING RULES:
                     "security_summary": security_summary
                 }
                 report.data = report_data
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(report, "data")
                 db.commit()
                 logger.info(f"Cached AI summaries for report {report_id}")
                     
@@ -524,7 +827,11 @@ FORMATTING RULES:
 
 
 @router.get("/{report_id}/codebase/diagram")
-async def get_codebase_diagram(report_id: int, db: Session = Depends(get_db)):
+async def get_codebase_diagram(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Get an AI-generated Mermaid architecture diagram for the codebase.
     
@@ -542,7 +849,7 @@ async def get_codebase_diagram(report_id: int, db: Session = Depends(get_db)):
     """
     from backend.core.config import settings
     
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     project_id = report.project_id
     
     # Check for cached diagram in report.data
@@ -943,7 +1250,11 @@ Name components based on ACTUAL file names and patterns from the code samples ab
 
 
 @router.get("/{report_id}/codebase")
-def get_codebase_structure(report_id: int, db: Session = Depends(get_db)):
+def get_codebase_structure(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Get the codebase structure as a tree with file metadata.
     
@@ -952,7 +1263,7 @@ def get_codebase_structure(report_id: int, db: Session = Depends(get_db)):
     - File metadata (language, line count, chunk count)
     - Finding counts per file
     """
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     project_id = report.project_id
     
     # Get all code chunks grouped by file
@@ -1084,7 +1395,8 @@ def get_codebase_structure(report_id: int, db: Session = Depends(get_db)):
 def get_file_content(
     report_id: int,
     file_path: str = Query(..., description="The file path to retrieve"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Get the FULL code content for a specific file.
@@ -1095,7 +1407,7 @@ def get_file_content(
     import zipfile
     from pathlib import Path
     
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     project = report.project
     
     # Get findings for this file
@@ -1283,7 +1595,11 @@ def _severity_rank(severity: str) -> int:
 
 
 @router.get("/{report_id}/dependencies")
-def get_dependencies(report_id: int, db: Session = Depends(get_db)):
+def get_dependencies(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Get dependency information for the project.
     
@@ -1292,7 +1608,7 @@ def get_dependencies(report_id: int, db: Session = Depends(get_db)):
     """
     import re
     
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     project_id = report.project_id
     
     # Get external dependencies from the database
@@ -1406,7 +1722,11 @@ def get_dependencies(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/vulnerabilities")
-def get_vulnerabilities(report_id: int, db: Session = Depends(get_db)):
+def get_vulnerabilities(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Get detailed CVE/CWE vulnerability information for the report.
     
@@ -1416,7 +1736,7 @@ def get_vulnerabilities(report_id: int, db: Session = Depends(get_db)):
     - EPSS scores and KEV status where available
     - Affected packages and fix versions
     """
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     project_id = report.project_id
     
     # Get all vulnerabilities from dependencies (CVEs)
@@ -1610,7 +1930,12 @@ def get_vulnerabilities(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/diff/{compare_report_id}")
-def get_scan_diff(report_id: int, compare_report_id: int, db: Session = Depends(get_db)):
+def get_scan_diff(
+    report_id: int, 
+    compare_report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Compare two scan reports to show what changed.
     
@@ -1621,8 +1946,8 @@ def get_scan_diff(report_id: int, compare_report_id: int, db: Session = Depends(
     - New files (added since compare)
     - Removed files (deleted since compare)
     """
-    report = _get_report(db, report_id)
-    compare_report = _get_report(db, compare_report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
+    compare_report = _verify_report_access(db, compare_report_id, current_user.id)
     
     # Ensure same project
     if report.project_id != compare_report.project_id:
@@ -1723,7 +2048,12 @@ def get_scan_diff(report_id: int, compare_report_id: int, db: Session = Depends(
 
 
 @router.post("/{report_id}/chat", response_model=ReportChatResponse)
-async def chat_about_report(report_id: int, request: ReportChatRequest, db: Session = Depends(get_db)):
+async def chat_about_report(
+    report_id: int, 
+    request: ReportChatRequest, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Chat with Gemini about a VR Scan report's findings and exploitability analysis.
     
@@ -1738,10 +2068,8 @@ async def chat_about_report(report_id: int, request: ReportChatRequest, db: Sess
             error="Chat unavailable: GEMINI_API_KEY not configured"
         )
     
-    # Get the report
-    report = db.get(models.Report, report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    # Verify access to the report
+    report = _verify_report_access(db, report_id, current_user.id)
     
     # Get findings
     findings = db.query(models.Finding).filter(models.Finding.scan_run_id == report.scan_run_id).all()
@@ -1872,12 +2200,17 @@ Answer the user's question based on this security scan report. Be helpful, speci
 
 
 @router.get("/{report_id}/file-trends/{file_path:path}")
-def get_file_trends(report_id: int, file_path: str, db: Session = Depends(get_db)):
+def get_file_trends(
+    report_id: int, 
+    file_path: str, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Get finding count trends for a specific file across recent scans.
     Returns the last N reports for the same project with finding counts for this file.
     """
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     
     # Get the last 10 reports for this project (most recent first)
     reports = db.query(models.Report).filter(
@@ -1918,14 +2251,18 @@ def get_file_trends(report_id: int, file_path: str, db: Session = Depends(get_db
 
 
 @router.get("/{report_id}/todos")
-def get_todos(report_id: int, db: Session = Depends(get_db)):
+def get_todos(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Scan code chunks for TODO, FIXME, HACK, XXX, BUG, NOTE comments.
     Returns a list of all comment markers found with line numbers.
     """
     import re
     
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     
     # Get all code chunks for this project
     chunks = db.query(models.CodeChunk).filter(
@@ -2101,7 +2438,8 @@ Analyze each carefully and respond with ONLY the JSON object."""
 async def get_secrets(
     report_id: int, 
     use_ai: bool = Query(True, description="Use Gemini AI to validate and filter false positives"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Scan code chunks for potential secrets, credentials, and sensitive data.
@@ -2111,7 +2449,7 @@ async def get_secrets(
     """
     import re
     
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     
     # Get all code chunks for this project
     chunks = db.query(models.CodeChunk).filter(
@@ -2322,7 +2660,8 @@ def _get_secret_severity(secret_type: str) -> str:
 def search_code(
     report_id: int, 
     q: str = Query(..., min_length=2, description="Search query"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Full-text search across code content in the codebase.
@@ -2330,7 +2669,7 @@ def search_code(
     """
     import re
     
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     
     # Get all code chunks for this project
     chunks = db.query(models.CodeChunk).filter(
@@ -2381,14 +2720,19 @@ class ExplainCodeRequest(BaseModel):
 
 
 @router.post("/{report_id}/explain-code")
-def explain_code(report_id: int, request: ExplainCodeRequest, db: Session = Depends(get_db)):
+def explain_code(
+    report_id: int, 
+    request: ExplainCodeRequest, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Use AI to explain what a code file does.
     """
     from google import genai
     from google.genai import types
     
-    report = _get_report(db, report_id)
+    report = _verify_report_access(db, report_id, current_user.id)
     
     # Get findings for this file to provide context
     findings = db.query(models.Finding).filter(

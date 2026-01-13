@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Box,
   Typography,
@@ -29,6 +30,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   keyframes,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -60,7 +63,36 @@ import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import ColorLensIcon from "@mui/icons-material/ColorLens";
 import LayersIcon from "@mui/icons-material/Layers";
+import FingerprintIcon from "@mui/icons-material/Fingerprint";
+import ApiIcon from "@mui/icons-material/Api";
+import KeyIcon from "@mui/icons-material/Key";
+import TokenIcon from "@mui/icons-material/Token";
+import DataObjectIcon from "@mui/icons-material/DataObject";
+import StorageIcon from "@mui/icons-material/Storage";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
+import DeviceHubIcon from "@mui/icons-material/DeviceHub";
+import RouterIcon from "@mui/icons-material/Router";
+import TerminalIcon from "@mui/icons-material/Terminal";
+import GppMaybeIcon from "@mui/icons-material/GppMaybe";
+import ShieldIcon from "@mui/icons-material/Shield";
+import HubIcon from "@mui/icons-material/Hub";
 import LearnPageLayout from "../components/LearnPageLayout";
+
+// Tab panel component
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div role="tabpanel" hidden={value !== index} {...other}>
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+}
 
 // Animations
 const float = keyframes`
@@ -250,6 +282,116 @@ export default function WiresharkGuidePage() {
     { item: "Statistics → Endpoints", description: "All unique IPs, Ethernet addresses, TCP/UDP ports seen" },
     { item: "Statistics → I/O Graph", description: "Visual timeline of traffic volume over capture duration" },
     { item: "Statistics → Flow Graph", description: "Sequence diagram of packet exchanges between hosts" },
+  ];
+
+  // State for tabs
+  const [advancedTab, setAdvancedTab] = React.useState(0);
+
+  // VRAgent Advanced PCAP Features Data
+  const offensiveFeatures = [
+    {
+      icon: <ApiIcon />,
+      title: "API Endpoint Discovery",
+      description: "Automatically extracts all API endpoints from HTTP/HTTPS traffic with method, path, parameters, and body",
+      color: "#3b82f6",
+      details: ["HTTP method & URL extraction", "Query parameter parsing", "Request body analysis", "Content-Type detection"],
+    },
+    {
+      icon: <TokenIcon />,
+      title: "Auth Token Extraction",
+      description: "Identifies and analyzes authentication mechanisms: JWT, Bearer, API keys, Basic Auth, OAuth, session cookies",
+      color: "#8b5cf6",
+      details: ["JWT claim decoding", "Weakness detection (none alg, short exp)", "Token hash tracking", "Credential exposure alerts"],
+    },
+    {
+      icon: <GppMaybeIcon />,
+      title: "Sensitive Data Detection",
+      description: "Scans traffic for PII, credentials, and secrets with 15+ pattern categories",
+      color: "#ef4444",
+      details: ["PII (email, phone, SSN, credit card)", "API keys (AWS, GitHub, generic)", "Passwords & private keys", "SQL errors & stack traces"],
+    },
+    {
+      icon: <ShieldIcon />,
+      title: "Protocol Weakness Analysis",
+      description: "Detects insecure protocol usage and misconfigurations",
+      color: "#f59e0b",
+      details: ["Cleartext HTTP detection", "Unencrypted FTP/Telnet/SMTP", "Weak TLS configurations", "Missing HSTS headers"],
+    },
+  ];
+
+  const tlsFingerprintFeatures = [
+    {
+      type: "JA3",
+      description: "Client TLS fingerprint derived from ClientHello parameters",
+      usage: "Identify malware, C2 tools, and client applications",
+      color: "#06b6d4",
+      fields: ["TLS version", "Cipher suites", "Extensions", "Elliptic curves", "Point formats"],
+    },
+    {
+      type: "JA3S",
+      description: "Server TLS fingerprint from ServerHello response",
+      usage: "Detect server-side malware or suspicious server configurations",
+      color: "#10b981",
+      fields: ["TLS version", "Selected cipher", "Extensions"],
+    },
+  ];
+
+  const protocolParsers = [
+    {
+      icon: <HubIcon />,
+      name: "WebSocket",
+      description: "Full WebSocket session and frame analysis",
+      features: ["Frame opcode detection", "Message reconstruction", "Binary/text payload parsing", "Ping/pong/close tracking"],
+      color: "#8b5cf6",
+    },
+    {
+      icon: <ApiIcon />,
+      name: "gRPC",
+      description: "HTTP/2 gRPC call extraction",
+      features: ["Service/method extraction", "Request/response matching", "Streaming detection", "Error status tracking"],
+      color: "#3b82f6",
+    },
+    {
+      icon: <RouterIcon />,
+      name: "MQTT",
+      description: "IoT MQTT protocol analysis",
+      features: ["Topic extraction", "Client ID tracking", "Publish/subscribe messages", "QoS level detection"],
+      color: "#10b981",
+    },
+    {
+      icon: <DeviceHubIcon />,
+      name: "CoAP",
+      description: "Constrained Application Protocol for IoT",
+      features: ["Resource URI extraction", "Method detection (GET/POST/PUT/DELETE)", "Response codes", "Block transfers"],
+      color: "#f59e0b",
+    },
+  ];
+
+  const databaseProtocols = [
+    { name: "MySQL", port: "3306", features: ["Query extraction", "Response parsing", "Authentication detection"] },
+    { name: "PostgreSQL", port: "5432", features: ["Query extraction", "Error messages", "Protocol state tracking"] },
+    { name: "Redis", port: "6379", features: ["RESP protocol parsing", "Command extraction", "Key enumeration"] },
+    { name: "MongoDB", port: "27017", features: ["Wire protocol decoding", "Query document extraction", "Collection detection"] },
+  ];
+
+  const captureProfiles = [
+    { name: "All Traffic", filter: "", description: "Capture all network traffic", intensity: 1 },
+    { name: "HTTP/HTTPS", filter: "port 80 or port 443 or port 8080", description: "Web traffic only", intensity: 2 },
+    { name: "DNS", filter: "port 53", description: "DNS queries and responses", intensity: 2 },
+    { name: "Auth Protocols", filter: "port 21 or port 22 or port 23 or port 3389 or port 445", description: "FTP, SSH, Telnet, RDP, SMB", intensity: 3 },
+    { name: "Email", filter: "port 25 or port 110 or port 143 or port 465 or port 587 or port 993 or port 995", description: "SMTP, POP3, IMAP", intensity: 3 },
+    { name: "Database", filter: "port 3306 or port 5432 or port 1433 or port 27017", description: "MySQL, PostgreSQL, MSSQL, MongoDB", intensity: 3 },
+    { name: "Suspicious Ports", filter: "port 4444 or port 5555 or port 6666 or port 1234 or port 31337 or port 8888", description: "Common backdoor/exploit ports", intensity: 4 },
+    { name: "ICMP", filter: "icmp", description: "Ping and ICMP messages", intensity: 2 },
+  ];
+
+  const highValuePatterns = [
+    { category: "Authentication", patterns: ["/auth", "/login", "/logout", "/signin", "/signup", "/register", "/oauth", "/token"] },
+    { category: "Admin", patterns: ["/admin", "/dashboard", "/manage", "/console", "/control", "/settings", "/config"] },
+    { category: "Payment", patterns: ["/payment", "/checkout", "/billing", "/invoice", "/subscribe", "/charge", "/order"] },
+    { category: "User Data", patterns: ["/user", "/profile", "/account", "/me", "/self"] },
+    { category: "File Operations", patterns: ["/upload", "/download", "/file", "/export", "/import", "/backup"] },
+    { category: "Debug/Internal", patterns: ["/debug", "/test", "/dev", "/staging", "/internal", "/_", "/actuator", "/swagger", "/graphql"] },
   ];
 
   const pageContext = `Wireshark Complete Guide - The definitive network protocol analyzer tutorial. Covers: display filters (IP, port, protocol, flags, content), capture techniques (interface selection, ring buffers, remote capture), packet analysis (HTTP, DNS, TCP/TLS dissection), advanced techniques (following streams, conversations, expert info), coloring rules, protocol dissectors, command-line tools (tshark, dumpcap), keyboard shortcuts, and security analysis patterns. Essential for network troubleshooting, security monitoring, forensics, and protocol debugging.`;
@@ -754,6 +896,567 @@ export default function WiresharkGuidePage() {
             </Grid>
           ))}
         </Grid>
+      </Paper>
+
+      {/* VRAgent Advanced PCAP Features */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          background: `linear-gradient(135deg, ${alpha("#ef4444", 0.05)} 0%, ${alpha("#8b5cf6", 0.05)} 100%)`,
+          border: `1px solid ${alpha("#ef4444", 0.2)}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+          <FingerprintIcon sx={{ color: "#ef4444", fontSize: 32 }} />
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              VRAgent Advanced PCAP Analysis
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Offensive security features powered by VRAgent's PCAP Analyzer
+            </Typography>
+          </Box>
+        </Box>
+
+        <Tabs
+          value={advancedTab}
+          onChange={(_, v) => setAdvancedTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            borderBottom: 1,
+            borderColor: "divider",
+            mt: 2,
+            "& .MuiTab-root": { fontWeight: 600, textTransform: "none" },
+          }}
+        >
+          <Tab icon={<GppMaybeIcon />} iconPosition="start" label="Attack Surface" />
+          <Tab icon={<FingerprintIcon />} iconPosition="start" label="TLS Fingerprints" />
+          <Tab icon={<HubIcon />} iconPosition="start" label="Protocol Parsers" />
+          <Tab icon={<StorageIcon />} iconPosition="start" label="Database Traffic" />
+          <Tab icon={<InsertDriveFileIcon />} iconPosition="start" label="File Extraction" />
+        </Tabs>
+
+        {/* Attack Surface Tab */}
+        <TabPanel value={advancedTab} index={0}>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            VRAgent automatically analyzes PCAP files from an <strong>offensive security perspective</strong> to identify 
+            API endpoints, authentication tokens, sensitive data leaks, and protocol weaknesses.
+          </Typography>
+          
+          <Grid container spacing={3}>
+            {offensiveFeatures.map((feature) => (
+              <Grid item xs={12} md={6} key={feature.title}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    borderRadius: 2,
+                    border: `1px solid ${alpha(feature.color, 0.3)}`,
+                    bgcolor: alpha(feature.color, 0.02),
+                    height: "100%",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                    <Box sx={{ color: feature.color }}>{feature.icon}</Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                      {feature.title}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {feature.description}
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                    {feature.details.map((detail, idx) => (
+                      <Chip
+                        key={idx}
+                        label={detail}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(feature.color, 0.1),
+                          color: feature.color,
+                          fontSize: "0.7rem",
+                        }}
+                      />
+                    ))}
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* High-Value Endpoint Detection */}
+          <Paper
+            sx={{
+              p: 3,
+              mt: 3,
+              borderRadius: 2,
+              bgcolor: alpha("#f59e0b", 0.05),
+              border: `1px solid ${alpha("#f59e0b", 0.2)}`,
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <SecurityIcon sx={{ color: "#f59e0b" }} />
+              High-Value Endpoint Detection
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              VRAgent automatically identifies attack-priority endpoints based on URL patterns:
+            </Typography>
+            <Grid container spacing={2}>
+              {highValuePatterns.map((cat) => (
+                <Grid item xs={12} sm={6} md={4} key={cat.category}>
+                  <Box>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: "#f59e0b" }}>
+                      {cat.category}
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                      {cat.patterns.slice(0, 4).map((p) => (
+                        <Chip
+                          key={p}
+                          label={p}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontSize: "0.65rem", height: 20 }}
+                        />
+                      ))}
+                      {cat.patterns.length > 4 && (
+                        <Chip label={`+${cat.patterns.length - 4}`} size="small" sx={{ fontSize: "0.65rem", height: 20 }} />
+                      )}
+                    </Box>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          {/* Export Formats */}
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+              Export Formats
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#10b981", 0.05) }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "#10b981", mb: 1 }}>
+                    <TerminalIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                    cURL Commands
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Auto-generated curl commands for every API endpoint discovered, including headers, auth, and body
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#8b5cf6", 0.05) }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "#8b5cf6", mb: 1 }}>
+                    <BugReportIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                    Burp Suite Requests
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Raw HTTP requests formatted for Burp Repeater import, ready for manual testing
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Box>
+        </TabPanel>
+
+        {/* TLS Fingerprints Tab */}
+        <TabPanel value={advancedTab} index={1}>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            <strong>JA3/JA3S fingerprinting</strong> creates unique identifiers for TLS clients and servers, 
+            enabling detection of malware, C2 tools, and suspicious applications regardless of IP or domain.
+          </Typography>
+
+          <Grid container spacing={3}>
+            {tlsFingerprintFeatures.map((fp) => (
+              <Grid item xs={12} md={6} key={fp.type}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    borderRadius: 2,
+                    border: `1px solid ${alpha(fp.color, 0.3)}`,
+                    bgcolor: alpha(fp.color, 0.02),
+                    height: "100%",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                    <FingerprintIcon sx={{ color: fp.color, fontSize: 28 }} />
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: fp.color }}>
+                        {fp.type}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {fp.type === "JA3" ? "Client Fingerprint" : "Server Fingerprint"}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {fp.description}
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Use Case:</Typography>
+                  <Typography variant="body2" sx={{ mb: 2 }}>{fp.usage}</Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Derived From:</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                    {fp.fields.map((field) => (
+                      <Chip
+                        key={field}
+                        label={field}
+                        size="small"
+                        sx={{ bgcolor: alpha(fp.color, 0.1), color: fp.color, fontSize: "0.7rem" }}
+                      />
+                    ))}
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Paper
+            sx={{
+              p: 2,
+              mt: 3,
+              borderRadius: 2,
+              bgcolor: alpha("#ef4444", 0.05),
+              border: `1px solid ${alpha("#ef4444", 0.2)}`,
+            }}
+          >
+            <Typography variant="body2">
+              <strong>🎯 Threat Hunting:</strong> JA3 fingerprints can identify known malware families like 
+              Cobalt Strike, Metasploit, and RATs even when they use legitimate domains or change IPs. 
+              VRAgent compares fingerprints against known malicious signatures.
+            </Typography>
+          </Paper>
+        </TabPanel>
+
+        {/* Protocol Parsers Tab */}
+        <TabPanel value={advancedTab} index={2}>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            VRAgent includes <strong>deep protocol parsers</strong> for modern application protocols 
+            beyond standard HTTP, enabling analysis of WebSocket, gRPC, and IoT communications.
+          </Typography>
+
+          <Grid container spacing={3}>
+            {protocolParsers.map((parser) => (
+              <Grid item xs={12} sm={6} key={parser.name}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    borderRadius: 2,
+                    border: `1px solid ${alpha(parser.color, 0.3)}`,
+                    bgcolor: alpha(parser.color, 0.02),
+                    height: "100%",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                    <Box sx={{ color: parser.color }}>{parser.icon}</Box>
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                        {parser.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {parser.description}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <List dense disablePadding>
+                    {parser.features.map((feature, idx) => (
+                      <ListItem key={idx} sx={{ py: 0.25, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 20 }}>
+                          <CheckCircleIcon sx={{ fontSize: 14, color: parser.color }} />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={feature}
+                          primaryTypographyProps={{ variant: "body2" }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* HTTP/2 and QUIC */}
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+              Also Supported
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#06b6d4", 0.2)}` }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>HTTP/2 Streams</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Multiplexed stream analysis, header compression (HPACK), server push detection
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>QUIC Connections</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    UDP-based transport detection, connection ID tracking, version identification
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Box>
+        </TabPanel>
+
+        {/* Database Traffic Tab */}
+        <TabPanel value={advancedTab} index={3}>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            VRAgent can <strong>extract database queries</strong> from network traffic, revealing what data 
+            applications are accessing and potential injection points.
+          </Typography>
+
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Database</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Port</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Extraction Capabilities</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {databaseProtocols.map((db) => (
+                  <TableRow key={db.name} hover>
+                    <TableCell>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <StorageIcon sx={{ fontSize: 18, color: "#6366f1" }} />
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{db.name}</Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={db.port} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {db.features.map((f) => (
+                          <Chip key={f} label={f} size="small" sx={{ fontSize: "0.7rem" }} />
+                        ))}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <Paper
+            sx={{
+              p: 2,
+              mt: 3,
+              borderRadius: 2,
+              bgcolor: alpha("#ef4444", 0.05),
+              border: `1px solid ${alpha("#ef4444", 0.2)}`,
+            }}
+          >
+            <Typography variant="body2">
+              <strong>⚠️ Security Note:</strong> Database queries in network traffic often reveal sensitive 
+              information. VRAgent highlights SQL injection patterns, credential queries, and data enumeration attempts.
+            </Typography>
+          </Paper>
+        </TabPanel>
+
+        {/* File Extraction Tab */}
+        <TabPanel value={advancedTab} index={4}>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            VRAgent can <strong>extract files</strong> transferred over HTTP, FTP, SMB, and other protocols, 
+            calculating hashes for threat intelligence correlation.
+          </Typography>
+
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Paper
+                sx={{
+                  p: 3,
+                  borderRadius: 2,
+                  border: `1px solid ${alpha("#3b82f6", 0.3)}`,
+                  bgcolor: alpha("#3b82f6", 0.02),
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                  <InsertDriveFileIcon sx={{ color: "#3b82f6" }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    File Carving
+                  </Typography>
+                </Box>
+                <List dense>
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="Automatic file type detection via magic bytes" primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="HTTP response body extraction" primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="TCP stream reassembly for split transfers" primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="Gzip/deflate decompression" primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper
+                sx={{
+                  p: 3,
+                  borderRadius: 2,
+                  border: `1px solid ${alpha("#10b981", 0.3)}`,
+                  bgcolor: alpha("#10b981", 0.02),
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                  <FingerprintIcon sx={{ color: "#10b981" }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Hash Calculation
+                  </Typography>
+                </Box>
+                <List dense>
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="MD5 hash for legacy systems" primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="SHA-256 hash for modern correlation" primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="VirusTotal / threat intel ready" primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="Filename and MIME type preservation" primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          {/* Timeline */}
+          <Paper
+            sx={{
+              p: 3,
+              mt: 3,
+              borderRadius: 2,
+              bgcolor: alpha("#f59e0b", 0.05),
+              border: `1px solid ${alpha("#f59e0b", 0.2)}`,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+              <TimelineIcon sx={{ color: "#f59e0b" }} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                Timeline Events
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              VRAgent builds a chronological timeline of network events for forensic analysis:
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {["HTTP Requests/Responses", "DNS Queries", "TLS Handshakes", "Authentication Events", 
+                "File Transfers", "Connection Resets", "Protocol Anomalies"].map((event) => (
+                <Chip
+                  key={event}
+                  label={event}
+                  size="small"
+                  sx={{ bgcolor: alpha("#f59e0b", 0.1), color: "#f59e0b" }}
+                />
+              ))}
+            </Box>
+          </Paper>
+        </TabPanel>
+      </Paper>
+
+      {/* Capture Profiles */}
+      <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <LayersIcon sx={{ color: "#06b6d4", fontSize: 28 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            VRAgent Capture Profiles
+          </Typography>
+        </Box>
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          VRAgent supports <strong>live capture profiles</strong> with pre-configured BPF filters for different analysis scenarios:
+        </Typography>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Profile</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>BPF Filter</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Intensity</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {captureProfiles.map((profile) => (
+                <TableRow key={profile.name} hover>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{profile.name}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    {profile.filter ? (
+                      <code style={{ 
+                        backgroundColor: alpha("#06b6d4", 0.1), 
+                        padding: "4px 8px", 
+                        borderRadius: 4,
+                        fontSize: "0.75rem",
+                      }}>
+                        {profile.filter}
+                      </code>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">All traffic</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>{profile.description}</TableCell>
+                  <TableCell>
+                    <Box sx={{ display: "flex", gap: 0.25 }}>
+                      {[1, 2, 3, 4].map((level) => (
+                        <Box
+                          key={level}
+                          sx={{
+                            width: 16,
+                            height: 8,
+                            borderRadius: 1,
+                            bgcolor: level <= profile.intensity 
+                              ? profile.intensity >= 4 ? "#ef4444" 
+                                : profile.intensity >= 3 ? "#f59e0b" 
+                                : "#10b981"
+                              : alpha("#6366f1", 0.1),
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Paper>
 
       {/* Statistics Menu */}

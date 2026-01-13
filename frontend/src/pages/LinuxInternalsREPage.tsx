@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import { Link } from "react-router-dom";
@@ -17,6 +17,12 @@ import {
   alpha,
   useTheme,
   Divider,
+  Drawer,
+  LinearProgress,
+  Fab,
+  Tooltip,
+  IconButton,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
@@ -28,9 +34,6 @@ import BuildIcon from "@mui/icons-material/Build";
 import SchoolIcon from "@mui/icons-material/School";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import Fab from "@mui/material/Fab";
-import Zoom from "@mui/material/Zoom";
-import useScrollTrigger from "@mui/material/useScrollTrigger";
 import SearchIcon from "@mui/icons-material/Search";
 import WarningIcon from "@mui/icons-material/Warning";
 import GavelIcon from "@mui/icons-material/Gavel";
@@ -52,6 +55,8 @@ import DataObjectIcon from "@mui/icons-material/DataObject";
 import SpeedIcon from "@mui/icons-material/Speed";
 import SyncAltIcon from "@mui/icons-material/SyncAlt";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
 import { useNavigate } from "react-router-dom";
 
 // Outline sections for future expansion
@@ -804,12 +809,178 @@ const quizQuestions: QuizQuestion[] = [
 export default function LinuxInternalsREPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const accent = "#f97316";
+
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "elf-format-content", label: "ELF Format", icon: <StorageIcon /> },
+    { id: "process-memory-content", label: "Process Memory", icon: <MemoryIcon /> },
+    { id: "syscalls-content", label: "System Calls", icon: <TerminalIcon /> },
+    { id: "dynamic-linking-content", label: "Dynamic Linking", icon: <SyncAltIcon /> },
+    { id: "debugging-content", label: "Debugging", icon: <BugReportIcon /> },
+    { id: "protections-content", label: "Binary Protections", icon: <SecurityIcon /> },
+    { id: "libc-content", label: "libc Internals", icon: <LayersIcon /> },
+    { id: "proc-filesystem-content", label: "/proc Filesystem", icon: <FolderIcon /> },
+    { id: "calling-conventions-content", label: "Calling Conventions", icon: <CodeIcon /> },
+    { id: "signals-content", label: "Signals", icon: <DataObjectIcon /> },
+    { id: "ptrace-content", label: "ptrace API", icon: <SearchIcon /> },
+    { id: "kernel-modules-content", label: "Kernel Modules", icon: <DeveloperBoardIcon /> },
+    { id: "analysis-tools-content", label: "RE Tools", icon: <BuildIcon /> },
+    { id: "exploitation-patterns-content", label: "Exploitation", icon: <LockIcon /> },
+    { id: "practice-ctf-content", label: "Practice & CTF", icon: <SchoolIcon /> },
+    { id: "quiz-section", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   const pageContext = `Linux Internals for Reverse Engineering - Comprehensive guide covering ELF file format, process memory layout, system calls, dynamic linking (PLT/GOT), debugging with GDB, binary protections (ASLR, PIE, NX), libc internals, /proc filesystem, x86-64 calling conventions, signals, ptrace API, kernel modules, Linux RE tools, exploitation patterns, and practice resources.`;
 
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": { width: 6 },
+        "&::-webkit-scrollbar-thumb": { bgcolor: alpha(accent, 0.3), borderRadius: 3 },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}>
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Progress</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>{Math.round(progressPercent)}%</Typography>
+          </Box>
+          <LinearProgress variant="determinate" value={progressPercent} sx={{ height: 6, borderRadius: 3, bgcolor: alpha(accent, 0.1), "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 } }} />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5, mb: 0.25, py: 0.5, cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": { bgcolor: alpha(accent, 0.08) },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText primary={<Typography variant="caption" sx={{ fontWeight: activeSection === item.id ? 700 : 500, color: activeSection === item.id ? accent : "text.secondary", fontSize: "0.75rem" }}>{item.label}</Typography>} />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Linux Internals for Reverse Engineering" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab color="primary" onClick={() => setNavDrawerOpen(true)} sx={{ position: "fixed", bottom: 90, right: 24, zIndex: 1000, bgcolor: accent, "&:hover": { bgcolor: "#ea580c" }, boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`, display: { xs: "flex", lg: "none" } }}>
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab size="small" onClick={scrollToTop} sx={{ position: "fixed", bottom: 32, right: 28, zIndex: 1000, bgcolor: alpha(accent, 0.15), color: accent, "&:hover": { bgcolor: alpha(accent, 0.25) }, display: { xs: "flex", lg: "none" } }}>
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer anchor="right" open={navDrawerOpen} onClose={() => setNavDrawerOpen(false)} PaperProps={{ sx: { width: isMobile ? "85%" : 320, bgcolor: theme.palette.background.paper, backgroundImage: "none" } }}>
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small"><CloseIcon /></IconButton>
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>{Math.round(progressPercent)}%</Typography>
+            </Box>
+            <LinearProgress variant="determinate" value={progressPercent} sx={{ height: 6, borderRadius: 3, bgcolor: alpha(accent, 0.1), "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 } }} />
+          </Box>
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem key={item.id} onClick={() => scrollToSection(item.id)} sx={{ borderRadius: 2, mb: 0.5, cursor: "pointer", bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent", borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent", "&:hover": { bgcolor: alpha(accent, 0.1) }, transition: "all 0.2s ease" }}>
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText primary={<Typography variant="body2" sx={{ fontWeight: activeSection === item.id ? 700 : 500, color: activeSection === item.id ? accent : "text.primary" }}>{item.label}</Typography>} />
+                {activeSection === item.id && <Chip label="Current" size="small" sx={{ height: 20, fontSize: "0.65rem", bgcolor: alpha(accent, 0.2), color: accent }} />}
+              </ListItem>
+            ))}
+          </List>
+          <Divider sx={{ my: 2 }} />
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button size="small" variant="outlined" onClick={scrollToTop} startIcon={<KeyboardArrowUpIcon />} sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}>Top</Button>
+            <Button size="small" variant="outlined" onClick={() => scrollToSection("quiz-section")} startIcon={<QuizIcon />} sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}>Quiz</Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
         {/* Back Button */}
         <Chip
           component={Link}
@@ -3637,27 +3808,8 @@ ONGOING: CTF Competitions
             Back to Learning Hub
           </Button>
         </Box>
-
-        {/* Floating Back to Top Button */}
-        <Zoom in={useScrollTrigger({ disableHysteresis: true, threshold: 400 })}>
-          <Fab
-            color="primary"
-            size="medium"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            sx={{
-              position: "fixed",
-              bottom: 24,
-              right: 24,
-              bgcolor: "#f97316",
-              "&:hover": { bgcolor: "#ea580c" },
-              zIndex: 1000,
-            }}
-          >
-            <KeyboardArrowUpIcon />
-          </Fab>
-        </Zoom>
-
-      </Container>
+        </Box>
+      </Box>
     </LearnPageLayout>
   );
 }

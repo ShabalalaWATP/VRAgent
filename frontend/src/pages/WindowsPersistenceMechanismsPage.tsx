@@ -1089,7 +1089,7 @@ const WindowsPersistenceMechanismsPage: React.FC = () => {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
-  const pageContext = `This page covers Windows persistence mechanisms used by attackers to maintain access after initial compromise. Categories include Registry Run Keys, Scheduled Tasks, Services, Startup Folders, WMI Event Subscriptions, Winlogon and LSA, Logon Scripts and GPO, and AppInit/DLL Search Order hijacking. Common locations covered: HKCU/HKLM Run keys, Task Scheduler Library, Windows Services, Startup folders, WMI EventFilter/Consumer, Winlogon shell/userinit, and AppInit_DLLs. The page includes detection signals, useful Windows Event IDs (4688, 4697, 4698, 7045, Sysmon 1/13), hardening checklists, safe enumeration commands, and beginner lab exercises.`;
+  const pageContext = `This page covers Windows persistence mechanisms used by attackers to maintain access after initial compromise. Categories include Registry Run Keys, Scheduled Tasks, Services, Startup Folders, WMI Event Subscriptions, Winlogon and LSA, Logon Scripts and GPO, and AppInit/DLL Search Order hijacking. Common locations covered: HKCU/HKLM Run keys, Task Scheduler Library, Windows Services, Startup folders, WMI EventFilter/Consumer, Winlogon shell/userinit, and AppInit_DLLs. The page includes a persistence lifecycle model, MITRE ATT&CK mappings, triage prompts, risky path guidance, detection signals, useful Windows Event IDs (4688, 4697, 4698, 7045, Sysmon 1/13), hardening checklists, safe enumeration commands, and beginner lab exercises.`;
 
   const objectives = [
     "Explain persistence in plain language and why it matters.",
@@ -1224,6 +1224,105 @@ const WindowsPersistenceMechanismsPage: React.FC = () => {
     "Winlogon shell or userinit values modified.",
     "AppInit_DLLs populated with non-standard DLLs.",
     "Logon scripts added outside of admin change windows.",
+  ];
+
+  const persistenceLifecycle = [
+    {
+      title: "Establish",
+      desc: "Create a trigger that executes after logon, boot, or an event.",
+      example: "Run keys, scheduled tasks, or services.",
+    },
+    {
+      title: "Validate",
+      desc: "Confirm it runs as expected and survives a reboot.",
+      example: "Task history shows execution, service starts cleanly.",
+    },
+    {
+      title: "Blend",
+      desc: "Reduce visibility by using plausible names and locations.",
+      example: "Vendor-like task names and signed binaries.",
+    },
+    {
+      title: "Fallback",
+      desc: "Maintain secondary access if the first method is removed.",
+      example: "Backup run key or secondary task.",
+    },
+  ];
+
+  const telemetryLayers = [
+    {
+      layer: "Process and module telemetry",
+      focus: "Process creation, command lines, and module loads.",
+      sources: "Security 4688, Sysmon 1/7, EDR telemetry.",
+    },
+    {
+      layer: "Registry and configuration",
+      focus: "Run keys, Winlogon, LSA, and AppInit changes.",
+      sources: "Sysmon 13, registry auditing, EDR baselines.",
+    },
+    {
+      layer: "Task and service control",
+      focus: "Task creation, service installs, and start changes.",
+      sources: "4697, 4698, 7045, TaskScheduler logs.",
+    },
+    {
+      layer: "Script and logon activity",
+      focus: "Logon scripts, PowerShell, WMI, and GPO changes.",
+      sources: "PowerShell logs, WMI logs, GPO auditing.",
+    },
+  ];
+
+  const attckMappings = [
+    { technique: "T1547", name: "Boot or Logon Autostart Execution", examples: "Run keys, Startup folder, Winlogon" },
+    { technique: "T1053", name: "Scheduled Task/Job", examples: "Task Scheduler, at logon triggers" },
+    { technique: "T1543", name: "Create or Modify System Process", examples: "Services and drivers" },
+    { technique: "T1546", name: "Event Triggered Execution", examples: "WMI event subscriptions" },
+    { technique: "T1574", name: "Hijack Execution Flow", examples: "DLL search order, AppInit_DLLs" },
+  ];
+
+  const triagePrompts = [
+    "Who created the artifact and when was it first seen?",
+    "Does the binary live in a user-writable location?",
+    "Is the file signed and by a trusted publisher?",
+    "Does the command line include encoded or obfuscated content?",
+    "Is there a matching change ticket or maintenance window?",
+  ];
+
+  const pathRiskGuide = [
+    { location: "%AppData% or %Temp%", risk: "High", note: "User-writable paths frequently abused." },
+    { location: "C:\\ProgramData", risk: "Medium", note: "Shared location, verify ownership and provenance." },
+    { location: "C:\\Program Files", risk: "Medium", note: "Validate publisher and install history." },
+    { location: "C:\\Windows\\System32", risk: "Lower", note: "Still verify signatures and recent writes." },
+    { location: "UNC or WebDAV paths", risk: "High", note: "Remote execution and staging risk." },
+  ];
+
+  const correlationIdeas = [
+    "Task creation followed by a new process from a user-writable path.",
+    "Run key added shortly after suspicious PowerShell activity.",
+    "New service install paired with outbound network beaconing.",
+    "WMI subscription creation outside admin change windows.",
+    "Startup shortcut that points to a recently downloaded file.",
+  ];
+
+  const responseChecklist = [
+    "Capture evidence: key, value, command line, hashes, and timestamps.",
+    "Confirm legitimacy with asset owner or change management.",
+    "Disable or remove the persistence entry safely.",
+    "Remediate root cause (initial access vector).",
+    "Hunt for related artifacts on similar hosts.",
+  ];
+
+  const labSuccessCriteria = [
+    "Enumerate at least one artifact from three categories.",
+    "Document path, signature, and creation time for each artifact.",
+    "Flag one item as suspicious and justify the rationale.",
+    "Propose one detection idea and one hardening step.",
+  ];
+
+  const stretchGoals = [
+    "Baseline autoruns and compare results across two hosts.",
+    "Correlate a task or service with process creation logs.",
+    "Validate a suspicious binary with a hash lookup in a lab.",
   ];
 
   const evidenceChecklist = [
@@ -1444,6 +1543,58 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                   ))}
                 </List>
               </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, mt: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 2 }}>
+                  Persistence Lifecycle
+                </Typography>
+                <Grid container spacing={2}>
+                  {persistenceLifecycle.map((item) => (
+                    <Grid item xs={12} md={6} key={item.title}>
+                      <Paper
+                        sx={{
+                          p: 2,
+                          bgcolor: "#0b1020",
+                          borderRadius: 2,
+                          border: "1px solid rgba(59,130,246,0.3)",
+                          height: "100%",
+                        }}
+                      >
+                        <Typography variant="subtitle2" sx={{ color: "#e2e8f0", fontWeight: 600, mb: 0.5 }}>
+                          {item.title}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                          {item.desc}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "grey.500" }}>
+                          Example: {item.example}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Telemetry Layers to Monitor
+                </Typography>
+                <List dense>
+                  {telemetryLayers.map((item) => (
+                    <ListItem key={item.layer} sx={{ alignItems: "flex-start" }}>
+                      <ListItemIcon sx={{ mt: 0.5 }}>
+                        <CheckCircleIcon color="info" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item.layer}
+                        secondary={`${item.focus} ${item.sources}`}
+                        primaryTypographyProps={{ sx: { color: "grey.200", fontWeight: 600 } }}
+                        secondaryTypographyProps={{ sx: { color: "grey.500" } }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
             </Box>
           </TabPanel>
 
@@ -1474,6 +1625,53 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                   </Grid>
                 ))}
               </Grid>
+
+              <Paper sx={{ p: 2.5, mt: 3, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+                  MITRE ATT&CK Mapping (High Level)
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: "#3b82f6" }}>Technique</TableCell>
+                        <TableCell sx={{ color: "#3b82f6" }}>Name</TableCell>
+                        <TableCell sx={{ color: "#3b82f6" }}>Examples</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {attckMappings.map((item) => (
+                        <TableRow key={item.technique}>
+                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.technique}</TableCell>
+                          <TableCell sx={{ color: "grey.300" }}>{item.name}</TableCell>
+                          <TableCell sx={{ color: "grey.400" }}>{item.examples}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Category Selection Tips
+                </Typography>
+                <List dense>
+                  {[
+                    "Start with user logon triggers (Run keys, Startup folder) for quick wins.",
+                    "Prioritize scheduled tasks and services for SYSTEM level persistence.",
+                    "Check WMI and GPO if you suspect stealth or broad deployment.",
+                    "Look for DLL hijacks when binaries run from unusual directories.",
+                  ].map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="info" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
             </Box>
           </TabPanel>
 
@@ -1500,6 +1698,48 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                 </Table>
               </TableContainer>
 
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+                  Triage Prompts
+                </Typography>
+                <List dense>
+                  {triagePrompts.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="info" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Path Risk Guide
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: "#3b82f6" }}>Location</TableCell>
+                        <TableCell sx={{ color: "#3b82f6" }}>Risk</TableCell>
+                        <TableCell sx={{ color: "#3b82f6" }}>Why it matters</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {pathRiskGuide.map((item) => (
+                        <TableRow key={item.location}>
+                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.location}</TableCell>
+                          <TableCell sx={{ color: "grey.300" }}>{item.risk}</TableCell>
+                          <TableCell sx={{ color: "grey.400" }}>{item.note}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+
               <Accordion>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Safe Enumeration Commands</Typography>
@@ -1525,6 +1765,23 @@ dir "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
 # WMI subscriptions (read-only)
 Get-WmiObject -Namespace root\\subscription -Class __EventFilter
 Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer`}
+                    language="powershell"
+                  />
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="h6">Signature and Hash Checks</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <CodeBlock
+                    code={`# Check file signature and hash (read-only)
+Get-AuthenticodeSignature "C:\\Path\\to\\binary.exe"
+Get-FileHash "C:\\Path\\to\\binary.exe" -Algorithm SHA256
+
+# Sysinternals Sigcheck (if installed)
+sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                     language="powershell"
                   />
                 </AccordionDetails>
@@ -1584,6 +1841,22 @@ Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer`}
 
               <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Correlation Ideas
+                </Typography>
+                <List dense>
+                  {correlationIdeas.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
                   Useful Windows Event IDs
                 </Typography>
                 <List dense>
@@ -1591,6 +1864,22 @@ Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer`}
                     <ListItem key={item}>
                       <ListItemIcon>
                         <CheckCircleIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+                  Response Checklist
+                </Typography>
+                <List dense>
+                  {responseChecklist.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="info" fontSize="small" />
                       </ListItemIcon>
                       <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
                     </ListItem>
@@ -1646,6 +1935,38 @@ Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer`}
                     "Check file paths and signatures for each item.",
                     "Write a short report with screenshots and recommendations.",
                   ].map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="info" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Success Criteria
+                </Typography>
+                <List dense>
+                  {labSuccessCriteria.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+                  Stretch Goals
+                </Typography>
+                <List dense>
+                  {stretchGoals.map((item) => (
                     <ListItem key={item}>
                       <ListItemIcon>
                         <CheckCircleIcon color="info" fontSize="small" />

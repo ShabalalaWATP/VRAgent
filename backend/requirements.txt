@@ -23,7 +23,11 @@ alembic==1.12.0
 
 # HTTP client
 httpx>=0.28.1
+aiohttp>=3.9.0
 aiofiles>=23.0
+
+# Server-Sent Events
+sse-starlette>=2.0.0
 
 # Background jobs
 redis==4.6.0
@@ -32,6 +36,7 @@ rq==1.15.1
 # Document generation
 reportlab==4.0.4
 python-docx==0.8.11
+weasyprint>=62.0
 markdown==3.4.4
 PyYAML>=6.0
 
@@ -74,3 +79,6 @@ pytest==7.4.0
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 factory-boy==3.3.0
+
+# System monitoring
+psutil>=5.9.0

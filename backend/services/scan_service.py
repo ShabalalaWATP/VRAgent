@@ -1725,6 +1725,7 @@ def run_scan(
                 ScanPhase.INITIAL_ANALYSIS: "agentic_initial_analysis",
                 ScanPhase.FOCUSED_ANALYSIS: "agentic_focused_analysis",
                 ScanPhase.DEEP_ANALYSIS: "agentic_deep_analysis",
+                ScanPhase.ULTRA_ANALYSIS: "agentic_ultra_analysis",
                 ScanPhase.CHUNKING: "agentic_chunking",
                 ScanPhase.ENTRY_POINT_DETECTION: "agentic_entry_points",
                 ScanPhase.FLOW_TRACING: "agentic_flow_tracing",
@@ -2023,7 +2024,27 @@ def run_scan(
         # Calculate total scan time
         total_scan_time = time.time() - scan_start
         
-        # Phase 14: Complete (100%)
+        # Phase 14: Complete (98%) - mark scan complete, start exploitability
+        _broadcast_progress(scan_run.id, "complete", 98, f"✅ Scan complete! {len(findings)} findings in {total_scan_time:.1f}s")
+        
+        # Phase 15: Auto-generate exploitability scenarios in background (98-100%)
+        # This runs INLINE after scan completion so it's ready when user views report
+        try:
+            high_critical_count = sum(1 for f in findings if f.severity in ("high", "critical"))
+            if high_critical_count > 0:
+                _broadcast_progress(scan_run.id, "exploitability", 98, 
+                                   f"⚔️ Generating exploitability scenarios for {high_critical_count} high/critical findings...")
+                from backend.services.exploit_service import generate_exploit_scenarios
+                # Use summary mode for speed - executive summary + templates
+                asyncio.run(generate_exploit_scenarios(db, report, mode="summary"))
+                _broadcast_progress(scan_run.id, "exploitability", 100, 
+                                   "⚔️ Exploitability scenarios ready!")
+                logger.info(f"Auto-generated exploitability scenarios for report {report.id}")
+        except Exception as e:
+            logger.warning(f"Auto exploitability generation failed (non-critical): {e}")
+            # Don't fail the scan for this - user can still trigger it manually
+        
+        # Final completion broadcast
         _broadcast_progress(scan_run.id, "complete", 100, f"✅ Scan complete! {len(findings)} findings in {total_scan_time:.1f}s")
         
         # Log performance summary

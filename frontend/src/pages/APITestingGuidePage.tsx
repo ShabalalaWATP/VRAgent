@@ -259,6 +259,7 @@ export default function APITestingGuidePage() {
           <Tab icon={<SecurityIcon />} label="Security Tests" />
           <Tab icon={<ComputerIcon />} label="Air-Gapped Features" />
           <Tab icon={<WebhookIcon />} label="Tabs Overview" />
+          <Tab icon={<SmartToyIcon />} label="VRAgent AI Features" />
           <Tab icon={<SchoolIcon />} label="Best Practices" />
         </Tabs>
       </Paper>
@@ -651,8 +652,233 @@ export default function APITestingGuidePage() {
         </Grid>
       </TabPanel>
 
-      {/* Tab 4: Best Practices */}
+      {/* Tab 4: VRAgent AI Features */}
       <TabPanel value={activeTab} index={4}>
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Alert severity="info" icon={<SmartToyIcon />} sx={{ mb: 2 }}>
+              <Typography variant="body1">
+                <strong>AI-Powered API Testing:</strong> VRAgent enhances traditional API testing with intelligent features 
+                powered by Google Gemini. These features help automate security analysis and generate actionable insights.
+              </Typography>
+            </Alert>
+          </Grid>
+
+          {/* AI Features Overview */}
+          {[
+            {
+              icon: <SmartToyIcon />,
+              title: "Natural Language → API Request",
+              color: "#8b5cf6",
+              description: "Describe what you want to test in plain English, and AI generates the complete API request.",
+              examples: ["\"Get all users with admin role\"", "\"Create a new product with price $50\"", "\"Delete user with ID 123\""],
+              output: "Method, URL, headers, and body automatically generated",
+            },
+            {
+              icon: <AssessmentIcon />,
+              title: "AI Test/Assertion Generator",
+              color: "#10b981",
+              description: "Automatically generate test assertions based on API responses.",
+              examples: ["Status code validation", "JSON path assertions", "Response time checks", "Schema validation"],
+              output: "Ready-to-use test code for your test suite",
+            },
+            {
+              icon: <SecurityIcon />,
+              title: "Response Anomaly Detection",
+              color: "#ef4444",
+              description: "AI analyzes responses for security issues, performance problems, and data anomalies.",
+              examples: ["Exposed credentials", "Error message info leaks", "Unusual response patterns", "Security header issues"],
+              output: "Categorized anomalies with severity and recommendations",
+            },
+            {
+              icon: <TipsAndUpdatesIcon />,
+              title: "Smart Variable Detection",
+              color: "#f59e0b",
+              description: "AI suggests variables to extract from responses for use in subsequent requests.",
+              examples: ["User IDs", "Auth tokens", "Pagination cursors", "Resource URLs"],
+              output: "Variable definitions with JSON paths and sample values",
+            },
+          ].map((feature, idx) => (
+            <Grid item xs={12} md={6} key={idx}>
+              <Card sx={{ height: "100%", border: `1px solid ${alpha(feature.color, 0.3)}` }}>
+                <CardContent>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                    <Box sx={{ p: 1, borderRadius: 1, bgcolor: alpha(feature.color, 0.1), color: feature.color }}>
+                      {feature.icon}
+                    </Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>{feature.title}</Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" paragraph>
+                    {feature.description}
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Examples:</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 2 }}>
+                    {feature.examples.map((ex, i) => (
+                      <Chip key={i} label={ex} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                    ))}
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    <strong>Output:</strong> {feature.output}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+
+          {/* AI-Enhanced Security Analysis */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <SecurityIcon sx={{ color: "#ef4444" }} />
+                AI Security Analysis Report Structure
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                When you run AI-powered security tests, VRAgent generates a comprehensive structured report:
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { title: "Executive Summary", desc: "High-level overview for stakeholders" },
+                  { title: "Risk Score (0-100)", desc: "Quantified security posture" },
+                  { title: "OWASP API Top 10 Mapping", desc: "Findings mapped to API1:2023 - API10:2023" },
+                  { title: "CWE Classification", desc: "Weaknesses linked to CWE database" },
+                  { title: "Exploitation Paths", desc: "How vulnerabilities could be chained" },
+                  { title: "Remediation Priority", desc: "Ordered fix recommendations" },
+                ].map((item, i) => (
+                  <Grid item xs={12} sm={6} md={4} key={i}>
+                    <Paper variant="outlined" sx={{ p: 1.5 }}>
+                      <Typography variant="subtitle2" fontWeight="bold">{item.title}</Typography>
+                      <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* OWASP API Top 10 Coverage */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <SecurityIcon sx={{ color: "#f59e0b" }} />
+                OWASP API Security Top 10 (2023) Coverage
+              </Typography>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>ID</TableCell>
+                      <TableCell>Vulnerability</TableCell>
+                      <TableCell>VRAgent Tests</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {[
+                      { id: "API1:2023", name: "Broken Object Level Authorization", tests: "IDOR detection, object access patterns" },
+                      { id: "API2:2023", name: "Broken Authentication", tests: "JWT analysis, token exposure, session testing" },
+                      { id: "API3:2023", name: "Broken Object Property Level Authorization", tests: "Mass assignment, excessive data exposure" },
+                      { id: "API4:2023", name: "Unrestricted Resource Consumption", tests: "Rate limiting, DoS potential" },
+                      { id: "API5:2023", name: "Broken Function Level Authorization", tests: "Privilege escalation, admin endpoint access" },
+                      { id: "API6:2023", name: "Unrestricted Access to Sensitive Business Flows", tests: "Business logic abuse detection" },
+                      { id: "API7:2023", name: "Server Side Request Forgery", tests: "SSRF payloads, URL parameter testing" },
+                      { id: "API8:2023", name: "Security Misconfiguration", tests: "Headers, CORS, TLS, error messages" },
+                      { id: "API9:2023", name: "Improper Inventory Management", tests: "Endpoint discovery, version detection" },
+                      { id: "API10:2023", name: "Unsafe Consumption of APIs", tests: "Third-party API validation" },
+                    ].map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell><Chip label={row.id} size="small" color="secondary" /></TableCell>
+                        <TableCell>{row.name}</TableCell>
+                        <TableCell><Typography variant="body2">{row.tests}</Typography></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Grid>
+
+          {/* Sensitive Data Detection */}
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: "100%" }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <WarningIcon sx={{ color: "#ef4444" }} />
+                Automatic Sensitive Data Detection
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                VRAgent automatically scans responses for sensitive data patterns:
+              </Typography>
+              <List dense>
+                {[
+                  { pattern: "Email addresses", severity: "LOW" },
+                  { pattern: "SSN patterns", severity: "CRITICAL" },
+                  { pattern: "Credit card numbers", severity: "CRITICAL" },
+                  { pattern: "API keys/secrets", severity: "HIGH" },
+                  { pattern: "Passwords in responses", severity: "CRITICAL" },
+                  { pattern: "JWT tokens", severity: "MEDIUM" },
+                  { pattern: "Database connection strings", severity: "CRITICAL" },
+                  { pattern: "AWS credentials", severity: "CRITICAL" },
+                  { pattern: "Private keys", severity: "CRITICAL" },
+                ].map((item, i) => (
+                  <ListItem key={i} sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <Chip 
+                        label={item.severity} 
+                        size="small" 
+                        sx={{ 
+                          fontSize: "0.6rem", 
+                          height: 18,
+                          bgcolor: item.severity === "CRITICAL" ? alpha("#ef4444", 0.2) : 
+                                   item.severity === "HIGH" ? alpha("#f59e0b", 0.2) : 
+                                   item.severity === "MEDIUM" ? alpha("#3b82f6", 0.2) : alpha("#10b981", 0.2),
+                          color: item.severity === "CRITICAL" ? "#ef4444" : 
+                                 item.severity === "HIGH" ? "#f59e0b" : 
+                                 item.severity === "MEDIUM" ? "#3b82f6" : "#10b981",
+                        }} 
+                      />
+                    </ListItemIcon>
+                    <ListItemText primary={item.pattern} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+
+          {/* Injection Payload Library */}
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: "100%" }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <SecurityIcon sx={{ color: "#8b5cf6" }} />
+                Built-in Injection Payload Library
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Comprehensive payload sets for vulnerability testing:
+              </Typography>
+              <List dense>
+                {[
+                  { category: "SQL Injection", count: "8+ payloads", examples: "UNION, OR 1=1, DROP TABLE" },
+                  { category: "XSS", count: "6+ payloads", examples: "script tags, event handlers, SVG" },
+                  { category: "Command Injection", count: "6+ payloads", examples: "semicolon, pipe, backtick" },
+                  { category: "Path Traversal", count: "5+ payloads", examples: "../, encoded variants" },
+                  { category: "SSRF", count: "Cloud metadata, internal IPs", examples: "169.254.169.254" },
+                ].map((item, i) => (
+                  <ListItem key={i} sx={{ py: 0.5 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <CheckCircleIcon fontSize="small" sx={{ color: "#8b5cf6" }} />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={<span><strong>{item.category}:</strong> {item.count}</span>}
+                      secondary={item.examples}
+                      primaryTypographyProps={{ variant: "body2" }}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+        </Grid>
+      </TabPanel>
+
+      {/* Tab 5: Best Practices */}
+      <TabPanel value={activeTab} index={5}>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3 }}>

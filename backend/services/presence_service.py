@@ -173,6 +173,9 @@ def get_bulk_presence(db: Session, user_ids: List[int], viewer_id: int) -> List[
                 status_emoji = presence.status_emoji
                 status_expires_at = presence.status_expires_at
         
+        # Ensure is_online is always a boolean, never None
+        is_user_online = is_online or bool(presence and presence.status in ["online", "away", "busy", "dnd"])
+        
         results.append({
             "user_id": user.id,
             "username": user.username,
@@ -183,7 +186,7 @@ def get_bulk_presence(db: Session, user_ids: List[int], viewer_id: int) -> List[
             "status_emoji": status_emoji,
             "status_expires_at": status_expires_at,
             "last_seen_at": presence.last_seen_at if presence else None,
-            "is_online": is_online or (presence and presence.status in ["online", "away", "busy", "dnd"])
+            "is_online": is_user_online
         })
     
     return results

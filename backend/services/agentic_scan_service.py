@@ -67,6 +67,95 @@ async def _retry_with_backoff(
     raise last_error
 
 
+def _repair_json(text: str) -> str:
+    """
+    Attempt to repair common JSON issues from LLM responses.
+    
+    Handles:
+    - Trailing commas before } or ]
+    - Missing quotes around keys
+    - Unescaped newlines in strings
+    - Truncated JSON (tries to close brackets)
+    """
+    if not text:
+        return text
+    
+    # Remove any markdown code fences
+    text = re.sub(r'```json\s*', '', text)
+    text = re.sub(r'```\s*$', '', text)
+    
+    # Fix trailing commas (common LLM mistake)
+    text = re.sub(r',\s*}', '}', text)
+    text = re.sub(r',\s*]', ']', text)
+    
+    # Fix unquoted keys (e.g., {key: "value"} -> {"key": "value"})
+    text = re.sub(r'{\s*(\w+)\s*:', r'{"\1":', text)
+    text = re.sub(r',\s*(\w+)\s*:', r',"\1":', text)
+    
+    # Try to balance brackets if truncated
+    open_braces = text.count('{') - text.count('}')
+    open_brackets = text.count('[') - text.count(']')
+    
+    if open_braces > 0 or open_brackets > 0:
+        # Add closing brackets
+        text = text.rstrip()
+        if text.endswith(','):
+            text = text[:-1]
+        text += ']' * open_brackets + '}' * open_braces
+    
+    return text
+
+
+def _safe_json_parse(text: str, fallback: dict = None) -> dict:
+    """
+    Safely parse JSON from LLM response with repair attempts.
+    
+    Args:
+        text: Raw text potentially containing JSON
+        fallback: Default value if parsing fails
+        
+    Returns:
+        Parsed JSON dict or fallback
+    """
+    if fallback is None:
+        fallback = {}
+    
+    if not text:
+        return fallback
+    
+    # First try to find JSON object in the text
+    json_match = re.search(r'\{[\s\S]*\}', text)
+    if not json_match:
+        return fallback
+    
+    json_str = json_match.group()
+    
+    # Try parsing as-is first
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        pass
+    
+    # Try with repairs
+    try:
+        repaired = _repair_json(json_str)
+        return json.loads(repaired)
+    except json.JSONDecodeError:
+        pass
+    
+    # Last resort: try to extract just the array if present
+    try:
+        # Look for an array that might be valid
+        array_match = re.search(r'\[\s*\{[\s\S]*?\}\s*\]', text)
+        if array_match:
+            arr = json.loads(array_match.group())
+            return {"items": arr}
+    except:
+        pass
+    
+    return fallback
+
+
 # Configure Gemini using google-genai SDK
 genai_client = None
 if settings.gemini_api_key:
@@ -88,6 +177,7 @@ class ScanPhase(str, Enum):
     INITIAL_ANALYSIS = "initial_analysis"  # New: First pass on ~60 files
     FOCUSED_ANALYSIS = "focused_analysis"  # New: Second pass on ~20 files  
     DEEP_ANALYSIS = "deep_analysis"  # New: Full analysis of ~8 files
+    ULTRA_ANALYSIS = "ultra_analysis"  # Pass 4: Ultra-deep analysis of large files (>50K chars)
     CHUNKING = "chunking"
     ENTRY_POINT_DETECTION = "entry_point_detection"
     FLOW_TRACING = "flow_tracing"
@@ -800,6 +890,16 @@ class CodeChunker:
             '.c': 'c',
             '.cpp': 'cpp',
             '.rs': 'rust',
+            # Documentation & config
+            '.md': 'markdown',
+            '.rst': 'restructuredtext',
+            '.txt': 'text',
+            '.yaml': 'yaml',
+            '.yml': 'yaml',
+            '.json': 'json',
+            '.toml': 'toml',
+            '.xml': 'xml',
+            '.properties': 'properties',
         }
         ext = Path(file_path).suffix.lower()
         return ext_map.get(ext, 'unknown')
@@ -857,21 +957,36 @@ class AgenticAnalyzer:
         
         # Multi-pass file limits: Standard (+50%) vs Enhanced (+100%/2x)
         if enhanced_mode:
-            # Enhanced: 100% increase (2x standard)
+            # Enhanced: 100% increase (2x standard) in file counts
             self.pass1_limit = 240   # 2x standard (was 120)
             self.pass2_limit = 80    # 2x standard (was 40)
             self.pass3_limit = 30    # 2x standard (was 15)
+            self.pass4_limit = 10    # Enhanced: 10 files for ultra-deep (vs 7 standard)
+            self.pass4_min_size = 50000  # Same threshold
+            
+            # Enhanced content depth limits - 20-40% more content per file
+            self.content_limits = {
+                "quick": 6000,       # Pass 1: 6K chars per file (+20%)
+                "detailed": 16000,   # Pass 2: 16K chars per file (+33%)
+                "full": 65000,       # Pass 3: 65K chars (+30%)
+                "ultra": 120000      # Pass 4: 120K chars (+20% for large files)
+            }
         else:
             # Standard: 50% increase from original values
             self.pass1_limit = 180   # +50% (was 120)
             self.pass2_limit = 60    # +50% (was 40)
             self.pass3_limit = 22    # +50% (was 15)
-        # Content depth limits per pass (how much of each file the AI sees)
-        self.content_limits = {
-            "quick": 5000,       # Pass 1: 5K chars per file
-            "detailed": 12000,   # Pass 2: 12K chars per file
-            "full": 50000        # Pass 3: 50K chars (full file analysis)
-        }
+            self.pass4_limit = 7     # Max 7 files for ultra-deep analysis
+            self.pass4_min_size = 50000  # Only files > 50K chars qualify for Pass 4
+            
+            # Standard content depth limits per pass
+            self.content_limits = {
+                "quick": 5000,       # Pass 1: 5K chars per file
+                "detailed": 12000,   # Pass 2: 12K chars per file
+                "full": 50000,       # Pass 3: 50K chars (full file analysis)
+                "ultra": 100000      # Pass 4: 100K chars (ultra-deep for large files)
+            }
+        
         # Project structure context (built during triage)
         self.project_structure: Optional[str] = None
     
@@ -954,26 +1069,32 @@ class AgenticAnalyzer:
         
         return "\n".join(summary_parts)
     
-    def set_multi_pass_limits(self, pass1: int = 60, pass2: int = 20, pass3: int = 8,
-                              quick_chars: int = 2000, detailed_chars: int = 5000, full_chars: int = 15000):
+    def set_multi_pass_limits(self, pass1: int = 60, pass2: int = 20, pass3: int = 8, pass4: int = 7,
+                              quick_chars: int = 2000, detailed_chars: int = 5000, full_chars: int = 15000,
+                              ultra_chars: int = 100000, pass4_min_size: int = 50000):
         """Configure multi-pass file limits and content depth.
         
         Args:
-            pass1/pass2/pass3: Number of files per pass
+            pass1/pass2/pass3/pass4: Number of files per pass
             quick_chars: Chars per file in Pass 1 (default 2000)
             detailed_chars: Chars per file in Pass 2 (default 5000)
             full_chars: Chars per file in Pass 3 (default 15000)
+            ultra_chars: Chars per file in Pass 4 (default 100000)
+            pass4_min_size: Minimum file size (chars) to qualify for Pass 4 (default 50000)
         """
         self.pass1_limit = pass1
         self.pass2_limit = pass2
         self.pass3_limit = pass3
+        self.pass4_limit = pass4
+        self.pass4_min_size = pass4_min_size
         self.content_limits = {
             "quick": quick_chars,
             "detailed": detailed_chars,
-            "full": full_chars
+            "full": full_chars,
+            "ultra": ultra_chars
         }
-        logger.info(f"AgenticScan: Multi-pass limits set to {pass1}→{pass2}→{pass3} files, "
-                   f"content depth: {quick_chars}→{detailed_chars}→{full_chars} chars")
+        logger.info(f"AgenticScan: Multi-pass limits set to {pass1}→{pass2}→{pass3}→{pass4} files, "
+                   f"content depth: {quick_chars}→{detailed_chars}→{full_chars}→{ultra_chars} chars")
     
     def set_external_intelligence(self, intel: ExternalIntelligence):
         """Set or update external intelligence data."""
@@ -1089,6 +1210,145 @@ class AgenticAnalyzer:
                            f"(affected by {item.get('cve')})")
         
         return "\n".join(parts) if parts else ""
+    
+    def _extract_security_relevant_sections(
+        self,
+        content: str,
+        file_path: str,
+        char_limit: int,
+        analysis_depth: str
+    ) -> str:
+        """
+        Smart extraction for large files - extracts security-relevant sections
+        instead of just truncating from the top.
+        
+        Strategy:
+        1. Always include imports/requires (show dependencies)
+        2. Prioritize functions with security keywords
+        3. Include SAST-flagged sections if available
+        4. For remaining space, include high-value code sections
+        """
+        lines = content.split('\n')
+        ext = os.path.splitext(file_path)[1].lower()
+        
+        # Security-relevant keywords to look for
+        security_keywords = [
+            'password', 'secret', 'token', 'auth', 'login', 'session', 'cookie',
+            'exec', 'eval', 'system', 'shell', 'command', 'spawn', 'popen',
+            'query', 'sql', 'select', 'insert', 'update', 'delete', 'where',
+            'request', 'response', 'header', 'cookie', 'input', 'param',
+            'file', 'open', 'read', 'write', 'path', 'upload', 'download',
+            'encrypt', 'decrypt', 'hash', 'md5', 'sha', 'base64',
+            'admin', 'root', 'sudo', 'privilege', 'permission', 'role',
+            'api', 'endpoint', 'route', 'controller', 'handler',
+            'serialize', 'deserialize', 'pickle', 'yaml.load', 'json.load',
+            'redirect', 'url', 'href', 'src', 'include', 'require',
+            'csrf', 'xss', 'injection', 'sanitize', 'escape', 'validate'
+        ]
+        
+        sections = []
+        current_budget = char_limit
+        
+        # SECTION 1: Always include first N lines (imports, config)
+        # These reveal dependencies and setup
+        header_lines = min(50, len(lines) // 10)  # First 10% or 50 lines
+        header = '\n'.join(lines[:header_lines])
+        if len(header) < current_budget * 0.2:  # Max 20% for header
+            sections.append(("# File Header (imports/config):", header))
+            current_budget -= len(header)
+        
+        # SECTION 2: Extract function/class definitions containing security keywords
+        in_function = False
+        function_start = 0
+        function_content = []
+        brace_depth = 0
+        
+        security_functions = []
+        
+        for i, line in enumerate(lines):
+            line_lower = line.lower()
+            
+            # Detect function/method start (multi-language support)
+            is_func_start = (
+                ('def ' in line and ext == '.py') or
+                ('function ' in line) or
+                ('function(' in line) or
+                ('=>' in line and ('const ' in line or 'let ' in line)) or
+                ('public ' in line and '(' in line and '{' in line) or
+                ('private ' in line and '(' in line and '{' in line) or
+                ('protected ' in line and '(' in line and '{' in line)
+            )
+            
+            if is_func_start and not in_function:
+                in_function = True
+                function_start = i
+                function_content = [line]
+                brace_depth = line.count('{') - line.count('}')
+                # For Python, track indent instead
+                if ext == '.py':
+                    brace_depth = len(line) - len(line.lstrip())
+            elif in_function:
+                function_content.append(line)
+                
+                # Check for function end
+                if ext == '.py':
+                    # Python: function ends when indent returns to function level or less
+                    current_indent = len(line) - len(line.lstrip()) if line.strip() else 999
+                    if current_indent <= brace_depth and line.strip() and i > function_start:
+                        # Function ended
+                        func_text = '\n'.join(function_content[:-1])  # Exclude this line
+                        if any(kw in func_text.lower() for kw in security_keywords):
+                            security_functions.append((function_start, func_text))
+                        in_function = False
+                else:
+                    # JS/PHP/Java: track braces
+                    brace_depth += line.count('{') - line.count('}')
+                    if brace_depth <= 0:
+                        func_text = '\n'.join(function_content)
+                        if any(kw in func_text.lower() for kw in security_keywords):
+                            security_functions.append((function_start, func_text))
+                        in_function = False
+        
+        # Sort by relevance (count of security keywords)
+        def count_keywords(text):
+            return sum(1 for kw in security_keywords if kw in text.lower())
+        
+        security_functions.sort(key=lambda x: count_keywords(x[1]), reverse=True)
+        
+        # Add top security-relevant functions within budget
+        for line_num, func_text in security_functions:
+            if len(func_text) < current_budget * 0.3:  # Each function max 30% of remaining
+                sections.append((f"# Security-relevant section (line {line_num}):", func_text))
+                current_budget -= len(func_text)
+                if current_budget < char_limit * 0.2:  # Stop when 20% budget remaining
+                    break
+        
+        # SECTION 3: If budget remains, add more code from the top
+        if current_budget > char_limit * 0.2:
+            remaining_content = content[len(header):current_budget + len(header)]
+            if remaining_content.strip():
+                sections.append(("# Additional code:", remaining_content))
+        
+        # Build final output
+        output_parts = []
+        total_size = sum(len(h) + len(c) for h, c in sections)
+        
+        output_parts.append(f"# [LARGE FILE: {len(lines)} lines, showing security-relevant sections]")
+        output_parts.append(f"# Full file: {file_path}")
+        output_parts.append("")
+        
+        for header_text, section_content in sections:
+            output_parts.append(header_text)
+            output_parts.append(section_content)
+            output_parts.append("")
+        
+        result = '\n'.join(output_parts)
+        
+        # Final safety truncation
+        if len(result) > char_limit:
+            result = result[:char_limit - 50] + "\n\n# [Truncated - file too large]"
+        
+        return result
     
     # ========================================================================
     # Multi-Pass Smart File Selection
@@ -1244,35 +1504,35 @@ class AgenticAnalyzer:
                 annotated_files.append(f"{idx+1}. {f['path']} ({f['extension']}, {f['size_kb']}KB){annotation}")
             files_text = "\n".join(annotated_files)
         
-        prompt = f"""You are an objective security analyst performing file triage to determine which files MIGHT be worth reviewing.
+        prompt = f"""You are an objective security analyst RANKING files by security relevance for deeper analysis.
 {intel_section}
-## Files to Categorize ({len(batch)} files):
+## Files to Rank ({len(batch)} files):
 {files_text}
 
 ## Your Task:
-Categorize each file by what type of code it likely contains (NOT whether it has vulnerabilities):
+RANK each file by its likelihood of containing security-relevant code. Assign a security_score from 0.0 to 1.0.
+The score determines analysis priority - higher scored files are analyzed first.
 
-- **CRITICAL**: Security-sensitive areas that SHOULD be reviewed (auth, crypto, session handling)
-  OR files that import packages with KNOWN CVEs
-- **HIGH**: External interfaces worth examining (API endpoints, database access, file ops)
-  OR files flagged by SAST scanners
-- **MEDIUM**: Business logic that may handle data (services, validators)
-- **LOW**: Supporting code unlikely to have direct security impact (config, models, types)
-- **SKIP**: Non-production code (tests, mocks, generated, docs, assets)
+**Scoring Guide:**
+- **0.9-1.0 (CRITICAL)**: Authentication, crypto, session handling, files importing packages with KNOWN CVEs
+- **0.7-0.89 (HIGH)**: API endpoints, database access, file operations, command execution, SAST-flagged files
+  Also: Architecture docs, API docs (reveal attack surfaces), config files with secrets
+- **0.4-0.69 (MEDIUM)**: Business logic, services, validators, data handlers
+- **0.2-0.39 (LOW)**: Supporting code, type definitions, constants, generic documentation
+- **0.0-0.19 (SKIP)**: Pure test files, mocks, minified bundles, vendor code, image assets
 
-Respond with JSON:
+Respond with JSON for ALL {len(batch)} files:
 {{
   "triage": [
-    {{"index": 1, "priority": "CRITICAL|HIGH|MEDIUM|LOW|SKIP", "security_score": 0.0-1.0, "reason": "brief reason for categorization"}}
+    {{"index": 1, "priority": "CRITICAL|HIGH|MEDIUM|LOW|SKIP", "security_score": 0.0-1.0, "reason": "brief reason"}}
   ]
 }}
 
-**IMPORTANT**: 
-- Files marked with ⚠️ should generally be CRITICAL or HIGH priority
-- You are categorizing files by TYPE and RISK CONTEXT, not predicting vulnerabilities
-- A file being CRITICAL means it handles sensitive operations or has known vulnerability exposure
-
-Be thorough - files importing vulnerable dependencies need review even if their names seem innocuous."""
+**CRITICAL INSTRUCTIONS**: 
+- You MUST return an entry for EVERY file (all {len(batch)} files)
+- Files marked with ⚠️ should score 0.7+ (HIGH or CRITICAL)
+- The security_score is the PRIMARY ranking factor - be precise
+- We will analyze the TOP files by score, so accurate ranking matters"""
 
         try:
             from google.genai import types
@@ -1297,12 +1557,16 @@ Be thorough - files importing vulnerable dependencies need review even if their 
             
             text = response.text if response else ""
             if text:
-                json_match = re.search(r'\{[\s\S]*\}', text)
-                if json_match:
-                    result_data = json.loads(json_match.group())
-                    for item in result_data.get("triage", []):
+                # Use safe JSON parser with repair capabilities
+                result_data = _safe_json_parse(text, {"triage": []})
+                
+                # Track which files got AI triage
+                triaged_indices = set()
+                
+                for item in result_data.get("triage", []):
                         idx = item.get("index", 1) - 1
                         if 0 <= idx < len(batch):
+                            triaged_indices.add(idx)
                             file_info = batch[idx]
                             full_path = os.path.join(project_path, file_info["path"])
                             
@@ -1316,6 +1580,17 @@ Be thorough - files importing vulnerable dependencies need review even if their 
                                 suggested_analysis_depth=self._priority_to_depth(item.get("priority", "MEDIUM"))
                             )
                             results.append(triage_result)
+                
+                # IMPORTANT: Fallback to heuristic for files NOT in AI response
+                # This ensures we don't lose files when AI returns incomplete results
+                for idx, file_info in enumerate(batch):
+                    if idx not in triaged_indices:
+                        full_path = os.path.join(project_path, file_info["path"])
+                        heuristic = self._heuristic_single_file(full_path, file_info["path"])
+                        results.append(heuristic)
+                        
+                if len(triaged_indices) < len(batch):
+                    logger.warning(f"AgenticScan: AI only triaged {len(triaged_indices)}/{len(batch)} files, using heuristics for rest")
                             
         except Exception as e:
             logger.warning(f"AgenticScan: File triage batch failed: {e}")
@@ -1360,26 +1635,41 @@ Be thorough - files importing vulnerable dependencies need review even if their 
         priority = "MEDIUM"
         reason = "Standard source file"
         
-        # Critical patterns
-        if any(p in path_lower for p in ['auth', 'login', 'password', 'token', 'session', 'crypto', 'key', 'secret']):
+        # Critical patterns - auth, security, crypto
+        if any(p in path_lower for p in ['auth', 'login', 'password', 'token', 'session', 'crypto', 'key', 'secret', 'credential']):
             score = 0.95
             priority = "CRITICAL"
             reason = "Authentication/security-related"
-        # High patterns
-        elif any(p in path_lower for p in ['route', 'controller', 'handler', 'api', 'endpoint', 'upload', 'download', 'query', 'db']):
+        # High patterns - entry points, data access, vulnerabilities
+        elif any(p in path_lower for p in [
+            'route', 'controller', 'handler', 'api', 'endpoint', 'upload', 'download', 
+            'query', 'db', 'database', 'sql', 'exec', 'command', 'shell', 'include',
+            'vulnerab', 'inject', 'xss', 'csrf', 'ssrf', 'lfi', 'rfi', 'brute',
+            'index.php', 'main.php', 'app.php'  # Common PHP entry points
+        ]):
             score = 0.8
             priority = "HIGH"
             reason = "Entry point or data access"
-        # Medium patterns
-        elif any(p in path_lower for p in ['service', 'manager', 'util', 'helper', 'validator']):
+        # High patterns - security-related source code (PHP files with risky names)
+        elif ext == '.php' and any(p in path_lower for p in ['source', 'low', 'medium', 'high', 'impossible']):
+            score = 0.75
+            priority = "HIGH"
+            reason = "Security difficulty level source"
+        # Medium patterns - business logic
+        elif any(p in path_lower for p in ['service', 'manager', 'util', 'helper', 'validator', 'model', 'view']):
             score = 0.5
             priority = "MEDIUM"
             reason = "Business logic"
-        # Low/Skip patterns
-        elif any(p in path_lower for p in ['test', 'spec', 'mock', '__test__', '.min.', 'bundle', 'dist', 'generated']):
+        # For PHP files not matching other patterns, default to MEDIUM (not SKIP)
+        elif ext == '.php':
+            score = 0.4
+            priority = "MEDIUM"
+            reason = "PHP source file"
+        # Low/Skip patterns - tests, generated, vendor
+        elif any(p in path_lower for p in ['test', 'spec', 'mock', '__test__', '.min.', 'bundle', 'dist', 'generated', 'vendor/', 'node_modules/']):
             score = 0.1
             priority = "SKIP"
-            reason = "Test/generated code"
+            reason = "Test/generated/vendor code"
         
         return FileTriageResult(
             file_path=full_path,
@@ -1395,26 +1685,35 @@ Be thorough - files importing vulnerable dependencies need review even if their 
         self,
         project_path: str,
         triage_results: List[FileTriageResult],
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        phase_callback: Optional[callable] = None
     ) -> Tuple[List[MultiPassAnalysisResult], List[str]]:
         """
-        PASS 1-3: Progressive multi-pass file analysis.
+        PASS 1-4: Progressive multi-pass file analysis.
         
-        Pass 1: Initial analysis of ~60 files (quick scan)
-        Pass 2: Focused analysis of ~20 most interesting files
-        Pass 3: Deep analysis of ~8 highest-priority files
+        Pass 1: Initial analysis of ~180 files (quick scan)
+        Pass 2: Focused analysis of ~60 most interesting files
+        Pass 3: Deep analysis of ~22 highest-priority files
+        Pass 4: Ultra-deep analysis of ~7 large files (>50K chars only)
         
         Returns:
             Tuple of (all pass results, files selected for deep analysis)
         """
         all_results: List[MultiPassAnalysisResult] = []
         
-        # Get files by priority (excluding SKIP)
-        eligible_files = [r for r in triage_results if r.priority != "SKIP"]
+        # Pass 0 (triage) RANKS files - it doesn't exclude them
+        # Sort all files by security_relevance score (highest first)
+        # Even "SKIP" priority files get a low score, they're just ranked lower
+        ranked_files = sorted(triage_results, key=lambda x: x.security_relevance, reverse=True)
         
-        # PASS 1: Initial analysis (uses configurable limit)
-        pass1_count = min(self.pass1_limit, len(eligible_files))
-        pass1_files = eligible_files[:pass1_count]
+        # PASS 1: Initial analysis of top N files by triage score
+        # This is where we actually READ the code and make decisions
+        pass1_count = min(self.pass1_limit, len(ranked_files))
+        pass1_files = ranked_files[:pass1_count]
+        
+        # Update phase for Pass 1
+        if phase_callback:
+            phase_callback(ScanPhase.INITIAL_ANALYSIS)
         
         if progress_callback:
             progress_callback(f"📋 Pass 1: Initial scan of {pass1_count} files...")
@@ -1432,21 +1731,45 @@ Be thorough - files importing vulnerable dependencies need review even if their 
         # Sort by security score to find most interesting files
         pass1_results.sort(key=lambda x: x.security_score, reverse=True)
         
-        # PASS 2: Focused analysis (uses configurable limit)
-        # Select files that need deeper analysis
-        pass2_candidates = [
-            r for r in pass1_results 
-            if r.requires_deeper_analysis or r.security_score >= 5.0 or r.potential_vulnerabilities > 0
-        ]
-        pass2_count = min(self.pass2_limit, len(pass2_candidates))
+        # PASS 2: Focused analysis of TOP N files from Pass 1
+        # Take the highest-scoring files from Pass 1, not filtered by threshold
+        pass2_count = min(self.pass2_limit, len(pass1_results))
+        pass2_candidates = pass1_results[:pass2_count]
         
         if pass2_count > 0:
+            # Update phase for Pass 2
+            if phase_callback:
+                phase_callback(ScanPhase.FOCUSED_ANALYSIS)
+            
             if progress_callback:
-                progress_callback(f"🔬 Pass 2: Focused analysis of {pass2_count} high-interest files...")
+                progress_callback(f"🔬 Pass 2: Focused analysis of top {pass2_count} files from Pass 1...")
             
             # Get the FileTriageResults for pass2 files
-            pass2_paths = {r.file_path for r in pass2_candidates[:pass2_count]}
-            pass2_triage = [t for t in triage_results if t.file_path in pass2_paths]
+            # Use normalized paths for matching to handle path format differences
+            pass2_paths = {os.path.normpath(r.file_path) for r in pass2_candidates}
+            pass2_triage = [t for t in triage_results if os.path.normpath(t.file_path) in pass2_paths]
+            
+            # If path matching failed, fall back to creating triage results from pass1 results
+            if len(pass2_triage) < pass2_count * 0.5:  # Less than 50% matched
+                logger.warning(f"AgenticScan: Path matching only found {len(pass2_triage)}/{pass2_count} files, using direct approach")
+                # Create FileTriageResults from the pass1 candidates directly
+                pass2_triage = []
+                for r in pass2_candidates:
+                    # Find matching triage result or create a minimal one
+                    matching = next((t for t in triage_results if os.path.normpath(t.file_path) == os.path.normpath(r.file_path)), None)
+                    if matching:
+                        pass2_triage.append(matching)
+                    else:
+                        # Create minimal triage result
+                        pass2_triage.append(FileTriageResult(
+                            file_path=r.file_path,
+                            relative_path=os.path.basename(r.file_path),
+                            file_type=os.path.splitext(r.file_path)[1],
+                            priority="HIGH",
+                            reasoning="Selected from Pass 1 results",
+                            security_relevance=r.security_score / 10.0,
+                            suggested_analysis_depth="detailed"
+                        ))
             
             pass2_results = await self._run_analysis_pass(
                 project_path=project_path,
@@ -1463,24 +1786,44 @@ Be thorough - files importing vulnerable dependencies need review even if their 
         else:
             pass2_results = []
         
-        # PASS 3: Deep analysis (uses configurable limit)
-        # Select the most critical files for full analysis
-        pass3_candidates = [
-            r for r in pass2_results 
-            if r.security_score >= 6.0 or r.potential_vulnerabilities > 0
-        ] if pass2_results else [
-            r for r in pass1_results 
-            if r.security_score >= 7.0 or r.potential_vulnerabilities > 0
-        ]
-        pass3_count = min(self.pass3_limit, len(pass3_candidates))
+        # PASS 3: Deep analysis of TOP N files from Pass 2 (or Pass 1 if Pass 2 empty)
+        # Take the highest-scoring files, not filtered by threshold
+        source_for_pass3 = pass2_results if pass2_results else pass1_results
+        pass3_count = min(self.pass3_limit, len(source_for_pass3))
+        pass3_candidates = source_for_pass3[:pass3_count]
         
         deep_analysis_files = []
         if pass3_count > 0:
-            if progress_callback:
-                progress_callback(f"🎯 Pass 3: Deep analysis of {pass3_count} critical files...")
+            # Update phase for Pass 3
+            if phase_callback:
+                phase_callback(ScanPhase.DEEP_ANALYSIS)
             
-            pass3_paths = {r.file_path for r in pass3_candidates[:pass3_count]}
-            pass3_triage = [t for t in triage_results if t.file_path in pass3_paths]
+            if progress_callback:
+                progress_callback(f"🎯 Pass 3: Deep analysis of top {pass3_count} files...")
+            
+            # Use normalized paths for matching
+            pass3_paths = {os.path.normpath(r.file_path) for r in pass3_candidates}
+            pass3_triage = [t for t in triage_results if os.path.normpath(t.file_path) in pass3_paths]
+            
+            # If path matching failed, fall back to creating triage results from candidates
+            if len(pass3_triage) < pass3_count * 0.5:  # Less than 50% matched
+                logger.warning(f"AgenticScan: Pass 3 path matching only found {len(pass3_triage)}/{pass3_count} files, using direct approach")
+                pass3_triage = []
+                for r in pass3_candidates:
+                    matching = next((t for t in triage_results if os.path.normpath(t.file_path) == os.path.normpath(r.file_path)), None)
+                    if matching:
+                        pass3_triage.append(matching)
+                    else:
+                        pass3_triage.append(FileTriageResult(
+                            file_path=r.file_path,
+                            relative_path=os.path.basename(r.file_path),
+                            file_type=os.path.splitext(r.file_path)[1],
+                            priority="CRITICAL",
+                            reasoning="Selected from Pass 2 results",
+                            security_relevance=r.security_score / 10.0,
+                            suggested_analysis_depth="full"
+                        ))
+            
             deep_analysis_files = [t.file_path for t in pass3_triage]
             
             pass3_results = await self._run_analysis_pass(
@@ -1493,13 +1836,91 @@ Be thorough - files importing vulnerable dependencies need review even if their 
             )
             all_results.extend(pass3_results)
         
+        # ============ PASS 4: Ultra-deep analysis of large files ============
+        # Only analyze files that are larger than 50K characters
+        pass4_count = 0
+        pass4_files = []
+        
+        # Update phase for Pass 4
+        if phase_callback:
+            phase_callback(ScanPhase.ULTRA_ANALYSIS)
+        
+        if progress_callback:
+            progress_callback("🚀 Pass 4: Identifying large files for ultra-deep analysis...")
+        
+        # Find files that are large enough to warrant ultra-deep analysis
+        large_file_candidates = []
+        
+        # Check all files that were analyzed in Pass 3 (or Pass 2 if no Pass 3)
+        files_to_check = pass3_triage if pass3_triage else pass2_triage
+        
+        for triage_result in files_to_check:
+            file_path = triage_result.file_path
+            full_path = os.path.join(project_path, file_path) if not os.path.isabs(file_path) else file_path
+            
+            try:
+                if os.path.exists(full_path):
+                    file_size = os.path.getsize(full_path)
+                    # Estimate character count (roughly 1 byte per char for most code files)
+                    # But let's read the actual file to get accurate char count
+                    try:
+                        with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()
+                            char_count = len(content)
+                    except Exception:
+                        char_count = file_size  # Fallback to byte count
+                    
+                    if char_count > self.pass4_min_size:
+                        # This file qualifies for ultra-deep analysis
+                        large_file_candidates.append({
+                            'triage': triage_result,
+                            'char_count': char_count,
+                            'security_score': triage_result.security_relevance
+                        })
+                        logger.info(f"Pass 4 candidate: {file_path} ({char_count:,} chars, score: {triage_result.security_relevance})")
+            except Exception as e:
+                logger.warning(f"Error checking file size for {file_path}: {e}")
+        
+        if large_file_candidates:
+            # Sort by security_relevance score (descending), then by size (descending)
+            large_file_candidates.sort(key=lambda x: (x['security_score'], x['char_count']), reverse=True)
+            
+            # Take top N files for ultra-deep analysis
+            pass4_candidates = large_file_candidates[:self.pass4_limit]
+            pass4_count = len(pass4_candidates)
+            
+            if progress_callback:
+                progress_callback(f"Pass 4: Ultra-deep analysis of {pass4_count} large files (>{self.pass4_min_size:,} chars)...")
+            
+            logger.info(f"AgenticScan: Pass 4 - Ultra-deep analysis of {pass4_count} large files")
+            for candidate in pass4_candidates:
+                logger.info(f"  - {candidate['triage'].file_path}: {candidate['char_count']:,} chars, score: {candidate['security_score']}")
+            
+            # Create triage results for Pass 4
+            pass4_triage = [c['triage'] for c in pass4_candidates]
+            pass4_files = [t.file_path for t in pass4_triage]
+            
+            pass4_results = await self._run_analysis_pass(
+                project_path=project_path,
+                files=pass4_triage,
+                pass_number=4,
+                analysis_depth="ultra",
+                chunk_size=2,  # Even smaller chunks for ultra-deep analysis
+                progress_callback=progress_callback
+            )
+            all_results.extend(pass4_results)
+        else:
+            if progress_callback:
+                progress_callback("Pass 4: No files large enough for ultra-deep analysis (>{:,} chars)".format(self.pass4_min_size))
+            logger.info(f"AgenticScan: Pass 4 - No files larger than {self.pass4_min_size:,} chars found")
+        
         self.multi_pass_results = all_results
         
         # Log summary
         logger.info(f"AgenticScan: Multi-pass analysis complete - "
-                   f"Pass 1: {pass1_count}, Pass 2: {pass2_count}, Pass 3: {pass3_count}")
+                   f"Pass 1: {pass1_count}, Pass 2: {pass2_count}, Pass 3: {pass3_count}, Pass 4: {pass4_count}")
         
-        return all_results, deep_analysis_files
+        return all_results, deep_analysis_files + pass4_files
 
     async def _run_analysis_pass(
         self,
@@ -1598,15 +2019,23 @@ Be thorough - files importing vulnerable dependencies need review even if their 
             try:
                 with open(f.file_path, 'r', encoding='utf-8', errors='ignore') as fh:
                     content = fh.read()
-                    # Truncate based on configured depth limits
                     char_limit = self.content_limits.get(analysis_depth, 2000)
-                    content = content[:char_limit]
+                    
+                    # Smart handling for large files
+                    if len(content) > char_limit:
+                        content = self._extract_security_relevant_sections(
+                            content, 
+                            f.file_path, 
+                            char_limit,
+                            analysis_depth
+                        )
                     
                     files_content.append({
                         "path": f.relative_path,
                         "full_path": f.file_path,
                         "content": content,
-                        "priority": f.priority
+                        "priority": f.priority,
+                        "was_truncated": len(content) >= char_limit * 0.95  # Flag if near limit
                     })
             except Exception as e:
                 logger.debug(f"Could not read {f.file_path}: {e}")
@@ -1619,7 +2048,8 @@ Be thorough - files importing vulnerable dependencies need review even if their 
         depth_instruction = {
             "quick": "Do a QUICK scan - identify obvious security patterns, entry points, and dangerous functions. Be efficient.",
             "detailed": "Do a DETAILED analysis - trace data flows, identify potential vulnerabilities, check for missing sanitization.",
-            "full": "Do a COMPREHENSIVE security audit - examine every function, trace all data flows, identify all potential attack vectors."
+            "full": "Do a COMPREHENSIVE security audit - examine every function, trace all data flows, identify all potential attack vectors.",
+            "ultra": "Do an ULTRA-DEEP security audit - this is a LARGE file requiring exhaustive analysis. Examine EVERY function in detail, trace ALL data flows completely, identify ALL potential attack vectors, analyze complex logic chains, look for subtle race conditions, check all error handling paths, verify all authentication/authorization checks, and identify any architectural security concerns. This file's size warrants extra scrutiny."
         }.get(analysis_depth, "quick")
         
         # Include project structure context (helps LLM understand architecture)
@@ -1627,8 +2057,8 @@ Be thorough - files importing vulnerable dependencies need review even if their 
         if self.project_structure:
             project_context = f"\n{self.project_structure}\n"
         
-        # Build external intelligence context - include FULL context for Pass 2 and 3
-        include_full = analysis_depth in ("detailed", "full")  # Pass 2 and 3 get full context
+        # Build external intelligence context - include FULL context for Pass 2, 3, and 4
+        include_full = analysis_depth in ("detailed", "full", "ultra")  # Pass 2, 3, and 4 get full context
         intel_context = self._build_intel_context_for_prompt(include_full_context=include_full)
         
         # Add per-file SAST context
@@ -1663,10 +2093,31 @@ Be thorough - files importing vulnerable dependencies need review even if their 
 ```
 """
         
+        # Detect if we have documentation/config files that need different analysis
+        doc_extensions = {'.md', '.rst', '.txt', '.yaml', '.yml', '.json', '.toml', '.xml', '.properties'}
+        has_docs = any(Path(fc['path']).suffix.lower() in doc_extensions for fc in files_content)
+        
+        doc_guidance = ""
+        if has_docs:
+            doc_guidance = """
+
+## DOCUMENTATION & CONFIG FILE ANALYSIS:
+For .md, .rst, .txt, .yaml, .yml, .json, .xml, .toml, .properties files, look for:
+- **Architecture info**: System diagrams, component descriptions that reveal attack surfaces
+- **API documentation**: Endpoints, parameters, authentication methods
+- **Hardcoded secrets**: API keys, passwords, tokens (even in examples)
+- **Default credentials**: admin/admin, test passwords in examples
+- **Infrastructure details**: Database names, internal hostnames, cloud resources
+- **Deployment configs**: Ports, exposed services, security settings
+- **Database schemas**: Tables, columns that reveal data model
+- **Environment variables**: List of expected secrets/configs
+These files don't have "entry points" in the code sense, but they can reveal critical security information.
+"""
+        
         prompt = f"""You are an objective code reviewer performing PASS {pass_number} ({analysis_depth.upper()}) security analysis.
 
 {depth_instruction}
-{project_context}{intel_context}
+{project_context}{intel_context}{doc_guidance}
 ## Files to Analyze:
 {files_text}
 
@@ -1676,7 +2127,8 @@ Be thorough - files importing vulnerable dependencies need review even if their 
 3. Whether input validation/sanitization is present or missing
 4. **If file imports vulnerable packages**: Check if the VULNERABLE FUNCTIONS are actually called
 5. **If file was SAST-flagged**: Verify or refute the SAST findings
-6. Any actual security concerns you can identify with evidence
+6. **For documentation/config files**: Architecture details, hardcoded secrets, default credentials
+7. Any actual security concerns you can identify with evidence
 
 ## Response Format (JSON):
 {{
@@ -1731,15 +2183,16 @@ Be thorough - files importing vulnerable dependencies need review even if their 
             )
             
             results = []
+            returned_indices = set()  # Track which files the AI returned results for
             text = response.text if response else ""
             if text:
-                json_match = re.search(r'\{[\s\S]*\}', text)
-                if json_match:
-                    result = json.loads(json_match.group())
-                    for item in result.get("files", []):
+                # Use safe JSON parser with repair capabilities
+                result = _safe_json_parse(text, {"files": []})
+                for item in result.get("files", []):
                         idx = item.get("index", 1) - 1
                         if 0 <= idx < len(files_content):
                             fc = files_content[idx]
+                            returned_indices.add(idx)
                             
                             results.append(MultiPassAnalysisResult(
                                 file_path=fc["full_path"],
@@ -1752,6 +2205,29 @@ Be thorough - files importing vulnerable dependencies need review even if their 
                                 security_score=item.get("security_score", 5.0),
                                 key_observations=item.get("observations", [])
                             ))
+            
+            # IMPORTANT: Create fallback results for files the AI didn't return
+            # This ensures all files are represented in pass results for subsequent passes
+            missing_count = 0
+            for idx, fc in enumerate(files_content):
+                if idx not in returned_indices:
+                    missing_count += 1
+                    # Create a minimal result for files the AI skipped
+                    # Use a mid-range score (5.0) to keep them in consideration
+                    results.append(MultiPassAnalysisResult(
+                        file_path=fc["full_path"],
+                        pass_number=pass_number,
+                        analysis_depth=analysis_depth,
+                        findings=[],
+                        entry_points_found=0,
+                        potential_vulnerabilities=0,
+                        requires_deeper_analysis=True,  # Mark for deeper analysis since we don't know
+                        security_score=5.0,  # Mid-range score to keep in consideration
+                        key_observations=["AI did not return explicit analysis - included for completeness"]
+                    ))
+            
+            if missing_count > 0:
+                logger.warning(f"AgenticScan: Pass {pass_number} AI only returned {len(returned_indices)}/{len(files_content)} files, created fallback for {missing_count}")
             
             return results
             
@@ -1893,12 +2369,11 @@ Be thorough - files importing vulnerable dependencies need review even if their 
             assessment = "Analysis complete"
             
             if text:
-                json_match = re.search(r'\{[\s\S]*\}', text)
-                if json_match:
-                    result = json.loads(json_match.group())
-                    assessment = result.get("overall_assessment", assessment)
-                    attack_chains = result.get("attack_chains", [])
-                    recommendations = result.get("recommendations", [])
+                # Use safe JSON parser with repair capabilities
+                result = _safe_json_parse(text, {})
+                assessment = result.get("overall_assessment", assessment)
+                attack_chains = result.get("attack_chains", [])
+                recommendations = result.get("recommendations", [])
             
             return SynthesisResult(
                 total_files_triaged=len(self.triage_results),
@@ -2108,9 +2583,10 @@ Sink format (only if genuinely concerning):
             
             text = response.text
             if text:
-                json_match = re.search(r'\{[\s\S]*\}', text)
-                if json_match:
-                    return json.loads(json_match.group())
+                # Use safe JSON parser with repair capabilities
+                result = _safe_json_parse(text, {c.id: {"entry_points": [], "sinks": []} for c in chunks})
+                if result:
+                    return result
             else:
                 logger.warning("AgenticScan: Empty response from LLM in batch analysis")
             
@@ -2410,13 +2886,10 @@ A response of {{"flow_exists": false, "is_exploitable": false}} is completely va
                         entry_point, sink, prompt, additional_context
                     )
             
-            # Parse response
-            json_match = re.search(r'\{[\s\S]*\}', text)
-            if json_match:
-                result = json.loads(json_match.group())
-                
-                if result.get("flow_exists") and result.get("is_exploitable"):
-                    return self._create_traced_flow(entry_point, sink, result)
+            # Parse response with safe JSON parser
+            result = _safe_json_parse(text, {})
+            if result.get("flow_exists") and result.get("is_exploitable"):
+                return self._create_traced_flow(entry_point, sink, result)
             
         except Exception as e:
             logger.warning(f"AgenticScan: Flow tracing failed: {e}")
@@ -2510,11 +2983,10 @@ Now complete the analysis with this additional context."""
             
             text = response.text
             if text:
-                json_match = re.search(r'\{[\s\S]*\}', text)
-                if json_match:
-                    result = json.loads(json_match.group())
-                    if result.get("flow_exists") and result.get("is_exploitable"):
-                        return self._create_traced_flow(entry_point, sink, result)
+                # Use safe JSON parser
+                result = _safe_json_parse(text, {})
+                if result.get("flow_exists") and result.get("is_exploitable"):
+                    return self._create_traced_flow(entry_point, sink, result)
         
         except Exception as e:
             logger.warning(f"AgenticScan: Additional context tracing failed: {e}")
@@ -2652,9 +3124,9 @@ Be conservative - if there's doubt, lean toward higher false_positive_likelihood
             
             text = response.text
             if text:
-                json_match = re.search(r'\{[\s\S]*\}', text)
-                if json_match:
-                    result = json.loads(json_match.group())
+                # Use safe JSON parser
+                result = _safe_json_parse(text, {})
+                if result:
                     return self._create_vulnerability(flow, result)
         
         except Exception as e:
@@ -2927,56 +3399,55 @@ Respond with JSON:
             
             text = response.text if response else ""
             if text:
-                json_match = re.search(r'\{[\s\S]*\}', text)
-                if json_match:
-                    result = json.loads(json_match.group())
-                    verifications = result.get("verifications", [])
-                    
-                    for ver in verifications:
-                        idx = ver.get("index", 1) - 1
-                        if 0 <= idx < len(batch):
-                            vuln = batch[idx]
-                            verdict = ver.get("verdict", "UNCERTAIN")
-                            confidence = ver.get("confidence", vuln.confidence)
-                            reasoning = ver.get("reasoning", "")
+                # Use safe JSON parser
+                result = _safe_json_parse(text, {"verifications": []})
+                verifications = result.get("verifications", [])
+                
+                for ver in verifications:
+                    idx = ver.get("index", 1) - 1
+                    if 0 <= idx < len(batch):
+                        vuln = batch[idx]
+                        verdict = ver.get("verdict", "UNCERTAIN")
+                        confidence = ver.get("confidence", vuln.confidence)
+                        reasoning = ver.get("reasoning", "")
+                        
+                        # Update confidence based on verification
+                        vuln.confidence = confidence
+                        
+                        # Adjust severity if recommended
+                        if ver.get("severity_adjustment") == "downgrade" and ver.get("new_severity"):
+                            vuln.severity = ver.get("new_severity")
+                        elif ver.get("severity_adjustment") == "upgrade" and ver.get("new_severity"):
+                            vuln.severity = ver.get("new_severity")
+                        
+                        # Filter based on verdict
+                        if verdict == "FALSE_POSITIVE":
+                            vuln.false_positive_likelihood = 0.9
+                            filtered_out.append({
+                                "id": vuln.id,
+                                "type": vuln.vulnerability_type,
+                                "reason": reasoning
+                            })
+                            logger.info(f"AgenticScan FP filtered: {vuln.vulnerability_type} - {reasoning[:50]}")
+                        else:
+                            # Keep the finding
+                            if verdict == "TRUE_POSITIVE":
+                                vuln.false_positive_likelihood = 0.1
+                            elif verdict == "LIKELY_TRUE":
+                                vuln.false_positive_likelihood = 0.25
+                            else:  # UNCERTAIN
+                                vuln.false_positive_likelihood = 0.4
                             
-                            # Update confidence based on verification
-                            vuln.confidence = confidence
-                            
-                            # Adjust severity if recommended
-                            if ver.get("severity_adjustment") == "downgrade" and ver.get("new_severity"):
-                                vuln.severity = ver.get("new_severity")
-                            elif ver.get("severity_adjustment") == "upgrade" and ver.get("new_severity"):
-                                vuln.severity = ver.get("new_severity")
-                            
-                            # Filter based on verdict
-                            if verdict == "FALSE_POSITIVE":
-                                vuln.false_positive_likelihood = 0.9
-                                filtered_out.append({
-                                    "id": vuln.id,
-                                    "type": vuln.vulnerability_type,
-                                    "reason": reasoning
-                                })
-                                logger.info(f"AgenticScan FP filtered: {vuln.vulnerability_type} - {reasoning[:50]}")
-                            else:
-                                # Keep the finding
-                                if verdict == "TRUE_POSITIVE":
-                                    vuln.false_positive_likelihood = 0.1
-                                elif verdict == "LIKELY_TRUE":
-                                    vuln.false_positive_likelihood = 0.25
-                                else:  # UNCERTAIN
-                                    vuln.false_positive_likelihood = 0.4
-                                
-                                verified.append(vuln)
-                    
-                    # Handle any unprocessed findings in batch
-                    processed_indices = {v.get("index", 0) - 1 for v in verifications}
-                    for idx, vuln in enumerate(batch):
-                        if idx not in processed_indices:
                             verified.append(vuln)
-                    
-                    # Return results for this batch
-                    return verified, {"filtered_findings": filtered_out}
+                
+                # Handle any unprocessed findings in batch
+                processed_indices = {v.get("index", 0) - 1 for v in verifications}
+                for idx, vuln in enumerate(batch):
+                    if idx not in processed_indices:
+                        verified.append(vuln)
+                
+                # Return results for this batch
+                return verified, {"filtered_findings": filtered_out}
             
             # If parsing failed, keep all findings
             return batch, {"filtered_findings": []}
@@ -3009,16 +3480,17 @@ class AgenticScanService:
         progress_callback: Optional[callable] = None,
         use_multi_pass: bool = True,  # Enable smart multi-pass by default
         external_intel: Optional[ExternalIntelligence] = None,  # CVE/SAST/dependency context
-        enhanced_mode: bool = False  # Enhanced: 150→60→20 files vs default 120→40→15
+        enhanced_mode: bool = False  # Enhanced: 240→80→30→10 files vs standard 180→60→22→7
     ) -> str:
         """
         Start a new agentic scan with smart multi-pass file selection.
         
         The scan now uses intelligent AI-driven file triage with RICH CONTEXT:
         - Pass 0: AI examines ALL file names to select security-relevant files
-        - Pass 1: Initial analysis of ~120 files (or ~150 in enhanced mode) - 5K/6K chars each
-        - Pass 2: Focused analysis of ~40 files (or ~60 in enhanced mode) - 12K/16K chars each
-        - Pass 3: Deep analysis of ~15 files (or ~20 in enhanced mode) - 50K/100K chars each
+        - Pass 1: Initial analysis - Standard: 180 files × 5K chars | Enhanced: 240 files × 6K chars
+        - Pass 2: Focused analysis - Standard: 60 files × 12K chars | Enhanced: 80 files × 16K chars
+        - Pass 3: Deep analysis - Standard: 22 files × 50K chars | Enhanced: 30 files × 65K chars
+        - Pass 4: Ultra-deep (files >50K only) - Standard: 7 files × 100K | Enhanced: 10 files × 120K
         - Flow Tracing, Vulnerability Analysis, FP Filtering: All receive FULL context including:
           - App description and architecture diagram
           - Security findings summary
@@ -3027,7 +3499,7 @@ class AgenticScanService:
         - Synthesis: AI combines findings from all passes with full context
         
         Args:
-            enhanced_mode: If True, increases file limits for more thorough analysis
+            enhanced_mode: If True, increases file limits AND content depth for more thorough analysis
             external_intel: CVE, SAST, dependency data PLUS app description, architecture diagram,
                           codebase map, attack surface map, and exploitability assessment
         
@@ -3040,20 +3512,24 @@ class AgenticScanService:
         # Enhanced mode: more files AND more content per file
         if enhanced_mode:
             self.analyzer.set_multi_pass_limits(
-                pass1=150, pass2=60, pass3=20,          # Files per pass (enhanced)
-                quick_chars=6000,                       # Pass 1: 6K chars
-                detailed_chars=16000,                   # Pass 2: 16K chars
-                full_chars=100000                       # Pass 3: 100K chars (very deep analysis)
+                pass1=240, pass2=80, pass3=30, pass4=10,  # Files per pass (enhanced)
+                quick_chars=6000,                          # Pass 1: 6K chars
+                detailed_chars=16000,                      # Pass 2: 16K chars
+                full_chars=65000,                          # Pass 3: 65K chars
+                ultra_chars=120000,                        # Pass 4: 120K chars (ultra-deep)
+                pass4_min_size=50000                       # Files >50K qualify for Pass 4
             )
-            logger.info("AgenticScan: Enhanced mode enabled (150→60→20 files, 6K→16K→100K chars)")
+            logger.info("AgenticScan: Enhanced mode enabled (240→80→30→10 files, 6K→16K→65K→120K chars)")
         else:
             self.analyzer.set_multi_pass_limits(
-                pass1=120, pass2=40, pass3=15,          # Files per pass (standard)
-                quick_chars=5000,                       # Pass 1: 5K chars
-                detailed_chars=12000,                   # Pass 2: 12K chars
-                full_chars=50000                        # Pass 3: 50K chars
+                pass1=180, pass2=60, pass3=22, pass4=7,   # Files per pass (standard)
+                quick_chars=5000,                          # Pass 1: 5K chars
+                detailed_chars=12000,                      # Pass 2: 12K chars
+                full_chars=50000,                          # Pass 3: 50K chars
+                ultra_chars=100000,                        # Pass 4: 100K chars
+                pass4_min_size=50000                       # Files >50K qualify for Pass 4
             )
-            logger.info("AgenticScan: Standard mode (120→40→15 files, 5K→12K→50K chars)")
+            logger.info("AgenticScan: Standard mode (180→60→22→7 files, 5K→12K→50K→100K chars)")
         
         # Inject external intelligence into analyzer if provided
         if external_intel:
@@ -3077,6 +3553,11 @@ class AgenticScanService:
                 ".scala",                               # Scala
                 ".pl", ".pm",                           # Perl
                 ".sh", ".bash",                         # Shell scripts
+                # Documentation & config (can reveal architecture, secrets, attack surfaces)
+                ".md", ".rst", ".txt",                  # Documentation
+                ".yaml", ".yml", ".json", ".toml",      # Config files (secrets, endpoints)
+                ".env.example", ".env.sample",          # Env templates (show expected secrets)
+                ".xml", ".properties",                  # Java/app configs
             ]
         
         scan_id = hashlib.md5(
@@ -3135,17 +3616,23 @@ class AgenticScanService:
                 if progress_callback:
                     progress_callback(progress)
                 
-                # Phases 1-3: Multi-Pass Analysis
+                # Phases 1-4: Multi-Pass Analysis
                 progress.phase = ScanPhase.INITIAL_ANALYSIS
                 progress.message = "📋 Starting multi-pass analysis..."
                 if progress_callback:
                     progress_callback(progress)
                 
+                def update_phase(new_phase: ScanPhase):
+                    """Update the scan phase for WebSocket tracking"""
+                    progress.phase = new_phase
+                    if progress_callback:
+                        progress_callback(progress)
+                
                 multi_pass_results, deep_files = await self.analyzer.multi_pass_analysis(
-                    project_path, triage_results, update_progress
+                    project_path, triage_results, update_progress, update_phase
                 )
                 
-                progress.phase = ScanPhase.DEEP_ANALYSIS
+                progress.phase = ScanPhase.ULTRA_ANALYSIS  # Final phase after multi-pass
                 progress.phase_progress = 1.0
                 
                 # Get files selected for chunking (combine top triage + deep analysis files)

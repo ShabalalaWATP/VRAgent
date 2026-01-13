@@ -90,6 +90,90 @@ const topCWEs: CWEEntry[] = [
   { id: "CWE-190", name: "Integer Overflow", category: "Numeric", description: "Calculation produces integer overflow or wraparound" },
 ];
 
+const cveRecordEssentials = [
+  "Short description of impact and scope",
+  "Affected products and versions (CPEs)",
+  "References to advisories, patches, and reports",
+  "CWE mapping for the underlying weakness",
+  "CVSS vector and severity rating",
+  "Exploit status and known exploitation reports",
+];
+
+const cveLifecycle = [
+  { step: "Reserve", detail: "CNA reserves an ID during coordinated disclosure." },
+  { step: "Publish", detail: "Record is populated with description and references." },
+  { step: "Enrich", detail: "NVD adds CVSS, CPEs, and CWE mapping." },
+  { step: "Update", detail: "Fixes, exploit status, and notes are added over time." },
+];
+
+const cweUsageTips = [
+  "Map recurring CWEs to secure coding training and reviews.",
+  "Use CWE Top 25 or OWASP views to prioritize engineering work.",
+  "Tag bugs with CWE to track root-cause trends over time.",
+  "Use CWE mapping to pick defensive tests and SAST rules.",
+];
+
+const cvssPitfalls = [
+  "Base score is not business impact; use environmental metrics for critical systems.",
+  "Scope changed can raise severity even with the same impacts.",
+  "Do not use CVSS alone; pair with EPSS and asset criticality.",
+  "Re-score when mitigations or exploit maturity changes.",
+];
+
+const epssBestPractices = [
+  "Use percentile thresholds (top 1, 5, 10 percent) to plan patch waves.",
+  "Track daily score changes for sudden spikes in exploitation likelihood.",
+  "Combine EPSS with KEV and threat intel for prioritization.",
+  "Override with asset criticality for crown-jewel systems.",
+];
+
+const triageMatrix = [
+  { label: "High CVSS + High EPSS", action: "Emergency patch or mitigate immediately." },
+  { label: "High CVSS + Low EPSS", action: "Patch in the next cycle and monitor intel." },
+  { label: "Low CVSS + High EPSS", action: "Validate exploitability and exposure; prioritize if reachable." },
+  { label: "Low CVSS + Low EPSS", action: "Backlog or accept risk with monitoring." },
+];
+
+const cveResponseChecklist = [
+  "Confirm affected versions and deployment scope.",
+  "Check for vendor fixes, workarounds, or mitigations.",
+  "Validate exposure (internet-facing, reachable, or authenticated).",
+  "Cross-reference KEV and threat intel for exploitation status.",
+  "Assign owners, deadlines, and communicate operational risk.",
+];
+
+const cveVsKev = [
+  { label: "CVE", detail: "Identifier for a vulnerability record." },
+  { label: "KEV", detail: "CISA catalog of vulnerabilities exploited in the wild." },
+  { label: "Use Together", detail: "Prioritize CVEs that appear in KEV and have high EPSS." },
+];
+
+const cweVsCapec = [
+  { label: "CWE", detail: "Weakness type or root cause in software." },
+  { label: "CAPEC", detail: "Common attack pattern that exploits weaknesses." },
+  { label: "Mapping", detail: "Use both to connect root cause with attacker behavior." },
+];
+
+const cvssV4Notes = [
+  "Adds more granularity for impact and downstream effects.",
+  "Separates impact on vulnerable system vs. subsequent systems.",
+  "Introduces new requirements to better model real-world exploitability.",
+  "Re-scoring may change severities compared to v3.1.",
+];
+
+const cvssEnvironmentalTips = [
+  "Adjust metrics for asset criticality and business impact.",
+  "Use modified base metrics for compensating controls.",
+  "Document any overrides so future teams can re-score.",
+];
+
+const epssPercentileBands = [
+  { band: "Top 1 percent", action: "Treat as urgent; consider emergency change." },
+  { band: "Top 5 percent", action: "Accelerate patching and confirm exposure." },
+  { band: "Top 10 percent", action: "Prioritize in near-term patch window." },
+  { band: "Below median", action: "Schedule in standard cycle with monitoring." },
+];
+
 export default function CveCweCvssPage() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -118,7 +202,7 @@ export default function CveCweCvssPage() {
 
   const severity = getCVSSSeverity(cvssScore);
 
-  const pageContext = `This page covers CVE/CWE/CVSS vulnerability classification systems. CVE (Common Vulnerabilities and Exposures) provides unique identifiers for security vulnerabilities. CWE (Common Weakness Enumeration) categorizes software weaknesses. CVSS (Common Vulnerability Scoring System) rates vulnerability severity. Current tab: ${selectedTab === 0 ? 'CVE' : selectedTab === 1 ? 'CWE' : 'CVSS'}. ${cweSearch ? `CWE search: ${cweSearch}.` : ''} CVSS calculator score: ${cvssScore} (${severity.label}).`;
+  const pageContext = `This page covers CVE/CWE/CVSS vulnerability classification systems. CVE (Common Vulnerabilities and Exposures) provides unique identifiers for security vulnerabilities. CWE (Common Weakness Enumeration) categorizes software weaknesses. CVSS (Common Vulnerability Scoring System) rates vulnerability severity. Includes lifecycle guidance, KEV and CAPEC references, vector examples, EPSS-based prioritization, and response checklists. Current tab: ${selectedTab === 0 ? 'CVE' : selectedTab === 1 ? 'CWE' : 'CVSS'}. ${cweSearch ? `CWE search: ${cweSearch}.` : ''} CVSS calculator score: ${cvssScore} (${severity.label}).`;
 
   return (
     <LearnPageLayout pageTitle="CVE/CWE/CVSS Reference" pageContext={pageContext}>
@@ -207,6 +291,22 @@ export default function CveCweCvssPage() {
                   <li><Typography variant="body2">Used by vulnerability databases, scanners, and security tools</Typography></li>
                   <li><Typography variant="body2">NVD enriches CVE entries with CVSS scores and additional metadata</Typography></li>
                 </Box>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>CVE Record Essentials</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {cveRecordEssentials.map((item) => (
+                      <li key={item}><Typography variant="body2">{item}</Typography></li>
+                    ))}
+                  </Box>
+                </Paper>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#10b981", 0.05) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>CVE Response Checklist</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {cveResponseChecklist.map((item) => (
+                      <li key={item}><Typography variant="body2">{item}</Typography></li>
+                    ))}
+                  </Box>
+                </Paper>
               </Grid>
               <Grid item xs={12} md={5}>
                 <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.05), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
@@ -226,6 +326,28 @@ export default function CveCweCvssPage() {
                   <Link href="https://cve.mitre.org/" target="_blank" sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 2, fontSize: "0.875rem" }}>
                     Browse CVE Database <LaunchIcon fontSize="small" />
                   </Link>
+                </Paper>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#0ea5e9", 0.05), border: `1px solid ${alpha("#0ea5e9", 0.2)}` }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>CVE Lifecycle</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {cveLifecycle.map((item) => (
+                      <li key={item.step}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.step}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.detail}</Typography>
+                      </li>
+                    ))}
+                  </Box>
+                </Paper>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#6366f1", 0.05), border: `1px solid ${alpha("#6366f1", 0.2)}` }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>CVE vs KEV</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {cveVsKev.map((item) => (
+                      <li key={item.label}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.label}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.detail}</Typography>
+                      </li>
+                    ))}
+                  </Box>
                 </Paper>
               </Grid>
             </Grid>
@@ -256,6 +378,25 @@ export default function CveCweCvssPage() {
                   <li><Typography variant="body2"><strong>Categories:</strong> Groupings of related weaknesses</Typography></li>
                   <li><Typography variant="body2"><strong>Weaknesses:</strong> Individual weakness types (Base, Variant, Composite)</Typography></li>
                 </Box>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha(theme.palette.secondary.main, 0.05) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Using CWE in Remediation</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {cweUsageTips.map((item) => (
+                      <li key={item}><Typography variant="body2">{item}</Typography></li>
+                    ))}
+                  </Box>
+                </Paper>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#8b5cf6", 0.05) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>CWE vs CAPEC</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {cweVsCapec.map((item) => (
+                      <li key={item.label}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.label}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.detail}</Typography>
+                      </li>
+                    ))}
+                  </Box>
+                </Paper>
               </Grid>
               <Grid item xs={12} md={5}>
                 <TextField
@@ -328,6 +469,39 @@ export default function CveCweCvssPage() {
                   <li><Typography variant="body2"><strong>Scope (S):</strong> Unchanged, Changed</Typography></li>
                   <li><Typography variant="body2"><strong>Impact (C/I/A):</strong> None, Low, High (for each)</Typography></li>
                 </Box>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Vector Example</Typography>
+                  <Box sx={{ fontFamily: "monospace", fontSize: "0.85rem", bgcolor: alpha(theme.palette.primary.main, 0.08), p: 1.5, borderRadius: 1 }}>
+                    CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+                    Example for a network-exposed, low-complexity issue with high impact.
+                  </Typography>
+                </Paper>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.06) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Common CVSS Pitfalls</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {cvssPitfalls.map((item) => (
+                      <li key={item}><Typography variant="body2">{item}</Typography></li>
+                    ))}
+                  </Box>
+                </Paper>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.05) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>CVSS v4 Notes</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {cvssV4Notes.map((item) => (
+                      <li key={item}><Typography variant="body2">{item}</Typography></li>
+                    ))}
+                  </Box>
+                </Paper>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#10b981", 0.05) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Environmental Tuning</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {cvssEnvironmentalTips.map((item) => (
+                      <li key={item}><Typography variant="body2">{item}</Typography></li>
+                    ))}
+                  </Box>
+                </Paper>
               </Grid>
               <Grid item xs={12} md={5}>
                 <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha(severity.color, 0.05), border: `2px solid ${severity.color}` }}>
@@ -411,6 +585,25 @@ export default function CveCweCvssPage() {
                 <Typography variant="body2" color="text.secondary">
                   The top 10% of EPSS scores typically contain 50%+ of all exploited vulnerabilities. Patching vulnerabilities in the top EPSS percentiles first dramatically reduces risk more efficiently than patching by CVSS alone.
                 </Typography>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#10b981", 0.05) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Prioritization Tips</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {epssBestPractices.map((item) => (
+                      <li key={item}><Typography variant="body2">{item}</Typography></li>
+                    ))}
+                  </Box>
+                </Paper>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#22c55e", 0.05) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>EPSS Percentile Bands</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {epssPercentileBands.map((item) => (
+                      <li key={item.band}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.band}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.action}</Typography>
+                      </li>
+                    ))}
+                  </Box>
+                </Paper>
               </Grid>
               <Grid item xs={12} md={5}>
                 <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -450,6 +643,17 @@ export default function CveCweCvssPage() {
                     FIRST EPSS Calculator <LaunchIcon fontSize="small" />
                   </Link>
                 </Paper>
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#ef4444", 0.05), border: `1px solid ${alpha("#ef4444", 0.2)}` }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Triage Matrix</Typography>
+                  <Box component="ul" sx={{ pl: 2, "& li": { mb: 1 } }}>
+                    {triageMatrix.map((item) => (
+                      <li key={item.label}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.label}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.action}</Typography>
+                      </li>
+                    ))}
+                  </Box>
+                </Paper>
               </Grid>
             </Grid>
           </Box>
@@ -467,6 +671,9 @@ export default function CveCweCvssPage() {
             { title: "CWE", purpose: "Category/type classification of weaknesses", example: "CWE-89 (SQL Injection)", url: "https://cwe.mitre.org/", color: "#8b5cf6" },
             { title: "CVSS", purpose: "Severity score (0-10) based on characteristics", example: "9.8 Critical", url: "https://www.first.org/cvss/", color: "#ef4444" },
             { title: "EPSS", purpose: "Probability of exploitation (0-100%)", example: "97.6% likely exploited", url: "https://www.first.org/epss/", color: "#10b981" },
+            { title: "CPE", purpose: "Standardized product naming for affected assets", example: "cpe:2.3:a:vendor:product:version", url: "https://nvd.nist.gov/products/cpe", color: "#06b6d4" },
+            { title: "KEV", purpose: "Known exploited vulnerability catalog", example: "CISA KEV list", url: "https://www.cisa.gov/known-exploited-vulnerabilities-catalog", color: "#f97316" },
+            { title: "CAPEC", purpose: "Common attack patterns tied to CWEs", example: "CAPEC-100", url: "https://capec.mitre.org/", color: "#14b8a6" },
           ].map((item) => (
             <Grid item xs={12} sm={6} md={3} key={item.title}>
               <Card sx={{ height: "100%", border: `1px solid ${alpha(item.color, 0.2)}` }}>

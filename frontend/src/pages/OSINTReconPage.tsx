@@ -1,11 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
-  Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Accordion,
@@ -25,7 +22,13 @@ import {
   Grid,
   IconButton,
   Tooltip,
+  Drawer,
+  Fab,
+  Divider,
+  LinearProgress,
   alpha,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -33,7 +36,6 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import TravelExploreIcon from "@mui/icons-material/TravelExplore";
 import PersonSearchIcon from "@mui/icons-material/PersonSearch";
 import DnsIcon from "@mui/icons-material/Dns";
-import BusinessIcon from "@mui/icons-material/Business";
 import SecurityIcon from "@mui/icons-material/Security";
 import CodeIcon from "@mui/icons-material/Code";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -42,6 +44,11 @@ import ImageIcon from "@mui/icons-material/Image";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import PublicIcon from "@mui/icons-material/Public";
 import QuizIcon from "@mui/icons-material/Quiz";
+import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
+import SchoolIcon from "@mui/icons-material/School";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
@@ -53,13 +60,15 @@ interface TabPanelProps {
 }
 
 function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
+  const { children, value: _value, index: _index, ...other } = props;
   return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+    <div role="tabpanel" {...other}>
+      <Box sx={{ py: 3 }}>{children}</Box>
     </div>
   );
 }
+
+const ACCENT_COLOR = "#f97316";
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, language = "bash" }) => {
   const [copied, setCopied] = useState(false);
@@ -70,9 +79,18 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, langua
   };
 
   return (
-    <Paper sx={{ p: 2, bgcolor: "#1a1a2e", borderRadius: 2, position: "relative", my: 2, border: "1px solid rgba(249, 115, 22, 0.3)" }}>
+    <Paper
+      sx={{
+        p: 2,
+        bgcolor: alpha("#0f172a", 0.9),
+        borderRadius: 2,
+        position: "relative",
+        my: 2,
+        border: `1px solid ${alpha(ACCENT_COLOR, 0.25)}`,
+      }}
+    >
       <Box sx={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 1 }}>
-        <Chip label={language} size="small" sx={{ bgcolor: "#f97316" }} />
+        <Chip label={language} size="small" sx={{ bgcolor: ACCENT_COLOR, color: "#0f172a", fontWeight: 700 }} />
         <Tooltip title={copied ? "Copied!" : "Copy"}>
           <IconButton size="small" onClick={handleCopy} sx={{ color: "grey.400" }}>
             <ContentCopyIcon fontSize="small" />
@@ -87,7 +105,7 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, langua
 };
 
 const QUIZ_QUESTION_COUNT = 10;
-const QUIZ_ACCENT_COLOR = "#f97316";
+const QUIZ_ACCENT_COLOR = ACCENT_COLOR;
 
 const quizQuestions: QuizQuestion[] = [
   {
@@ -1067,18 +1085,403 @@ const quizQuestions: QuizQuestion[] = [
   },
 ];
 
+const outlineSections = [
+  {
+    id: "fundamentals",
+    title: "OSINT Fundamentals",
+    icon: <SecurityIcon />,
+    color: "#f97316",
+    status: "Complete",
+    description: "Passive vs active recon, workflow stages, legal boundaries",
+  },
+  {
+    id: "domain-recon",
+    title: "Domain & DNS Recon",
+    icon: <DnsIcon />,
+    color: "#3b82f6",
+    status: "Complete",
+    description: "WHOIS, DNS records, subdomains, infrastructure mapping",
+  },
+  {
+    id: "people-orgs",
+    title: "People & Organization Intel",
+    icon: <PersonSearchIcon />,
+    color: "#8b5cf6",
+    status: "Complete",
+    description: "Org structure, social presence, emails, and personas",
+  },
+  {
+    id: "images-metadata",
+    title: "Images & Metadata",
+    icon: <ImageIcon />,
+    color: "#10b981",
+    status: "Complete",
+    description: "EXIF data, reverse image search, document metadata",
+  },
+  {
+    id: "code-repos",
+    title: "Code & Repository Recon",
+    icon: <GitHubIcon />,
+    color: "#0ea5e9",
+    status: "Complete",
+    description: "GitHub search, leaked secrets, dependency trails",
+  },
+  {
+    id: "advanced-osint",
+    title: "Advanced OSINT",
+    icon: <PublicIcon />,
+    color: "#f59e0b",
+    status: "Complete",
+    description: "Dark web, sock puppets, automation, link analysis",
+  },
+  {
+    id: "tools",
+    title: "Tools & Automation",
+    icon: <CodeIcon />,
+    color: "#ec4899",
+    status: "Complete",
+    description: "Tooling reference, automation scripts, and workflows",
+  },
+];
+
+const quickStats = [
+  { value: "7", label: "Core Modules", color: "#f97316" },
+  { value: "75", label: "Quiz Questions", color: "#3b82f6" },
+  { value: "3", label: "Recon Phases", color: "#10b981" },
+  { value: "50+", label: "Sources & Tools", color: "#8b5cf6" },
+];
+
 const OSINTReconPage: React.FC = () => {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const theme = useTheme();
+  const accent = ACCENT_COLOR;
 
-  const pageContext = `This page covers OSINT (Open Source Intelligence) and Reconnaissance techniques including domain reconnaissance, DNS enumeration, email harvesting, social media investigation, image EXIF analysis, GitHub/code repository analysis, Google dorking, subdomain discovery, and OSINT tools.`;
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const tabValue = 0;
+
+  const pageContext = `OSINT & Reconnaissance learning page covering passive and active recon, domain/DNS enumeration, people and organization intelligence, image/metadata analysis, code repository recon, advanced OSINT workflows, and essential tooling.`;
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <TravelExploreIcon /> },
+    { id: "outline", label: "Outline", icon: <ListAltIcon /> },
+    { id: "prerequisites", label: "Prerequisites", icon: <CheckCircleIcon /> },
+    { id: "fundamentals", label: "Fundamentals", icon: <SecurityIcon /> },
+    { id: "domain-recon", label: "Domain Recon", icon: <DnsIcon /> },
+    { id: "people-orgs", label: "People & Orgs", icon: <PersonSearchIcon /> },
+    { id: "images-metadata", label: "Images & Metadata", icon: <ImageIcon /> },
+    { id: "code-repos", label: "Code & Repos", icon: <GitHubIcon /> },
+    { id: "advanced-osint", label: "Advanced OSINT", icon: <PublicIcon /> },
+    { id: "tools", label: "Tools", icon: <CodeIcon /> },
+    { id: "next-steps", label: "Next Steps", icon: <SchoolIcon /> },
+    { id: "key-takeaways", label: "Takeaways", icon: <TipsAndUpdatesIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="OSINT & Reconnaissance" pageContext={pageContext}>
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
-      <Container maxWidth="lg">
-        {/* Header */}
-        <Box sx={{ mb: 4 }}>
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#ea580c" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Back Button */}
           <Chip
             component={Link}
             to="/learn"
@@ -1086,60 +1489,368 @@ const OSINTReconPage: React.FC = () => {
             label="Back to Learning Hub"
             clickable
             variant="outlined"
-            sx={{ borderRadius: 2, mb: 2 }}
+            sx={{ borderRadius: 2, mb: 3 }}
           />
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <TravelExploreIcon sx={{ fontSize: 40, color: "#f97316" }} />
-            <Typography
-              variant="h3"
-              sx={{
-                fontWeight: 700,
-                background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
-                backgroundClip: "text",
-                WebkitBackgroundClip: "text",
-                color: "transparent",
-              }}
-            >
-              OSINT & Reconnaissance
-            </Typography>
-          </Box>
-          <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
-            Open Source Intelligence gathering and target reconnaissance techniques
-          </Typography>
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Chip icon={<PersonSearchIcon />} label="Passive Recon" size="small" />
-            <Chip icon={<DnsIcon />} label="Domain Intel" size="small" />
-            <Chip icon={<BusinessIcon />} label="Organization" size="small" />
-          </Box>
-        </Box>
 
-        {/* Tabs */}
-        <Paper sx={{ bgcolor: "#12121a", borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
+          {/* Hero Banner */}
+          <Paper
             sx={{
-              borderBottom: "1px solid rgba(255,255,255,0.1)",
-              "& .MuiTab-root": { color: "grey.400" },
-              "& .Mui-selected": { color: "#f97316" },
+              p: 4,
+              mb: 4,
+              borderRadius: 4,
+              background: `linear-gradient(135deg, ${alpha("#f97316", 0.16)} 0%, ${alpha("#f59e0b", 0.16)} 50%, ${alpha("#0ea5e9", 0.16)} 100%)`,
+              border: `1px solid ${alpha(accent, 0.2)}`,
+              position: "relative",
+              overflow: "hidden",
             }}
           >
-            <Tab icon={<SecurityIcon />} label="Fundamentals" />
-            <Tab icon={<DnsIcon />} label="Domain Recon" />
-            <Tab icon={<PersonSearchIcon />} label="People & Orgs" />
-            <Tab icon={<ImageIcon />} label="Images & Metadata" />
-            <Tab icon={<GitHubIcon />} label="Code & Repos" />
-            <Tab icon={<PublicIcon />} label="Advanced OSINT" />
-            <Tab icon={<CodeIcon />} label="Tools" />
-          </Tabs>
+            <Box
+              sx={{
+                position: "absolute",
+                top: -50,
+                right: -50,
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${alpha("#f97316", 0.12)} 0%, transparent 70%)`,
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: -30,
+                left: "30%",
+                width: 150,
+                height: 150,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${alpha("#0ea5e9", 0.12)} 0%, transparent 70%)`,
+              }}
+            />
 
-          {/* Tab 0: Fundamentals */}
+            <Box sx={{ position: "relative", zIndex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 3 }}>
+                <Box
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 3,
+                    background: `linear-gradient(135deg, #f97316, #f59e0b)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: `0 8px 32px ${alpha("#f97316", 0.3)}`,
+                  }}
+                >
+                  <TravelExploreIcon sx={{ fontSize: 44, color: "white" }} />
+                </Box>
+                <Box>
+                  <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
+                    OSINT & Reconnaissance
+                  </Typography>
+                  <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 400 }}>
+                    Open source intelligence for mapping targets and context
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                <Chip label="Passive Recon" sx={{ bgcolor: alpha("#3b82f6", 0.15), color: "#3b82f6", fontWeight: 600 }} />
+                <Chip label="Domain Intel" sx={{ bgcolor: alpha("#f97316", 0.15), color: "#f97316", fontWeight: 600 }} />
+                <Chip label="People & Org" sx={{ bgcolor: alpha("#8b5cf6", 0.15), color: "#8b5cf6", fontWeight: 600 }} />
+                <Chip label="OpSec Mindset" sx={{ bgcolor: alpha("#10b981", 0.15), color: "#10b981", fontWeight: 600 }} />
+              </Box>
+
+              {/* Quick Stats */}
+              <Grid container spacing={2}>
+                {quickStats.map((stat) => (
+                  <Grid item xs={6} sm={3} key={stat.label}>
+                    <Paper
+                      sx={{
+                        p: 2,
+                        textAlign: "center",
+                        borderRadius: 2,
+                        bgcolor: alpha(stat.color, 0.1),
+                        border: `1px solid ${alpha(stat.color, 0.2)}`,
+                      }}
+                    >
+                      <Typography variant="h4" sx={{ fontWeight: 800, color: stat.color }}>
+                        {stat.value}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        {stat.label}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          </Paper>
+
+          {/* Quick Navigation */}
+          <Paper
+            sx={{
+              p: 2,
+              mb: 4,
+              borderRadius: 3,
+              position: "sticky",
+              top: 70,
+              zIndex: 100,
+              backdropFilter: "blur(10px)",
+              bgcolor: alpha(theme.palette.background.paper, 0.9),
+              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              boxShadow: `0 4px 20px ${alpha("#000", 0.1)}`,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+              <Chip
+                label="Learning Hub"
+                size="small"
+                clickable
+                onClick={() => navigate("/learn")}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  bgcolor: alpha(accent, 0.1),
+                  color: accent,
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.2),
+                  },
+                }}
+              />
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                Quick Navigation
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {[
+                { label: "Introduction", id: "intro" },
+                { label: "Outline", id: "outline" },
+                { label: "Prerequisites", id: "prerequisites" },
+                { label: "Fundamentals", id: "fundamentals" },
+                { label: "Domain Recon", id: "domain-recon" },
+                { label: "People & Orgs", id: "people-orgs" },
+                { label: "Images", id: "images-metadata" },
+                { label: "Code & Repos", id: "code-repos" },
+                { label: "Advanced", id: "advanced-osint" },
+                { label: "Tools", id: "tools" },
+                { label: "Next Steps", id: "next-steps" },
+              ].map((nav) => (
+                <Chip
+                  key={nav.id}
+                  label={nav.label}
+                  size="small"
+                  clickable
+                  onClick={() => scrollToSection(nav.id)}
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: "0.75rem",
+                    "&:hover": {
+                      bgcolor: alpha(accent, 0.15),
+                      color: accent,
+                    },
+                  }}
+                />
+              ))}
+            </Box>
+          </Paper>
+
+          {/* ==================== INTRODUCTION ==================== */}
+          <Typography id="intro" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            OSINT & Recon Overview
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Build a reliable picture of a target using public signals, then validate with careful follow-up.
+          </Typography>
+
+          <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha(accent, 0.04), border: `1px solid ${alpha(accent, 0.15)}` }}>
+            <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem" }}>
+              <strong>Open Source Intelligence (OSINT)</strong> turns public data into actionable context. You start with
+              passive sources like DNS, public records, social media, and code repositories, then correlate those signals to
+              map people, infrastructure, and relationships.
+            </Typography>
+            <Box sx={{ my: 3 }}>
+              <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem" }}>
+                Reconnaissance blends collection with validation. You gather data, check for consistency, and document
+                sources so findings can be reproduced. Done well, OSINT reduces blind spots, improves targeting, and
+                highlights the highest-value areas for deeper investigation.
+              </Typography>
+            </Box>
+            <Alert severity="warning">
+              <strong>Legal note:</strong> Only collect information you are authorized to gather, respect privacy laws, and
+              follow terms of service for every source.
+            </Alert>
+          </Paper>
+
+          {/* ==================== COURSE OUTLINE ==================== */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+            <Divider sx={{ flex: 1 }} />
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
+              SUMMARY
+            </Typography>
+            <Divider sx={{ flex: 1 }} />
+          </Box>
+
+          <Typography id="outline" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Course Outline
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            A structured path through OSINT fundamentals, workflows, and tools.
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 5 }}>
+            {outlineSections.map((section, index) => (
+              <Grid item xs={12} sm={6} md={4} key={section.id}>
+                <Paper
+                  sx={{
+                    p: 2.5,
+                    height: "100%",
+                    borderRadius: 3,
+                    border: `1px solid ${alpha(section.color, section.status === "Complete" ? 0.3 : 0.15)}`,
+                    bgcolor: section.status === "Complete" ? alpha(section.color, 0.03) : "transparent",
+                    opacity: section.status === "Complete" ? 1 : 0.75,
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                      borderColor: section.color,
+                      opacity: 1,
+                      boxShadow: `0 8px 24px ${alpha(section.color, 0.15)}`,
+                    },
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 1.5,
+                          bgcolor: alpha(section.color, 0.1),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: section.color,
+                        }}
+                      >
+                        {section.icon}
+                      </Box>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                        {String(index + 1).padStart(2, "0")}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={section.status}
+                      size="small"
+                      icon={<CheckCircleIcon sx={{ fontSize: 14 }} />}
+                      sx={{
+                        fontSize: "0.65rem",
+                        height: 22,
+                        bgcolor: alpha("#10b981", 0.1),
+                        color: "#10b981",
+                        "& .MuiChip-icon": {
+                          color: "#10b981",
+                        },
+                      }}
+                    />
+                  </Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    {section.title}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+                    {section.description}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* ==================== PREREQUISITES ==================== */}
+          <Typography id="prerequisites" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Prerequisites
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Recommended background knowledge and habits that make OSINT work effective.
+          </Typography>
+
+          <Grid container spacing={3} sx={{ mb: 5 }}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
+                  Helpful to Have
+                </Typography>
+                <List dense>
+                  {[
+                    "Basic web and DNS concepts",
+                    "Comfort with search operators",
+                    "Note-taking and source tracking",
+                    "Patience for validation work",
+                    "Awareness of privacy and legal boundaries",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.3, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <CheckCircleIcon sx={{ fontSize: 14, color: "#10b981" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+                  Nice to Have
+                </Typography>
+                <List dense>
+                  {[
+                    "Basic networking fundamentals",
+                    "Python or Bash scripting",
+                    "Familiarity with breach data",
+                    "Understanding of web tech stacks",
+                    "Experience with DNS tooling",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.3, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <TipsAndUpdatesIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+                  We'll Teach You
+                </Typography>
+                <List dense>
+                  {[
+                    "A repeatable recon workflow",
+                    "Source validation strategies",
+                    "OpSec hygiene for OSINT",
+                    "Tooling for automation",
+                    "Reporting and documentation",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.3, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <SchoolIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          {/* ==================== FUNDAMENTALS ==================== */}
           <TabPanel value={tabValue} index={0}>
             <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#f97316", mb: 3 }}>
+              <Typography id="fundamentals" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
                 OSINT Fundamentals
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                Core definitions, recon phases, and the standard workflow.
               </Typography>
 
               <Alert severity="warning" sx={{ mb: 3 }}>
@@ -1283,11 +1994,14 @@ const OSINTReconPage: React.FC = () => {
             </Box>
           </TabPanel>
 
-          {/* Tab 1: Domain Recon */}
+          {/* ==================== DOMAIN RECON ==================== */}
           <TabPanel value={tabValue} index={1}>
             <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#f97316", mb: 3 }}>
+              <Typography id="domain-recon" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
                 Domain & Infrastructure Reconnaissance
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                Map domains, subdomains, and infrastructure to build an accurate attack surface.
               </Typography>
 
               <Alert severity="info" sx={{ mb: 3 }}>
@@ -1577,11 +2291,14 @@ curl "https://web.archive.org/cdx/search/cdx?url=target.com/robots.txt&output=te
             </Box>
           </TabPanel>
 
-          {/* Tab 2: People & Organizations */}
+          {/* ==================== PEOPLE & ORGS ==================== */}
           <TabPanel value={tabValue} index={2}>
             <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#f97316", mb: 3 }}>
+              <Typography id="people-orgs" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
                 People & Organization Intelligence
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                Identify people, roles, and relationships without direct contact.
               </Typography>
 
               <Alert severity="info" sx={{ mb: 3 }}>
@@ -1847,11 +2564,14 @@ h8mail -t emails.txt -o results.csv
             </Box>
           </TabPanel>
 
-          {/* Tab 3: Images & Metadata */}
+          {/* ==================== IMAGES & METADATA ==================== */}
           <TabPanel value={tabValue} index={3}>
             <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#f97316", mb: 3 }}>
+              <Typography id="images-metadata" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
                 Image & Metadata Analysis
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                Extract signals from media, documents, and historical context.
               </Typography>
 
               <Accordion defaultExpanded>
@@ -1998,11 +2718,14 @@ for f in *.pdf; do exiftool "$f" >> metadata.txt; done
             </Box>
           </TabPanel>
 
-          {/* Tab 4: Code & Repos */}
+          {/* ==================== CODE & REPOS ==================== */}
           <TabPanel value={tabValue} index={4}>
             <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#f97316", mb: 3 }}>
+              <Typography id="code-repos" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
                 Code Repository Intelligence
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                Mine code hosting platforms for configuration leaks and internal references.
               </Typography>
 
               <Accordion defaultExpanded>
@@ -2147,11 +2870,14 @@ git log --author="name@email.com"`}
             </Box>
           </TabPanel>
 
-          {/* Tab 5: Advanced OSINT */}
+          {/* ==================== ADVANCED OSINT ==================== */}
           <TabPanel value={tabValue} index={5}>
             <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#f97316", mb: 3 }}>
+              <Typography id="advanced-osint" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
                 Advanced OSINT Techniques
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                High-sensitivity sources, deeper validation, and operational safety.
               </Typography>
 
               <Accordion defaultExpanded>
@@ -2354,11 +3080,14 @@ theHarvester -d target.com -b all -f output
             </Box>
           </TabPanel>
 
-          {/* Tab 6: Tools */}
+          {/* ==================== TOOLS ==================== */}
           <TabPanel value={tabValue} index={6}>
             <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#f97316", mb: 3 }}>
+              <Typography id="tools" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
                 OSINT Tools Reference
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                A curated toolkit for discovery, automation, and validation.
               </Typography>
 
               <Alert severity="info" sx={{ mb: 3 }}>
@@ -2558,43 +3287,152 @@ echo "[*] Recon complete! Results in $OUTPUT/"`}
               </Accordion>
             </Box>
           </TabPanel>
-        </Paper>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            mt: 4,
-            p: 4,
-            borderRadius: 3,
-            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
+          {/* ==================== NEXT STEPS ==================== */}
+          <Typography id="next-steps" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Next Steps
           </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="OSINT and Reconnaissance Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Continue with adjacent topics that build on OSINT skills.
+          </Typography>
 
-        {/* Footer */}
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#f97316", color: "#f97316" }}
+          <Grid container spacing={2} sx={{ mb: 5 }}>
+            {[
+              { title: "Cyber Threat Intel", path: "/learn/cti", color: "#8b5cf6", description: "Turn OSINT into strategic intelligence" },
+              { title: "Threat Hunting", path: "/learn/threat-hunting", color: "#0ea5e9", description: "Apply intel to proactive defense" },
+              { title: "Scanning Fundamentals", path: "/learn/scanning", color: "#f97316", description: "Validate recon with active scanning" },
+              { title: "Nmap Guide", path: "/learn/nmap", color: "#22c55e", description: "Map services and live hosts" },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.title}>
+                <Paper
+                  onClick={() => navigate(item.path)}
+                  sx={{
+                    p: 2.5,
+                    textAlign: "center",
+                    cursor: "pointer",
+                    borderRadius: 3,
+                    border: `1px solid ${alpha(item.color, 0.2)}`,
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      transform: "translateY(-4px)",
+                      borderColor: item.color,
+                      boxShadow: `0 8px 24px ${alpha(item.color, 0.2)}`,
+                    },
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: item.color, mb: 0.5 }}>
+                    {item.title}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {item.description}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* Key Takeaways */}
+          <Paper
+            id="key-takeaways"
+            sx={{
+              p: 4,
+              mb: 5,
+              borderRadius: 3,
+              bgcolor: alpha("#10b981", 0.03),
+              border: `1px solid ${alpha("#10b981", 0.15)}`,
+              scrollMarginTop: 180,
+            }}
           >
-            Back to Learning Hub
-          </Button>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+              <TipsAndUpdatesIcon sx={{ color: "#10b981" }} />
+              Key Takeaways
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>
+                  Start Passive, Then Validate
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Build context from public sources, then confirm with targeted probes if authorized.
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>
+                  Document Every Source
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Track where each signal came from so findings are repeatable and defensible.
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>
+                  Protect Your OpSec
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Separate personas, reduce attribution, and follow legal boundaries at every step.
+                </Typography>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* ==================== QUIZ SECTION ==================== */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+            <Divider sx={{ flex: 1 }} />
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
+              TEST YOUR KNOWLEDGE
+            </Typography>
+            <Divider sx={{ flex: 1 }} />
+          </Box>
+
+          <Typography id="quiz" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Knowledge Quiz
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Test your OSINT and reconnaissance fundamentals with a quick randomized quiz.
+          </Typography>
+
+          <Paper
+            sx={{
+              mt: 2,
+              p: 4,
+              borderRadius: 3,
+              border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+            }}
+          >
+            <QuizSection
+              questions={quizQuestions}
+              accentColor={QUIZ_ACCENT_COLOR}
+              title="OSINT and Reconnaissance Knowledge Check"
+              description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+              questionsPerQuiz={QUIZ_QUESTION_COUNT}
+            />
+          </Paper>
+
+          {/* Footer Navigation */}
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+            <Button
+              variant="outlined"
+              size="large"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{
+                borderRadius: 2,
+                px: 4,
+                py: 1.5,
+                fontWeight: 600,
+                borderColor: alpha(accent, 0.3),
+                color: accent,
+                "&:hover": {
+                  borderColor: accent,
+                  bgcolor: alpha(accent, 0.05),
+                },
+              }}
+            >
+              Return to Learning Hub
+            </Button>
+          </Box>
         </Box>
-      </Container>
-    </Box>
+      </Box>
     </LearnPageLayout>
   );
 };

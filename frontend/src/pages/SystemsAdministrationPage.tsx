@@ -1647,9 +1647,75 @@ export default function SystemsAdministrationPage() {
           <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
             Most organizations use a mix of Windows and Linux. Being proficient in both dramatically increases your 
             value and job opportunities. Start with whichever is most relevant to your current or target job, 
-            then expand. The concepts (users, permissions, services, networking) transfer between platforms — 
+            then expand. The concepts (users, permissions, services, networking) transfer between platforms - 
             only the specific commands and tools differ.
           </Typography>
+        </Paper>
+
+        {/* Sysadmin Skill Stack */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6", display: "flex", alignItems: "center", gap: 1 }}>
+            <TipsAndUpdatesIcon /> Sysadmin Skill Stack
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Technical Foundation</Typography>
+              <List dense>
+                {[
+                  "Linux and Windows administration",
+                  "Networking fundamentals (DNS, DHCP, TCP/IP)",
+                  "Storage, backups, and data protection",
+                  "Security hardening and patching",
+                  "Scripting and automation basics",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Operational Discipline</Typography>
+              <List dense>
+                {[
+                  "Monitoring and alerting strategy",
+                  "Change management and approvals",
+                  "Incident response and RCA",
+                  "Documentation and runbooks",
+                  "Capacity planning and budgeting",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#22c55e" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>People and Business</Typography>
+              <List dense>
+                {[
+                  "Clear status updates under pressure",
+                  "Translate risk into business impact",
+                  "Vendor and contract coordination",
+                  "Prioritization across stakeholders",
+                  "On-call communication etiquette",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
         </Paper>
 
         {/* ==================== SECTION 2: SERVER HARDWARE FUNDAMENTALS ==================== */}
@@ -1807,6 +1873,53 @@ export default function SystemsAdministrationPage() {
           </Grid>
         </Paper>
 
+        {/* Sizing and Redundancy */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e", display: "flex", alignItems: "center", gap: 1 }}>
+            <TipsAndUpdatesIcon /> Sizing and Redundancy Planning
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Sizing Checklist</Typography>
+              <List dense>
+                {[
+                  "Establish CPU, memory, and disk baselines",
+                  "Measure peak vs average utilization",
+                  "Forecast growth for 12 to 24 months",
+                  "Validate storage IOPS and latency needs",
+                  "Plan network bandwidth for peak traffic",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#22c55e" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Redundancy Checklist</Typography>
+              <List dense>
+                {[
+                  "Dual power supplies on separate circuits",
+                  "RAID with hot spare or fast replacement",
+                  "Dual NICs with bonding or teaming",
+                  "Spare disks and standardized firmware",
+                  "Failover or clustering for critical workloads",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#22c55e" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
+
         {/* ==================== SECTION 3: SERVER OPERATING SYSTEMS ==================== */}
         <Typography id="operating-systems" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           💻 Server Operating Systems
@@ -1949,6 +2062,40 @@ export default function SystemsAdministrationPage() {
           </Grid>
         </Paper>
 
+        {/* Service Lifecycle Essentials */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e", display: "flex", alignItems: "center", gap: 1 }}>
+            <SettingsIcon /> Service Lifecycle Essentials
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Linux (systemd)</Typography>
+              <Paper sx={{ p: 1.5, bgcolor: "#1e1e1e", borderRadius: 1 }}>
+                <Typography variant="caption" sx={{ fontFamily: "monospace", color: "#9cdcfe" }}>
+                  systemctl status nginx<br/>
+                  systemctl restart nginx<br/>
+                  systemctl enable nginx<br/>
+                  journalctl -u nginx --since "1 hour ago"
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Windows Services</Typography>
+              <Paper sx={{ p: 1.5, bgcolor: "#1e1e1e", borderRadius: 1 }}>
+                <Typography variant="caption" sx={{ fontFamily: "monospace", color: "#9cdcfe" }}>
+                  Get-Service -Name W3SVC<br/>
+                  Restart-Service -Name W3SVC<br/>
+                  sc query W3SVC<br/>
+                  Get-EventLog -LogName System -Newest 5
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
+            Always document service ownership, dependencies, and a safe restart procedure before touching production.
+          </Typography>
+        </Paper>
+
         {/* ==================== SECTION 4: USER & GROUP MANAGEMENT ==================== */}
         <Typography id="user-management" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           👥 User & Group Management
@@ -2082,6 +2229,53 @@ export default function SystemsAdministrationPage() {
             </Paper>
           </Grid>
         </Grid>
+
+        {/* Identity Hygiene */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b", display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon /> Identity Hygiene and Service Accounts
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>User Lifecycle Practices</Typography>
+              <List dense>
+                {[
+                  "Joiner/mover/leaver process with approvals",
+                  "Quarterly access reviews for critical groups",
+                  "Group-based access rather than direct grants",
+                  "Disable stale accounts after inactivity",
+                  "Require MFA for privileged accounts",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Service Account Hygiene</Typography>
+              <List dense>
+                {[
+                  "Use non-interactive accounts with least privilege",
+                  "Separate accounts per service or application",
+                  "Rotate credentials and store in a vault",
+                  "Use managed identities where available",
+                  "Audit logon rights and usage regularly",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
 
         {/* ==================== SECTION 5: NETWORK SERVICES ==================== */}
         <Typography id="networking-services" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
@@ -2219,6 +2413,63 @@ export default function SystemsAdministrationPage() {
               </Paper>
             </Grid>
           </Grid>
+        </Paper>
+
+        {/* Subnetting and Troubleshooting */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#ef4444", 0.03), border: `1px solid ${alpha("#ef4444", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444", display: "flex", alignItems: "center", gap: 1 }}>
+            <NetworkCheckIcon /> Network Troubleshooting Quickstart
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Subnetting Quick Facts</Typography>
+              <List dense>
+                {[
+                  "CIDR /24 = 255.255.255.0 (254 hosts)",
+                  "CIDR /26 = 255.255.255.192 (62 hosts)",
+                  "CIDR /30 = 255.255.255.252 (2 hosts)",
+                  "Default gateway must be in the same subnet",
+                  "Reserve space for growth and VLAN separation",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#ef4444" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>First Response Checklist</Typography>
+              <List dense>
+                {[
+                  "Verify IP, mask, gateway, DNS settings",
+                  "Test local connectivity (ping gateway)",
+                  "Resolve DNS and test by IP vs hostname",
+                  "Check firewall rules and port access",
+                  "Trace route to identify network hop issues",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#ef4444" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+          <Paper sx={{ p: 1.5, mt: 2, bgcolor: "#1e1e1e", borderRadius: 1 }}>
+            <Typography variant="caption" sx={{ fontFamily: "monospace", color: "#9cdcfe" }}>
+              ipconfig /all&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Windows IP details<br/>
+              ip addr show&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Linux IP details<br/>
+              nslookup example.com&nbsp;&nbsp;# DNS lookup<br/>
+              ping 8.8.8.8&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Connectivity test<br/>
+              tracert example.com&nbsp;&nbsp;# Windows trace route<br/>
+              traceroute example.com&nbsp;# Linux trace route
+            </Typography>
+          </Paper>
         </Paper>
 
         {/* ==================== SECTION 6: STORAGE MANAGEMENT ==================== */}
@@ -2387,6 +2638,44 @@ export default function SystemsAdministrationPage() {
           </Paper>
         </Paper>
 
+        {/* Storage Performance and Protection */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#6366f1", 0.03), border: `1px solid ${alpha("#6366f1", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#6366f1", display: "flex", alignItems: "center", gap: 1 }}>
+            <StorageIcon /> Storage Performance and Protection
+          </Typography>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            {[
+              { name: "IOPS", desc: "Operations per second. Important for random read/write workloads.", color: "#3b82f6" },
+              { name: "Throughput", desc: "MB/s for large sequential reads and writes.", color: "#22c55e" },
+              { name: "Latency", desc: "Time per operation. High latency slows databases and VMs.", color: "#f59e0b" },
+            ].map((item) => (
+              <Grid item xs={12} md={4} key={item.name}>
+                <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha(item.color, 0.2)}`, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color }}>{item.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Snapshots vs Backups</Typography>
+          <List dense>
+            {[
+              "Snapshots are fast point-in-time copies on the same storage",
+              "Backups are separate copies for recovery and compliance",
+              "Snapshots are not a replacement for offsite backups",
+              "Use immutable storage or object lock when possible",
+              "Test restores regularly to validate recovery",
+            ].map((item) => (
+              <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 24 }}>
+                  <CheckCircleIcon sx={{ fontSize: 14, color: "#6366f1" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
         {/* ==================== SECTION 7: BACKUP & DISASTER RECOVERY ==================== */}
         <Typography id="backup-recovery" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           💾 Backup & Disaster Recovery
@@ -2517,6 +2806,53 @@ export default function SystemsAdministrationPage() {
             </Paper>
           </Grid>
         </Grid>
+
+        {/* Restore Testing */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#0ea5e9", display: "flex", alignItems: "center", gap: 1 }}>
+            <BackupIcon /> Restore Testing and Backup Security
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Restore Testing Checklist</Typography>
+              <List dense>
+                {[
+                  "Monthly sample restores for critical systems",
+                  "Quarterly full restore or DR rehearsal",
+                  "Validate RPO and RTO against SLAs",
+                  "Document results and update runbooks",
+                  "Automate backup verification where possible",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#0ea5e9" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Backup Security Practices</Typography>
+              <List dense>
+                {[
+                  "Separate backup admin accounts with MFA",
+                  "Use immutable storage or object lock",
+                  "Restrict network access to backup servers",
+                  "Monitor backup job failures and delays",
+                  "Store encryption keys securely and offsite",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#0ea5e9" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
 
         {/* ==================== SECTION 8: MONITORING & LOGGING ==================== */}
         <Typography id="monitoring-logging" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
@@ -2650,6 +2986,44 @@ export default function SystemsAdministrationPage() {
           </Grid>
         </Paper>
 
+        {/* Signals and Alert Hygiene */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#ec4899", 0.03), border: `1px solid ${alpha("#ec4899", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ec4899", display: "flex", alignItems: "center", gap: 1 }}>
+            <MonitorHeartIcon /> Signals and Alert Hygiene
+          </Typography>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            {[
+              { name: "Metrics", desc: "Numeric time series. Great for capacity and performance trends." },
+              { name: "Logs", desc: "Event records. Best for troubleshooting and security analysis." },
+              { name: "Traces", desc: "Request flows across services. Ideal for latency analysis." },
+            ].map((item) => (
+              <Grid item xs={12} md={4} key={item.name}>
+                <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#ec4899", 0.2)}`, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Alerting Best Practices</Typography>
+          <List dense>
+            {[
+              "Alert on user impact, not every metric spike",
+              "Use warning and critical thresholds with context",
+              "Route alerts to the right on-call owner",
+              "Suppress noisy alerts during maintenance windows",
+              "Review and tune alerts after incidents",
+            ].map((item) => (
+              <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 24 }}>
+                  <CheckCircleIcon sx={{ fontSize: 14, color: "#ec4899" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
         {/* ==================== SECTION 9: SECURITY & HARDENING ==================== */}
         <Typography id="security-hardening" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           🔒 Security & Hardening
@@ -2754,6 +3128,66 @@ export default function SystemsAdministrationPage() {
           </Grid>
         </Paper>
 
+        {/* Security Operations Routine */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#dc2626", 0.03), border: `1px solid ${alpha("#dc2626", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#dc2626", display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon /> Security Operations Routine
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Daily</Typography>
+              <List dense>
+                {[
+                  "Review critical security alerts",
+                  "Check for failed logins and anomalies",
+                  "Validate backup job success",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#dc2626" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Weekly</Typography>
+              <List dense>
+                {[
+                  "Review patch backlog and risk",
+                  "Validate endpoint protection status",
+                  "Audit privileged group membership",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#dc2626" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Monthly or Quarterly</Typography>
+              <List dense>
+                {[
+                  "Run vulnerability scans and track fixes",
+                  "Review firewall rules and clean up stale entries",
+                  "Test restore from backup for one critical system",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#dc2626" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
+
         {/* ==================== SECTION 10: AUTOMATION & SCRIPTING ==================== */}
         <Typography id="automation-scripting" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           🤖 Automation & Scripting
@@ -2843,6 +3277,53 @@ export default function SystemsAdministrationPage() {
             </Grid>
           ))}
         </Grid>
+
+        {/* Automation Playbook */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#10b981", 0.03), border: `1px solid ${alpha("#10b981", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#10b981", display: "flex", alignItems: "center", gap: 1 }}>
+            <AutorenewIcon /> Automation Starter Playbook
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>High-Value Quick Wins</Typography>
+              <List dense>
+                {[
+                  "User onboarding and offboarding scripts",
+                  "Standard server build and patching routine",
+                  "Backup validation and reporting",
+                  "Log rotation and cleanup tasks",
+                  "Daily health checks with summary output",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#10b981" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Safety Guardrails</Typography>
+              <List dense>
+                {[
+                  "Dry-run or audit mode before change",
+                  "Backups or snapshots before automation",
+                  "Idempotent scripts that can be re-run safely",
+                  "Logging and error handling with exit codes",
+                  "Code review and version control for scripts",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#10b981" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
 
         {/* ==================== SECTION 11: VIRTUALIZATION & CONTAINERS ==================== */}
         <Typography id="virtualization" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
@@ -2940,6 +3421,53 @@ export default function SystemsAdministrationPage() {
               docker-compose up -d&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Start multi-container app
             </Typography>
           </Paper>
+        </Paper>
+
+        {/* Virtualization Operations */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 1 }}>
+            <CloudIcon /> Virtualization Operations Checklist
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>VM Lifecycle Hygiene</Typography>
+              <List dense>
+                {[
+                  "Tag VMs with owner, purpose, and environment",
+                  "Remove old snapshots to avoid performance hits",
+                  "Standardize templates and golden images",
+                  "Right-size CPU and memory allocations",
+                  "Retire unused VMs to reclaim capacity",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#8b5cf6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Host and Cluster Care</Typography>
+              <List dense>
+                {[
+                  "Monitor CPU and memory oversubscription",
+                  "Balance workloads across hosts",
+                  "Validate storage multipath and redundancy",
+                  "Patch hypervisors in a rolling window",
+                  "Test failover and live migration regularly",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#8b5cf6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
         </Paper>
 
         {/* ==================== SECTION 12: WEB & APPLICATION SERVICES ==================== */}
@@ -3071,6 +3599,51 @@ export default function SystemsAdministrationPage() {
           </Grid>
         </Paper>
 
+        {/* HTTP and TLS Essentials */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#f97316", 0.03), border: `1px solid ${alpha("#f97316", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f97316", display: "flex", alignItems: "center", gap: 1 }}>
+            <LockIcon /> HTTP and TLS Essentials
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>HTTP Basics</Typography>
+              <List dense>
+                {[
+                  "Common methods: GET, POST, PUT, DELETE",
+                  "Status codes: 200 OK, 301 Redirect, 404 Not Found, 500 Server Error",
+                  "Headers control caching, auth, and content type",
+                  "Keep-alive reduces connection overhead",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#f97316" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>TLS Management</Typography>
+              <List dense>
+                {[
+                  "Automate renewals with ACME (Lets Encrypt)",
+                  "Use strong ciphers and disable legacy protocols",
+                  "Track certificate expiration in monitoring",
+                  "Store private keys securely and restrict access",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#f97316" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
+
         {/* ==================== SECTION 13: DATABASE ADMINISTRATION BASICS ==================== */}
         <Typography id="database-admin" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           🗃️ Database Administration Basics
@@ -3177,6 +3750,51 @@ export default function SystemsAdministrationPage() {
             </Grid>
           ))}
         </Grid>
+
+        {/* Database Maintenance Essentials */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6", display: "flex", alignItems: "center", gap: 1 }}>
+            <StorageIcon /> Database Maintenance Essentials
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Reliability and HA</Typography>
+              <List dense>
+                {[
+                  "Automated backups with regular restore tests",
+                  "Replication or clustering for failover",
+                  "Separate storage for data and logs when possible",
+                  "Monitor replication lag and disk growth",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Performance and Maintenance</Typography>
+              <List dense>
+                {[
+                  "Review slow query logs and add indexes",
+                  "Run vacuum/analyze or optimize tasks",
+                  "Capacity planning for storage and IOPS",
+                  "Least-privilege database users and roles",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
 
         {/* ==================== SECTION 14: DOCUMENTATION & PROCEDURES ==================== */}
         <Typography id="documentation" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
@@ -3301,6 +3919,28 @@ export default function SystemsAdministrationPage() {
           </Grid>
         </Paper>
 
+        {/* Runbook Template */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e", display: "flex", alignItems: "center", gap: 1 }}>
+            <DescriptionIcon /> Runbook Template
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            A runbook should be short, tested, and easy to follow under pressure. Use a consistent structure so anyone can execute it.
+          </Typography>
+          <Paper sx={{ p: 1.5, bgcolor: "#1e1e1e", borderRadius: 1 }}>
+            <Typography variant="caption" sx={{ fontFamily: "monospace", color: "#9cdcfe" }}>
+              Title: Restore Web Server from Backup<br/>
+              Purpose: What this runbook achieves<br/>
+              Scope: Systems and environments covered<br/>
+              Prereqs: Access, tools, approvals required<br/>
+              Steps: Numbered actions with expected output<br/>
+              Rollback: How to revert if something fails<br/>
+              Validation: How to confirm success<br/>
+              Escalation: Who to contact and when
+            </Typography>
+          </Paper>
+        </Paper>
+
         {/* ==================== SECTION 15: TROUBLESHOOTING METHODOLOGY ==================== */}
         <Typography id="troubleshooting" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           🔧 Troubleshooting Methodology
@@ -3391,6 +4031,45 @@ export default function SystemsAdministrationPage() {
             </Paper>
           </Grid>
         </Grid>
+
+        {/* Incident Response Timeline */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b", display: "flex", alignItems: "center", gap: 1 }}>
+            <BuildIcon /> Incident Response Timeline
+          </Typography>
+          <Grid container spacing={2}>
+            {[
+              { phase: "Detect", desc: "Alert triggers or user reports. Confirm impact and scope." },
+              { phase: "Triage", desc: "Prioritize severity, assign owner, and communicate status." },
+              { phase: "Mitigate", desc: "Stabilize service and reduce user impact quickly." },
+              { phase: "Recover", desc: "Restore normal operations and verify systems." },
+              { phase: "Postmortem", desc: "Document root cause and preventive actions." },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={4} key={item.phase}>
+                <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}`, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.phase}</Typography>
+                  <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>Postmortem Questions</Typography>
+          <List dense>
+            {[
+              "What was the customer impact and duration?",
+              "Which signals should have alerted us sooner?",
+              "What change or condition triggered the incident?",
+              "How do we prevent recurrence with automation or guardrails?",
+            ].map((item) => (
+              <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 24 }}>
+                  <CheckCircleIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
 
         {/* ==================== SECTION 16: CAREER PATHS & CERTIFICATIONS ==================== */}
         <Typography id="career-certs" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>

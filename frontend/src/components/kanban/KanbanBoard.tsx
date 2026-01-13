@@ -1,7 +1,8 @@
 /**
  * KanbanBoard - Main Kanban board component with drag-and-drop
+ * Features: Real-time WebSocket sync, Filtering & Search
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -21,6 +22,16 @@ import {
   ListItemText,
   Tooltip,
   Badge,
+  Collapse,
+  Chip,
+  Avatar,
+  AvatarGroup,
+  Select,
+  FormControl,
+  InputLabel,
+  InputAdornment,
+  Grid,
+  alpha,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -30,6 +41,12 @@ import {
   DragIndicator as DragIcon,
   Refresh as RefreshIcon,
   ViewKanban as KanbanIcon,
+  FilterList as FilterIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
+  Wifi as WifiIcon,
+  WifiOff as WifiOffIcon,
+  People as PeopleIcon,
 } from '@mui/icons-material';
 import {
   DragDropContext,
@@ -41,7 +58,9 @@ import {
 } from '@hello-pangea/dnd';
 import KanbanCard, { CardData } from './KanbanCard';
 import CardDetailDialog from './CardDetailDialog';
-import { kanbanApi, KanbanBoard as KanbanBoardType, KanbanColumn } from '../../api/client';
+import AddCardDialog, { NewCardData } from './AddCardDialog';
+import { kanbanApi, KanbanBoard as KanbanBoardType, KanbanColumn, KanbanCard as KanbanCardType } from '../../api/client';
+import { useKanbanWebSocket, KanbanUser } from '../../hooks/useKanbanWebSocket';
 
 export interface ColumnData extends KanbanColumn {}
 
@@ -64,21 +83,166 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, onFindingCl
   const [board, setBoard] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Dialogs
   const [addColumnOpen, setAddColumnOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   const [editColumnId, setEditColumnId] = useState<number | null>(null);
   const [editColumnName, setEditColumnName] = useState('');
-  
+
   // Card dialogs
   const [addCardColumnId, setAddCardColumnId] = useState<number | null>(null);
+  const [addCardDialogOpen, setAddCardDialogOpen] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [selectedCard, setSelectedCard] = useState<CardData | null>(null);
-  
+
   // Menu
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
   const [menuColumnId, setMenuColumnId] = useState<number | null>(null);
+
+  // Filter state
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
+  const [labelFilter, setLabelFilter] = useState<string>('all');
+  const [dueDateFilter, setDueDateFilter] = useState<string>('all');
+  const [showCompleted, setShowCompleted] = useState(true);
+
+  // WebSocket handlers
+  const handleCardCreated = useCallback((card: KanbanCardType, userId: number) => {
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        columns: prev.columns.map(col =>
+          col.id === card.column_id
+            ? { ...col, cards: [...col.cards, card] }
+            : col
+        ),
+      };
+    });
+  }, []);
+
+  const handleCardUpdated = useCallback((cardId: number, updates: Partial<KanbanCardType>, userId: number) => {
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        columns: prev.columns.map(col => ({
+          ...col,
+          cards: col.cards.map(card =>
+            card.id === cardId ? { ...card, ...updates } : card
+          ),
+        })),
+      };
+    });
+  }, []);
+
+  const handleCardMoved = useCallback((cardId: number, sourceColumnId: number, targetColumnId: number, position: number, userId: number) => {
+    setBoard(prev => {
+      if (!prev) return prev;
+
+      // Find the card
+      let movedCard: KanbanCardType | undefined;
+      const newColumns = prev.columns.map(col => {
+        if (col.id === sourceColumnId) {
+          const cardIndex = col.cards.findIndex(c => c.id === cardId);
+          if (cardIndex >= 0) {
+            movedCard = { ...col.cards[cardIndex], column_id: targetColumnId };
+            return { ...col, cards: col.cards.filter(c => c.id !== cardId) };
+          }
+        }
+        return col;
+      });
+
+      if (!movedCard) return prev;
+
+      // Insert into target column
+      return {
+        ...prev,
+        columns: newColumns.map(col => {
+          if (col.id === targetColumnId) {
+            const newCards = [...col.cards];
+            newCards.splice(position, 0, movedCard!);
+            return { ...col, cards: newCards };
+          }
+          return col;
+        }),
+      };
+    });
+  }, []);
+
+  const handleCardDeleted = useCallback((cardId: number, userId: number) => {
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        columns: prev.columns.map(col => ({
+          ...col,
+          cards: col.cards.filter(card => card.id !== cardId),
+        })),
+      };
+    });
+  }, []);
+
+  const handleColumnCreated = useCallback((column: KanbanColumn, userId: number) => {
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        columns: [...prev.columns, { ...column, cards: column.cards || [] }],
+      };
+    });
+  }, []);
+
+  const handleColumnUpdated = useCallback((columnId: number, updates: Partial<KanbanColumn>, userId: number) => {
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        columns: prev.columns.map(col =>
+          col.id === columnId ? { ...col, ...updates } : col
+        ),
+      };
+    });
+  }, []);
+
+  const handleColumnDeleted = useCallback((columnId: number, userId: number) => {
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        columns: prev.columns.filter(col => col.id !== columnId),
+      };
+    });
+  }, []);
+
+  const handleColumnsReordered = useCallback((columnIds: number[], userId: number) => {
+    setBoard(prev => {
+      if (!prev) return prev;
+      const columnMap = new Map(prev.columns.map(col => [col.id, col]));
+      const reorderedColumns = columnIds
+        .map(id => columnMap.get(id))
+        .filter((col): col is KanbanColumn => col !== undefined)
+        .map((col, idx) => ({ ...col, position: idx }));
+      return { ...prev, columns: reorderedColumns };
+    });
+  }, []);
+
+  // WebSocket hook
+  const { status: wsStatus, activeUsers } = useKanbanWebSocket({
+    boardId: board?.id || 0,
+    enabled: !!board?.id,
+    onCardCreated: handleCardCreated,
+    onCardUpdated: handleCardUpdated,
+    onCardMoved: handleCardMoved,
+    onCardDeleted: handleCardDeleted,
+    onColumnCreated: handleColumnCreated,
+    onColumnUpdated: handleColumnUpdated,
+    onColumnDeleted: handleColumnDeleted,
+    onColumnsReordered: handleColumnsReordered,
+  });
   
   // Fetch board data
   const fetchBoard = useCallback(async () => {
@@ -98,7 +262,121 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, onFindingCl
   useEffect(() => {
     fetchBoard();
   }, [fetchBoard]);
-  
+
+  // Compute filter options from cards
+  const filterOptions = useMemo(() => {
+    if (!board) return { priorities: [], labels: [], assignees: [] };
+
+    const allCards = board.columns.flatMap(c => c.cards);
+    const priorities = [...new Set(allCards.map(c => c.priority).filter(Boolean))] as string[];
+    const labels = [...new Set(allCards.flatMap(c => c.labels?.map(l => l.name) || []))];
+    const assigneeMap = new Map<number, { user_id: number; username: string }>();
+    allCards.forEach(card => {
+      card.assignees?.forEach(a => {
+        if (!assigneeMap.has(a.user_id)) {
+          assigneeMap.set(a.user_id, { user_id: a.user_id, username: a.username });
+        }
+      });
+    });
+
+    return {
+      priorities,
+      labels,
+      assignees: Array.from(assigneeMap.values()),
+    };
+  }, [board]);
+
+  // Apply filters to columns
+  const filteredColumns = useMemo(() => {
+    if (!board) return [];
+
+    return board.columns.map(column => ({
+      ...column,
+      cards: column.cards.filter(card => {
+        // Text search (title, description, labels)
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          const matchesTitle = card.title.toLowerCase().includes(query);
+          const matchesDesc = card.description?.toLowerCase().includes(query);
+          const matchesLabels = card.labels?.some(l => l.name.toLowerCase().includes(query));
+          if (!matchesTitle && !matchesDesc && !matchesLabels) {
+            return false;
+          }
+        }
+
+        // Priority filter
+        if (priorityFilter !== 'all' && card.priority !== priorityFilter) {
+          return false;
+        }
+
+        // Assignee filter
+        if (assigneeFilter !== 'all') {
+          const assigneeId = parseInt(assigneeFilter);
+          if (!card.assignee_ids?.includes(assigneeId)) {
+            return false;
+          }
+        }
+
+        // Label filter
+        if (labelFilter !== 'all') {
+          if (!card.labels?.some(l => l.name === labelFilter)) {
+            return false;
+          }
+        }
+
+        // Due date filter
+        if (dueDateFilter !== 'all') {
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+          if (dueDateFilter === 'overdue') {
+            if (!card.due_date || new Date(card.due_date) >= today) return false;
+          } else if (dueDateFilter === 'today') {
+            if (!card.due_date) return false;
+            const dueDate = new Date(card.due_date);
+            if (dueDate < today || dueDate >= new Date(today.getTime() + 24 * 60 * 60 * 1000)) return false;
+          } else if (dueDateFilter === 'week') {
+            if (!card.due_date) return false;
+            const dueDate = new Date(card.due_date);
+            if (dueDate < today || dueDate > weekFromNow) return false;
+          } else if (dueDateFilter === 'none') {
+            if (card.due_date) return false;
+          }
+        }
+
+        // Completed filter
+        if (!showCompleted && card.completed_at) {
+          return false;
+        }
+
+        return true;
+      }),
+    }));
+  }, [board, searchQuery, priorityFilter, assigneeFilter, labelFilter, dueDateFilter, showCompleted]);
+
+  // Count active filters
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (searchQuery) count++;
+    if (priorityFilter !== 'all') count++;
+    if (assigneeFilter !== 'all') count++;
+    if (labelFilter !== 'all') count++;
+    if (dueDateFilter !== 'all') count++;
+    if (!showCompleted) count++;
+    return count;
+  }, [searchQuery, priorityFilter, assigneeFilter, labelFilter, dueDateFilter, showCompleted]);
+
+  // Clear all filters
+  const clearFilters = useCallback(() => {
+    setSearchQuery('');
+    setPriorityFilter('all');
+    setAssigneeFilter('all');
+    setLabelFilter('all');
+    setDueDateFilter('all');
+    setShowCompleted(true);
+  }, []);
+
   // Drag and drop handler
   const handleDragEnd = async (result: DropResult) => {
     if (!result.destination || !board) return;
@@ -228,6 +506,27 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, onFindingCl
     }
   };
   
+  const handleAddCardWithDetails = async (cardData: NewCardData) => {
+    if (!addCardColumnId) return;
+    
+    try {
+      await kanbanApi.createCard(addCardColumnId, {
+        title: cardData.title,
+        description: cardData.description,
+        priority: cardData.priority as 'low' | 'medium' | 'high' | 'critical' | undefined,
+        labels: cardData.labels,
+        due_date: cardData.due_date,
+        assignee_ids: cardData.assignee_ids,
+        color: cardData.color,
+      });
+      setAddCardDialogOpen(false);
+      setAddCardColumnId(null);
+      fetchBoard();
+    } catch (err) {
+      console.error('Failed to add card:', err);
+    }
+  };
+  
   const handleCardClick = (card: CardData) => {
     setSelectedCard(card);
   };
@@ -277,6 +576,50 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, onFindingCl
         <Typography variant="h6" sx={{ flexGrow: 1 }}>
           {board.name}
         </Typography>
+
+        {/* Connection Status */}
+        <Tooltip title={wsStatus === 'connected' ? 'Real-time sync active' : 'Connecting...'}>
+          <Chip
+            icon={wsStatus === 'connected' ? <WifiIcon /> : <WifiOffIcon />}
+            label={wsStatus === 'connected' ? 'Live' : 'Offline'}
+            size="small"
+            color={wsStatus === 'connected' ? 'success' : 'default'}
+            variant="outlined"
+          />
+        </Tooltip>
+
+        {/* Active Users */}
+        {activeUsers.length > 0 && (
+          <Tooltip title={`${activeUsers.length} user${activeUsers.length > 1 ? 's' : ''} viewing: ${activeUsers.map(u => u.username).join(', ')}`}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <PeopleIcon fontSize="small" color="action" />
+              <AvatarGroup max={3} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.75rem' } }}>
+                {activeUsers.map(user => (
+                  <Avatar
+                    key={user.user_id}
+                    sx={{ bgcolor: user.color, width: 24, height: 24 }}
+                  >
+                    {user.username.charAt(0).toUpperCase()}
+                  </Avatar>
+                ))}
+              </AvatarGroup>
+            </Box>
+          </Tooltip>
+        )}
+
+        {/* Filter Toggle */}
+        <Tooltip title="Filter cards">
+          <Badge badgeContent={activeFilterCount} color="primary">
+            <IconButton
+              onClick={() => setFiltersExpanded(!filtersExpanded)}
+              size="small"
+              color={filtersExpanded ? 'primary' : 'default'}
+            >
+              <FilterIcon />
+            </IconButton>
+          </Badge>
+        </Tooltip>
+
         <Tooltip title="Refresh board">
           <IconButton onClick={fetchBoard} size="small">
             <RefreshIcon />
@@ -291,7 +634,134 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, onFindingCl
           Add Column
         </Button>
       </Box>
-      
+
+      {/* Filter Panel */}
+      <Collapse in={filtersExpanded}>
+        <Paper sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
+          <Grid container spacing={2} alignItems="center">
+            {/* Search */}
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Search cards..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchQuery && (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setSearchQuery('')}>
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+
+            {/* Priority Filter */}
+            <Grid item xs={6} sm={3} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Priority</InputLabel>
+                <Select
+                  value={priorityFilter}
+                  label="Priority"
+                  onChange={(e) => setPriorityFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  {filterOptions.priorities.map(p => (
+                    <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Assignee Filter */}
+            <Grid item xs={6} sm={3} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Assignee</InputLabel>
+                <Select
+                  value={assigneeFilter}
+                  label="Assignee"
+                  onChange={(e) => setAssigneeFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  {filterOptions.assignees.map(a => (
+                    <MenuItem key={a.user_id} value={String(a.user_id)}>{a.username}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Label Filter */}
+            <Grid item xs={6} sm={3} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Label</InputLabel>
+                <Select
+                  value={labelFilter}
+                  label="Label"
+                  onChange={(e) => setLabelFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  {filterOptions.labels.map(l => (
+                    <MenuItem key={l} value={l}>{l}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Due Date Filter */}
+            <Grid item xs={6} sm={3} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Due Date</InputLabel>
+                <Select
+                  value={dueDateFilter}
+                  label="Due Date"
+                  onChange={(e) => setDueDateFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="overdue">Overdue</MenuItem>
+                  <MenuItem value="today">Today</MenuItem>
+                  <MenuItem value="week">This Week</MenuItem>
+                  <MenuItem value="none">No Due Date</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Show Completed Toggle */}
+            <Grid item xs={6} sm={3} md={1}>
+              <Tooltip title={showCompleted ? 'Hide completed cards' : 'Show completed cards'}>
+                <Chip
+                  label="Done"
+                  onClick={() => setShowCompleted(!showCompleted)}
+                  color={showCompleted ? 'default' : 'primary'}
+                  variant={showCompleted ? 'outlined' : 'filled'}
+                  size="small"
+                />
+              </Tooltip>
+            </Grid>
+
+            {/* Clear Filters */}
+            {activeFilterCount > 0 && (
+              <Grid item>
+                <Button
+                  size="small"
+                  startIcon={<ClearIcon />}
+                  onClick={clearFilters}
+                >
+                  Clear ({activeFilterCount})
+                </Button>
+              </Grid>
+            )}
+          </Grid>
+        </Paper>
+      </Collapse>
+
       {/* Kanban Columns */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="board" direction="horizontal" type="COLUMN">
@@ -308,7 +778,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, onFindingCl
                 pb: 2,
               }}
             >
-              {board.columns.map((column, index) => (
+              {filteredColumns.map((column, index) => (
                 <Draggable key={column.id} draggableId={`column-${column.id}`} index={index}>
                   {(provided: DraggableProvided) => (
                     <Paper
@@ -410,48 +880,17 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, onFindingCl
                       
                       {/* Add Card Button */}
                       <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider' }}>
-                        {addCardColumnId === column.id ? (
-                          <Box>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              placeholder="Enter card title"
-                              value={newCardTitle}
-                              onChange={(e) => setNewCardTitle(e.target.value)}
-                              onKeyPress={(e) => e.key === 'Enter' && handleAddCard()}
-                              autoFocus
-                              sx={{ mb: 1 }}
-                            />
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              <Button
-                                variant="contained"
-                                size="small"
-                                onClick={handleAddCard}
-                                disabled={!newCardTitle.trim()}
-                              >
-                                Add
-                              </Button>
-                              <Button
-                                size="small"
-                                onClick={() => {
-                                  setAddCardColumnId(null);
-                                  setNewCardTitle('');
-                                }}
-                              >
-                                Cancel
-                              </Button>
-                            </Box>
-                          </Box>
-                        ) : (
-                          <Button
-                            fullWidth
-                            startIcon={<AddIcon />}
-                            onClick={() => setAddCardColumnId(column.id)}
-                            sx={{ justifyContent: 'flex-start', color: 'text.secondary' }}
-                          >
-                            Add card
-                          </Button>
-                        )}
+                        <Button
+                          fullWidth
+                          startIcon={<AddIcon />}
+                          onClick={() => {
+                            setAddCardColumnId(column.id);
+                            setAddCardDialogOpen(true);
+                          }}
+                          sx={{ justifyContent: 'flex-start', color: 'text.secondary' }}
+                        >
+                          Add card
+                        </Button>
                       </Box>
                     </Paper>
                   )}
@@ -539,10 +978,26 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, onFindingCl
           open={true}
           card={selectedCard}
           columns={board.columns}
+          projectId={projectId}
           onClose={() => setSelectedCard(null)}
           onUpdate={handleCardUpdate}
           onDelete={() => handleCardDelete(selectedCard.id)}
           onFindingClick={onFindingClick}
+        />
+      )}
+      
+      {/* Add Card Dialog */}
+      {addCardDialogOpen && addCardColumnId && board && (
+        <AddCardDialog
+          open={addCardDialogOpen}
+          columnId={addCardColumnId}
+          columnName={board.columns.find(c => c.id === addCardColumnId)?.name || ''}
+          projectId={projectId}
+          onClose={() => {
+            setAddCardDialogOpen(false);
+            setAddCardColumnId(null);
+          }}
+          onAdd={handleAddCardWithDetails}
         />
       )}
     </Box>

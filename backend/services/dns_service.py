@@ -7,15 +7,24 @@ Provides DNS enumeration capabilities including:
 - Zone transfer attempts (AXFR)
 - Reverse DNS lookups
 - WHOIS integration
-- DNS security analysis (DNSSEC, SPF, DMARC, DKIM)
+- DNS security analysis (DNSSEC, SPF, DMARC, DKIM, BIMI)
+- Subdomain takeover detection
+- Cloud provider detection (AWS, Azure, GCP, Cloudflare)
+- Dangling CNAME detection
+- Wildcard DNS detection
+- ASN/BGP information lookup
+- Certificate Transparency log search
 """
+
+from __future__ import annotations
 
 import asyncio
 import socket
 import logging
 import re
+import json
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Set
 from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
@@ -132,9 +141,71 @@ class SecurityAnalysis:
     has_caa: bool = False
     caa_records: List[str] = field(default_factory=list)
     
+    # BIMI (Brand Indicators for Message Identification)
+    has_bimi: bool = False
+    bimi_record: Optional[str] = None
+    
+    # MTA-STS (Mail Transfer Agent Strict Transport Security)
+    has_mta_sts: bool = False
+    mta_sts_record: Optional[str] = None
+    
     mail_security_score: int = 0  # 0-100
     overall_issues: List[str] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class SubdomainTakeoverRisk:
+    """Subdomain takeover vulnerability information."""
+    subdomain: str
+    cname_target: str
+    provider: str
+    risk_level: str  # critical, high, medium, low
+    reason: str
+    is_vulnerable: bool
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class CloudProviderInfo:
+    """Cloud provider detection result."""
+    ip_or_domain: str
+    provider: str  # aws, azure, gcp, cloudflare, akamai, fastly, etc.
+    service: Optional[str] = None  # S3, CloudFront, API Gateway, etc.
+    region: Optional[str] = None
+    is_cdn: bool = False
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ASNInfo:
+    """ASN/BGP information for an IP."""
+    ip_address: str
+    asn: Optional[str] = None
+    asn_name: Optional[str] = None
+    organization: Optional[str] = None
+    country: Optional[str] = None
+    network_range: Optional[str] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class CTLogEntry:
+    """Certificate Transparency log entry."""
+    common_name: str
+    issuer: str
+    not_before: str
+    not_after: str
+    san_names: List[str] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -177,6 +248,33 @@ class DNSReconResult:
     # AI analysis
     ai_analysis: Optional[str] = None
     
+    # ===== NEW ADVANCED RECONNAISSANCE FIELDS =====
+    
+    # Subdomain takeover vulnerabilities
+    takeover_risks: List[SubdomainTakeoverRisk] = field(default_factory=list)
+    
+    # Cloud provider detection
+    cloud_providers: List[CloudProviderInfo] = field(default_factory=list)
+    
+    # ASN/BGP information
+    asn_info: List[ASNInfo] = field(default_factory=list)
+    
+    # Certificate Transparency log entries
+    ct_logs: List[CTLogEntry] = field(default_factory=list)
+    
+    # Wildcard detection
+    has_wildcard: bool = False
+    wildcard_ips: List[str] = field(default_factory=list)
+    
+    # Dangling CNAMEs (potential takeover)
+    dangling_cnames: List[Dict[str, str]] = field(default_factory=list)
+    
+    # Geographic distribution of IPs
+    geo_distribution: Dict[str, List[str]] = field(default_factory=dict)
+    
+    # Infrastructure summary
+    infrastructure_summary: Dict[str, Any] = field(default_factory=dict)
+    
     def to_dict(self) -> Dict[str, Any]:
         result = {
             "domain": self.domain,
@@ -194,6 +292,16 @@ class DNSReconResult:
             "total_subdomains": self.total_subdomains,
             "unique_ips": self.unique_ips,
             "ai_analysis": self.ai_analysis,
+            # New fields
+            "takeover_risks": [t.to_dict() for t in self.takeover_risks],
+            "cloud_providers": [c.to_dict() for c in self.cloud_providers],
+            "asn_info": [a.to_dict() for a in self.asn_info],
+            "ct_logs": [c.to_dict() for c in self.ct_logs],
+            "has_wildcard": self.has_wildcard,
+            "wildcard_ips": self.wildcard_ips,
+            "dangling_cnames": self.dangling_cnames,
+            "geo_distribution": self.geo_distribution,
+            "infrastructure_summary": self.infrastructure_summary,
         }
         return result
 
@@ -410,6 +518,388 @@ def _check_subdomain(domain: str, subdomain: str, timeout: float = 3.0) -> Optio
             return None
 
 
+# ============================================================================
+# ADVANCED RECONNAISSANCE FUNCTIONS
+# ============================================================================
+
+# Known vulnerable CNAME patterns for subdomain takeover
+TAKEOVER_SIGNATURES = {
+    # Cloud Platforms
+    "s3.amazonaws.com": ("AWS S3", "The bucket does not exist|NoSuchBucket"),
+    "cloudfront.net": ("AWS CloudFront", "ERROR: The request could not be satisfied"),
+    "elasticbeanstalk.com": ("AWS Elastic Beanstalk", "404 Not Found"),
+    "azurewebsites.net": ("Azure Web Apps", "404 Web Site not found"),
+    "cloudapp.azure.com": ("Azure Cloud Services", ""),
+    "blob.core.windows.net": ("Azure Blob Storage", "BlobNotFound|ContainerNotFound"),
+    "azure-api.net": ("Azure API Management", ""),
+    "azureedge.net": ("Azure CDN", ""),
+    "trafficmanager.net": ("Azure Traffic Manager", ""),
+    "cloudapp.net": ("Azure", ""),
+    "storage.googleapis.com": ("Google Cloud Storage", "NoSuchBucket"),
+    "appspot.com": ("Google App Engine", ""),
+    "firebaseapp.com": ("Firebase", ""),
+    "web.app": ("Firebase Hosting", ""),
+    # CDNs
+    "fastly.net": ("Fastly", "Fastly error: unknown domain"),
+    "global.ssl.fastly.net": ("Fastly", "Fastly error: unknown domain"),
+    "herokuapp.com": ("Heroku", "no-such-app.herokuapp.com|There is no app configured"),
+    "herokudns.com": ("Heroku", ""),
+    "pantheonsite.io": ("Pantheon", "404 error unknown site"),
+    "netlify.app": ("Netlify", "Not Found"),
+    "netlify.com": ("Netlify", ""),
+    "vercel.app": ("Vercel", ""),
+    "now.sh": ("Vercel", ""),
+    "surge.sh": ("Surge.sh", "project not found"),
+    "bitbucket.io": ("Bitbucket", "Repository not found"),
+    "github.io": ("GitHub Pages", "There isn't a GitHub Pages site here"),
+    "gitlab.io": ("GitLab Pages", ""),
+    "ghost.io": ("Ghost", ""),
+    "shopify.com": ("Shopify", "Sorry, this shop is currently unavailable"),
+    "myshopify.com": ("Shopify", ""),
+    "zendesk.com": ("Zendesk", "Help Center Closed"),
+    "readme.io": ("ReadMe.io", "Project doesnt exist"),
+    "freshdesk.com": ("Freshdesk", ""),
+    "statuspage.io": ("Statuspage", ""),
+    "uservoice.com": ("UserVoice", "This UserVoice subdomain is currently available"),
+    "helpjuice.com": ("HelpJuice", "We could not find what you"),
+    "helpscoutdocs.com": ("HelpScout", "No settings were found for this company"),
+    "cargo.site": ("Cargo", ""),
+    "feedpress.me": ("FeedPress", ""),
+    "unbounce.com": ("Unbounce", "The requested URL was not found"),
+    "unbouncepages.com": ("Unbounce", ""),
+    "tictail.com": ("Tictail", ""),
+    "cargocollective.com": ("Cargo Collective", ""),
+    "launchrock.com": ("LaunchRock", ""),
+    "teamwork.com": ("Teamwork", ""),
+    "wpengine.com": ("WP Engine", ""),
+    "squarespace.com": ("Squarespace", ""),
+}
+
+# Cloud provider IP ranges and CNAME patterns
+CLOUD_PROVIDER_PATTERNS = {
+    # AWS patterns
+    "amazonaws.com": "aws",
+    "aws.amazon.com": "aws",
+    "cloudfront.net": "aws",
+    "elasticbeanstalk": "aws",
+    "elb.amazonaws.com": "aws",
+    "s3.amazonaws.com": "aws",
+    "execute-api": "aws",
+    "apigateway": "aws",
+    # Azure patterns
+    "azure": "azure",
+    "microsoft.com": "azure",
+    "windows.net": "azure",
+    "azurewebsites.net": "azure",
+    "azureedge.net": "azure",
+    "cloudapp.azure.com": "azure",
+    # GCP patterns
+    "google": "gcp",
+    "googleapis.com": "gcp",
+    "appspot.com": "gcp",
+    "cloudfunctions.net": "gcp",
+    "run.app": "gcp",
+    "firebaseapp.com": "gcp",
+    # Cloudflare
+    "cloudflare": "cloudflare",
+    # Akamai
+    "akamai": "akamai",
+    "akamaiedge": "akamai",
+    "akamaitechnologies": "akamai",
+    # Fastly
+    "fastly": "fastly",
+    # DigitalOcean
+    "digitalocean": "digitalocean",
+    # Vercel
+    "vercel": "vercel",
+    "now.sh": "vercel",
+    # Netlify
+    "netlify": "netlify",
+    # Heroku
+    "heroku": "heroku",
+}
+
+# Service detection patterns
+SERVICE_PATTERNS = {
+    "s3": ("AWS", "S3 Bucket"),
+    "cloudfront": ("AWS", "CloudFront CDN"),
+    "elb": ("AWS", "Elastic Load Balancer"),
+    "execute-api": ("AWS", "API Gateway"),
+    "elasticbeanstalk": ("AWS", "Elastic Beanstalk"),
+    "rds": ("AWS", "RDS Database"),
+    "lambda": ("AWS", "Lambda Function"),
+    "azurewebsites": ("Azure", "App Service"),
+    "blob.core": ("Azure", "Blob Storage"),
+    "azureedge": ("Azure", "CDN"),
+    "trafficmanager": ("Azure", "Traffic Manager"),
+    "firebaseapp": ("GCP", "Firebase Hosting"),
+    "cloudfunctions": ("GCP", "Cloud Functions"),
+    "run.app": ("GCP", "Cloud Run"),
+    "appspot": ("GCP", "App Engine"),
+}
+
+
+def _detect_cloud_provider(domain_or_ip: str, cname: Optional[str] = None) -> Optional[CloudProviderInfo]:
+    """Detect cloud provider from domain/CNAME pattern."""
+    check_value = (cname or domain_or_ip).lower()
+    
+    provider = None
+    service = None
+    is_cdn = False
+    
+    # Check against patterns
+    for pattern, prov in CLOUD_PROVIDER_PATTERNS.items():
+        if pattern in check_value:
+            provider = prov
+            break
+    
+    if not provider:
+        return None
+    
+    # Detect specific service
+    for svc_pattern, (prov, svc_name) in SERVICE_PATTERNS.items():
+        if svc_pattern in check_value:
+            service = svc_name
+            break
+    
+    # Check if CDN
+    cdn_indicators = ["cloudfront", "azureedge", "akamai", "fastly", "cloudflare", "cdn"]
+    is_cdn = any(ind in check_value for ind in cdn_indicators)
+    
+    # Try to extract region
+    region = None
+    region_patterns = [
+        r'\.([a-z]{2}-[a-z]+-\d)\.', # AWS region pattern
+        r'\.([a-z]+\d?)\.cloudapp\.azure\.com',  # Azure region
+    ]
+    for pattern in region_patterns:
+        match = re.search(pattern, check_value)
+        if match:
+            region = match.group(1)
+            break
+    
+    return CloudProviderInfo(
+        ip_or_domain=domain_or_ip,
+        provider=provider,
+        service=service,
+        region=region,
+        is_cdn=is_cdn,
+    )
+
+
+def _check_subdomain_takeover(subdomain: str, cname: str) -> Optional[SubdomainTakeoverRisk]:
+    """Check if a subdomain with CNAME is vulnerable to takeover."""
+    if not cname:
+        return None
+    
+    cname_lower = cname.lower()
+    
+    for pattern, (provider, error_sig) in TAKEOVER_SIGNATURES.items():
+        if pattern in cname_lower:
+            # Check if the CNAME target resolves
+            try:
+                socket.gethostbyname(cname)
+                # Resolved - might still be vulnerable if it returns specific error
+                is_vulnerable = False
+                reason = f"CNAME points to {provider} ({cname})"
+                risk_level = "low"
+            except socket.gaierror:
+                # NXDOMAIN - high risk of takeover
+                is_vulnerable = True
+                reason = f"CNAME points to non-existent {provider} resource ({cname})"
+                risk_level = "critical"
+            
+            return SubdomainTakeoverRisk(
+                subdomain=subdomain,
+                cname_target=cname,
+                provider=provider,
+                risk_level=risk_level,
+                reason=reason,
+                is_vulnerable=is_vulnerable,
+            )
+    
+    return None
+
+
+def _detect_wildcard_dns(domain: str) -> Tuple[bool, List[str]]:
+    """Detect if domain has wildcard DNS configured."""
+    import random
+    import string
+    
+    # Generate random subdomain that shouldn't exist
+    random_sub = ''.join(random.choices(string.ascii_lowercase, k=16))
+    test_domain = f"{random_sub}.{domain}"
+    
+    try:
+        import dns.resolver
+        resolver = dns.resolver.Resolver()
+        resolver.timeout = 5
+        
+        try:
+            answers = resolver.resolve(test_domain, "A")
+            # If random subdomain resolves, wildcard is enabled
+            wildcard_ips = [str(rdata) for rdata in answers]
+            return True, wildcard_ips
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+            return False, []
+    except ImportError:
+        try:
+            ips = socket.gethostbyname_ex(test_domain)[2]
+            return True, ips
+        except socket.gaierror:
+            return False, []
+    except Exception:
+        return False, []
+
+
+def _check_dangling_cname(subdomain: str, cname: str) -> Optional[Dict[str, str]]:
+    """Check if CNAME target doesn't resolve (dangling)."""
+    if not cname:
+        return None
+    
+    try:
+        socket.gethostbyname(cname)
+        return None  # CNAME resolves, not dangling
+    except socket.gaierror:
+        return {
+            "subdomain": subdomain,
+            "cname": cname,
+            "status": "dangling",
+            "risk": "Potential subdomain takeover vulnerability",
+        }
+
+
+async def _fetch_ct_logs(domain: str, max_entries: int = 50) -> List[CTLogEntry]:
+    """Fetch Certificate Transparency logs for domain discovery."""
+    import urllib.request
+    import urllib.error
+    
+    ct_entries = []
+    
+    try:
+        # Use crt.sh API for CT log search
+        url = f"https://crt.sh/?q=%.{domain}&output=json"
+        
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "VRAgent DNS Recon/1.0"
+        })
+        
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode())
+            
+            seen_names = set()
+            for entry in data[:max_entries * 2]:  # Get more, then dedupe
+                common_name = entry.get("common_name", "")
+                if common_name in seen_names:
+                    continue
+                seen_names.add(common_name)
+                
+                # Parse SAN if available
+                san_names = []
+                name_value = entry.get("name_value", "")
+                if name_value:
+                    san_names = [n.strip() for n in name_value.split("\n") if n.strip()]
+                
+                ct_entries.append(CTLogEntry(
+                    common_name=common_name,
+                    issuer=entry.get("issuer_name", "Unknown"),
+                    not_before=entry.get("not_before", ""),
+                    not_after=entry.get("not_after", ""),
+                    san_names=san_names[:10],  # Limit SAN names
+                ))
+                
+                if len(ct_entries) >= max_entries:
+                    break
+                    
+    except Exception as e:
+        logger.debug(f"CT log fetch failed for {domain}: {e}")
+    
+    return ct_entries
+
+
+def _lookup_asn_info(ip: str) -> Optional[ASNInfo]:
+    """Look up ASN information for an IP address using Team Cymru DNS."""
+    try:
+        import dns.resolver
+        import dns.reversename
+        
+        # Convert IP to reverse format for Team Cymru query
+        ip_obj = ipaddress.ip_address(ip)
+        if ip_obj.version == 4:
+            reversed_ip = '.'.join(reversed(ip.split('.')))
+            query = f"{reversed_ip}.origin.asn.cymru.com"
+        else:
+            # IPv6 - more complex reversal
+            return None  # Skip IPv6 for now
+        
+        resolver = dns.resolver.Resolver()
+        resolver.timeout = 5
+        
+        try:
+            answers = resolver.resolve(query, "TXT")
+            for rdata in answers:
+                txt = str(rdata).strip('"')
+                # Format: ASN | IP/CIDR | CC | Registry | Allocated
+                parts = [p.strip() for p in txt.split("|")]
+                if len(parts) >= 3:
+                    asn = parts[0]
+                    cidr = parts[1] if len(parts) > 1 else None
+                    country = parts[2] if len(parts) > 2 else None
+                    
+                    # Get ASN name
+                    asn_name = None
+                    try:
+                        asn_query = f"AS{asn}.asn.cymru.com"
+                        asn_answers = resolver.resolve(asn_query, "TXT")
+                        for asn_rdata in asn_answers:
+                            asn_txt = str(asn_rdata).strip('"')
+                            asn_parts = asn_txt.split("|")
+                            if len(asn_parts) >= 5:
+                                asn_name = asn_parts[4].strip()
+                    except:
+                        pass
+                    
+                    return ASNInfo(
+                        ip_address=ip,
+                        asn=f"AS{asn}",
+                        asn_name=asn_name,
+                        country=country,
+                        network_range=cidr,
+                    )
+        except:
+            pass
+            
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug(f"ASN lookup failed for {ip}: {e}")
+    
+    return None
+
+
+def _build_infrastructure_summary(result: DNSReconResult) -> Dict[str, Any]:
+    """Build a summary of the discovered infrastructure."""
+    summary = {
+        "total_hosts": len(result.unique_ips) + len(result.subdomains),
+        "ip_count": len(result.unique_ips),
+        "subdomain_count": len(result.subdomains),
+        "nameserver_count": len(result.nameservers),
+        "mail_server_count": len(result.mail_servers),
+        "cloud_providers_detected": list(set(c.provider for c in result.cloud_providers)),
+        "cdn_detected": any(c.is_cdn for c in result.cloud_providers),
+        "security_issues_count": len(result.security.overall_issues) if result.security else 0,
+        "takeover_risks_count": len(result.takeover_risks),
+        "critical_takeover_risks": len([t for t in result.takeover_risks if t.risk_level == "critical"]),
+        "has_zone_transfer_vuln": result.zone_transfer_possible,
+        "has_wildcard": result.has_wildcard,
+        "dangling_cnames_count": len(result.dangling_cnames),
+        "mail_security_score": result.security.mail_security_score if result.security else 0,
+        "unique_asns": list(set(a.asn for a in result.asn_info if a.asn)),
+        "countries_detected": list(set(a.country for a in result.asn_info if a.country)),
+    }
+    return summary
+
+
 def _attempt_zone_transfer(domain: str, nameserver: str, timeout: float = 10.0) -> Tuple[bool, List[str]]:
     """Attempt DNS zone transfer (AXFR)."""
     try:
@@ -501,6 +991,28 @@ def _analyze_security(domain: str, records: List[DNSRecord]) -> SecurityAnalysis
         security.overall_issues.append("No DKIM records found for common selectors")
         security.recommendations.append("Implement DKIM for email authentication")
     
+    # Check BIMI (Brand Indicators for Message Identification)
+    bimi_records = _resolve_dns(f"default._bimi.{domain}", "TXT")
+    for r in bimi_records:
+        if "v=bimi1" in r.value.lower():
+            security.has_bimi = True
+            security.bimi_record = r.value
+            break
+    
+    if not security.has_bimi:
+        security.recommendations.append("Consider implementing BIMI for brand visibility in emails")
+    
+    # Check MTA-STS (Mail Transfer Agent Strict Transport Security)
+    mta_sts_records = _resolve_dns(f"_mta-sts.{domain}", "TXT")
+    for r in mta_sts_records:
+        if "v=sts" in r.value.lower() or "v=stSv1" in r.value.lower():
+            security.has_mta_sts = True
+            security.mta_sts_record = r.value
+            break
+    
+    if not security.has_mta_sts:
+        security.recommendations.append("Consider implementing MTA-STS for email transport security")
+    
     # Check CAA records
     caa_records = [r for r in records if r.record_type == "CAA"]
     if caa_records:
@@ -536,20 +1048,24 @@ def _analyze_security(domain: str, records: List[DNSRecord]) -> SecurityAnalysis
     if not security.has_dnssec:
         security.recommendations.append("Consider implementing DNSSEC for DNS integrity")
     
-    # Calculate mail security score
+    # Calculate mail security score (updated with BIMI and MTA-STS)
     score = 0
     if security.has_spf:
-        score += 30
+        score += 25
         if not security.spf_issues:
-            score += 10
+            score += 5
     if security.has_dmarc:
-        score += 30
+        score += 25
         if "p=reject" in (security.dmarc_record or "").lower():
             score += 10
         elif "p=quarantine" in (security.dmarc_record or "").lower():
             score += 5
     if security.has_dkim:
         score += 20
+    if security.has_bimi:
+        score += 5
+    if security.has_mta_sts:
+        score += 10
     
     security.mail_security_score = min(score, 100)
     
@@ -679,10 +1195,10 @@ async def run_dns_recon(
                     for sub in batch
                 ]
                 
-                batch_results = await asyncio.gather(*futures)
+                batch_results = await asyncio.gather(*futures, return_exceptions=True)
                 
                 for sub_result in batch_results:
-                    if sub_result:
+                    if sub_result and not isinstance(sub_result, Exception):
                         found_subdomains.append(sub_result)
                 
                 checked_count += len(batch)
@@ -737,6 +1253,97 @@ async def run_dns_recon(
             report_progress("reverse_dns", int((i / len(ip_list)) * 100), f"Reverse DNS: {i}/{len(ip_list)}")
     result.reverse_dns = reverse_dns
     
+    # ===== ADVANCED RECONNAISSANCE =====
+    
+    # Wildcard detection
+    report_progress("advanced", 0, "Detecting wildcard DNS...")
+    result.has_wildcard, result.wildcard_ips = _detect_wildcard_dns(domain)
+    if result.has_wildcard:
+        logger.info(f"Wildcard DNS detected for {domain}: {result.wildcard_ips}")
+    
+    # Cloud provider detection & Subdomain takeover analysis
+    report_progress("advanced", 15, "Analyzing cloud providers and takeover risks...")
+    for sub in result.subdomains:
+        # Cloud provider detection
+        cloud_info = _detect_cloud_provider(sub.full_domain, sub.cname)
+        if cloud_info:
+            result.cloud_providers.append(cloud_info)
+        
+        # Subdomain takeover detection
+        if sub.cname:
+            takeover_risk = _check_subdomain_takeover(sub.full_domain, sub.cname)
+            if takeover_risk:
+                result.takeover_risks.append(takeover_risk)
+            
+            # Dangling CNAME check
+            dangling = _check_dangling_cname(sub.full_domain, sub.cname)
+            if dangling:
+                result.dangling_cnames.append(dangling)
+    
+    # Also check main domain records for cloud providers
+    for record in result.records:
+        if record.record_type == "CNAME":
+            cloud_info = _detect_cloud_provider(record.name, record.value)
+            if cloud_info:
+                result.cloud_providers.append(cloud_info)
+    
+    # ASN lookup for unique IPs (limit to 10 for performance)
+    report_progress("advanced", 35, "Looking up ASN information...")
+    asn_lookup_ips = list(all_ips)[:10]
+    for ip in asn_lookup_ips:
+        asn_info = _lookup_asn_info(ip)
+        if asn_info:
+            result.asn_info.append(asn_info)
+    
+    # Geographic distribution from ASN data
+    geo_dist: Dict[str, List[str]] = {}
+    for asn in result.asn_info:
+        if asn.country:
+            if asn.country not in geo_dist:
+                geo_dist[asn.country] = []
+            geo_dist[asn.country].append(asn.ip_address)
+    result.geo_distribution = geo_dist
+    
+    # Certificate Transparency log search (for thorough/subdomain scans)
+    if scan_type in ["thorough", "subdomain_focus"]:
+        report_progress("advanced", 55, "Searching Certificate Transparency logs...")
+        try:
+            ct_entries = await _fetch_ct_logs(domain, max_entries=30)
+            result.ct_logs = ct_entries
+            
+            # Extract additional subdomains from CT logs
+            ct_subdomains = set()
+            for entry in ct_entries:
+                for san in entry.san_names:
+                    if san.endswith(f".{domain}") or san == domain:
+                        subdomain_part = san.replace(f".{domain}", "").replace(domain, "").strip(".")
+                        if subdomain_part and subdomain_part not in [s.subdomain for s in result.subdomains]:
+                            ct_subdomains.add(subdomain_part)
+            
+            if ct_subdomains:
+                logger.info(f"Found {len(ct_subdomains)} potential subdomains from CT logs")
+                # Check these subdomains
+                report_progress("advanced", 70, f"Checking {len(ct_subdomains)} CT-discovered subdomains...")
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    loop = asyncio.get_event_loop()
+                    ct_futures = [
+                        loop.run_in_executor(executor, _check_subdomain, domain, sub)
+                        for sub in list(ct_subdomains)[:50]  # Limit to 50
+                    ]
+                    ct_results = await asyncio.gather(*ct_futures, return_exceptions=True)
+                    for ct_sub in ct_results:
+                        if ct_sub and not isinstance(ct_sub, Exception):
+                            result.subdomains.append(ct_sub)
+                            result.total_subdomains += 1
+        except Exception as e:
+            logger.warning(f"CT log search failed: {e}")
+    
+    # Build infrastructure summary
+    report_progress("advanced", 90, "Building infrastructure summary...")
+    result.infrastructure_summary = _build_infrastructure_summary(result)
+    
+    report_progress("advanced", 100, "Advanced reconnaissance complete")
+    
     # Calculate duration
     end_time = datetime.now()
     result.scan_duration_seconds = (end_time - start_time).total_seconds()
@@ -776,6 +1383,15 @@ def get_dns_status() -> Dict[str, Any]:
             "security_analysis": has_dnspython,
             "dnssec_check": has_dnspython,
             "whois_lookup": is_whois_available(),
+            # New advanced features
+            "subdomain_takeover": True,
+            "cloud_detection": True,
+            "asn_lookup": has_dnspython,
+            "ct_log_search": True,
+            "wildcard_detection": True,
+            "dangling_cname": True,
+            "bimi_check": has_dnspython,
+            "mta_sts_check": has_dnspython,
         }
     }
 

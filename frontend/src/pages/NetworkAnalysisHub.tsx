@@ -353,10 +353,10 @@ const NetworkAnalysisHub: React.FC = () => {
         />
       </Box>
 
-      {/* Tool Cards - 4x2 Grid */}
+      {/* Tool Cards - 3x3 Grid */}
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {/* PCAP Analyzer */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -424,7 +424,7 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* Nmap Analyzer */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -492,7 +492,7 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* SSL/TLS Scanner */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -560,7 +560,7 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* DNS Reconnaissance */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -628,7 +628,7 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* Traceroute Visualization */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -696,7 +696,7 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* API Endpoint Tester */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -765,7 +765,7 @@ const NetworkAnalysisHub: React.FC = () => {
         </Grid>
 
         {/* Security Fuzzer */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -835,8 +835,79 @@ const NetworkAnalysisHub: React.FC = () => {
           </Card>
         </Grid>
 
+        {/* Binary Fuzzer */}
+        <Grid item xs={12} sm={6} md={4}>
+          <Card
+            sx={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              background: `linear-gradient(135deg, ${alpha("#dc2626", 0.1)} 0%, ${alpha("#b91c1c", 0.05)} 100%)`,
+              border: `1px solid ${alpha("#dc2626", 0.3)}`,
+              transition: "all 0.3s ease",
+              "&:hover": {
+                transform: "translateY(-4px)",
+                boxShadow: `0 8px 30px ${alpha("#dc2626", 0.3)}`,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 2,
+                    background: `linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                    <path d="M6 2h12v2H6V2zm0 4h12v2H6V6zm0 4h12v2H6v-2zm0 4h12v2H6v-2zm0 4h12v2H6v-2zm0 4h12v2H6v-2z"/>
+                  </svg>
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                    Binary Fuzzer
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Binary Vulnerability Testing
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
+                Coverage-guided fuzzing for native executables. Detects memory corruption, crashes, 
+                buffer overflows, use-after-free, and other binary vulnerabilities.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+                <Chip label="Crashes" size="small" variant="outlined" />
+                <Chip label="Memory" size="small" variant="outlined" />
+                <Chip label="Exploits" size="small" variant="outlined" />
+              </Box>
+              <Button
+                component={Link}
+                to="/network/binary-fuzzer"
+                variant="contained"
+                fullWidth
+                sx={{
+                  mt: "auto",
+                  background: `linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)`,
+                  },
+                }}
+              >
+                Open Binary Fuzzer
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* MITM Workbench */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",

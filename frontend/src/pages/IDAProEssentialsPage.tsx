@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
@@ -28,6 +28,10 @@ import {
   Tooltip,
   alpha,
   useTheme,
+  Drawer,
+  Fab,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import { useNavigate, Link } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -44,6 +48,12 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import QuizIcon from "@mui/icons-material/Quiz";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import KeyboardIcon from "@mui/icons-material/Keyboard";
+import FitnessCenterIcon from "@mui/icons-material/FitnessCenter";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 
 interface QuizQuestion {
   id: number;
@@ -1287,15 +1297,122 @@ function QuizSection() {
 export default function IDAProEssentialsPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const mainContentRef = useRef<HTMLDivElement>(null);
 
   const pageContext = `IDA Pro Essentials learning page covering the IDA Pro interface, auto-analysis, navigation, 
   cross-references, types and structures, decompiler usage, IDAPython scripting, debugging and patching basics, 
   and beginner-friendly workflows for reverse engineering.`;
 
+  // Navigation sections
+  const sectionNavItems = [
+    { id: "intro-section", label: "Introduction", icon: <MemoryIcon fontSize="small" /> },
+    { id: "quickstart-section", label: "Quick Start", icon: <PlayArrowIcon fontSize="small" /> },
+    { id: "workspace-section", label: "Workspace Map", icon: <SearchIcon fontSize="small" /> },
+    { id: "capabilities-section", label: "Core Capabilities", icon: <BuildIcon fontSize="small" /> },
+    { id: "tasks-section", label: "Common Tasks", icon: <CodeIcon fontSize="small" /> },
+    { id: "checklist-section", label: "Checklist & Pitfalls", icon: <CheckCircleIcon fontSize="small" /> },
+    { id: "scripting-section", label: "IDAPython", icon: <TerminalIcon fontSize="small" /> },
+    { id: "shortcuts-section", label: "Keyboard Shortcuts", icon: <KeyboardIcon fontSize="small" /> },
+    { id: "practice-section", label: "Practice Routine", icon: <FitnessCenterIcon fontSize="small" /> },
+    { id: "quiz-section", label: "Knowledge Quiz", icon: <QuizIcon fontSize="small" /> },
+  ];
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const handleNavClick = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setNavDrawerOpen(false);
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const sidebarNav = (
+    <Paper
+      sx={{
+        position: "sticky",
+        top: 80,
+        p: 2,
+        borderRadius: 3,
+        bgcolor: alpha("#0f1422", 0.95),
+        border: `1px solid ${alpha("#6366f1", 0.2)}`,
+        maxHeight: "calc(100vh - 100px)",
+        overflow: "auto",
+      }}
+    >
+      <Typography variant="subtitle2" sx={{ color: "#6366f1", fontWeight: 700, mb: 2, px: 1 }}>
+        📍 Page Navigation
+      </Typography>
+      <LinearProgress
+        variant="determinate"
+        value={100}
+        sx={{
+          mb: 2,
+          mx: 1,
+          height: 4,
+          borderRadius: 2,
+          bgcolor: alpha("#6366f1", 0.1),
+          "& .MuiLinearProgress-bar": { bgcolor: "#6366f1" },
+        }}
+      />
+      <List dense sx={{ py: 0 }}>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            onClick={() => handleNavClick(item.id)}
+            sx={{
+              borderRadius: 2,
+              mb: 0.5,
+              cursor: "pointer",
+              "&:hover": {
+                bgcolor: alpha("#6366f1", 0.1),
+              },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: "#6366f1" }}>{item.icon}</ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                fontSize: "0.85rem",
+                fontWeight: 500,
+                color: "grey.300",
+              }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="IDA Pro Essentials" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Box sx={{ minHeight: "100vh", py: 4 }}>
+        <Container maxWidth="xl">
+          <Box sx={{ display: "flex", gap: 3 }}>
+            {/* Sidebar Navigation - Desktop Only */}
+            {!isMobile && (
+              <Box sx={{ width: 260, flexShrink: 0 }}>
+                {sidebarNav}
+              </Box>
+            )}
+
+            {/* Main Content */}
+            <Box ref={mainContentRef} sx={{ flex: 1, minWidth: 0 }}>
         <Paper
+          id="intro-section"
           sx={{
             p: { xs: 3, md: 4 },
             mb: 4,
@@ -1450,7 +1567,7 @@ export default function IDAProEssentialsPage() {
           variant="outlined"
           sx={{ borderRadius: 2, mb: 3 }}
         />
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
+        <Paper id="quickstart-section" sx={{ p: 4, mb: 4, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             Quick Start Workflow
           </Typography>
@@ -1472,7 +1589,7 @@ export default function IDAProEssentialsPage() {
           </List>
         </Paper>
 
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
+        <Paper id="workspace-section" sx={{ p: 4, mb: 4, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             IDA Workspace Map
           </Typography>
@@ -1501,7 +1618,7 @@ export default function IDAProEssentialsPage() {
           </TableContainer>
         </Paper>
 
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
+        <Paper id="capabilities-section" sx={{ p: 4, mb: 4, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             Core Capabilities You Should Master
           </Typography>
@@ -1547,7 +1664,7 @@ export default function IDAProEssentialsPage() {
           </Grid>
         </Paper>
 
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
+        <Paper id="tasks-section" sx={{ p: 4, mb: 4, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             Common Tasks in IDA
           </Typography>
@@ -1575,7 +1692,7 @@ export default function IDAProEssentialsPage() {
           ))}
         </Paper>
 
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
+        <Paper id="checklist-section" sx={{ p: 4, mb: 4, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             Analysis Checklist and Pitfalls
           </Typography>
@@ -1619,7 +1736,7 @@ export default function IDAProEssentialsPage() {
           </Alert>
         </Paper>
 
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
+        <Paper id="scripting-section" sx={{ p: 4, mb: 4, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             IDAPython Starter Snippet
           </Typography>
@@ -1642,7 +1759,7 @@ print("Total functions:", count)`}
           />
         </Paper>
 
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
+        <Paper id="shortcuts-section" sx={{ p: 4, mb: 4, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             Essential Keyboard Shortcuts
           </Typography>
@@ -1666,7 +1783,7 @@ print("Total functions:", count)`}
           </TableContainer>
         </Paper>
 
-        <Paper sx={{ p: 4, mb: 5, borderRadius: 3 }}>
+        <Paper id="practice-section" sx={{ p: 4, mb: 5, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             Practice Routine for Beginners
           </Typography>
@@ -1709,7 +1826,70 @@ print("Total functions:", count)`}
             Back to Learning Hub
           </Button>
         </Box>
-      </Container>
+            </Box>
+          </Box>
+        </Container>
+      </Box>
+
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            bgcolor: "#0f1422",
+            width: 280,
+          },
+        }}
+      >
+        <Box sx={{ p: 2, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6" sx={{ color: "#6366f1", fontWeight: 700 }}>
+              Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: "grey.400" }}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </Box>
+        {sidebarNav}
+      </Drawer>
+
+      {/* Mobile Navigation FAB */}
+      {isMobile && (
+        <Fab
+          color="primary"
+          size="medium"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 80,
+            right: 16,
+            bgcolor: "#6366f1",
+            "&:hover": { bgcolor: "#4f46e5" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      )}
+
+      {/* Scroll to Top FAB */}
+      {showScrollTop && (
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 16,
+            right: 16,
+            bgcolor: "rgba(99, 102, 241, 0.8)",
+            "&:hover": { bgcolor: "#6366f1" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      )}
     </LearnPageLayout>
   );
 }

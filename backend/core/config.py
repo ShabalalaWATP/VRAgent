@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     # Default to Gemini 3 Flash Preview - latest and most capable flash model
     # Other options: gemini-2.5-flash, gemini-3-pro-preview (most capable)
     gemini_model_id: str = Field("gemini-3-flash-preview", validation_alias="GEMINI_MODEL_ID")
+    
+    # OpenAI API settings (optional fallback)
+    openai_api_key: str = Field("", validation_alias="OPENAI_API_KEY")
+    openai_model: str = Field("gpt-4", validation_alias="OPENAI_MODEL")
+    openai_base_url: str = Field("https://api.openai.com/v1", validation_alias="OPENAI_BASE_URL")
+    
     # Ghidra configuration (optional, for binary decompilation)
     ghidra_home: str = Field("", validation_alias="GHIDRA_HOME")
     ghidra_headless_path: str = Field("", validation_alias="GHIDRA_HEADLESS_PATH")
@@ -37,6 +43,10 @@ class Settings(BaseSettings):
     # File upload settings
     max_upload_size: int = Field(100 * 1024 * 1024, validation_alias="MAX_UPLOAD_SIZE")  # 100MB default
     upload_dir: str = Field("/tmp/uploads", validation_alias="UPLOAD_DIR")  # Base upload directory
+
+    # MITM storage settings
+    mitm_storage_dir: str = Field("backend/storage/mitm", validation_alias="MITM_STORAGE_DIR")
+    mitm_max_entries: int = Field(5000, validation_alias="MITM_MAX_ENTRIES")
 
     # Reverse engineering signature settings
     yara_rules_path: str = Field("backend/yara_rules", validation_alias="YARA_RULES_PATH")

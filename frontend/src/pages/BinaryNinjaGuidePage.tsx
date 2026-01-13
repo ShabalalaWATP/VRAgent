@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Container,
@@ -29,6 +29,10 @@ import {
   Divider,
   alpha,
   useTheme,
+  Drawer,
+  Fab,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -44,6 +48,12 @@ import SecurityIcon from "@mui/icons-material/Security";
 import QuizIcon from "@mui/icons-material/Quiz";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import LightbulbIcon from "@mui/icons-material/Lightbulb";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
@@ -1158,11 +1168,137 @@ function QuizSection() {
 
 const BinaryNinjaGuidePage: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [tabValue, setTabValue] = useState(0);
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const mainContentRef = useRef<HTMLDivElement>(null);
+
+  // Navigation items for sidebar
+  const sectionNavItems = [
+    { id: 0, label: "Getting Started", icon: <PlayArrowIcon fontSize="small" /> },
+    { id: 1, label: "Navigation", icon: <SearchIcon fontSize="small" /> },
+    { id: 2, label: "IL Views", icon: <AccountTreeIcon fontSize="small" /> },
+    { id: 3, label: "Scripting", icon: <CodeIcon fontSize="small" /> },
+    { id: 4, label: "Tips & Practice", icon: <LightbulbIcon fontSize="small" /> },
+    { id: "quiz", label: "Knowledge Quiz", icon: <QuizIcon fontSize="small" /> },
+  ];
+
+  // Handle scroll to show/hide scroll-to-top button
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const handleNavClick = (id: number | string) => {
+    if (typeof id === "number") {
+      setTabValue(id);
+      // Scroll to tabs section
+      const tabsElement = document.getElementById("binja-tabs-section");
+      if (tabsElement) {
+        tabsElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } else if (id === "quiz") {
+      const quizElement = document.getElementById("quiz-section");
+      if (quizElement) {
+        quizElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+    setNavDrawerOpen(false);
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
+
+  // Calculate progress based on current tab
+  const progressPercent = ((tabValue + 1) / 5) * 100;
+
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        position: "sticky",
+        top: 90,
+        p: 2,
+        borderRadius: 3,
+        bgcolor: alpha("#0f1422", 0.9),
+        border: `1px solid ${alpha("#14b8a6", 0.2)}`,
+        backdropFilter: "blur(10px)",
+        maxHeight: "calc(100vh - 120px)",
+        overflowY: "auto",
+      }}
+    >
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="subtitle2" sx={{ color: "grey.400", mb: 1, fontWeight: 600 }}>
+          Progress
+        </Typography>
+        <LinearProgress
+          variant="determinate"
+          value={progressPercent}
+          sx={{
+            height: 6,
+            borderRadius: 3,
+            bgcolor: alpha("#14b8a6", 0.1),
+            "& .MuiLinearProgress-bar": {
+              bgcolor: "#14b8a6",
+              borderRadius: 3,
+            },
+          }}
+        />
+        <Typography variant="caption" sx={{ color: "grey.500", mt: 0.5, display: "block" }}>
+          {Math.round(progressPercent)}% Complete
+        </Typography>
+      </Box>
+      <Divider sx={{ my: 2, borderColor: alpha("#14b8a6", 0.1) }} />
+      <Typography variant="subtitle2" sx={{ color: "grey.400", mb: 1, fontWeight: 600 }}>
+        Sections
+      </Typography>
+      <List dense disablePadding>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={typeof item.id === "number" ? item.id : item.id}
+            component="div"
+            onClick={() => handleNavClick(item.id)}
+            sx={{
+              borderRadius: 2,
+              mb: 0.5,
+              cursor: "pointer",
+              bgcolor: (typeof item.id === "number" && tabValue === item.id) ? alpha("#14b8a6", 0.15) : "transparent",
+              borderLeft: (typeof item.id === "number" && tabValue === item.id) ? `3px solid #14b8a6` : "3px solid transparent",
+              "&:hover": {
+                bgcolor: alpha("#14b8a6", 0.1),
+              },
+              transition: "all 0.2s ease",
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: (typeof item.id === "number" && tabValue === item.id) ? "#14b8a6" : "grey.500" }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                variant: "body2",
+                sx: {
+                  color: (typeof item.id === "number" && tabValue === item.id) ? "#14b8a6" : "grey.300",
+                  fontWeight: (typeof item.id === "number" && tabValue === item.id) ? 600 : 400,
+                },
+              }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
 
   const keyIdeas = [
     "Binary Ninja centers analysis around multiple intermediate languages (LLIL, MLIL, HLIL).",
@@ -1283,7 +1419,17 @@ for s in bv.strings:
   return (
     <LearnPageLayout pageTitle="Binary Ninja Essentials" pageContext={pageContext}>
       <Box sx={{ minHeight: "100vh", bgcolor: "#080d12", py: 4 }}>
-        <Container maxWidth="lg">
+        <Container maxWidth="xl">
+          <Box sx={{ display: "flex", gap: 3 }}>
+            {/* Sidebar Navigation - Desktop Only */}
+            {!isMobile && (
+              <Box sx={{ width: 260, flexShrink: 0 }}>
+                {sidebarNav}
+              </Box>
+            )}
+
+            {/* Main Content */}
+            <Box ref={mainContentRef} sx={{ flex: 1, minWidth: 0 }}>
           <Chip
             component={Link}
             to="/learn"
@@ -1463,7 +1609,7 @@ for s in bv.strings:
             <Chip icon={<BuildIcon />} label="Type Recovery" size="small" />
           </Box>
 
-          <Paper sx={{ bgcolor: "#111827", borderRadius: 2 }}>
+          <Paper id="binja-tabs-section" sx={{ bgcolor: "#111827", borderRadius: 2 }}>
             <Tabs
               value={tabValue}
               onChange={handleTabChange}
@@ -1802,8 +1948,70 @@ for s in bv.strings:
               Back to Learning Hub
             </Button>
           </Box>
+            </Box>
+          </Box>
         </Container>
       </Box>
+
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            bgcolor: "#0f1422",
+            width: 280,
+          },
+        }}
+      >
+        <Box sx={{ p: 2, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6" sx={{ color: "#14b8a6", fontWeight: 700 }}>
+              Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: "grey.400" }}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </Box>
+        {sidebarNav}
+      </Drawer>
+
+      {/* Mobile Navigation FAB */}
+      {isMobile && (
+        <Fab
+          color="primary"
+          size="medium"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 80,
+            right: 16,
+            bgcolor: "#14b8a6",
+            "&:hover": { bgcolor: "#0d9488" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      )}
+
+      {/* Scroll to Top FAB */}
+      {showScrollTop && (
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 16,
+            right: 16,
+            bgcolor: "rgba(20, 184, 166, 0.8)",
+            "&:hover": { bgcolor: "#14b8a6" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      )}
     </LearnPageLayout>
   );
 };

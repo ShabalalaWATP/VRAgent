@@ -1062,3 +1062,751 @@ def export_advanced_analysis(
             "avg_response_time": sum(r.get('response_time', 0) for r in responses) / len(responses) if responses else 0,
         }
     }
+
+
+# ============================================================================
+# OFFENSIVE SECURITY ANALYSIS
+# For analyzing sandboxed software, malware behavior, and C2 communication
+# ============================================================================
+
+@dataclass
+class C2Indicator:
+    """C2 (Command & Control) communication indicator."""
+    indicator_type: str  # "domain", "ip", "url", "protocol", "beacon"
+    value: str
+    confidence: float  # 0-1
+    framework: Optional[str] = None  # "cobalt_strike", "metasploit", "empire", etc.
+    evidence: List[str] = field(default_factory=list)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class MalwareBehavior:
+    """Detected malware behavior pattern."""
+    behavior_type: str  # "persistence", "evasion", "exfiltration", "lateral_movement"
+    technique: str
+    mitre_id: Optional[str] = None  # MITRE ATT&CK ID
+    severity: str = "medium"
+    indicators: List[str] = field(default_factory=list)
+    recommendation: str = ""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class SandboxEvasion:
+    """Detected sandbox evasion technique."""
+    technique: str
+    detection_method: str
+    indicators: List[str] = field(default_factory=list)
+    bypass_type: str = ""  # "timing", "environment", "behavior"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class OffensiveAnalysisResult:
+    """Complete offensive analysis result."""
+    c2_indicators: List[C2Indicator] = field(default_factory=list)
+    malware_behaviors: List[MalwareBehavior] = field(default_factory=list)
+    sandbox_evasions: List[SandboxEvasion] = field(default_factory=list)
+    exploit_indicators: List[Dict[str, Any]] = field(default_factory=list)
+    risk_score: float = 0.0
+    threat_level: str = "low"  # "critical", "high", "medium", "low", "info"
+    iocs: Dict[str, List[str]] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "c2_indicators": [c.to_dict() for c in self.c2_indicators],
+            "malware_behaviors": [m.to_dict() for m in self.malware_behaviors],
+            "sandbox_evasions": [s.to_dict() for s in self.sandbox_evasions],
+            "exploit_indicators": self.exploit_indicators,
+            "risk_score": self.risk_score,
+            "threat_level": self.threat_level,
+            "iocs": self.iocs,
+        }
+
+
+# C2 Framework Signatures
+C2_FRAMEWORK_SIGNATURES = {
+    "cobalt_strike": {
+        "patterns": [
+            r"beacon\s*payload",
+            r"malleable\s*c2",
+            r"watermark\s*=\s*\d+",
+            r"spawn\s*to",
+            r"process[-_]inject",
+            r"jump\s*psexec",
+            r"hashdump",
+            r"logonpasswords",
+            r"dcsync",
+            r"golden\s*ticket",
+        ],
+        "user_agents": [
+            "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.0;",
+            "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1;",
+        ],
+        "default_ports": [443, 80, 8080, 8443],
+    },
+    "metasploit": {
+        "patterns": [
+            r"meterpreter",
+            r"reverse_tcp",
+            r"reverse_http",
+            r"bind_tcp",
+            r"multi/handler",
+            r"exploit/multi",
+            r"post/windows",
+            r"post/linux",
+            r"auxiliary/scanner",
+            r"payload/windows",
+        ],
+        "default_ports": [4444, 4445, 5555],
+    },
+    "empire": {
+        "patterns": [
+            r"empire\s*agent",
+            r"stager",
+            r"invoke-empire",
+            r"powershell\s*empire",
+            r"launcher\.bat",
+        ],
+        "default_ports": [443, 80],
+    },
+    "sliver": {
+        "patterns": [
+            r"sliver\s*implant",
+            r"mtls\s*listener",
+            r"wg\s*listener",
+            r"dns\s*canary",
+        ],
+        "default_ports": [443, 8888, 31337],
+    },
+    "brute_ratel": {
+        "patterns": [
+            r"brc4",
+            r"brute\s*ratel",
+            r"badger",
+        ],
+        "default_ports": [443],
+    },
+    "covenant": {
+        "patterns": [
+            r"covenant",
+            r"grunt\s*stager",
+            r"grunt\s*payload",
+        ],
+        "default_ports": [80, 443],
+    },
+}
+
+# MITRE ATT&CK Mappings for Malware Behaviors
+MITRE_MAPPINGS = {
+    # Persistence
+    "registry_run_key": {"id": "T1547.001", "tactic": "Persistence", "technique": "Boot or Logon Autostart Execution: Registry Run Keys"},
+    "scheduled_task": {"id": "T1053.005", "tactic": "Persistence", "technique": "Scheduled Task/Job: Scheduled Task"},
+    "startup_folder": {"id": "T1547.001", "tactic": "Persistence", "technique": "Boot or Logon Autostart Execution: Registry Run Keys"},
+    "service_creation": {"id": "T1543.003", "tactic": "Persistence", "technique": "Create or Modify System Process: Windows Service"},
+    
+    # Defense Evasion
+    "process_injection": {"id": "T1055", "tactic": "Defense Evasion", "technique": "Process Injection"},
+    "dll_injection": {"id": "T1055.001", "tactic": "Defense Evasion", "technique": "Process Injection: DLL Injection"},
+    "process_hollowing": {"id": "T1055.012", "tactic": "Defense Evasion", "technique": "Process Injection: Process Hollowing"},
+    "amsi_bypass": {"id": "T1562.001", "tactic": "Defense Evasion", "technique": "Impair Defenses: Disable or Modify Tools"},
+    "etw_bypass": {"id": "T1562.006", "tactic": "Defense Evasion", "technique": "Impair Defenses: Indicator Blocking"},
+    "timestomp": {"id": "T1070.006", "tactic": "Defense Evasion", "technique": "Indicator Removal: Timestomp"},
+    
+    # Credential Access
+    "credential_dumping": {"id": "T1003", "tactic": "Credential Access", "technique": "OS Credential Dumping"},
+    "lsass_dump": {"id": "T1003.001", "tactic": "Credential Access", "technique": "OS Credential Dumping: LSASS Memory"},
+    "sam_dump": {"id": "T1003.002", "tactic": "Credential Access", "technique": "OS Credential Dumping: SAM"},
+    "keylogging": {"id": "T1056.001", "tactic": "Credential Access", "technique": "Input Capture: Keylogging"},
+    
+    # Discovery
+    "system_info": {"id": "T1082", "tactic": "Discovery", "technique": "System Information Discovery"},
+    "process_discovery": {"id": "T1057", "tactic": "Discovery", "technique": "Process Discovery"},
+    "network_discovery": {"id": "T1046", "tactic": "Discovery", "technique": "Network Service Scanning"},
+    
+    # Lateral Movement
+    "psexec": {"id": "T1570", "tactic": "Lateral Movement", "technique": "Lateral Tool Transfer"},
+    "wmi_execution": {"id": "T1047", "tactic": "Execution", "technique": "Windows Management Instrumentation"},
+    "smb_exec": {"id": "T1021.002", "tactic": "Lateral Movement", "technique": "Remote Services: SMB/Windows Admin Shares"},
+    
+    # Exfiltration
+    "dns_exfil": {"id": "T1048.003", "tactic": "Exfiltration", "technique": "Exfiltration Over Alternative Protocol: DNS"},
+    "http_exfil": {"id": "T1048.002", "tactic": "Exfiltration", "technique": "Exfiltration Over Alternative Protocol: HTTP"},
+    "cloud_exfil": {"id": "T1567", "tactic": "Exfiltration", "technique": "Exfiltration Over Web Service"},
+    
+    # Command and Control
+    "dns_c2": {"id": "T1071.004", "tactic": "Command and Control", "technique": "Application Layer Protocol: DNS"},
+    "http_c2": {"id": "T1071.001", "tactic": "Command and Control", "technique": "Application Layer Protocol: HTTP"},
+    "encrypted_channel": {"id": "T1573", "tactic": "Command and Control", "technique": "Encrypted Channel"},
+}
+
+
+def analyze_c2_indicators(content: str, headers: Dict[str, str] = None) -> List[C2Indicator]:
+    """Analyze content for C2 communication indicators."""
+    indicators = []
+    
+    if headers is None:
+        headers = {}
+    
+    # Check for C2 framework signatures
+    for framework, sigs in C2_FRAMEWORK_SIGNATURES.items():
+        for pattern in sigs["patterns"]:
+            if re.search(pattern, content, re.IGNORECASE):
+                indicators.append(C2Indicator(
+                    indicator_type="framework",
+                    value=framework,
+                    confidence=0.8,
+                    framework=framework,
+                    evidence=[f"Pattern match: {pattern}"]
+                ))
+                break
+    
+    # Extract potential C2 domains
+    domain_patterns = [
+        r"(?:https?://)?([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.(?:[a-zA-Z]{2,}))",
+        r"\.duckdns\.org",
+        r"\.no-ip\.(?:org|biz)",
+        r"\.ddns\.net",
+        r"\.hopto\.org",
+        r"ngrok\.io",
+        r"cloudflare.*tunnel",
+    ]
+    
+    for pattern in domain_patterns:
+        for match in re.finditer(pattern, content, re.IGNORECASE):
+            domain = match.group(0)
+            # Skip common legitimate domains
+            if not any(legit in domain.lower() for legit in ['google', 'microsoft', 'amazon', 'github']):
+                indicators.append(C2Indicator(
+                    indicator_type="domain",
+                    value=domain,
+                    confidence=0.5,
+                    evidence=[f"Suspicious domain pattern: {domain}"]
+                ))
+    
+    # Extract IP addresses with ports (potential C2)
+    ip_port_pattern = r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})"
+    for match in re.finditer(ip_port_pattern, content):
+        ip, port = match.groups()
+        port_int = int(port)
+        
+        # High-value C2 ports
+        suspicious_ports = [4444, 4445, 5555, 8080, 8443, 31337, 1234, 9999]
+        confidence = 0.7 if port_int in suspicious_ports else 0.4
+        
+        indicators.append(C2Indicator(
+            indicator_type="ip",
+            value=f"{ip}:{port}",
+            confidence=confidence,
+            evidence=[f"IP:Port combination detected"]
+        ))
+    
+    # Check for beacon patterns
+    beacon_patterns = [
+        (r"sleep\s*[=:]\s*(\d+)", "beacon_sleep"),
+        (r"jitter\s*[=:]\s*(\d+)", "beacon_jitter"),
+        (r"callback\s*[=:]", "callback_config"),
+        (r"heartbeat", "heartbeat"),
+        (r"checkin", "checkin"),
+    ]
+    
+    for pattern, indicator_name in beacon_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            indicators.append(C2Indicator(
+                indicator_type="beacon",
+                value=indicator_name,
+                confidence=0.6,
+                evidence=[f"Beacon pattern: {pattern}"]
+            ))
+    
+    return indicators
+
+
+def analyze_malware_behaviors(content: str) -> List[MalwareBehavior]:
+    """Analyze content for malware behavior patterns."""
+    behaviors = []
+    
+    # Persistence behaviors
+    persistence_patterns = [
+        (r"HKLM\\.*\\Run|HKCU\\.*\\Run|CurrentVersion\\Run", "registry_run_key", "Registry Run Key Persistence"),
+        (r"schtasks\s*/create|New-ScheduledTask", "scheduled_task", "Scheduled Task Creation"),
+        (r"startup\s*folder|shell:startup", "startup_folder", "Startup Folder Persistence"),
+        (r"sc\s*create|New-Service", "service_creation", "Service Creation"),
+        (r"wmic\s*startup|Win32_StartupCommand", "wmi_persistence", "WMI Persistence"),
+    ]
+    
+    for pattern, technique_key, description in persistence_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            mitre = MITRE_MAPPINGS.get(technique_key, {})
+            behaviors.append(MalwareBehavior(
+                behavior_type="persistence",
+                technique=description,
+                mitre_id=mitre.get("id"),
+                severity="high",
+                indicators=[pattern],
+                recommendation=f"Monitor for {description.lower()} - MITRE: {mitre.get('id', 'N/A')}"
+            ))
+    
+    # Defense evasion behaviors
+    evasion_patterns = [
+        (r"CreateRemoteThread|NtCreateThreadEx|WriteProcessMemory", "process_injection", "Process Injection"),
+        (r"LoadLibrary.*inject|reflective\s*dll|manual\s*map", "dll_injection", "DLL Injection"),
+        (r"NtUnmapViewOfSection|hollow|doppelgang", "process_hollowing", "Process Hollowing"),
+        (r"amsi.*bypass|AmsiScanBuffer.*patch", "amsi_bypass", "AMSI Bypass"),
+        (r"etw.*bypass|EtwEventWrite.*patch", "etw_bypass", "ETW Bypass"),
+        (r"timestomp|SetFileTime|touch.*\-d", "timestomp", "Timestomping"),
+    ]
+    
+    for pattern, technique_key, description in evasion_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            mitre = MITRE_MAPPINGS.get(technique_key, {})
+            behaviors.append(MalwareBehavior(
+                behavior_type="evasion",
+                technique=description,
+                mitre_id=mitre.get("id"),
+                severity="high",
+                indicators=[pattern],
+                recommendation=f"Defense evasion technique: {description}"
+            ))
+    
+    # Credential access behaviors
+    cred_patterns = [
+        (r"mimikatz|sekurlsa|logonpasswords|wdigest", "credential_dumping", "Credential Dumping"),
+        (r"lsass.*dump|procdump.*lsass|comsvcs.*MiniDump", "lsass_dump", "LSASS Memory Dump"),
+        (r"reg\s*save.*sam|reg\s*save.*system|secretsdump", "sam_dump", "SAM Database Dump"),
+        (r"keylog|GetAsyncKeyState|SetWindowsHookEx.*WH_KEYBOARD", "keylogging", "Keylogging"),
+    ]
+    
+    for pattern, technique_key, description in cred_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            mitre = MITRE_MAPPINGS.get(technique_key, {})
+            behaviors.append(MalwareBehavior(
+                behavior_type="credential_access",
+                technique=description,
+                mitre_id=mitre.get("id"),
+                severity="critical",
+                indicators=[pattern],
+                recommendation=f"Credential theft technique detected: {description}"
+            ))
+    
+    # Exfiltration behaviors
+    exfil_patterns = [
+        (r"dns\s*tunnel|dns.*exfil|subdomain.*encode", "dns_exfil", "DNS Exfiltration"),
+        (r"http.*post.*data|upload.*file|send.*loot", "http_exfil", "HTTP Exfiltration"),
+        (r"telegram.*bot|discord.*webhook|slack.*webhook", "cloud_exfil", "Cloud Service Exfiltration"),
+    ]
+    
+    for pattern, technique_key, description in exfil_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            mitre = MITRE_MAPPINGS.get(technique_key, {})
+            behaviors.append(MalwareBehavior(
+                behavior_type="exfiltration",
+                technique=description,
+                mitre_id=mitre.get("id"),
+                severity="high",
+                indicators=[pattern],
+                recommendation=f"Data exfiltration channel: {description}"
+            ))
+    
+    return behaviors
+
+
+def analyze_sandbox_evasion(content: str) -> List[SandboxEvasion]:
+    """Analyze content for sandbox evasion techniques."""
+    evasions = []
+    
+    # VM/Sandbox detection patterns
+    vm_patterns = [
+        (r"vmware|virtualbox|vbox|qemu|hyperv|xen", "environment", "VM Detection"),
+        (r"sandbox|cuckoo|any\.run|hybrid-analysis|virustotal", "environment", "Sandbox Detection"),
+        (r"wine\s*detect|wine_get_version", "environment", "Wine Detection"),
+        (r"IsDebuggerPresent|CheckRemoteDebugger|NtQueryInformationProcess", "debugger", "Debugger Detection"),
+        (r"rdtsc|GetTickCount.*diff|QueryPerformanceCounter", "timing", "Timing-based Detection"),
+    ]
+    
+    for pattern, bypass_type, technique in vm_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            evasions.append(SandboxEvasion(
+                technique=technique,
+                detection_method=pattern,
+                indicators=[pattern],
+                bypass_type=bypass_type
+            ))
+    
+    # Anti-analysis patterns
+    anti_analysis = [
+        (r"anti[_-]?debug|anti[_-]?vm|anti[_-]?analysis", "behavioral", "Anti-Analysis Framework"),
+        (r"sleep\s*\(\s*\d{5,}\s*\)", "timing", "Long Sleep (Sleep Evasion)"),
+        (r"GetCursorPos.*loop|mouse.*move.*detect", "behavioral", "Human Interaction Check"),
+        (r"GetSystemMetrics|screen.*resolution.*check", "environment", "Screen Resolution Check"),
+        (r"mac.*address.*check|adapter.*count", "environment", "MAC Address/NIC Check"),
+        (r"cpu.*count|processor.*count|core.*count", "environment", "CPU Count Check"),
+        (r"memory.*size|GlobalMemoryStatus", "environment", "Memory Size Check"),
+        (r"disk.*size|GetDiskFreeSpace", "environment", "Disk Size Check"),
+        (r"username.*check|computername.*check", "environment", "Username/Computer Name Check"),
+    ]
+    
+    for pattern, bypass_type, technique in anti_analysis:
+        if re.search(pattern, content, re.IGNORECASE):
+            evasions.append(SandboxEvasion(
+                technique=technique,
+                detection_method=pattern,
+                indicators=[pattern],
+                bypass_type=bypass_type
+            ))
+    
+    return evasions
+
+
+def extract_iocs(content: str) -> Dict[str, List[str]]:
+    """Extract Indicators of Compromise from content."""
+    iocs = {
+        "ips": [],
+        "domains": [],
+        "urls": [],
+        "hashes_md5": [],
+        "hashes_sha1": [],
+        "hashes_sha256": [],
+        "emails": [],
+        "bitcoin_addresses": [],
+        "monero_addresses": [],
+        "file_paths": [],
+        "registry_keys": [],
+        "mutexes": [],
+    }
+    
+    # IP addresses
+    ip_pattern = r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b"
+    iocs["ips"] = list(set(re.findall(ip_pattern, content)))
+    
+    # Domains
+    domain_pattern = r"\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\b"
+    potential_domains = set(re.findall(domain_pattern, content))
+    # Filter out common domains
+    common_domains = {'google.com', 'microsoft.com', 'github.com', 'amazon.com', 'example.com'}
+    iocs["domains"] = [d for d in potential_domains if d.lower() not in common_domains]
+    
+    # URLs
+    url_pattern = r"https?://[^\s<>\"\'{}|\\^`\[\]]+"
+    iocs["urls"] = list(set(re.findall(url_pattern, content)))
+    
+    # Hashes
+    iocs["hashes_md5"] = list(set(re.findall(r"\b[a-fA-F0-9]{32}\b", content)))
+    iocs["hashes_sha1"] = list(set(re.findall(r"\b[a-fA-F0-9]{40}\b", content)))
+    iocs["hashes_sha256"] = list(set(re.findall(r"\b[a-fA-F0-9]{64}\b", content)))
+    
+    # Emails
+    email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+    iocs["emails"] = list(set(re.findall(email_pattern, content)))
+    
+    # Cryptocurrency addresses
+    iocs["bitcoin_addresses"] = list(set(re.findall(r"\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b", content)))
+    iocs["monero_addresses"] = list(set(re.findall(r"\b4[0-9AB][0-9a-zA-Z]{93}\b", content)))
+    
+    # File paths (Windows and Unix)
+    windows_path = r"[A-Za-z]:\\(?:[^\\/:*?\"<>|\r\n]+\\)*[^\\/:*?\"<>|\r\n]*"
+    unix_path = r"/(?:[^/\0]+/)*[^/\0]+"
+    iocs["file_paths"] = list(set(re.findall(windows_path, content) + re.findall(unix_path, content)))[:50]
+    
+    # Registry keys
+    reg_pattern = r"(?:HKLM|HKCU|HKCR|HKU|HKCC)\\[^\s\"']+"
+    iocs["registry_keys"] = list(set(re.findall(reg_pattern, content, re.IGNORECASE)))
+    
+    # Mutexes
+    mutex_pattern = r"(?:Global\\|Local\\)?[A-Za-z0-9_-]{8,}"
+    # Filter to likely mutex patterns
+    potential_mutexes = re.findall(mutex_pattern, content)
+    iocs["mutexes"] = [m for m in set(potential_mutexes) if len(m) >= 10][:20]
+    
+    # Remove empty lists
+    return {k: v for k, v in iocs.items() if v}
+
+
+def perform_offensive_analysis(
+    responses: List[Dict[str, Any]],
+    include_c2: bool = True,
+    include_malware: bool = True,
+    include_evasion: bool = True,
+    include_iocs: bool = True
+) -> OffensiveAnalysisResult:
+    """Perform comprehensive offensive security analysis on fuzzing responses."""
+    result = OffensiveAnalysisResult()
+    
+    all_content = ""
+    all_headers = {}
+    
+    for resp in responses:
+        body = resp.get('body', '')
+        headers = resp.get('headers', {})
+        
+        all_content += body + "\n"
+        all_headers.update(headers)
+    
+    # C2 Analysis
+    if include_c2:
+        result.c2_indicators = analyze_c2_indicators(all_content, all_headers)
+    
+    # Malware Behavior Analysis
+    if include_malware:
+        result.malware_behaviors = analyze_malware_behaviors(all_content)
+    
+    # Sandbox Evasion Analysis
+    if include_evasion:
+        result.sandbox_evasions = analyze_sandbox_evasion(all_content)
+    
+    # IOC Extraction
+    if include_iocs:
+        result.iocs = extract_iocs(all_content)
+    
+    # Calculate risk score
+    score = 0
+    
+    # C2 indicators add significant risk
+    score += len(result.c2_indicators) * 15
+    
+    # Critical malware behaviors
+    critical_behaviors = [b for b in result.malware_behaviors if b.severity == "critical"]
+    high_behaviors = [b for b in result.malware_behaviors if b.severity == "high"]
+    score += len(critical_behaviors) * 20
+    score += len(high_behaviors) * 10
+    
+    # Sandbox evasion
+    score += len(result.sandbox_evasions) * 5
+    
+    # IOCs
+    if result.iocs:
+        score += len(result.iocs.get("bitcoin_addresses", [])) * 10
+        score += len(result.iocs.get("monero_addresses", [])) * 10
+    
+    result.risk_score = min(100, score)
+    
+    # Determine threat level
+    if result.risk_score >= 80:
+        result.threat_level = "critical"
+    elif result.risk_score >= 60:
+        result.threat_level = "high"
+    elif result.risk_score >= 40:
+        result.threat_level = "medium"
+    elif result.risk_score >= 20:
+        result.threat_level = "low"
+    else:
+        result.threat_level = "info"
+    
+    return result
+
+
+# ============================================================================
+# OFFENSIVE PAYLOAD GENERATORS
+# Specialized payloads for analyzing sandboxed software
+# ============================================================================
+
+def generate_c2_probe_payloads() -> List[str]:
+    """Generate payloads for probing C2 infrastructure."""
+    payloads = [
+        # Beacon probe patterns
+        "beacon",
+        "callback",
+        "heartbeat",
+        "checkin",
+        "task",
+        "command",
+        "exfil",
+        
+        # Framework-specific probes
+        "meterpreter",
+        "stager",
+        "empire",
+        "sliver",
+        "covenant",
+        
+        # Protocol probes
+        "dns://",
+        "icmp://",
+        "http://c2.",
+        "https://beacon.",
+        "wss://cmd.",
+        
+        # Configuration probes
+        "config.json",
+        "beacon.config",
+        "c2.config",
+        "payload.bin",
+        "stager.ps1",
+        "loader.dll",
+    ]
+    return payloads
+
+
+def generate_evasion_test_payloads() -> List[str]:
+    """Generate payloads for testing sandbox evasion."""
+    payloads = [
+        # VM detection strings
+        "VMware",
+        "VirtualBox",
+        "QEMU",
+        "Hyper-V",
+        "Xen",
+        "KVM",
+        
+        # Sandbox detection
+        "sandbox",
+        "cuckoo",
+        "any.run",
+        "hybrid-analysis",
+        
+        # Anti-debug
+        "IsDebuggerPresent",
+        "CheckRemoteDebuggerPresent",
+        "NtQueryInformationProcess",
+        "debug_mode",
+        
+        # Timing checks
+        "sleep(60000)",
+        "GetTickCount",
+        "rdtsc",
+        
+        # Environment checks
+        "GetSystemMetrics",
+        "GetCursorPos",
+        "mouse_move",
+    ]
+    return payloads
+
+
+def generate_malware_string_payloads() -> List[str]:
+    """Generate common malware string payloads for detection testing."""
+    payloads = [
+        # Persistence
+        "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "schtasks /create",
+        "sc create",
+        "New-Service",
+        "startup folder",
+        
+        # Process injection
+        "CreateRemoteThread",
+        "WriteProcessMemory",
+        "VirtualAllocEx",
+        "NtMapViewOfSection",
+        "QueueUserAPC",
+        
+        # Credential theft
+        "mimikatz",
+        "sekurlsa::logonpasswords",
+        "lsass.dmp",
+        "hashdump",
+        "SAM database",
+        
+        # Evasion
+        "amsi.dll",
+        "AmsiScanBuffer",
+        "etw bypass",
+        "unhook ntdll",
+        
+        # Exfiltration
+        "ftp upload",
+        "http post",
+        "dns exfil",
+        "telegram bot",
+    ]
+    return payloads
+
+
+def generate_api_hooking_payloads() -> List[str]:
+    """Generate API hooking detection payloads."""
+    payloads = [
+        # Windows API hooks
+        "ntdll.dll",
+        "kernel32.dll",
+        "kernelbase.dll",
+        "NtCreateFile",
+        "NtWriteFile",
+        "NtReadFile",
+        "NtCreateProcess",
+        "NtCreateThread",
+        "ZwMapViewOfSection",
+        
+        # Syscall
+        "syscall",
+        "sysenter",
+        "int 2e",
+        
+        # Hook detection
+        "hook detected",
+        "inline hook",
+        "iat hook",
+        "eat hook",
+        "trampoline",
+        
+        # Bypass techniques
+        "direct syscall",
+        "unhook",
+        "fresh copy",
+        "heaven's gate",
+    ]
+    return payloads
+
+
+# ============================================================================
+# EDR/AV SIGNATURE PATTERNS
+# ============================================================================
+
+EDR_SIGNATURES = {
+    "crowdstrike": {
+        "patterns": [r"csagent", r"falcon", r"csfalcon"],
+        "processes": ["csfalconservice.exe", "csagent.exe"],
+    },
+    "carbon_black": {
+        "patterns": [r"carbonblack", r"cb\.exe", r"cbdefense"],
+        "processes": ["cb.exe", "cbcomms.exe"],
+    },
+    "sentinel_one": {
+        "patterns": [r"sentinelone", r"sentinel", r"s1agent"],
+        "processes": ["sentinelagent.exe", "sentinelctl.exe"],
+    },
+    "defender": {
+        "patterns": [r"microsoft defender", r"msmpeng", r"mpcmdrun"],
+        "processes": ["msmpeng.exe", "mpcmdrun.exe"],
+    },
+    "symantec": {
+        "patterns": [r"symantec", r"norton", r"sep14"],
+        "processes": ["ccsvchst.exe", "rtvscan.exe"],
+    },
+    "mcafee": {
+        "patterns": [r"mcafee", r"mfeann", r"mfeavsvc"],
+        "processes": ["mcshield.exe", "mfetp.exe"],
+    },
+    "kaspersky": {
+        "patterns": [r"kaspersky", r"klnagent", r"avp"],
+        "processes": ["avp.exe", "avpui.exe"],
+    },
+    "sophos": {
+        "patterns": [r"sophos", r"sav32cli", r"swi_fc"],
+        "processes": ["savservice.exe", "swi_service.exe"],
+    },
+}
+
+
+def detect_security_products(content: str) -> List[Dict[str, Any]]:
+    """Detect security products mentioned in content."""
+    detected = []
+    
+    for product, sigs in EDR_SIGNATURES.items():
+        for pattern in sigs["patterns"]:
+            if re.search(pattern, content, re.IGNORECASE):
+                detected.append({
+                    "product": product,
+                    "type": "edr_av",
+                    "pattern_matched": pattern,
+                    "processes": sigs["processes"],
+                })
+                break
+    
+    return detected

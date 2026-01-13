@@ -6,7 +6,27 @@ from sqlalchemy.orm import Session
 
 from backend import models
 from backend.core.database import get_db
+from backend.core.auth import get_current_user
 from backend.schemas import Finding, Report
+
+
+def verify_project_access(db: Session, project_id: int, user_id: int) -> bool:
+    """Check if user has access to the project."""
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        return False
+    
+    # Owner always has access
+    if project.owner_id == user_id:
+        return True
+    
+    # Check collaborator access
+    collaborator = db.query(models.ProjectCollaborator).filter(
+        models.ProjectCollaborator.project_id == project_id,
+        models.ProjectCollaborator.user_id == user_id
+    ).first()
+    
+    return collaborator is not None
 
 
 # Chat models
@@ -29,14 +49,27 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[Report])
-def list_reports(project_id: int, db: Session = Depends(get_db)):
+def list_reports(
+    project_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """List all reports for a project. Called via /projects/{project_id}/reports"""
+    if not verify_project_access(db, project_id, current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     reports = db.query(models.Report).filter(models.Report.project_id == project_id).all()
     return reports
 
 
 @router.get("/{report_id}", response_model=Report)
-def get_report(report_id: int, db: Session = Depends(get_db)):
+def get_report(
+    project_id: int,
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if not verify_project_access(db, project_id, current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     report = db.get(models.Report, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -44,7 +77,14 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{report_id}")
-def delete_report(report_id: int, db: Session = Depends(get_db)):
+def delete_report(
+    project_id: int,
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if not verify_project_access(db, project_id, current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     report = db.get(models.Report, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -54,7 +94,14 @@ def delete_report(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/findings", response_model=list[Finding])
-def list_findings(report_id: int, db: Session = Depends(get_db)):
+def list_findings(
+    project_id: int,
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if not verify_project_access(db, project_id, current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     report = db.get(models.Report, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -63,8 +110,15 @@ def list_findings(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/attack-chains")
-def get_attack_chains(report_id: int, db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
+def get_attack_chains(
+    project_id: int,
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
     """Get attack chains identified by AI analysis for a report."""
+    if not verify_project_access(db, project_id, current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     report = db.get(models.Report, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -75,8 +129,15 @@ def get_attack_chains(report_id: int, db: Session = Depends(get_db)) -> List[Dic
 
 
 @router.get("/{report_id}/ai-insights")
-def get_ai_insights(report_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def get_ai_insights(
+    project_id: int,
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+) -> Dict[str, Any]:
     """Get AI analysis insights including false positives and severity adjustments."""
+    if not verify_project_access(db, project_id, current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     report = db.get(models.Report, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -95,13 +156,21 @@ def get_ai_insights(report_id: int, db: Session = Depends(get_db)) -> Dict[str, 
 
 
 @router.post("/{report_id}/chat", response_model=ReportChatResponse)
-async def chat_about_report(report_id: int, request: ReportChatRequest, db: Session = Depends(get_db)):
+async def chat_about_report(
+    project_id: int,
+    report_id: int, 
+    request: ReportChatRequest, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Chat with Gemini about a VR Scan report's findings and exploitability analysis.
     
     Allows users to ask follow-up questions about security findings, attack chains,
     and exploit scenarios.
     """
+    if not verify_project_access(db, project_id, current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     from backend.core.config import settings
     
     if not settings.gemini_api_key:

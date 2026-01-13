@@ -1051,7 +1051,7 @@ const AntiVirusDetectionPage: React.FC = () => {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
-  const pageContext = `This page covers antivirus detection fundamentals for beginners. Topics include detection methods (signature-based, heuristic rules, behavior monitoring, reputation and cloud), understanding common alert types, detection signals and artifacts, and platform-specific checks for Windows Defender, Linux ClamAV, and macOS XProtect/Gatekeeper. The page covers telemetry sources, evidence capture, false positive handling, triage workflows, and when to escalate incidents. Key concepts include signatures, heuristics, behavior analysis, quarantine, and false positives/negatives.`;
+  const pageContext = `This page covers antivirus detection fundamentals for beginners. Topics include detection methods (signature-based, heuristic rules, behavior monitoring, reputation and cloud), common alert types, detection signals and artifacts, and platform-specific checks for Windows Defender, Linux ClamAV, and macOS XProtect/Gatekeeper. The page covers telemetry sources, evidence capture, enrichment, severity rubric, response checklists, false positive handling, triage workflows, and when to escalate incidents. Key concepts include signatures, heuristics, behavior analysis, quarantine, and false positives/negatives.`;
 
   const beginnerObjectives = [
     "Explain what antivirus detection is in plain language.",
@@ -1122,6 +1122,81 @@ const AntiVirusDetectionPage: React.FC = () => {
     "See if the alert repeats after reboot or removal.",
     "Confirm if other security tools alert on the same file.",
     "If safe, add allowlist with approval and document why.",
+  ];
+
+  const detectionLayers = [
+    "Signatures for known malware families and hashes.",
+    "Heuristics for suspicious traits and packed files.",
+    "Behavior monitoring for runtime actions and persistence.",
+    "Reputation checks for new or uncommon binaries.",
+  ];
+
+  const alertEnrichmentChecklist = [
+    "SHA-256 hash and signer details",
+    "Parent/child process tree and command line",
+    "File origin (URL, email, removable media, or download)",
+    "Network connections within a short time window",
+    "Prevalence across the fleet and first-seen timestamp",
+  ];
+
+  const methodSelectionTips = [
+    "Use signatures for known threats and behavior for fileless activity.",
+    "Tune heuristics with allowlists for trusted internal tooling.",
+    "Prefer reputation checks for newly downloaded binaries.",
+    "Correlate AV alerts with EDR and network telemetry before escalation.",
+  ];
+
+  const maintenanceChecklist = [
+    "Review exclusions and allowlists on a regular cadence.",
+    "Confirm real-time protection and cloud features are enabled.",
+    "Validate scan schedules and update windows.",
+    "Test detection workflows in a lab environment.",
+  ];
+
+  const triageNoteTemplate = [
+    "Summary and severity rating",
+    "Host and user context",
+    "Evidence captured (hashes, paths, process tree)",
+    "Actions taken and containment status",
+    "Next steps and owner",
+  ];
+
+  const severityRubric = [
+    { level: "Low", indicators: "Single host, low-risk PUA, no lateral movement", action: "Document, monitor, and close if validated" },
+    { level: "Medium", indicators: "Suspicious behavior or unknown binary on user endpoint", action: "Contain if needed and enrich evidence" },
+    { level: "High", indicators: "Multiple hosts, privileged accounts, or confirmed malware family", action: "Escalate to IR and hunt for spread" },
+    { level: "Critical", indicators: "Production impact, data exfiltration, or ransomware behavior", action: "Immediate incident response and containment" },
+  ];
+
+  const falsePositiveSources = [
+    "Admin and IT tools that use scripting or remote execution",
+    "Packers or installers that look like obfuscation",
+    "Custom internal apps with low reputation",
+    "Security testing tools or lab samples",
+    "Unsigned utilities in development folders",
+  ];
+
+  const escalationPacket = [
+    "Alert summary with severity and timestamps",
+    "Evidence bundle (hash, path, process tree)",
+    "Network indicators and related connections",
+    "Containment actions already taken",
+    "Owner, system criticality, and business impact",
+  ];
+
+  const responseChecklist = [
+    "Isolate affected hosts if malicious activity is confirmed",
+    "Collect volatile data before remediation",
+    "Remove persistence and validate clean state",
+    "Scan for related indicators across the fleet",
+    "Update detections and document lessons learned",
+  ];
+
+  const labSafetyTips = [
+    "Use isolated networks and disposable test VMs",
+    "Avoid scanning production unless approved",
+    "Never execute unknown samples on corporate devices",
+    "Reset snapshots after testing to remove artifacts",
   ];
 
   const signals = [
@@ -1301,6 +1376,22 @@ const AntiVirusDetectionPage: React.FC = () => {
                   ))}
                 </List>
               </Paper>
+
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Detection Layers at a Glance
+                </Typography>
+                <List dense>
+                  {detectionLayers.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
             </Box>
           </TabPanel>
 
@@ -1338,6 +1429,22 @@ const AntiVirusDetectionPage: React.FC = () => {
                     <ListItem key={item}>
                       <ListItemIcon>
                         <CheckCircleIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#22c55e", mb: 1 }}>
+                  Method Selection Tips
+                </Typography>
+                <List dense>
+                  {methodSelectionTips.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="info" fontSize="small" />
                       </ListItemIcon>
                       <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
                     </ListItem>
@@ -1435,6 +1542,22 @@ const AntiVirusDetectionPage: React.FC = () => {
                   ))}
                 </List>
               </Paper>
+
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Alert Enrichment Checklist
+                </Typography>
+                <List dense>
+                  {alertEnrichmentChecklist.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
             </Box>
           </TabPanel>
 
@@ -1518,6 +1641,38 @@ systemextensionsctl list`}
                   ))}
                 </List>
               </Paper>
+
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#22c55e", mb: 1 }}>
+                  Maintenance Checklist
+                </Typography>
+                <List dense>
+                  {maintenanceChecklist.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="info" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Lab Safety Tips
+                </Typography>
+                <List dense>
+                  {labSafetyTips.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
             </Box>
           </TabPanel>
 
@@ -1546,6 +1701,32 @@ systemextensionsctl list`}
               </Paper>
 
               <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Severity Rubric
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: "#a5b4fc" }}>Level</TableCell>
+                        <TableCell sx={{ color: "#a5b4fc" }}>Indicators</TableCell>
+                        <TableCell sx={{ color: "#a5b4fc" }}>Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {severityRubric.map((row) => (
+                        <TableRow key={row.level}>
+                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{row.level}</TableCell>
+                          <TableCell sx={{ color: "grey.400" }}>{row.indicators}</TableCell>
+                          <TableCell sx={{ color: "grey.400" }}>{row.action}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#22c55e", mb: 1 }}>
                   Beginner Questions
                 </Typography>
@@ -1570,6 +1751,70 @@ systemextensionsctl list`}
                     <ListItem key={item}>
                       <ListItemIcon>
                         <CheckCircleIcon color="warning" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Common False Positive Sources
+                </Typography>
+                <List dense>
+                  {falsePositiveSources.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="warning" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Triage Note Template
+                </Typography>
+                <List dense>
+                  {triageNoteTemplate.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#22c55e", mb: 1 }}>
+                  Response Checklist
+                </Typography>
+                <List dense>
+                  {responseChecklist.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="info" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                  Escalation Packet
+                </Typography>
+                <List dense>
+                  {escalationPacket.map((item) => (
+                    <ListItem key={item}>
+                      <ListItemIcon>
+                        <CheckCircleIcon color="success" fontSize="small" />
                       </ListItemIcon>
                       <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
                     </ListItem>

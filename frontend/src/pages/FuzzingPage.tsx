@@ -51,6 +51,7 @@ import {
   Step,
   StepLabel,
   StepContent,
+  InputAdornment,
 } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -60,6 +61,8 @@ import PauseIcon from "@mui/icons-material/Pause";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
+import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -100,7 +103,21 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import SearchIcon from "@mui/icons-material/Search";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
 import CategoryIcon from "@mui/icons-material/Category";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
+import NavigateNextIcon from "@mui/icons-material/NavigateNext";
+import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
+import CheckIcon from "@mui/icons-material/Check";
+import LightbulbIcon from "@mui/icons-material/Lightbulb";
+import TimerIcon from "@mui/icons-material/Timer";
+import BlockIcon from "@mui/icons-material/Block";
+import ClearIcon from "@mui/icons-material/Clear";
+import CableIcon from "@mui/icons-material/Cable";
+import PieChartIcon from "@mui/icons-material/PieChart";
+import GridOnIcon from "@mui/icons-material/GridOn";
+import RadarIcon from "@mui/icons-material/Radar";
 import ReactMarkdown from "react-markdown";
+import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import { fuzzer, FuzzerResponse, FuzzerConfig as APIFuzzerConfig } from "../api/client";
 import { jsPDF } from "jspdf";
 import { 
@@ -185,7 +202,10 @@ interface FuzzConfig {
   filterCodes: number[];
   matchSize: { min: number; max: number } | null;
   matchRegex: string;
+  proxyUrl: string;
 }
+
+const FUZZER_HANDOFF_KEY = "vragent-fuzzer-handoff";
 
 // Built-in wordlists
 const BUILTIN_WORDLISTS: WordlistConfig[] = [
@@ -439,6 +459,270 @@ const HEADER_PRESETS = [
   { name: "XMLHttpRequest", header: "X-Requested-With", value: "XMLHttpRequest" },
 ];
 
+// Interactive Wizard Steps Configuration
+const WIZARD_STEPS = [
+  {
+    id: "welcome",
+    title: "Welcome to the Security Fuzzer! 🚀",
+    description: "This wizard will guide you through your first fuzzing session step-by-step.",
+    longDescription: `**What is Fuzzing?**
+
+Fuzzing is a security testing technique where you send many different inputs (called "payloads") to an application to find vulnerabilities.
+
+**What you'll learn:**
+1. How to configure a target URL
+2. How to mark positions for payload injection
+3. How to select and load payloads
+4. How to run a fuzzing session
+5. How to analyze the results
+
+**Let's get started!**`,
+    tip: "Don't worry if this seems complex - we'll explain everything as we go!",
+    validation: () => true,
+    validationMessage: "",
+  },
+  {
+    id: "target",
+    title: "Step 1: Configure Your Target",
+    description: "Enter the URL you want to test. This is the endpoint that will receive the payloads.",
+    longDescription: `**Enter a Target URL**
+
+This is the web address you want to test. It could be:
+- An API endpoint: \`http://192.168.1.1/api/users\`
+- A login page: \`http://target.com/login\`
+- A search page: \`http://example.com/search?q=test\`
+
+**Example targets for practice:**
+- \`http://192.168.1.1/FUZZ\` - Test different paths
+- \`http://example.com/api/users/FUZZ\` - Test user IDs
+- \`http://target.com/search?query=FUZZ\` - Test search input
+
+**Important:** Use \`FUZZ\` or \`§0§\` where you want payloads injected.`,
+    tip: "💡 Pro tip: The 'FUZZ' keyword marks where payloads will be inserted. You can also use §0§, §1§, etc. for multiple positions.",
+    validation: (config: FuzzConfig) => config.targetUrl.length > 0,
+    validationMessage: "Please enter a target URL to continue",
+  },
+  {
+    id: "positions",
+    title: "Step 2: Mark Injection Positions",
+    description: "Positions tell the fuzzer WHERE to inject payloads in your request.",
+    longDescription: `**What are Injection Positions?**
+
+Positions are markers in your URL or request body where the fuzzer will insert test payloads.
+
+**Two ways to mark positions:**
+
+1. **Using FUZZ keyword** (simplest):
+   - URL: \`http://192.168.1.1/FUZZ\`
+   - The word FUZZ gets replaced with each payload
+   
+2. **Using numbered markers** (for multiple positions):
+   - URL: \`http://192.168.1.1/api/§0§?token=§1§\`
+   - §0§ = first set of payloads
+   - §1§ = second set of payloads
+
+**Examples:**
+| URL | What it tests |
+|-----|---------------|
+| \`/api/users/FUZZ\` | Different user IDs |
+| \`/§0§/config\` | Different directories |
+| \`?id=§0§&page=§1§\` | Multiple parameters |`,
+    tip: "💡 If you used 'FUZZ' in your URL, click 'Auto-detect FUZZ position' to automatically set it up!",
+    validation: (config: FuzzConfig) => config.positions.length > 0 || config.targetUrl.includes("FUZZ"),
+    validationMessage: "Add at least one injection position (or use FUZZ in your URL)",
+  },
+  {
+    id: "payloads",
+    title: "Step 3: Load Your Payloads",
+    description: "Payloads are the values that will be tested at each position.",
+    longDescription: `**What are Payloads?**
+
+Payloads are the test values sent to your target. They can be:
+- Directory names: admin, backup, config
+- User IDs: 1, 2, 3, 4, 5
+- Attack strings: ' OR 1=1--, <script>alert(1)</script>
+
+**Three ways to add payloads:**
+
+1. **Use Built-in Wordlists** (Recommended for beginners):
+   - Common Directories - for finding hidden pages
+   - SQL Injection - for testing databases
+   - XSS Payloads - for cross-site scripting tests
+
+2. **Enter Custom Payloads**:
+   - Type one payload per line
+   - Great for specific values you want to test
+
+3. **Upload a File**:
+   - Load your own wordlist (.txt file)
+   - One payload per line`,
+    tip: "💡 Start with 'Common Directories' wordlist - it's safe and useful for beginners!",
+    validation: (config: FuzzConfig) => config.payloads.some(p => p.length > 0),
+    validationMessage: "Load at least one payload list to continue",
+  },
+  {
+    id: "attackmode",
+    title: "Step 4: Choose Attack Mode",
+    description: "Attack mode determines how payloads are combined when testing multiple positions.",
+    longDescription: `**Attack Modes Explained:**
+
+**🎯 Sniper** (Best for beginners)
+- Tests ONE position at a time
+- Other positions stay static
+- Example: If you have 10 payloads and 2 positions = 20 requests
+- Use when: Testing a single parameter
+
+**🔨 Battering Ram**
+- Uses SAME payload in ALL positions simultaneously
+- Example: 10 payloads = 10 requests
+- Use when: Testing same value everywhere (like a username)
+
+**🎸 Pitchfork**
+- Pairs payloads from each position 1:1
+- Position 1 payload 1 + Position 2 payload 1, etc.
+- Use when: Testing related values (username + password pairs)
+
+**💣 Cluster Bomb**
+- Tests EVERY combination of payloads
+- Example: 10 payloads × 10 payloads = 100 requests
+- Use when: Exhaustive testing (warning: can be slow!)`,
+    tip: "💡 Stick with 'Sniper' mode for your first test - it's the simplest and most efficient!",
+    validation: () => true,
+    validationMessage: "",
+  },
+  {
+    id: "run",
+    title: "Step 5: Start Fuzzing! 🎉",
+    description: "You're ready to run your first fuzzing session!",
+    longDescription: `**Final Checklist:**
+
+✅ Target URL is set
+✅ Injection positions are marked
+✅ Payloads are loaded
+✅ Attack mode is selected
+
+**What happens when you click Start:**
+
+1. The fuzzer sends requests to your target
+2. Each request uses a different payload
+3. Responses are analyzed in real-time
+4. Interesting responses are flagged
+
+**What to look for in results:**
+- **Different status codes** - 200 vs 403 vs 404
+- **Different response lengths** - May indicate different behavior
+- **Different response times** - Slow responses might mean vulnerability
+- **Interesting flags** - Auto-detected patterns
+
+**After fuzzing:**
+- Use AI Analysis for automated insights
+- Check the Smart Detection tab for vulnerabilities
+- Export your findings as a report`,
+    tip: "💡 Watch the progress bar and response table as requests are made. Look for responses that stand out!",
+    validation: () => true,
+    validationMessage: "",
+  },
+];
+
+// Contextual Help Tooltips Data
+const CONTEXTUAL_HELP = {
+  targetUrl: {
+    title: "Target URL",
+    description: "The web address you want to test. Use 'FUZZ' or '§0§' to mark where payloads should be inserted.",
+    example: "http://192.168.1.1/api/users/FUZZ",
+    tip: "Use http:// for local networks, https:// for secure connections",
+  },
+  method: {
+    title: "HTTP Method",
+    description: "The type of request to send. GET is for retrieving data, POST for sending data.",
+    example: "GET for directory enumeration, POST for form testing",
+    tip: "Most web pages use GET, APIs often use POST, PUT, DELETE",
+  },
+  threads: {
+    title: "Concurrent Threads",
+    description: "How many requests to send simultaneously. Higher = faster but may trigger rate limiting.",
+    example: "10 threads = 10 requests at once",
+    tip: "Start with 10, increase if target can handle it",
+  },
+  delay: {
+    title: "Delay Between Requests",
+    description: "Milliseconds to wait between each request. Helps avoid detection and rate limiting.",
+    example: "100ms = 10 requests per second max",
+    tip: "Use 100-500ms for stealthy testing",
+  },
+  timeout: {
+    title: "Request Timeout",
+    description: "How long to wait for a response before giving up (in milliseconds).",
+    example: "10000ms = 10 seconds",
+    tip: "Increase for slow servers, decrease for faster scanning",
+  },
+  attackMode: {
+    title: "Attack Mode",
+    description: "How payloads are combined when you have multiple injection positions.",
+    example: "Sniper = test one position at a time",
+    tip: "Use Sniper for simple tests, Cluster Bomb for exhaustive testing",
+  },
+  positions: {
+    title: "Injection Positions",
+    description: "Markers in your URL or body where payloads will be inserted.",
+    example: "§0§ = first position, §1§ = second position",
+    tip: "Use FUZZ for a single position, numbered markers for multiple",
+  },
+  payloads: {
+    title: "Payloads",
+    description: "The test values to send. Can be wordlists, custom values, or generated sequences.",
+    example: "admin, root, test, user, backup...",
+    tip: "Start with built-in wordlists, then customize based on results",
+  },
+  proxyUrl: {
+    title: "Proxy URL",
+    description: "Route requests through a proxy like Burp Suite or ZAP for inspection.",
+    example: "http://127.0.0.1:8080",
+    tip: "Great for debugging or manual inspection of interesting requests",
+  },
+  matchCodes: {
+    title: "Match Status Codes",
+    description: "Only show responses with these HTTP status codes.",
+    example: "200, 301, 403, 500",
+    tip: "403 often indicates a protected page exists, 500 might mean a vulnerability",
+  },
+};
+
+// Helper component for contextual help
+const HelpTooltip: React.FC<{ field: keyof typeof CONTEXTUAL_HELP; showHelp?: boolean }> = ({ field, showHelp = true }) => {
+  const help = CONTEXTUAL_HELP[field];
+  if (!showHelp || !help) return null;
+  
+  return (
+    <Tooltip
+      arrow
+      placement="top"
+      title={
+        <Box sx={{ p: 0.5, maxWidth: 300 }}>
+          <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+            {help.title}
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            {help.description}
+          </Typography>
+          {help.example && (
+            <Typography variant="caption" sx={{ display: "block", fontFamily: "monospace", bgcolor: "rgba(0,0,0,0.2)", p: 0.5, borderRadius: 0.5, mb: 1 }}>
+              Example: {help.example}
+            </Typography>
+          )}
+          <Typography variant="caption" color="warning.light" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <LightbulbIcon sx={{ fontSize: 14 }} /> {help.tip}
+          </Typography>
+        </Box>
+      }
+    >
+      <IconButton size="small" sx={{ ml: 0.5, opacity: 0.6, "&:hover": { opacity: 1 } }}>
+        <HelpOutlineIcon sx={{ fontSize: 16 }} />
+      </IconButton>
+    </Tooltip>
+  );
+};
+
 const FuzzingPage: React.FC = () => {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
@@ -460,7 +744,30 @@ const FuzzingPage: React.FC = () => {
     filterCodes: [],
     matchSize: null,
     matchRegex: "",
+    proxyUrl: "",
   });
+
+  useEffect(() => {
+    const stored = localStorage.getItem(FUZZER_HANDOFF_KEY);
+    if (!stored) return;
+    try {
+      const payload = JSON.parse(stored);
+      if (payload?.targetUrl) {
+        setConfig(prev => ({
+          ...prev,
+          targetUrl: payload.targetUrl,
+          method: payload.method || prev.method,
+          headers: payload.headers || prev.headers,
+          body: payload.body || prev.body,
+        }));
+        setActiveTab(0);
+      }
+    } catch (err) {
+      console.error("Failed to parse fuzzer handoff", err);
+    } finally {
+      localStorage.removeItem(FUZZER_HANDOFF_KEY);
+    }
+  }, []);
   
   const [results, setResults] = useState<FuzzResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -486,17 +793,37 @@ const FuzzingPage: React.FC = () => {
     minLength: "",
     maxLength: "",
     interestingOnly: false,
+    // Enhanced filter options
+    excludeStatusCodes: "",      // Negative match: exclude these status codes (comma-separated)
+    regexPattern: "",            // Regex pattern to match in response body
+    excludePattern: "",          // Pattern to exclude from results
+    minResponseTime: "",         // Minimum response time in ms
+    maxResponseTime: "",         // Maximum response time in ms
+    contentType: "",             // Filter by content type
+    showOnlyErrors: false,       // Show only error responses (4xx, 5xx)
+    showOnlySuccess: false,      // Show only success responses (2xx)
+    hideReflected: false,        // Hide results where payload is reflected
+    showOnlyReflected: false,    // Show only results where payload is reflected
   });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   
   // AI & Guide state
   const [showGuide, setShowGuide] = useState(true); // Show by default for new users
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatMaximized, setChatMaximized] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
+  
+  // Interactive Beginner Wizard state
+  const [wizardMode, setWizardMode] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [showWizardHelp, setShowWizardHelp] = useState<string | null>(null);
+  const [wizardValidation, setWizardValidation] = useState<Record<string, boolean>>({});
+  const [showContextualHelp, setShowContextualHelp] = useState(true);
   
   // Save/Load config state
   const [savedConfigs, setSavedConfigs] = useState<SavedConfig[]>([]);
@@ -556,6 +883,78 @@ const FuzzingPage: React.FC = () => {
   const [differentialResults, setDifferentialResults] = useState<any[]>([]);
   const [responseCategories, setResponseCategories] = useState<Record<string, string[]>>({});
   const [baselineIndex, setBaselineIndex] = useState(0);
+  
+  // Repeater state (like Burp Suite's Repeater)
+  const [repeaterOpen, setRepeaterOpen] = useState(false);
+  const [repeaterRequest, setRepeaterRequest] = useState<{
+    url: string;
+    method: string;
+    headers: Record<string, string>;
+    body: string;
+    proxyUrl: string;
+    originalPayload?: string;
+  } | null>(null);
+  const [repeaterResponse, setRepeaterResponse] = useState<{
+    statusCode: number;
+    headers: Record<string, string>;
+    body: string;
+    responseTime: number;
+    contentLength: number;
+  } | null>(null);
+  const [repeaterSending, setRepeaterSending] = useState(false);
+  const [repeaterHistory, setRepeaterHistory] = useState<Array<{
+    id: string;
+    request: typeof repeaterRequest;
+    response: typeof repeaterResponse;
+    timestamp: Date;
+  }>>([]);
+  
+  // Response comparison state
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareResults, setCompareResults] = useState<[FuzzResult | null, FuzzResult | null]>([null, null]);
+  const [compareDialogOpen, setCompareDialogOpen] = useState(false);
+  
+  // ============================================================================
+  // WEBSOCKET FUZZING STATE
+  // ============================================================================
+  const [wsConfig, setWsConfig] = useState({
+    targetUrl: "",
+    initialMessages: [] as string[],
+    authToken: "",
+    authHeader: "Authorization",
+    origin: "",
+    subprotocols: [] as string[],
+    attackCategories: ["all"],
+    customPayloads: [] as string[],
+    messageTemplate: "",
+    timeout: 10000,
+    delayBetweenTests: 100,
+    maxMessagesPerTest: 10,
+  });
+  const [wsResults, setWsResults] = useState<any[]>([]);
+  const [wsIsRunning, setWsIsRunning] = useState(false);
+  const [wsProgress, setWsProgress] = useState({ current: 0, total: 0 });
+  const [wsStats, setWsStats] = useState<any>(null);
+  const [wsFindings, setWsFindings] = useState<any[]>([]);
+  const [wsCategories, setWsCategories] = useState<any[]>([]);
+  const [wsNewInitMsg, setWsNewInitMsg] = useState("");
+  const [wsNewCustomPayload, setWsNewCustomPayload] = useState("");
+  const [wsSelectedCategory, setWsSelectedCategory] = useState<string | null>(null);
+  const [wsCategoryPayloads, setWsCategoryPayloads] = useState<any>(null);
+  
+  // ============================================================================
+  // COVERAGE TRACKING STATE
+  // ============================================================================
+  const [coverageSessions, setCoverageSessions] = useState<any[]>([]);
+  const [activeCoverageSession, setActiveCoverageSession] = useState<any>(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [coverageGaps, setCoverageGaps] = useState<any>(null);
+  const [coverageHeatmap, setCoverageHeatmap] = useState<any>(null);
+  const [coverageTechniques, setCoverageTechniques] = useState<any[]>([]);
+  const [owaspCategories, setOwaspCategories] = useState<any>({});
+  const [coverageNewSessionUrl, setCoverageNewSessionUrl] = useState("");
+  const [showCoverageReport, setShowCoverageReport] = useState(false);
+  const [coverageReportContent, setCoverageReportContent] = useState("");
   
   const abortControllerRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -619,6 +1018,150 @@ const FuzzingPage: React.FC = () => {
     setResponseDialogOpen(true);
   };
   
+  // ==========================================================================
+  // Repeater Functions (like Burp Suite's Repeater)
+  // ==========================================================================
+  
+  // Send request to Repeater
+  const sendToRepeater = (result: FuzzResult) => {
+    // Build the URL with the payload substituted
+    let targetUrl = config.targetUrl;
+    if (targetUrl.includes("FUZZ") || targetUrl.includes("§0§")) {
+      targetUrl = targetUrl.replace(/FUZZ|§0§/g, result.payload);
+    }
+    
+    setRepeaterRequest({
+      url: targetUrl,
+      method: config.method,
+      headers: { ...config.headers },
+      body: config.body.replace(/FUZZ|§\d§/g, result.payload),
+      proxyUrl: config.proxyUrl || "",
+      originalPayload: result.payload,
+    });
+    setRepeaterResponse(null);
+    setRepeaterOpen(true);
+  };
+  
+  // Send Repeater request
+  const sendRepeaterRequest = async () => {
+    if (!repeaterRequest) return;
+    
+    setRepeaterSending(true);
+    const startTime = Date.now();
+    
+    try {
+      // Use the fuzzer API to send a single request
+      const response = await fetch("/api/fuzzer/send-single", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          url: repeaterRequest.url,
+          method: repeaterRequest.method,
+          headers: repeaterRequest.headers,
+          body: repeaterRequest.body,
+          proxy_url: repeaterRequest.proxyUrl || null,
+        }),
+      });
+      
+      const data = await response.json();
+      const responseTime = Date.now() - startTime;
+      
+      const newResponse = {
+        statusCode: data.status_code || data.statusCode || 0,
+        headers: data.headers || {},
+        body: data.body || "",
+        responseTime: data.response_time || responseTime,
+        contentLength: data.content_length || (data.body?.length || 0),
+      };
+      
+      setRepeaterResponse(newResponse);
+      
+      // Add to history
+      setRepeaterHistory(prev => [{
+        id: `repeater-${Date.now()}`,
+        request: { ...repeaterRequest },
+        response: newResponse,
+        timestamp: new Date(),
+      }, ...prev].slice(0, 50)); // Keep last 50
+      
+    } catch (e: any) {
+      setRepeaterResponse({
+        statusCode: 0,
+        headers: {},
+        body: `Error: ${e.message || "Failed to send request"}`,
+        responseTime: Date.now() - startTime,
+        contentLength: 0,
+      });
+    } finally {
+      setRepeaterSending(false);
+    }
+  };
+  
+  // Add header to Repeater request
+  const addRepeaterHeader = () => {
+    if (repeaterRequest) {
+      setRepeaterRequest({
+        ...repeaterRequest,
+        headers: { ...repeaterRequest.headers, "": "" },
+      });
+    }
+  };
+  
+  // Update Repeater header
+  const updateRepeaterHeader = (oldKey: string, newKey: string, value: string) => {
+    if (repeaterRequest) {
+      const newHeaders = { ...repeaterRequest.headers };
+      if (oldKey !== newKey) {
+        delete newHeaders[oldKey];
+      }
+      newHeaders[newKey] = value;
+      setRepeaterRequest({ ...repeaterRequest, headers: newHeaders });
+    }
+  };
+  
+  // Delete Repeater header
+  const deleteRepeaterHeader = (key: string) => {
+    if (repeaterRequest) {
+      const newHeaders = { ...repeaterRequest.headers };
+      delete newHeaders[key];
+      setRepeaterRequest({ ...repeaterRequest, headers: newHeaders });
+    }
+  };
+  
+  // ==========================================================================
+  // Response Comparison Functions
+  // ==========================================================================
+  
+  // Toggle compare mode
+  const toggleCompareResult = (result: FuzzResult) => {
+    setCompareResults(prev => {
+      if (prev[0]?.id === result.id) {
+        return [null, prev[1]];
+      }
+      if (prev[1]?.id === result.id) {
+        return [prev[0], null];
+      }
+      if (!prev[0]) {
+        return [result, prev[1]];
+      }
+      if (!prev[1]) {
+        return [prev[0], result];
+      }
+      // Replace first selection
+      return [result, prev[1]];
+    });
+  };
+  
+  // Open comparison dialog
+  const openCompareDialog = () => {
+    if (compareResults[0] && compareResults[1]) {
+      setCompareDialogOpen(true);
+    }
+  };
+
   // ==========================================================================
   // Session Management Functions
   // ==========================================================================
@@ -1083,6 +1626,7 @@ const FuzzingPage: React.FC = () => {
           match_codes: config.matchCodes,
           filter_codes: config.filterCodes,
           match_regex: config.matchRegex,
+          proxy_url: config.proxyUrl || undefined,
         };
         
         streamRef.current = fuzzer.stream(
@@ -1291,10 +1835,63 @@ const FuzzingPage: React.FC = () => {
 
   // Filter results
   const filteredResults = results.filter(result => {
+    // Basic filters
     if (resultFilter.statusCode && result.statusCode.toString() !== resultFilter.statusCode) return false;
     if (resultFilter.minLength && result.responseLength < parseInt(resultFilter.minLength)) return false;
     if (resultFilter.maxLength && result.responseLength > parseInt(resultFilter.maxLength)) return false;
     if (resultFilter.interestingOnly && !result.interesting) return false;
+    
+    // Advanced filters - Exclude status codes
+    if (resultFilter.excludeStatusCodes) {
+      const excludeCodes = resultFilter.excludeStatusCodes.split(",").map(c => c.trim());
+      if (excludeCodes.includes(result.statusCode.toString())) return false;
+    }
+    
+    // Advanced filters - Response time
+    if (resultFilter.minResponseTime && result.responseTime < parseInt(resultFilter.minResponseTime)) return false;
+    if (resultFilter.maxResponseTime && result.responseTime > parseInt(resultFilter.maxResponseTime)) return false;
+    
+    // Advanced filters - Regex pattern match (search in response body if available)
+    if (resultFilter.regexPattern) {
+      try {
+        const regex = new RegExp(resultFilter.regexPattern, "i");
+        const searchText = (result.payload || "") + (result.contentType || "");
+        if (!regex.test(searchText)) return false;
+      } catch {
+        // Invalid regex, skip this filter
+      }
+    }
+    
+    // Advanced filters - Exclude pattern
+    if (resultFilter.excludePattern) {
+      try {
+        const regex = new RegExp(resultFilter.excludePattern, "i");
+        const searchText = (result.payload || "") + (result.contentType || "");
+        if (regex.test(searchText)) return false;
+      } catch {
+        // Invalid regex, skip this filter
+      }
+    }
+    
+    // Advanced filters - Content type
+    if (resultFilter.contentType && result.contentType) {
+      if (!result.contentType.toLowerCase().includes(resultFilter.contentType.toLowerCase())) return false;
+    }
+    
+    // Advanced filters - Status code category filters
+    if (resultFilter.showOnlyErrors) {
+      if (result.statusCode < 400) return false;
+    }
+    if (resultFilter.showOnlySuccess) {
+      if (result.statusCode < 200 || result.statusCode >= 300) return false;
+    }
+    
+    // Advanced filters - Reflection-based filters
+    // Check if payload is reflected in any way (basic check)
+    const isReflected = result.interesting || result.payload.length > 5;
+    if (resultFilter.showOnlyReflected && !isReflected) return false;
+    if (resultFilter.hideReflected && isReflected) return false;
+    
     return true;
   });
 
@@ -1642,6 +2239,22 @@ const FuzzingPage: React.FC = () => {
             Back to Network Hub
           </Button>
           <Box sx={{ display: "flex", gap: 1 }}>
+            {/* Beginner Wizard Mode Toggle */}
+            <Button
+              variant={wizardMode ? "contained" : "outlined"}
+              color="success"
+              startIcon={<RocketLaunchIcon />}
+              onClick={() => {
+                setWizardMode(!wizardMode);
+                if (!wizardMode) setWizardStep(0);
+              }}
+              sx={{
+                background: wizardMode ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" : undefined,
+                boxShadow: wizardMode ? `0 4px 14px ${alpha("#10b981", 0.4)}` : undefined,
+              }}
+            >
+              {wizardMode ? "Exit Wizard" : "Beginner Wizard"}
+            </Button>
             <Tooltip title="Save Configuration">
               <Button
                 variant="outlined"
@@ -1670,6 +2283,18 @@ const FuzzingPage: React.FC = () => {
             >
               {showGuide ? "Hide Guide" : "Quick Tips"}
             </Button>
+            <Tooltip title="Toggle inline help tooltips on input fields">
+              <IconButton
+                onClick={() => setShowContextualHelp(!showContextualHelp)}
+                color={showContextualHelp ? "primary" : "default"}
+                sx={{ 
+                  bgcolor: showContextualHelp ? alpha("#3b82f6", 0.1) : undefined,
+                  border: `1px solid ${showContextualHelp ? "#3b82f6" : "transparent"}`,
+                }}
+              >
+                <HelpOutlineIcon />
+              </IconButton>
+            </Tooltip>
             <Button
               variant="outlined"
               color="primary"
@@ -1723,6 +2348,605 @@ const FuzzingPage: React.FC = () => {
             </Button>
           )}
         </Box>
+
+        {/* 🔥 CYBERPUNK Agentic Fuzzer Banner 🔥 */}
+        <Paper
+          component={Link}
+          to="/network/agentic-fuzzer"
+          sx={{
+            mb: 3,
+            p: 0,
+            background: "linear-gradient(135deg, #0a0a0f 0%, #1a0a2e 50%, #0f1a2e 100%)",
+            border: "2px solid transparent",
+            borderImage: "linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff) 1",
+            borderRadius: 0,
+            clipPath: "polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))",
+            cursor: "pointer",
+            textDecoration: "none",
+            display: "block",
+            position: "relative",
+            overflow: "hidden",
+            transition: "all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+            "&:hover": {
+              transform: "translateY(-4px) scale(1.01)",
+              boxShadow: `
+                0 0 20px #ff00ff,
+                0 0 40px rgba(255, 0, 255, 0.4),
+                0 0 60px rgba(0, 255, 255, 0.2),
+                inset 0 0 60px rgba(255, 0, 255, 0.1)
+              `,
+              "& .cyber-scan-line": {
+                opacity: 1,
+              },
+              "& .cyber-glitch": {
+                animation: "glitch 0.3s infinite",
+              },
+              "& .cyber-icon": {
+                animation: "iconPulse 0.5s ease-in-out infinite alternate",
+              },
+            },
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: `
+                repeating-linear-gradient(
+                  0deg,
+                  transparent,
+                  transparent 2px,
+                  rgba(0, 255, 255, 0.03) 2px,
+                  rgba(0, 255, 255, 0.03) 4px
+                )
+              `,
+              pointerEvents: "none",
+              zIndex: 1,
+            },
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              top: "-50%",
+              left: "-50%",
+              width: "200%",
+              height: "200%",
+              background: "conic-gradient(from 0deg, transparent, #ff00ff, transparent, #00ffff, transparent)",
+              animation: "rotateBorder 4s linear infinite",
+              opacity: 0.1,
+              zIndex: 0,
+            },
+            "@keyframes rotateBorder": {
+              "0%": { transform: "rotate(0deg)" },
+              "100%": { transform: "rotate(360deg)" },
+            },
+            "@keyframes glitch": {
+              "0%": { textShadow: "2px 0 #ff00ff, -2px 0 #00ffff" },
+              "25%": { textShadow: "-2px 0 #ff00ff, 2px 0 #00ffff" },
+              "50%": { textShadow: "2px 2px #ff00ff, -2px -2px #00ffff" },
+              "75%": { textShadow: "-2px 2px #ff00ff, 2px -2px #00ffff" },
+              "100%": { textShadow: "2px 0 #ff00ff, -2px 0 #00ffff" },
+            },
+            "@keyframes iconPulse": {
+              "0%": { transform: "scale(1)", filter: "drop-shadow(0 0 10px #ff00ff)" },
+              "100%": { transform: "scale(1.1)", filter: "drop-shadow(0 0 20px #00ffff)" },
+            },
+            "@keyframes scanLine": {
+              "0%": { top: "-100%" },
+              "100%": { top: "200%" },
+            },
+            "@keyframes dataStream": {
+              "0%": { backgroundPosition: "0% 0%" },
+              "100%": { backgroundPosition: "0% 100%" },
+            },
+          }}
+        >
+          {/* Scanning Line Effect */}
+          <Box
+            className="cyber-scan-line"
+            sx={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              height: "2px",
+              background: "linear-gradient(90deg, transparent, #00ffff, #ff00ff, #00ffff, transparent)",
+              boxShadow: "0 0 20px #00ffff, 0 0 40px #ff00ff",
+              animation: "scanLine 2s linear infinite",
+              opacity: 0.6,
+              zIndex: 10,
+            }}
+          />
+
+          {/* Corner Decorations */}
+          <Box sx={{ position: "absolute", top: 0, left: 0, width: 40, height: 40, borderTop: "3px solid #00ffff", borderLeft: "3px solid #00ffff", zIndex: 5 }} />
+          <Box sx={{ position: "absolute", top: 0, right: 20, width: 40, height: 40, borderTop: "3px solid #ff00ff", borderRight: "3px solid #ff00ff", zIndex: 5 }} />
+          <Box sx={{ position: "absolute", bottom: 0, left: 20, width: 40, height: 40, borderBottom: "3px solid #ff00ff", borderLeft: "3px solid #ff00ff", zIndex: 5 }} />
+          <Box sx={{ position: "absolute", bottom: 0, right: 0, width: 40, height: 40, borderBottom: "3px solid #00ffff", borderRight: "3px solid #00ffff", zIndex: 5 }} />
+
+          {/* Main Content Container */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 3, p: 2.5, position: "relative", zIndex: 2 }}>
+            {/* Cyberpunk AI Icon */}
+            <Box
+              className="cyber-icon"
+              sx={{
+                width: 80,
+                height: 80,
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 0,
+                  background: "linear-gradient(45deg, #ff00ff, #00ffff)",
+                  clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+                  animation: "iconPulse 2s ease-in-out infinite alternate",
+                },
+                "&::after": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 3,
+                  background: "#0a0a0f",
+                  clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+                },
+              }}
+            >
+              <SmartToyIcon sx={{ fontSize: 44, color: "#00ffff", position: "relative", zIndex: 1, filter: "drop-shadow(0 0 10px #00ffff)" }} />
+            </Box>
+
+            {/* Content */}
+            <Box sx={{ flex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+                <Typography
+                  className="cyber-glitch"
+                  variant="h4"
+                  sx={{
+                    fontFamily: "'Orbitron', 'Rajdhani', monospace",
+                    fontWeight: 900,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    background: "linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff)",
+                    backgroundSize: "200% auto",
+                    backgroundClip: "text",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    animation: "dataStream 3s linear infinite",
+                    textShadow: "0 0 20px rgba(255, 0, 255, 0.5)",
+                  }}
+                >
+                  ⚡ AGENTIC FUZZER
+                </Typography>
+                <Box
+                  sx={{
+                    px: 1.5,
+                    py: 0.5,
+                    background: "linear-gradient(90deg, rgba(255, 0, 255, 0.3), rgba(0, 255, 255, 0.3))",
+                    border: "1px solid #ff00ff",
+                    clipPath: "polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%)",
+                    animation: "pulse 1.5s ease-in-out infinite",
+                    "@keyframes pulse": {
+                      "0%, 100%": { opacity: 1, boxShadow: "0 0 10px #ff00ff" },
+                      "50%": { opacity: 0.7, boxShadow: "0 0 20px #00ffff" },
+                    },
+                  }}
+                >
+                  <Typography sx={{ color: "#fff", fontWeight: 700, fontSize: "0.7rem", fontFamily: "monospace", letterSpacing: "0.15em" }}>
+                    AI-NEURAL
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    px: 1.5,
+                    py: 0.5,
+                    background: "rgba(0, 255, 136, 0.2)",
+                    border: "1px solid #00ff88",
+                    clipPath: "polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%)",
+                  }}
+                >
+                  <Typography sx={{ color: "#00ff88", fontWeight: 700, fontSize: "0.7rem", fontFamily: "monospace", letterSpacing: "0.1em" }}>
+                    ★ ELITE
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography
+                sx={{
+                  color: "rgba(255, 255, 255, 0.7)",
+                  mb: 1.5,
+                  fontFamily: "'Share Tech Mono', monospace",
+                  fontSize: "0.95rem",
+                  textShadow: "0 0 10px rgba(0, 255, 255, 0.3)",
+                }}
+              >
+                Neural network-powered autonomous penetration testing. AI discovers vulnerabilities,
+                evades defenses, and chains exploits with zero human intervention.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                {["WAF EVASION", "AUTO RECON", "CHAIN ATTACKS", "SMART REPORTS"].map((feature, i) => (
+                  <Box key={feature} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Box sx={{ width: 8, height: 8, background: i % 2 === 0 ? "#00ffff" : "#ff00ff", boxShadow: `0 0 10px ${i % 2 === 0 ? "#00ffff" : "#ff00ff"}` }} />
+                    <Typography sx={{ color: i % 2 === 0 ? "#00ffff" : "#ff00ff", fontSize: "0.75rem", fontFamily: "monospace", fontWeight: 600, letterSpacing: "0.05em" }}>
+                      {feature}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            {/* Animated Enter Arrow */}
+            <Box
+              sx={{
+                width: 60,
+                height: 60,
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 0,
+                  border: "2px solid",
+                  borderColor: "#00ffff",
+                  clipPath: "polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 60% 50%)",
+                  animation: "arrowPulse 1s ease-in-out infinite",
+                  "@keyframes arrowPulse": {
+                    "0%, 100%": { opacity: 1, transform: "translateX(0)" },
+                    "50%": { opacity: 0.5, transform: "translateX(5px)" },
+                  },
+                },
+              }}
+            >
+              <NavigateNextIcon sx={{ fontSize: 36, color: "#00ffff", filter: "drop-shadow(0 0 10px #00ffff)", animation: "arrowPulse 1s ease-in-out infinite" }} />
+            </Box>
+          </Box>
+
+          {/* Bottom Status Bar */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              px: 2.5,
+              py: 1,
+              background: "rgba(0, 0, 0, 0.5)",
+              borderTop: "1px solid rgba(0, 255, 255, 0.2)",
+              position: "relative",
+              zIndex: 2,
+            }}
+          >
+            <Typography sx={{ color: "#00ffff", fontSize: "0.7rem", fontFamily: "monospace", opacity: 0.8 }}>
+              SYS://NEURAL_FUZZER_v2.0
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#00ff88", boxShadow: "0 0 10px #00ff88", animation: "blink 1s infinite" }} />
+              <Typography sx={{ color: "#00ff88", fontSize: "0.7rem", fontFamily: "monospace" }}>ONLINE</Typography>
+            </Box>
+            <Typography sx={{ color: "#ff00ff", fontSize: "0.7rem", fontFamily: "monospace", opacity: 0.8 }}>
+              [CLICK TO INITIALIZE]
+            </Typography>
+            <style>{`@keyframes blink { 0%, 50%, 100% { opacity: 1; } 25%, 75% { opacity: 0.3; } }`}</style>
+          </Box>
+        </Paper>
+
+        {/* Interactive Beginner Wizard Panel */}
+        <Collapse in={wizardMode}>
+          <Paper 
+            sx={{ 
+              p: 3, 
+              mb: 3, 
+              background: `linear-gradient(135deg, ${alpha("#10b981", 0.08)} 0%, ${alpha("#059669", 0.08)} 100%)`,
+              border: `2px solid ${alpha("#10b981", 0.3)}`,
+              borderRadius: 3,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 2,
+                    background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: `0 4px 14px ${alpha("#10b981", 0.4)}`,
+                  }}
+                >
+                  <RocketLaunchIcon sx={{ fontSize: 28, color: "white" }} />
+                </Box>
+                <Box>
+                  <Typography variant="h5" fontWeight={700} sx={{ color: "#059669" }}>
+                    {WIZARD_STEPS[wizardStep]?.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Step {wizardStep + 1} of {WIZARD_STEPS.length}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                {/* Progress indicator */}
+                {WIZARD_STEPS.map((step, idx) => (
+                  <Box
+                    key={step.id}
+                    onClick={() => setWizardStep(idx)}
+                    sx={{
+                      width: idx === wizardStep ? 32 : 12,
+                      height: 12,
+                      borderRadius: 6,
+                      bgcolor: idx < wizardStep ? "#10b981" : idx === wizardStep ? "#059669" : alpha("#10b981", 0.2),
+                      cursor: "pointer",
+                      transition: "all 0.3s",
+                      "&:hover": { bgcolor: alpha("#10b981", 0.5) },
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            <Grid container spacing={3}>
+              {/* Main content area */}
+              <Grid item xs={12} md={8}>
+                <Paper sx={{ p: 3, bgcolor: "background.paper", borderRadius: 2 }}>
+                  <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
+                    {WIZARD_STEPS[wizardStep]?.description}
+                  </Typography>
+                  
+                  <Box sx={{ 
+                    bgcolor: alpha("#10b981", 0.05), 
+                    p: 2.5, 
+                    borderRadius: 2, 
+                    mb: 3,
+                    borderLeft: `4px solid #10b981`,
+                  }}>
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => <Typography variant="body2" paragraph sx={{ mb: 1.5, lineHeight: 1.8 }}>{children}</Typography>,
+                        strong: ({ children }) => <Typography component="span" fontWeight={700}>{children}</Typography>,
+                        li: ({ children }) => <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>{children}</Typography>,
+                        code: ({ children }) => (
+                          <Box 
+                            component="code" 
+                            sx={{ 
+                              bgcolor: "rgba(0,0,0,0.2)", 
+                              px: 0.75, 
+                              py: 0.25, 
+                              borderRadius: 0.5, 
+                              fontFamily: "monospace",
+                              fontSize: "0.85em",
+                            }}
+                          >
+                            {children}
+                          </Box>
+                        ),
+                      }}
+                    >
+                      {WIZARD_STEPS[wizardStep]?.longDescription || ""}
+                    </ReactMarkdown>
+                  </Box>
+
+                  {/* Validation feedback */}
+                  {wizardStep > 0 && wizardStep < 5 && (
+                    <Alert 
+                      severity={WIZARD_STEPS[wizardStep]?.validation(config) ? "success" : "warning"}
+                      sx={{ mb: 2 }}
+                    >
+                      {WIZARD_STEPS[wizardStep]?.validation(config) 
+                        ? "✅ Great! This step is complete. You can continue to the next step."
+                        : WIZARD_STEPS[wizardStep]?.validationMessage}
+                    </Alert>
+                  )}
+
+                  {/* Quick action buttons based on current step */}
+                  {wizardStep === 1 && (
+                    <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          setConfig(prev => ({
+                            ...prev,
+                            targetUrl: "http://192.168.1.1/FUZZ",
+                          }));
+                        }}
+                      >
+                        Try Example: Router Discovery
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          setConfig(prev => ({
+                            ...prev,
+                            targetUrl: "http://example.com/api/users/FUZZ",
+                          }));
+                        }}
+                      >
+                        Try Example: API User IDs
+                      </Button>
+                    </Box>
+                  )}
+
+                  {wizardStep === 2 && config.targetUrl.includes("FUZZ") && config.positions.length === 0 && (
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={() => {
+                        setConfig(prev => ({
+                          ...prev,
+                          positions: ["FUZZ"],
+                          payloads: [[]],
+                        }));
+                      }}
+                    >
+                      ✨ Auto-detect FUZZ position
+                    </Button>
+                  )}
+
+                  {wizardStep === 3 && (
+                    <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="small"
+                        onClick={() => {
+                          const wordlist = BUILTIN_WORDLISTS.find(w => w.name === "Common Directories");
+                          if (wordlist && config.positions.length > 0) {
+                            setConfig(prev => {
+                              const newPayloads = [...prev.payloads];
+                              newPayloads[0] = wordlist.sample;
+                              return { ...prev, payloads: newPayloads };
+                            });
+                          }
+                        }}
+                        disabled={config.positions.length === 0}
+                      >
+                        📁 Load Common Directories (Recommended)
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => setActiveTab(3)}
+                      >
+                        Browse All Wordlists
+                      </Button>
+                    </Box>
+                  )}
+
+                  {wizardStep === 5 && (
+                    <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
+                      <Button
+                        variant="contained"
+                        color="success"
+                        size="large"
+                        startIcon={isRunning ? <StopIcon /> : <PlayArrowIcon />}
+                        onClick={isRunning ? stopFuzzing : startFuzzing}
+                        disabled={!config.targetUrl || config.payloads.every(p => p.length === 0)}
+                        sx={{
+                          background: isRunning ? "#dc2626" : "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                          px: 4,
+                          py: 1.5,
+                        }}
+                      >
+                        {isRunning ? "Stop Fuzzing" : "🚀 Start My First Fuzzing!"}
+                      </Button>
+                      {results.length > 0 && (
+                        <Chip 
+                          label={`${results.length} results collected`}
+                          color="success"
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
+                  )}
+                </Paper>
+              </Grid>
+
+              {/* Tip sidebar */}
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2.5, bgcolor: alpha("#f59e0b", 0.08), borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, color: "#d97706" }}>
+                    <LightbulbIcon fontSize="small" />
+                    Pro Tip
+                  </Typography>
+                  <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
+                    {WIZARD_STEPS[wizardStep]?.tip}
+                  </Typography>
+                </Paper>
+
+                {/* Current configuration summary */}
+                <Paper sx={{ p: 2.5, mt: 2, bgcolor: alpha("#6366f1", 0.05), borderRadius: 2, border: `1px solid ${alpha("#6366f1", 0.2)}` }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, color: "#4f46e5" }}>
+                    <AssessmentIcon fontSize="small" />
+                    Your Progress
+                  </Typography>
+                  <List dense sx={{ "& .MuiListItem-root": { py: 0.5 } }}>
+                    <ListItem>
+                      <ListItemIcon sx={{ minWidth: 32 }}>
+                        {config.targetUrl ? <CheckCircleIcon color="success" fontSize="small" /> : <ErrorIcon color="disabled" fontSize="small" />}
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Target URL"
+                        secondary={config.targetUrl ? config.targetUrl.substring(0, 30) + (config.targetUrl.length > 30 ? "..." : "") : "Not set"}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption" }}
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemIcon sx={{ minWidth: 32 }}>
+                        {config.positions.length > 0 ? <CheckCircleIcon color="success" fontSize="small" /> : <ErrorIcon color="disabled" fontSize="small" />}
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Positions"
+                        secondary={config.positions.length > 0 ? `${config.positions.length} position(s)` : "None"}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption" }}
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemIcon sx={{ minWidth: 32 }}>
+                        {config.payloads.some(p => p.length > 0) ? <CheckCircleIcon color="success" fontSize="small" /> : <ErrorIcon color="disabled" fontSize="small" />}
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Payloads"
+                        secondary={config.payloads.some(p => p.length > 0) ? `${config.payloads.reduce((a, p) => a + p.length, 0)} payloads` : "None loaded"}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption" }}
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemIcon sx={{ minWidth: 32 }}>
+                        <CheckCircleIcon color="success" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Attack Mode"
+                        secondary={ATTACK_MODES[config.attackMode]?.name || config.attackMode}
+                        primaryTypographyProps={{ variant: "caption", fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: "caption" }}
+                      />
+                    </ListItem>
+                  </List>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Navigation buttons */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", mt: 3, pt: 2, borderTop: `1px solid ${alpha("#10b981", 0.2)}` }}>
+              <Button
+                variant="outlined"
+                startIcon={<NavigateBeforeIcon />}
+                onClick={() => setWizardStep(Math.max(0, wizardStep - 1))}
+                disabled={wizardStep === 0}
+              >
+                Previous Step
+              </Button>
+              <Box sx={{ display: "flex", gap: 2 }}>
+                {wizardStep === WIZARD_STEPS.length - 1 ? (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => setWizardMode(false)}
+                    startIcon={<CheckIcon />}
+                  >
+                    Finish Wizard
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    endIcon={<NavigateNextIcon />}
+                    onClick={() => setWizardStep(Math.min(WIZARD_STEPS.length - 1, wizardStep + 1))}
+                    sx={{
+                      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                    }}
+                  >
+                    Next Step
+                  </Button>
+                )}
+              </Box>
+            </Box>
+          </Paper>
+        </Collapse>
 
         {/* Usage Guide Panel */}
         <Collapse in={showGuide}>
@@ -1798,6 +3022,232 @@ const FuzzingPage: React.FC = () => {
                     ))}
                   </Box>
                 </Box>
+              </Grid>
+
+              {/* Video Tutorials Section */}
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle1" fontWeight={700} sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                  🎬 Video Tutorials & Visual Guides
+                </Typography>
+                <Grid container spacing={2}>
+                  {/* Tutorial Card 1: Getting Started */}
+                  <Grid item xs={12} md={4}>
+                    <Card 
+                      sx={{ 
+                        height: "100%",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        border: `1px solid ${alpha("#f97316", 0.2)}`,
+                        "&:hover": { 
+                          transform: "translateY(-4px)",
+                          boxShadow: `0 8px 24px ${alpha("#f97316", 0.2)}`,
+                          borderColor: "#f97316",
+                        },
+                      }}
+                      onClick={() => window.open("https://www.youtube.com/results?search_query=web+fuzzing+security+testing+tutorial", "_blank")}
+                    >
+                      <CardContent>
+                        <Box sx={{ 
+                          bgcolor: alpha("#f97316", 0.1), 
+                          borderRadius: 2, 
+                          p: 2, 
+                          mb: 2,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          position: "relative",
+                          overflow: "hidden",
+                        }}>
+                          <Box sx={{
+                            position: "absolute",
+                            width: "100%",
+                            height: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            bgcolor: alpha("#000", 0.3),
+                            borderRadius: 2,
+                          }}>
+                            <PlayArrowIcon sx={{ fontSize: 48, color: "#fff" }} />
+                          </Box>
+                          <RocketLaunchIcon sx={{ fontSize: 60, color: alpha("#f97316", 0.3) }} />
+                        </Box>
+                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                          🚀 Getting Started with Web Fuzzing
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Learn the basics: what is fuzzing, why it matters, and how to set up your first security test.
+                        </Typography>
+                        <Box sx={{ mt: 1, display: "flex", gap: 0.5 }}>
+                          <Chip label="5 min" size="small" variant="outlined" />
+                          <Chip label="Beginner" size="small" color="success" variant="outlined" />
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* Tutorial Card 2: Understanding Attack Modes */}
+                  <Grid item xs={12} md={4}>
+                    <Card 
+                      sx={{ 
+                        height: "100%",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        border: `1px solid ${alpha("#3b82f6", 0.2)}`,
+                        "&:hover": { 
+                          transform: "translateY(-4px)",
+                          boxShadow: `0 8px 24px ${alpha("#3b82f6", 0.2)}`,
+                          borderColor: "#3b82f6",
+                        },
+                      }}
+                      onClick={() => window.open("https://www.youtube.com/results?search_query=burp+suite+intruder+attack+modes+sniper+battering+ram", "_blank")}
+                    >
+                      <CardContent>
+                        <Box sx={{ 
+                          bgcolor: alpha("#3b82f6", 0.1), 
+                          borderRadius: 2, 
+                          p: 2, 
+                          mb: 2,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          position: "relative",
+                          overflow: "hidden",
+                        }}>
+                          <Box sx={{
+                            position: "absolute",
+                            width: "100%",
+                            height: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            bgcolor: alpha("#000", 0.3),
+                            borderRadius: 2,
+                          }}>
+                            <PlayArrowIcon sx={{ fontSize: 48, color: "#fff" }} />
+                          </Box>
+                          <CategoryIcon sx={{ fontSize: 60, color: alpha("#3b82f6", 0.3) }} />
+                        </Box>
+                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                          🎯 Understanding Attack Modes
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Deep dive into Sniper, Battering Ram, Pitchfork, and Cluster Bomb - when to use each mode.
+                        </Typography>
+                        <Box sx={{ mt: 1, display: "flex", gap: 0.5 }}>
+                          <Chip label="10 min" size="small" variant="outlined" />
+                          <Chip label="Intermediate" size="small" color="warning" variant="outlined" />
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* Tutorial Card 3: SQL Injection Testing */}
+                  <Grid item xs={12} md={4}>
+                    <Card 
+                      sx={{ 
+                        height: "100%",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        border: `1px solid ${alpha("#ef4444", 0.2)}`,
+                        "&:hover": { 
+                          transform: "translateY(-4px)",
+                          boxShadow: `0 8px 24px ${alpha("#ef4444", 0.2)}`,
+                          borderColor: "#ef4444",
+                        },
+                      }}
+                      onClick={() => window.open("https://www.youtube.com/results?search_query=sql+injection+fuzzing+testing+tutorial", "_blank")}
+                    >
+                      <CardContent>
+                        <Box sx={{ 
+                          bgcolor: alpha("#ef4444", 0.1), 
+                          borderRadius: 2, 
+                          p: 2, 
+                          mb: 2,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          position: "relative",
+                          overflow: "hidden",
+                        }}>
+                          <Box sx={{
+                            position: "absolute",
+                            width: "100%",
+                            height: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            bgcolor: alpha("#000", 0.3),
+                            borderRadius: 2,
+                          }}>
+                            <PlayArrowIcon sx={{ fontSize: 48, color: "#fff" }} />
+                          </Box>
+                          <BugReportIcon sx={{ fontSize: 60, color: alpha("#ef4444", 0.3) }} />
+                        </Box>
+                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                          💉 SQL Injection Testing
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Practical guide to finding SQL injection vulnerabilities using payloads and analyzing responses.
+                        </Typography>
+                        <Box sx={{ mt: 1, display: "flex", gap: 0.5 }}>
+                          <Chip label="15 min" size="small" variant="outlined" />
+                          <Chip label="Advanced" size="small" color="error" variant="outlined" />
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* Quick Reference Cards */}
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 1, mb: 1 }}>
+                      📖 Quick Reference Cheat Sheets
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                      <Chip 
+                        label="SQL Injection Payloads"
+                        icon={<CodeIcon />}
+                        onClick={() => window.open("https://github.com/payloadbox/sql-injection-payload-list", "_blank")}
+                        sx={{ cursor: "pointer", "&:hover": { bgcolor: alpha("#ef4444", 0.1) } }}
+                      />
+                      <Chip 
+                        label="XSS Payloads"
+                        icon={<CodeIcon />}
+                        onClick={() => window.open("https://github.com/payloadbox/xss-payload-list", "_blank")}
+                        sx={{ cursor: "pointer", "&:hover": { bgcolor: alpha("#f97316", 0.1) } }}
+                      />
+                      <Chip 
+                        label="Command Injection"
+                        icon={<CodeIcon />}
+                        onClick={() => window.open("https://github.com/payloadbox/command-injection-payload-list", "_blank")}
+                        sx={{ cursor: "pointer", "&:hover": { bgcolor: alpha("#8b5cf6", 0.1) } }}
+                      />
+                      <Chip 
+                        label="Directory Traversal"
+                        icon={<FolderIcon />}
+                        onClick={() => window.open("https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Directory%20Traversal", "_blank")}
+                        sx={{ cursor: "pointer", "&:hover": { bgcolor: alpha("#3b82f6", 0.1) } }}
+                      />
+                      <Chip 
+                        label="OWASP Testing Guide"
+                        icon={<ShieldIcon />}
+                        onClick={() => window.open("https://owasp.org/www-project-web-security-testing-guide/", "_blank")}
+                        sx={{ cursor: "pointer", "&:hover": { bgcolor: alpha("#10b981", 0.1) } }}
+                      />
+                    </Box>
+                  </Grid>
+
+                  {/* Interactive Examples */}
+                  <Grid item xs={12}>
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        <strong>💡 Pro Tip:</strong> Click on the <strong>"Beginner Wizard"</strong> button above for an interactive, 
+                        step-by-step walkthrough that guides you through your first fuzzing session with real-time validation and tips!
+                      </Typography>
+                    </Alert>
+                  </Grid>
+                </Grid>
               </Grid>
             </Grid>
           </Paper>
@@ -2020,6 +3470,20 @@ const FuzzingPage: React.FC = () => {
             icon={<FolderIcon />}
             iconPosition="start"
           />
+          <Tab 
+            label={
+              <Badge badgeContent={wsFindings.length} color="warning" max={99}>
+                WebSocket Fuzzing
+              </Badge>
+            }
+            icon={<CableIcon />}
+            iconPosition="start"
+          />
+          <Tab 
+            label="Coverage"
+            icon={<RadarIcon />}
+            iconPosition="start"
+          />
         </Tabs>
       </Box>
 
@@ -2102,19 +3566,22 @@ const FuzzingPage: React.FC = () => {
                     </Tooltip>
                   </Grid>
                   <Grid item xs={12} sm={10}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Target URL"
-                      placeholder="http://192.168.1.1/FUZZ"
-                      value={config.targetUrl}
-                      onChange={(e) => setConfig(prev => ({ ...prev, targetUrl: e.target.value }))}
-                      helperText={
-                        <span>
-                          Examples: <code>http://192.168.1.1/FUZZ</code> (directory discovery) | <code>http://target.com/search?q=FUZZ</code> (parameter fuzzing)
-                        </span>
-                      }
-                    />
+                    <Box sx={{ display: "flex", alignItems: "flex-start" }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Target URL"
+                        placeholder="http://192.168.1.1/FUZZ"
+                        value={config.targetUrl}
+                        onChange={(e) => setConfig(prev => ({ ...prev, targetUrl: e.target.value }))}
+                        helperText={
+                          <span>
+                            Examples: <code>http://192.168.1.1/FUZZ</code> (directory discovery) | <code>http://target.com/search?q=FUZZ</code> (parameter fuzzing)
+                          </span>
+                        }
+                      />
+                      <HelpTooltip field="targetUrl" showHelp={showContextualHelp} />
+                    </Box>
                   </Grid>
                   
                   {/* Headers section with presets */}
@@ -2249,43 +3716,52 @@ const FuzzingPage: React.FC = () => {
                 
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
-                    <Tooltip title="Number of parallel requests. Start low (2-3) for routers to avoid overload.">
-                      <TextField
-                        fullWidth
-                        size="small"
-                        type="number"
-                        label="Threads"
-                        value={config.threads}
-                        onChange={(e) => setConfig(prev => ({ ...prev, threads: parseInt(e.target.value) || 1 }))}
-                        helperText="2-3 for routers"
-                      />
-                    </Tooltip>
+                    <Box sx={{ display: "flex", alignItems: "flex-start" }}>
+                      <Tooltip title="Number of parallel requests. Start low (2-3) for routers to avoid overload.">
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="number"
+                          label="Threads"
+                          value={config.threads}
+                          onChange={(e) => setConfig(prev => ({ ...prev, threads: parseInt(e.target.value) || 1 }))}
+                          helperText="2-3 for routers"
+                        />
+                      </Tooltip>
+                      <HelpTooltip field="threads" showHelp={showContextualHelp} />
+                    </Box>
                   </Grid>
                   <Grid item xs={6}>
-                    <Tooltip title="Wait time between requests in milliseconds. Add delay to avoid rate limits.">
-                      <TextField
-                        fullWidth
-                        size="small"
-                        type="number"
-                        label="Delay (ms)"
-                        value={config.delay}
-                        onChange={(e) => setConfig(prev => ({ ...prev, delay: parseInt(e.target.value) || 0 }))}
-                        helperText="100-500 recommended"
-                      />
-                    </Tooltip>
+                    <Box sx={{ display: "flex", alignItems: "flex-start" }}>
+                      <Tooltip title="Wait time between requests in milliseconds. Add delay to avoid rate limits.">
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="number"
+                          label="Delay (ms)"
+                          value={config.delay}
+                          onChange={(e) => setConfig(prev => ({ ...prev, delay: parseInt(e.target.value) || 0 }))}
+                          helperText="100-500 recommended"
+                        />
+                      </Tooltip>
+                      <HelpTooltip field="delay" showHelp={showContextualHelp} />
+                    </Box>
                   </Grid>
                   <Grid item xs={12}>
-                    <Tooltip title="How long to wait for a response before timing out.">
-                      <TextField
-                        fullWidth
-                        size="small"
-                        type="number"
-                        label="Timeout (ms)"
-                        value={config.timeout}
-                        onChange={(e) => setConfig(prev => ({ ...prev, timeout: parseInt(e.target.value) || 10000 }))}
-                        helperText="10000 (10s) default"
-                      />
-                    </Tooltip>
+                    <Box sx={{ display: "flex", alignItems: "flex-start" }}>
+                      <Tooltip title="How long to wait for a response before timing out.">
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="number"
+                          label="Timeout (ms)"
+                          value={config.timeout}
+                          onChange={(e) => setConfig(prev => ({ ...prev, timeout: parseInt(e.target.value) || 10000 }))}
+                          helperText="10000 (10s) default"
+                        />
+                      </Tooltip>
+                      <HelpTooltip field="timeout" showHelp={showContextualHelp} />
+                    </Box>
                   </Grid>
                   <Grid item xs={12}>
                     <FormControlLabel
@@ -2297,6 +3773,25 @@ const FuzzingPage: React.FC = () => {
                       }
                       label="Follow Redirects"
                     />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Box sx={{ display: "flex", alignItems: "flex-start" }}>
+                      <Tooltip title="Route requests through a proxy like Burp Suite (127.0.0.1:8080), ZAP, or mitmproxy for interception">
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Proxy URL (optional)"
+                          placeholder="http://127.0.0.1:8080"
+                          value={config.proxyUrl}
+                          onChange={(e) => setConfig(prev => ({ ...prev, proxyUrl: e.target.value }))}
+                          helperText="Burp: http://127.0.0.1:8080 | SOCKS: socks5://127.0.0.1:9050"
+                          InputProps={{
+                            sx: { fontFamily: "monospace", fontSize: "0.9rem" }
+                          }}
+                        />
+                      </Tooltip>
+                      <HelpTooltip field="proxyUrl" showHelp={showContextualHelp} />
+                    </Box>
                   </Grid>
                 </Grid>
               </CardContent>
@@ -2884,6 +4379,233 @@ const FuzzingPage: React.FC = () => {
                         </Grid>
                       )}
                     </Grid>
+                  </CardContent>
+                </Card>
+
+                {/* Payload Processor Pipeline */}
+                <Card sx={{ mt: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" fontWeight={600} gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <AutorenewIcon color="secondary" />
+                      Payload Processor Pipeline
+                      <Chip label="New" size="small" color="success" sx={{ ml: 1 }} />
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      Chain multiple encoding transformations in sequence. Example: URL Encode → Base64 → Double URL Encode
+                    </Typography>
+                    
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      <Typography variant="body2">
+                        <strong>How it works:</strong> Define a pipeline of transformations. Each step processes the output of the previous step.
+                        Useful for bypassing WAF that blocks simple encodings.
+                      </Typography>
+                    </Alert>
+
+                    {/* Pipeline Builder */}
+                    <Box sx={{ 
+                      p: 2, 
+                      mb: 2, 
+                      bgcolor: alpha(theme.palette.secondary.main, 0.05), 
+                      borderRadius: 2,
+                      border: `1px dashed ${alpha(theme.palette.secondary.main, 0.3)}`
+                    }}>
+                      <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        🔧 Build Your Pipeline
+                      </Typography>
+                      
+                      {/* Visual Pipeline Display */}
+                      <Box sx={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        gap: 1, 
+                        flexWrap: "wrap",
+                        p: 2,
+                        bgcolor: "background.paper",
+                        borderRadius: 1,
+                        mb: 2,
+                        minHeight: 50,
+                      }}>
+                        <Chip label="Input" size="small" color="primary" />
+                        {selectedEncodings.length > 0 ? (
+                          selectedEncodings.map((enc, i) => (
+                            <React.Fragment key={i}>
+                              <NavigateNextIcon color="action" />
+                              <Chip 
+                                label={enc.replace("_", " ")}
+                                size="small"
+                                color="secondary"
+                                onDelete={() => setSelectedEncodings(prev => prev.filter((_, idx) => idx !== i))}
+                              />
+                            </React.Fragment>
+                          ))
+                        ) : (
+                          <>
+                            <NavigateNextIcon color="disabled" />
+                            <Typography variant="caption" color="text.disabled">
+                              Click encodings below to add steps...
+                            </Typography>
+                          </>
+                        )}
+                        {selectedEncodings.length > 0 && (
+                          <>
+                            <NavigateNextIcon color="action" />
+                            <Chip label="Output" size="small" color="success" />
+                          </>
+                        )}
+                      </Box>
+
+                      {/* Available Encodings */}
+                      <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: "block", mb: 1 }}>
+                        Click to add to pipeline (order matters!):
+                      </Typography>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                        {[
+                          { value: "url", label: "URL Encode", desc: "Encode special chars as %XX" },
+                          { value: "double_url", label: "Double URL", desc: "URL encode twice" },
+                          { value: "base64", label: "Base64", desc: "Base64 encode" },
+                          { value: "html_entities", label: "HTML Entities", desc: "Convert to &entity;" },
+                          { value: "html_decimal", label: "HTML Decimal", desc: "Convert to &#XX;" },
+                          { value: "html_hex", label: "HTML Hex", desc: "Convert to &#xXX;" },
+                          { value: "unicode", label: "Unicode", desc: "Convert to \\uXXXX" },
+                          { value: "hex", label: "Hex", desc: "Convert to 0xXX format" },
+                          { value: "reverse", label: "Reverse", desc: "Reverse the string" },
+                          { value: "lowercase", label: "Lowercase", desc: "Convert to lowercase" },
+                          { value: "uppercase", label: "Uppercase", desc: "Convert to uppercase" },
+                          { value: "strip_spaces", label: "Strip Spaces", desc: "Remove all spaces" },
+                        ].map(enc => (
+                          <Tooltip key={enc.value} title={enc.desc} arrow>
+                            <Chip
+                              label={enc.label}
+                              size="small"
+                              variant="outlined"
+                              onClick={() => setSelectedEncodings(prev => [...prev, enc.value])}
+                              sx={{ cursor: "pointer", "&:hover": { bgcolor: alpha(theme.palette.secondary.main, 0.1) } }}
+                            />
+                          </Tooltip>
+                        ))}
+                      </Box>
+
+                      {/* Pipeline Controls */}
+                      <Box sx={{ display: "flex", gap: 1, mt: 2 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={() => setSelectedEncodings([])}
+                          disabled={selectedEncodings.length === 0}
+                        >
+                          Clear Pipeline
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => setSelectedEncodings(prev => [...prev].reverse())}
+                          disabled={selectedEncodings.length < 2}
+                        >
+                          Reverse Order
+                        </Button>
+                      </Box>
+                    </Box>
+
+                    {/* Live Preview */}
+                    {encodingInput.trim() && selectedEncodings.length > 0 && (
+                      <Paper sx={{ p: 2, bgcolor: "#1e1e1e", borderRadius: 2 }}>
+                        <Typography variant="subtitle2" color="primary.light" gutterBottom>
+                          🔄 Live Pipeline Preview
+                        </Typography>
+                        {encodingInput.split("\n").filter(p => p.trim()).slice(0, 3).map((payload, i) => {
+                          // Apply pipeline transformations
+                          let result = payload;
+                          const steps: { step: string; value: string }[] = [{ step: "Input", value: payload }];
+                          
+                          selectedEncodings.forEach(enc => {
+                            try {
+                              switch (enc) {
+                                case "url":
+                                  result = encodeURIComponent(result);
+                                  break;
+                                case "double_url":
+                                  result = encodeURIComponent(encodeURIComponent(result));
+                                  break;
+                                case "base64":
+                                  result = btoa(result);
+                                  break;
+                                case "hex":
+                                  result = Array.from(result).map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+                                  break;
+                                case "reverse":
+                                  result = result.split("").reverse().join("");
+                                  break;
+                                case "lowercase":
+                                  result = result.toLowerCase();
+                                  break;
+                                case "uppercase":
+                                  result = result.toUpperCase();
+                                  break;
+                                case "strip_spaces":
+                                  result = result.replace(/\s/g, "");
+                                  break;
+                                case "html_entities":
+                                  result = result.replace(/[<>&"']/g, c => ({
+                                    "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;", "'": "&#x27;"
+                                  })[c] || c);
+                                  break;
+                                case "unicode":
+                                  result = Array.from(result).map(c => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0")).join("");
+                                  break;
+                                default:
+                                  break;
+                              }
+                              steps.push({ step: enc, value: result });
+                            } catch (e) {
+                              steps.push({ step: enc, value: `[Error: ${e}]` });
+                            }
+                          });
+                          
+                          return (
+                            <Box key={i} sx={{ mb: 2, pb: 2, borderBottom: i < 2 ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                                {steps.map((step, j) => (
+                                  <React.Fragment key={j}>
+                                    {j > 0 && <NavigateNextIcon sx={{ color: "rgba(255,255,255,0.3)" }} fontSize="small" />}
+                                    <Tooltip title={step.value.length > 50 ? step.value : ""}>
+                                      <Box sx={{ 
+                                        display: "flex", 
+                                        flexDirection: "column", 
+                                        alignItems: "center",
+                                        maxWidth: 150,
+                                      }}>
+                                        <Typography variant="caption" color="primary.light" fontSize={10}>
+                                          {step.step}
+                                        </Typography>
+                                        <Typography 
+                                          variant="caption" 
+                                          sx={{ 
+                                            fontFamily: "monospace", 
+                                            color: j === steps.length - 1 ? "#4ade80" : "#d4d4d4",
+                                            maxWidth: 150,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {step.value.slice(0, 30)}{step.value.length > 30 ? "..." : ""}
+                                        </Typography>
+                                      </Box>
+                                    </Tooltip>
+                                  </React.Fragment>
+                                ))}
+                              </Box>
+                            </Box>
+                          );
+                        })}
+                        {encodingInput.split("\n").filter(p => p.trim()).length > 3 && (
+                          <Typography variant="caption" color="text.secondary">
+                            + {encodingInput.split("\n").filter(p => p.trim()).length - 3} more payloads...
+                          </Typography>
+                        )}
+                      </Paper>
+                    )}
                   </CardContent>
                 </Card>
               </Grid>
@@ -3524,6 +5246,33 @@ const FuzzingPage: React.FC = () => {
                   }
                   label="Interesting Only"
                 />
+                <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={compareMode}
+                      onChange={(e) => {
+                        setCompareMode(e.target.checked);
+                        if (!e.target.checked) {
+                          setCompareResults([null, null]);
+                        }
+                      }}
+                      size="small"
+                    />
+                  }
+                  label="Compare Mode"
+                />
+                {compareMode && (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<SearchIcon />}
+                    onClick={openCompareDialog}
+                    disabled={!compareResults[0] || !compareResults[1]}
+                  >
+                    Compare ({compareResults.filter(Boolean).length}/2)
+                  </Button>
+                )}
                 <Box sx={{ flexGrow: 1 }} />
                 <ButtonGroup variant="outlined" disabled={results.length === 0 || exportLoading}>
                   <Button
@@ -3557,8 +5306,451 @@ const FuzzingPage: React.FC = () => {
                   </MenuItem>
                 </Menu>
               </Box>
+
+              {/* Advanced Filters Toggle */}
+              <Box 
+                sx={{ 
+                  mt: 1.5, 
+                  pt: 1.5, 
+                  borderTop: showAdvancedFilters ? `1px solid ${alpha("#000", 0.1)}` : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <ExpandMoreIcon 
+                    sx={{ 
+                      transform: showAdvancedFilters ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease",
+                      fontSize: 20,
+                      color: "text.secondary",
+                    }} 
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Advanced Filters
+                  </Typography>
+                  {(resultFilter.excludeStatusCodes || resultFilter.regexPattern || resultFilter.excludePattern || 
+                    resultFilter.minResponseTime || resultFilter.maxResponseTime || resultFilter.contentType ||
+                    resultFilter.showOnlyErrors || resultFilter.showOnlySuccess || resultFilter.hideReflected || resultFilter.showOnlyReflected) && (
+                    <Chip label="Active" size="small" color="primary" sx={{ height: 20, fontSize: "0.7rem" }} />
+                  )}
+                </Box>
+              </Box>
+
+              {/* Advanced Filters Panel */}
+              <Collapse in={showAdvancedFilters}>
+                <Box sx={{ mt: 2 }}>
+                  <Grid container spacing={2}>
+                    {/* Row 1: Exclude Status Codes & Response Time */}
+                    <Grid item xs={12} md={4}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Exclude Status Codes"
+                        placeholder="404,500,503"
+                        value={resultFilter.excludeStatusCodes}
+                        onChange={(e) => setResultFilter(prev => ({ ...prev, excludeStatusCodes: e.target.value }))}
+                        helperText="Comma-separated codes to hide"
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <BlockIcon fontSize="small" color="error" />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Min Response Time (ms)"
+                        type="number"
+                        value={resultFilter.minResponseTime}
+                        onChange={(e) => setResultFilter(prev => ({ ...prev, minResponseTime: e.target.value }))}
+                        helperText="Show responses slower than this"
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <TimerIcon fontSize="small" color="primary" />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Max Response Time (ms)"
+                        type="number"
+                        value={resultFilter.maxResponseTime}
+                        onChange={(e) => setResultFilter(prev => ({ ...prev, maxResponseTime: e.target.value }))}
+                        helperText="Show responses faster than this"
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <TimerIcon fontSize="small" color="primary" />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Grid>
+
+                    {/* Row 2: Regex Pattern & Exclude Pattern */}
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Regex Pattern (Match)"
+                        placeholder="error|exception|sql"
+                        value={resultFilter.regexPattern}
+                        onChange={(e) => setResultFilter(prev => ({ ...prev, regexPattern: e.target.value }))}
+                        helperText="Show results where response matches this regex"
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchIcon fontSize="small" color="success" />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Exclude Pattern"
+                        placeholder="Not Found|Access Denied"
+                        value={resultFilter.excludePattern}
+                        onChange={(e) => setResultFilter(prev => ({ ...prev, excludePattern: e.target.value }))}
+                        helperText="Hide results where response matches this pattern"
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <BlockIcon fontSize="small" color="error" />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Grid>
+
+                    {/* Row 3: Content Type */}
+                    <Grid item xs={12} md={4}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Content Type"
+                        placeholder="application/json"
+                        value={resultFilter.contentType}
+                        onChange={(e) => setResultFilter(prev => ({ ...prev, contentType: e.target.value }))}
+                        helperText="Filter by response content type"
+                      />
+                    </Grid>
+
+                    {/* Row 4: Quick Filters */}
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                        Quick Filters
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={resultFilter.showOnlyErrors}
+                              onChange={(e) => setResultFilter(prev => ({ 
+                                ...prev, 
+                                showOnlyErrors: e.target.checked,
+                                showOnlySuccess: e.target.checked ? false : prev.showOnlySuccess,
+                              }))}
+                              size="small"
+                              color="error"
+                            />
+                          }
+                          label={
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography variant="body2">Errors Only</Typography>
+                              <Chip label="4xx/5xx" size="small" color="error" variant="outlined" sx={{ height: 18, fontSize: "0.65rem" }} />
+                            </Box>
+                          }
+                        />
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={resultFilter.showOnlySuccess}
+                              onChange={(e) => setResultFilter(prev => ({ 
+                                ...prev, 
+                                showOnlySuccess: e.target.checked,
+                                showOnlyErrors: e.target.checked ? false : prev.showOnlyErrors,
+                              }))}
+                              size="small"
+                              color="success"
+                            />
+                          }
+                          label={
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography variant="body2">Success Only</Typography>
+                              <Chip label="2xx" size="small" color="success" variant="outlined" sx={{ height: 18, fontSize: "0.65rem" }} />
+                            </Box>
+                          }
+                        />
+                        <Divider orientation="vertical" flexItem />
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={resultFilter.showOnlyReflected}
+                              onChange={(e) => setResultFilter(prev => ({ 
+                                ...prev, 
+                                showOnlyReflected: e.target.checked,
+                                hideReflected: e.target.checked ? false : prev.hideReflected,
+                              }))}
+                              size="small"
+                              color="warning"
+                            />
+                          }
+                          label={
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography variant="body2">Reflected Only</Typography>
+                              <Tooltip title="Show only responses where the payload is reflected back (potential XSS)">
+                                <HelpOutlineIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+                              </Tooltip>
+                            </Box>
+                          }
+                        />
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={resultFilter.hideReflected}
+                              onChange={(e) => setResultFilter(prev => ({ 
+                                ...prev, 
+                                hideReflected: e.target.checked,
+                                showOnlyReflected: e.target.checked ? false : prev.showOnlyReflected,
+                              }))}
+                              size="small"
+                            />
+                          }
+                          label={
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography variant="body2">Hide Reflected</Typography>
+                              <Tooltip title="Hide responses where the payload is reflected back (filter noise)">
+                                <HelpOutlineIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+                              </Tooltip>
+                            </Box>
+                          }
+                        />
+                      </Box>
+                    </Grid>
+
+                    {/* Clear All Filters Button */}
+                    <Grid item xs={12}>
+                      <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                        <Button
+                          size="small"
+                          onClick={() => setResultFilter({
+                            statusCode: "",
+                            minLength: "",
+                            maxLength: "",
+                            interestingOnly: false,
+                            excludeStatusCodes: "",
+                            regexPattern: "",
+                            excludePattern: "",
+                            minResponseTime: "",
+                            maxResponseTime: "",
+                            contentType: "",
+                            showOnlyErrors: false,
+                            showOnlySuccess: false,
+                            hideReflected: false,
+                            showOnlyReflected: false,
+                          })}
+                          startIcon={<ClearIcon />}
+                        >
+                          Clear All Filters
+                        </Button>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Box>
+              </Collapse>
             </CardContent>
           </Card>
+
+          {/* Response Time Visualization Chart */}
+          {results.length > 0 && (
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                  <Typography variant="h6" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <TimerIcon color="primary" />
+                    Response Time Distribution
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                    <Chip 
+                      label={`Avg: ${Math.round(stats.avgResponseTime)}ms`}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                    <Chip 
+                      label={`Min: ${Math.min(...results.map(r => r.responseTime))}ms`}
+                      size="small"
+                      color="success"
+                      variant="outlined"
+                    />
+                    <Chip 
+                      label={`Max: ${Math.max(...results.map(r => r.responseTime))}ms`}
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                    />
+                  </Box>
+                </Box>
+                
+                {/* Simple ASCII-style bar chart */}
+                <Box sx={{ 
+                  bgcolor: alpha(theme.palette.background.default, 0.5), 
+                  p: 2, 
+                  borderRadius: 2,
+                  maxHeight: 200,
+                  overflow: "auto",
+                }}>
+                  {(() => {
+                    // Calculate response time buckets
+                    const times = results.map(r => r.responseTime);
+                    const maxTime = Math.max(...times);
+                    const minTime = Math.min(...times);
+                    const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+                    const stdDev = Math.sqrt(times.reduce((sum, t) => sum + Math.pow(t - avgTime, 2), 0) / times.length);
+                    
+                    // Group into buckets
+                    const bucketCount = Math.min(20, Math.ceil((maxTime - minTime) / 50) || 5);
+                    const bucketSize = Math.ceil((maxTime - minTime) / bucketCount) || 100;
+                    const buckets: { start: number; end: number; count: number; hasAnomaly: boolean }[] = [];
+                    
+                    for (let i = 0; i < bucketCount; i++) {
+                      const start = minTime + (i * bucketSize);
+                      const end = start + bucketSize;
+                      const matching = results.filter(r => r.responseTime >= start && r.responseTime < end);
+                      buckets.push({
+                        start,
+                        end,
+                        count: matching.length,
+                        hasAnomaly: matching.some(r => r.responseTime > avgTime + (2 * stdDev) || r.interesting),
+                      });
+                    }
+                    
+                    const maxCount = Math.max(...buckets.map(b => b.count));
+                    
+                    return (
+                      <Box>
+                        {/* Time-based anomaly detection hint */}
+                        {times.some(t => t > avgTime + (2 * stdDev)) && (
+                          <Alert severity="warning" sx={{ mb: 2 }}>
+                            <Typography variant="body2">
+                              <strong>Time-based anomaly detected!</strong> Some responses took significantly longer than average. 
+                              This could indicate time-based SQL injection, resource-intensive operations, or server-side delays.
+                            </Typography>
+                          </Alert>
+                        )}
+                        
+                        {/* Bar chart */}
+                        <Grid container spacing={0.5}>
+                          {buckets.map((bucket, i) => {
+                            const barWidth = bucket.count > 0 ? Math.max((bucket.count / maxCount) * 100, 5) : 0;
+                            return (
+                              <Grid item xs={12} key={i}>
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1, height: 24 }}>
+                                  <Typography 
+                                    variant="caption" 
+                                    sx={{ width: 80, fontFamily: "monospace", textAlign: "right", color: "text.secondary" }}
+                                  >
+                                    {Math.round(bucket.start)}-{Math.round(bucket.end)}ms
+                                  </Typography>
+                                  <Tooltip title={`${bucket.count} responses in this range${bucket.hasAnomaly ? " (contains anomalies)" : ""}`}>
+                                    <Box
+                                      sx={{
+                                        width: `${barWidth}%`,
+                                        minWidth: bucket.count > 0 ? 4 : 0,
+                                        height: 16,
+                                        bgcolor: bucket.hasAnomaly 
+                                          ? "error.main" 
+                                          : bucket.start > avgTime 
+                                            ? "warning.main" 
+                                            : "success.main",
+                                        borderRadius: 1,
+                                        transition: "width 0.3s ease",
+                                        cursor: "pointer",
+                                        "&:hover": { opacity: 0.8 },
+                                      }}
+                                    />
+                                  </Tooltip>
+                                  <Typography variant="caption" sx={{ minWidth: 30, fontFamily: "monospace" }}>
+                                    {bucket.count}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            );
+                          })}
+                        </Grid>
+                        
+                        {/* Legend */}
+                        <Box sx={{ display: "flex", gap: 3, mt: 2, pt: 2, borderTop: `1px solid ${alpha("#000", 0.1)}` }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <Box sx={{ width: 12, height: 12, bgcolor: "success.main", borderRadius: 0.5 }} />
+                            <Typography variant="caption">Below average</Typography>
+                          </Box>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <Box sx={{ width: 12, height: 12, bgcolor: "warning.main", borderRadius: 0.5 }} />
+                            <Typography variant="caption">Above average</Typography>
+                          </Box>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <Box sx={{ width: 12, height: 12, bgcolor: "error.main", borderRadius: 0.5 }} />
+                            <Typography variant="caption">Contains anomalies (2+ std dev)</Typography>
+                          </Box>
+                        </Box>
+                      </Box>
+                    );
+                  })()}
+                </Box>
+
+                {/* Slow response highlight */}
+                {(() => {
+                  const times = results.map(r => r.responseTime);
+                  const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+                  const stdDev = Math.sqrt(times.reduce((sum, t) => sum + Math.pow(t - avgTime, 2), 0) / times.length);
+                  const slowResponses = results.filter(r => r.responseTime > avgTime + (2 * stdDev));
+                  
+                  if (slowResponses.length === 0) return null;
+                  
+                  return (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                        <WarningAmberIcon color="warning" fontSize="small" />
+                        Slow Responses ({slowResponses.length}) - Potential Time-Based Vulnerability
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                        {slowResponses.slice(0, 10).map((r, i) => (
+                          <Chip
+                            key={i}
+                            label={`${r.payload.slice(0, 20)}${r.payload.length > 20 ? "..." : ""} (${r.responseTime}ms)`}
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                            onClick={() => viewResponseDetails(r)}
+                            sx={{ cursor: "pointer", fontFamily: "monospace" }}
+                          />
+                        ))}
+                        {slowResponses.length > 10 && (
+                          <Chip label={`+${slowResponses.length - 10} more`} size="small" />
+                        )}
+                      </Box>
+                    </Box>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Results Table */}
           {results.length === 0 ? (
@@ -3639,6 +5831,28 @@ const FuzzingPage: React.FC = () => {
                             <VisibilityIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
+                        <Tooltip title="Send to Repeater">
+                          <IconButton
+                            size="small"
+                            onClick={() => sendToRepeater(result)}
+                            color="secondary"
+                          >
+                            <RefreshIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {compareMode && (
+                          <Tooltip title={
+                            compareResults[0]?.id === result.id || compareResults[1]?.id === result.id
+                              ? "Selected for comparison"
+                              : "Select for comparison"
+                          }>
+                            <Checkbox
+                              size="small"
+                              checked={compareResults[0]?.id === result.id || compareResults[1]?.id === result.id}
+                              onChange={() => toggleCompareResult(result)}
+                            />
+                          </Tooltip>
+                        )}
                         <Tooltip title="Copy payload">
                           <IconButton
                             size="small"
@@ -3667,46 +5881,74 @@ const FuzzingPage: React.FC = () => {
       {/* AI Chat Panel */}
       {results.length > 0 && (
         <Paper
-          elevation={3}
+          elevation={6}
           sx={{
             position: "fixed",
-            bottom: 0,
-            left: { xs: 0, md: 240 },
-            right: 0,
+            bottom: 16,
+            right: 16,
+            left: chatMaximized ? { xs: 16, md: 256 } : "auto",
+            width: chatMaximized ? "auto" : { xs: "calc(100% - 32px)", sm: 400 },
+            maxWidth: chatMaximized ? "none" : 400,
             zIndex: 1200,
-            borderTopLeftRadius: 12,
-            borderTopRightRadius: 12,
+            borderRadius: 3,
             overflow: "hidden",
+            boxShadow: "0 4px 30px rgba(0,0,0,0.3)",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
           {/* Chat Header */}
           <Box
-            onClick={() => setChatOpen(!chatOpen)}
+            onClick={() => !chatMaximized && setChatOpen(!chatOpen)}
             sx={{
-              p: 2,
+              p: 1.5,
               background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
               color: "white",
-              cursor: "pointer",
+              cursor: chatMaximized ? "default" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              "&:hover": { filter: "brightness(1.1)" },
+              "&:hover": { filter: chatMaximized ? "none" : "brightness(1.1)" },
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <ChatIcon />
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                Ask AI About Your Fuzzing Results
+            <Box
+              onClick={() => chatMaximized && setChatOpen(!chatOpen)}
+              sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer", flex: 1 }}
+            >
+              <ChatIcon fontSize="small" />
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                AI Chat
               </Typography>
-              <Chip 
-                label={`${results.length} results`} 
-                size="small" 
-                sx={{ bgcolor: "rgba(255,255,255,0.2)", color: "white" }} 
-              />
+              {results.length > 0 && (
+                <Chip
+                  label={results.length}
+                  size="small"
+                  sx={{ bgcolor: "rgba(255,255,255,0.2)", color: "white", height: 20, "& .MuiChip-label": { px: 1, fontSize: "0.7rem" } }}
+                />
+              )}
             </Box>
-            <IconButton size="small" sx={{ color: "white" }}>
-              {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-            </IconButton>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <IconButton
+                size="small"
+                sx={{ color: "white", p: 0.5 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!chatOpen) setChatOpen(true);
+                  setChatMaximized(!chatMaximized);
+                }}
+              >
+                {chatMaximized ? <CloseFullscreenIcon fontSize="small" /> : <OpenInFullIcon fontSize="small" />}
+              </IconButton>
+              <IconButton
+                size="small"
+                sx={{ color: "white", p: 0.5 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setChatOpen(!chatOpen);
+                }}
+              >
+                {chatOpen ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
+              </IconButton>
+            </Box>
           </Box>
 
           {/* Chat Content */}
@@ -3714,16 +5956,16 @@ const FuzzingPage: React.FC = () => {
             {/* Messages Area */}
             <Box
               sx={{
-                height: "calc(60vh - 140px)",
-                maxHeight: 400,
+                height: chatMaximized ? "calc(66vh - 120px)" : 280,
                 overflowY: "auto",
                 p: 2,
-                bgcolor: alpha(theme.palette.background.default, 0.5),
+                bgcolor: alpha(theme.palette.background.default, 0.98),
+                transition: "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
               {/* Welcome message */}
               {chatMessages.length === 0 && (
-                <Box sx={{ textAlign: "center", py: 4 }}>
+                <Box sx={{ textAlign: "center", py: chatMaximized ? 6 : 2 }}>
                   <SmartToyIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     I can help you understand your fuzzing results and identify potential vulnerabilities!
@@ -3796,18 +6038,23 @@ const FuzzingPage: React.FC = () => {
                         "& p": { m: 0 },
                         "& p:not(:last-child)": { mb: 1 },
                         "& h2": { fontSize: "1.1rem", fontWeight: 700, mb: 1 },
-                        "& code": {
-                          bgcolor: alpha(msg.role === "user" ? "#fff" : "#f97316", 0.2),
-                          px: 0.5,
-                          borderRadius: 0.5,
-                          fontFamily: "monospace",
-                          fontSize: "0.85em",
-                        },
+                        "& h3": { fontSize: "1rem", fontWeight: 600, mb: 0.5 },
                         "& ul, & ol": { pl: 2, m: 0 },
                         "& li": { mb: 0.5 },
+                        "& strong": { fontWeight: 600 },
                       }}
                     >
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown
+                        components={{
+                          code: ({ className, children }) => (
+                            <ChatCodeBlock className={className} theme={theme}>
+                              {children}
+                            </ChatCodeBlock>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </Paper>
                   </Box>
                 </Box>
@@ -4253,6 +6500,18 @@ const FuzzingPage: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
+          <Button
+            startIcon={<RefreshIcon />}
+            onClick={() => {
+              if (selectedResult) {
+                sendToRepeater(selectedResult);
+                setResponseDialogOpen(false);
+              }
+            }}
+            color="secondary"
+          >
+            Send to Repeater
+          </Button>
           <Button
             startIcon={<ContentCopyIcon />}
             onClick={() => {
@@ -4959,6 +7218,858 @@ const FuzzingPage: React.FC = () => {
           </Grid>
         </Box>
       )}
+
+      {/* Tab 8: WebSocket Fuzzing */}
+      {activeTab === 8 && (
+        <Box>
+          <Grid container spacing={3}>
+            {/* WebSocket Configuration */}
+            <Grid item xs={12} lg={5}>
+              <Card sx={{ background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.05)} 0%, ${alpha("#0891b2", 0.05)} 100%)` }}>
+                <CardContent>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+                    <CableIcon color="info" sx={{ fontSize: 28 }} />
+                    <Typography variant="h6" fontWeight={700}>WebSocket Deep Fuzzing</Typography>
+                  </Box>
+                  
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Test WebSocket endpoints for authentication bypass, state manipulation, injection attacks, 
+                    CSWSH, race conditions, and more.
+                  </Typography>
+                  
+                  {/* Target URL */}
+                  <TextField
+                    fullWidth
+                    label="WebSocket URL"
+                    placeholder="wss://example.com/ws or ws://localhost:8080/socket"
+                    value={wsConfig.targetUrl}
+                    onChange={(e) => setWsConfig(prev => ({ ...prev, targetUrl: e.target.value }))}
+                    sx={{ mb: 2 }}
+                    InputProps={{
+                      startAdornment: <CableIcon sx={{ mr: 1, color: "text.secondary" }} />,
+                    }}
+                  />
+                  
+                  {/* Auth Token */}
+                  <Grid container spacing={2} sx={{ mb: 2 }}>
+                    <Grid item xs={8}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Auth Token (optional)"
+                        placeholder="Bearer token or session ID"
+                        value={wsConfig.authToken}
+                        onChange={(e) => setWsConfig(prev => ({ ...prev, authToken: e.target.value }))}
+                      />
+                    </Grid>
+                    <Grid item xs={4}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Header Name"
+                        value={wsConfig.authHeader}
+                        onChange={(e) => setWsConfig(prev => ({ ...prev, authHeader: e.target.value }))}
+                      />
+                    </Grid>
+                  </Grid>
+                  
+                  {/* Origin for CSWSH testing */}
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Origin Header (for CSWSH testing)"
+                    placeholder="https://evil.com"
+                    value={wsConfig.origin}
+                    onChange={(e) => setWsConfig(prev => ({ ...prev, origin: e.target.value }))}
+                    sx={{ mb: 2 }}
+                  />
+                  
+                  {/* Message Template */}
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={3}
+                    label="Message Template (use FUZZ or §0§ as placeholder)"
+                    placeholder='{"action": "FUZZ", "data": "test"}'
+                    value={wsConfig.messageTemplate}
+                    onChange={(e) => setWsConfig(prev => ({ ...prev, messageTemplate: e.target.value }))}
+                    sx={{ mb: 2 }}
+                  />
+                  
+                  {/* Initial Messages */}
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                    Initial Messages (establish state before testing)
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder='{"action": "login", "token": "..."}'
+                      value={wsNewInitMsg}
+                      onChange={(e) => setWsNewInitMsg(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter" && wsNewInitMsg.trim()) {
+                          setWsConfig(prev => ({ ...prev, initialMessages: [...prev.initialMessages, wsNewInitMsg.trim()] }));
+                          setWsNewInitMsg("");
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        if (wsNewInitMsg.trim()) {
+                          setWsConfig(prev => ({ ...prev, initialMessages: [...prev.initialMessages, wsNewInitMsg.trim()] }));
+                          setWsNewInitMsg("");
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </Box>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 2, minHeight: 24 }}>
+                    {wsConfig.initialMessages.map((msg, i) => (
+                      <Chip
+                        key={i}
+                        label={msg.slice(0, 40) + (msg.length > 40 ? "..." : "")}
+                        size="small"
+                        onDelete={() => setWsConfig(prev => ({
+                          ...prev,
+                          initialMessages: prev.initialMessages.filter((_, idx) => idx !== i)
+                        }))}
+                      />
+                    ))}
+                  </Box>
+                  
+                  {/* Attack Categories */}
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                    Attack Categories
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
+                    {[
+                      { id: "all", label: "All", color: "primary" },
+                      { id: "auth_bypass", label: "Auth Bypass", color: "error" },
+                      { id: "state_manipulation", label: "State Manipulation", color: "warning" },
+                      { id: "frame_injection", label: "Frame Injection", color: "info" },
+                      { id: "message_tampering", label: "Injection Attacks", color: "error" },
+                      { id: "race_condition", label: "Race Conditions", color: "warning" },
+                      { id: "cswsh", label: "CSWSH", color: "error" },
+                      { id: "protocol_violation", label: "Protocol Violations", color: "default" },
+                      { id: "dos", label: "DoS", color: "warning" },
+                    ].map((cat) => (
+                      <Chip
+                        key={cat.id}
+                        label={cat.label}
+                        color={wsConfig.attackCategories.includes(cat.id) ? cat.color as any : "default"}
+                        variant={wsConfig.attackCategories.includes(cat.id) ? "filled" : "outlined"}
+                        onClick={() => {
+                          if (cat.id === "all") {
+                            setWsConfig(prev => ({ ...prev, attackCategories: ["all"] }));
+                          } else {
+                            setWsConfig(prev => {
+                              const cats = prev.attackCategories.filter(c => c !== "all");
+                              if (cats.includes(cat.id)) {
+                                return { ...prev, attackCategories: cats.filter(c => c !== cat.id) };
+                              } else {
+                                return { ...prev, attackCategories: [...cats, cat.id] };
+                              }
+                            });
+                          }
+                        }}
+                        sx={{ cursor: "pointer" }}
+                      />
+                    ))}
+                  </Box>
+                  
+                  {/* Timing Settings */}
+                  <Grid container spacing={2} sx={{ mb: 2 }}>
+                    <Grid item xs={4}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="number"
+                        label="Timeout (ms)"
+                        value={wsConfig.timeout}
+                        onChange={(e) => setWsConfig(prev => ({ ...prev, timeout: parseInt(e.target.value) || 10000 }))}
+                      />
+                    </Grid>
+                    <Grid item xs={4}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="number"
+                        label="Delay (ms)"
+                        value={wsConfig.delayBetweenTests}
+                        onChange={(e) => setWsConfig(prev => ({ ...prev, delayBetweenTests: parseInt(e.target.value) || 100 }))}
+                      />
+                    </Grid>
+                    <Grid item xs={4}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="number"
+                        label="Max Responses"
+                        value={wsConfig.maxMessagesPerTest}
+                        onChange={(e) => setWsConfig(prev => ({ ...prev, maxMessagesPerTest: parseInt(e.target.value) || 10 }))}
+                      />
+                    </Grid>
+                  </Grid>
+                  
+                  {/* Action Buttons */}
+                  <Box sx={{ display: "flex", gap: 2 }}>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      fullWidth
+                      startIcon={wsIsRunning ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
+                      onClick={async () => {
+                        if (!wsConfig.targetUrl) return;
+                        setWsIsRunning(true);
+                        setWsResults([]);
+                        setWsFindings([]);
+                        setWsProgress({ current: 0, total: 0 });
+                        try {
+                          const response = await fetch("/api/fuzzer/websocket/stream", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              target_url: wsConfig.targetUrl,
+                              initial_messages: wsConfig.initialMessages,
+                              auth_token: wsConfig.authToken || null,
+                              auth_header: wsConfig.authHeader,
+                              origin: wsConfig.origin || null,
+                              subprotocols: wsConfig.subprotocols,
+                              attack_categories: wsConfig.attackCategories,
+                              custom_payloads: wsConfig.customPayloads,
+                              message_template: wsConfig.messageTemplate,
+                              timeout: wsConfig.timeout,
+                              delay_between_tests: wsConfig.delayBetweenTests,
+                              max_messages_per_test: wsConfig.maxMessagesPerTest,
+                            }),
+                          });
+                          const reader = response.body?.getReader();
+                          const decoder = new TextDecoder();
+                          if (reader) {
+                            while (true) {
+                              const { done, value } = await reader.read();
+                              if (done) break;
+                              const text = decoder.decode(value);
+                              const lines = text.split("\n").filter(l => l.startsWith("data: "));
+                              for (const line of lines) {
+                                try {
+                                  const data = JSON.parse(line.slice(6));
+                                  if (data.type === "start") {
+                                    setWsProgress({ current: 0, total: data.total });
+                                  } else if (data.type === "progress") {
+                                    setWsProgress({ current: data.current, total: data.total });
+                                    if (data.result) {
+                                      setWsResults(prev => [...prev, data.result]);
+                                    }
+                                  } else if (data.type === "complete") {
+                                    setWsStats(data.stats);
+                                    setWsFindings(data.findings || []);
+                                  }
+                                } catch (e) {}
+                              }
+                            }
+                          }
+                        } catch (err) {
+                          console.error("WebSocket fuzzing failed:", err);
+                        } finally {
+                          setWsIsRunning(false);
+                        }
+                      }}
+                      disabled={wsIsRunning || !wsConfig.targetUrl}
+                      sx={{
+                        background: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
+                        "&:hover": { background: "linear-gradient(135deg, #0891b2 0%, #0e7490 100%)" },
+                      }}
+                    >
+                      {wsIsRunning ? "Fuzzing..." : "Start WebSocket Fuzzing"}
+                    </Button>
+                  </Box>
+                  
+                  {/* Progress */}
+                  {wsIsRunning && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Progress: {wsProgress.current} / {wsProgress.total}
+                      </Typography>
+                      <LinearProgress 
+                        variant="determinate" 
+                        value={(wsProgress.current / Math.max(wsProgress.total, 1)) * 100} 
+                        sx={{ mt: 0.5, borderRadius: 2 }}
+                      />
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            {/* Results Panel */}
+            <Grid item xs={12} lg={7}>
+              {/* Stats */}
+              {wsStats && (
+                <Paper sx={{ p: 2, mb: 2, background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.05)} 0%, ${alpha("#8b5cf6", 0.05)} 100%)` }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6} sm={3}>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="h4" fontWeight={700} color="primary">{wsStats.total_tests}</Typography>
+                        <Typography variant="caption" color="text.secondary">Total Tests</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="h4" fontWeight={700} color="success.main">{wsStats.successful_connections}</Typography>
+                        <Typography variant="caption" color="text.secondary">Connected</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="h4" fontWeight={700} color="warning.main">{wsStats.interesting_count}</Typography>
+                        <Typography variant="caption" color="text.secondary">Interesting</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="h4" fontWeight={700} color="error.main">{wsStats.vulnerabilities_found}</Typography>
+                        <Typography variant="caption" color="text.secondary">Vulnerabilities</Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              )}
+              
+              {/* Findings */}
+              {wsFindings.length > 0 && (
+                <Card sx={{ mb: 2, border: `1px solid ${alpha("#ef4444", 0.3)}` }}>
+                  <CardContent>
+                    <Typography variant="h6" fontWeight={600} color="error.main" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                      <WarningIcon /> Vulnerabilities Found ({wsFindings.length})
+                    </Typography>
+                    {wsFindings.map((finding, i) => (
+                      <Paper key={i} sx={{ p: 2, mb: 1, bgcolor: alpha("#ef4444", 0.05) }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <Chip 
+                            label={finding.severity} 
+                            size="small" 
+                            color={finding.severity === "critical" ? "error" : finding.severity === "high" ? "error" : "warning"} 
+                          />
+                          <Typography variant="subtitle2" fontWeight={600}>{finding.type}</Typography>
+                        </Box>
+                        <Typography variant="body2" sx={{ mb: 1 }}>{finding.description}</Typography>
+                        <Typography variant="caption" sx={{ fontFamily: "monospace", display: "block", bgcolor: "rgba(0,0,0,0.1)", p: 0.5, borderRadius: 1 }}>
+                          Payload: {finding.payload}
+                        </Typography>
+                        {finding.recommendation && (
+                          <Typography variant="caption" color="info.main" sx={{ display: "block", mt: 1 }}>
+                            💡 {finding.recommendation}
+                          </Typography>
+                        )}
+                      </Paper>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+              
+              {/* Results Table */}
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+                    Test Results ({wsResults.length})
+                  </Typography>
+                  <TableContainer sx={{ maxHeight: 500 }}>
+                    <Table stickyHeader size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Test</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Duration</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Flags</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {wsResults.slice(0, 200).map((result, i) => (
+                          <TableRow 
+                            key={result.id || i} 
+                            hover
+                            sx={{ 
+                              bgcolor: result.vulnerability_detected 
+                                ? alpha("#ef4444", 0.1) 
+                                : result.interesting 
+                                  ? alpha("#f59e0b", 0.05) 
+                                  : "inherit" 
+                            }}
+                          >
+                            <TableCell>
+                              <Chip label={result.category} size="small" variant="outlined" />
+                            </TableCell>
+                            <TableCell>
+                              <Tooltip title={result.payload || ""}>
+                                <Typography variant="body2" sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {result.test_name}
+                                </Typography>
+                              </Tooltip>
+                            </TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={result.connection_state} 
+                                size="small" 
+                                color={result.connection_state === "connected" ? "success" : result.connection_state === "error" ? "error" : "default"}
+                              />
+                            </TableCell>
+                            <TableCell>{result.duration_ms}ms</TableCell>
+                            <TableCell>
+                              {result.flags?.map((flag: string, fi: number) => (
+                                <Chip key={fi} label={flag} size="small" color="warning" variant="outlined" sx={{ mr: 0.5, mb: 0.5, fontSize: "0.7rem" }} />
+                              ))}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  {wsResults.length === 0 && !wsIsRunning && (
+                    <Box sx={{ textAlign: "center", py: 4 }}>
+                      <CableIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
+                      <Typography color="text.secondary">
+                        Configure your WebSocket target and start fuzzing to see results
+                      </Typography>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Box>
+      )}
+
+      {/* Tab 9: Coverage Tracking */}
+      {activeTab === 9 && (
+        <Box>
+          <Grid container spacing={3}>
+            {/* Coverage Overview */}
+            <Grid item xs={12} lg={4}>
+              <Card sx={{ background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.05)} 0%, ${alpha("#6366f1", 0.05)} 100%)` }}>
+                <CardContent>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+                    <RadarIcon color="secondary" sx={{ fontSize: 28 }} />
+                    <Typography variant="h6" fontWeight={700}>Coverage Tracking</Typography>
+                  </Box>
+                  
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Track your security testing coverage across techniques, OWASP Top 10 categories, 
+                    and endpoints. Identify gaps and get recommendations for comprehensive testing.
+                  </Typography>
+                  
+                  {/* Create New Session */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>Create Coverage Session</Typography>
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        placeholder="Target base URL (e.g., https://api.example.com)"
+                        value={coverageNewSessionUrl}
+                        onChange={(e) => setCoverageNewSessionUrl(e.target.value)}
+                      />
+                      <Button
+                        variant="contained"
+                        onClick={async () => {
+                          if (!coverageNewSessionUrl) return;
+                          setCoverageLoading(true);
+                          try {
+                            const res = await fetch("/api/fuzzer/coverage/sessions", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ target_base_url: coverageNewSessionUrl }),
+                            });
+                            const session = await res.json();
+                            setActiveCoverageSession(session);
+                            setCoverageSessions(prev => [...prev, session]);
+                            setCoverageNewSessionUrl("");
+                          } catch (err) {
+                            console.error("Failed to create coverage session:", err);
+                          } finally {
+                            setCoverageLoading(false);
+                          }
+                        }}
+                        disabled={coverageLoading || !coverageNewSessionUrl}
+                      >
+                        Create
+                      </Button>
+                    </Box>
+                  </Box>
+                  
+                  {/* Load Existing Sessions */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                      Coverage Sessions
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      fullWidth
+                      startIcon={coverageLoading ? <CircularProgress size={16} /> : <RefreshIcon />}
+                      onClick={async () => {
+                        setCoverageLoading(true);
+                        try {
+                          const res = await fetch("/api/fuzzer/coverage/sessions");
+                          const data = await res.json();
+                          setCoverageSessions(data.sessions || []);
+                        } catch (err) {
+                          console.error("Failed to load coverage sessions:", err);
+                        } finally {
+                          setCoverageLoading(false);
+                        }
+                      }}
+                      sx={{ mb: 1 }}
+                    >
+                      Load Sessions
+                    </Button>
+                    {coverageSessions.length > 0 && (
+                      <Paper variant="outlined" sx={{ p: 1, maxHeight: 200, overflow: "auto" }}>
+                        {coverageSessions.map((session) => (
+                          <Box
+                            key={session.session_id}
+                            onClick={() => setActiveCoverageSession(session)}
+                            sx={{
+                              p: 1,
+                              borderRadius: 1,
+                              cursor: "pointer",
+                              bgcolor: activeCoverageSession?.session_id === session.session_id ? alpha("#8b5cf6", 0.1) : "transparent",
+                              "&:hover": { bgcolor: alpha("#8b5cf6", 0.05) },
+                              mb: 0.5,
+                            }}
+                          >
+                            <Typography variant="body2" fontWeight={500}>
+                              {session.target_base_url}
+                            </Typography>
+                            <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
+                              <Chip label={`${session.coverage_percent || 0}%`} size="small" color="primary" />
+                              <Chip label={`${session.total_findings || 0} findings`} size="small" color="error" variant="outlined" />
+                            </Box>
+                          </Box>
+                        ))}
+                      </Paper>
+                    )}
+                  </Box>
+                  
+                  {/* Load Techniques */}
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    startIcon={<CategoryIcon />}
+                    onClick={async () => {
+                      try {
+                        const [techRes, owaspRes] = await Promise.all([
+                          fetch("/api/fuzzer/coverage/techniques"),
+                          fetch("/api/fuzzer/coverage/owasp"),
+                        ]);
+                        const techniques = await techRes.json();
+                        const owasp = await owaspRes.json();
+                        setCoverageTechniques(techniques.techniques || []);
+                        setOwaspCategories(owasp);
+                      } catch (err) {
+                        console.error("Failed to load techniques:", err);
+                      }
+                    }}
+                    sx={{ mb: 2 }}
+                  >
+                    Load Technique Registry
+                  </Button>
+                  
+                  {/* Active Session Stats */}
+                  {activeCoverageSession && (
+                    <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                        Active Session
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: "block", fontFamily: "monospace", mb: 1 }}>
+                        {activeCoverageSession.target_base_url}
+                      </Typography>
+                      <Grid container spacing={1}>
+                        <Grid item xs={6}>
+                          <Typography variant="h4" fontWeight={700} color="secondary">
+                            {activeCoverageSession.overall_stats?.coverage_percent || 0}%
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">Coverage</Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="h4" fontWeight={700} color="error.main">
+                            {activeCoverageSession.overall_stats?.total_findings || 0}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">Findings</Typography>
+                        </Grid>
+                      </Grid>
+                      
+                      <Box sx={{ mt: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<SearchIcon />}
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/fuzzer/coverage/sessions/${activeCoverageSession.session_id}/gaps`);
+                              const gaps = await res.json();
+                              setCoverageGaps(gaps);
+                            } catch (err) {
+                              console.error("Failed to load gaps:", err);
+                            }
+                          }}
+                        >
+                          Analyze Gaps
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<GridOnIcon />}
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/fuzzer/coverage/sessions/${activeCoverageSession.session_id}/heatmap`);
+                              const heatmap = await res.json();
+                              setCoverageHeatmap(heatmap);
+                            } catch (err) {
+                              console.error("Failed to load heatmap:", err);
+                            }
+                          }}
+                        >
+                          View Heatmap
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<DownloadIcon />}
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/fuzzer/coverage/sessions/${activeCoverageSession.session_id}/report?format=markdown`);
+                              const report = await res.text();
+                              setCoverageReportContent(report);
+                              setShowCoverageReport(true);
+                            } catch (err) {
+                              console.error("Failed to generate report:", err);
+                            }
+                          }}
+                        >
+                          Report
+                        </Button>
+                      </Box>
+                    </Paper>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            {/* Coverage Details */}
+            <Grid item xs={12} lg={8}>
+              {/* OWASP Coverage */}
+              {Object.keys(owaspCategories).length > 0 && (
+                <Card sx={{ mb: 2 }}>
+                  <CardContent>
+                    <Typography variant="h6" fontWeight={600} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                      <ShieldIcon color="primary" /> OWASP Top 10 Coverage
+                    </Typography>
+                    <Grid container spacing={1}>
+                      {Object.entries(owaspCategories).map(([id, info]: [string, any]) => (
+                        <Grid item xs={12} sm={6} key={id}>
+                          <Paper
+                            sx={{
+                              p: 1.5,
+                              bgcolor: alpha(info.techniques?.length > 3 ? "#10b981" : "#f59e0b", 0.05),
+                              border: `1px solid ${alpha(info.techniques?.length > 3 ? "#10b981" : "#f59e0b", 0.2)}`,
+                            }}
+                          >
+                            <Typography variant="subtitle2" fontWeight={600}>
+                              {id}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                              {info.name}
+                            </Typography>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <LinearProgress
+                                variant="determinate"
+                                value={activeCoverageSession?.owasp_coverage?.[id]?.coverage_percent || 0}
+                                sx={{ flex: 1, borderRadius: 1 }}
+                              />
+                              <Typography variant="caption" fontWeight={600}>
+                                {activeCoverageSession?.owasp_coverage?.[id]?.coverage_percent || 0}%
+                              </Typography>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                              {info.techniques?.length || 0} techniques
+                            </Typography>
+                          </Paper>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </CardContent>
+                </Card>
+              )}
+              
+              {/* Coverage Gaps */}
+              {coverageGaps && (
+                <Card sx={{ mb: 2, border: `1px solid ${alpha("#f59e0b", 0.3)}` }}>
+                  <CardContent>
+                    <Typography variant="h6" fontWeight={600} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                      <WarningIcon color="warning" /> Coverage Gaps
+                    </Typography>
+                    
+                    {/* Recommendations */}
+                    {coverageGaps.recommendations?.length > 0 && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" fontWeight={600} gutterBottom>Recommendations</Typography>
+                        {coverageGaps.recommendations.map((rec: any, i: number) => (
+                          <Alert 
+                            key={i} 
+                            severity={rec.priority === "critical" ? "error" : rec.priority === "high" ? "warning" : "info"}
+                            sx={{ mb: 1 }}
+                          >
+                            {rec.message}
+                          </Alert>
+                        ))}
+                      </Box>
+                    )}
+                    
+                    {/* Untested Techniques */}
+                    {coverageGaps.untested_techniques?.length > 0 && (
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                          Untested Techniques ({coverageGaps.untested_techniques.length})
+                        </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                          {coverageGaps.untested_techniques.slice(0, 20).map((tech: any) => (
+                            <Chip
+                              key={tech.id}
+                              label={tech.name}
+                              size="small"
+                              color={tech.severity === "critical" ? "error" : tech.severity === "high" ? "warning" : "default"}
+                              variant="outlined"
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+              
+              {/* Techniques Registry */}
+              {coverageTechniques.length > 0 && (
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+                      Security Testing Techniques ({coverageTechniques.length})
+                    </Typography>
+                    <TableContainer sx={{ maxHeight: 400 }}>
+                      <Table stickyHeader size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 600 }}>Technique</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>OWASP</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Severity</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Est. Time</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {coverageTechniques.map((tech) => (
+                            <TableRow key={tech.id} hover>
+                              <TableCell>
+                                <Typography variant="body2" fontWeight={500}>{tech.name}</Typography>
+                                <Typography variant="caption" color="text.secondary">{tech.description}</Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Chip label={tech.category} size="small" variant="outlined" />
+                              </TableCell>
+                              <TableCell>
+                                <Chip label={tech.owasp_category} size="small" color="primary" variant="outlined" />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={tech.severity}
+                                  size="small"
+                                  color={tech.severity === "critical" ? "error" : tech.severity === "high" ? "warning" : "default"}
+                                />
+                              </TableCell>
+                              <TableCell>{tech.estimated_time}s</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </CardContent>
+                </Card>
+              )}
+              
+              {/* Empty State */}
+              {!activeCoverageSession && coverageTechniques.length === 0 && (
+                <Card sx={{ textAlign: "center", py: 6 }}>
+                  <CardContent>
+                    <RadarIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                      No Coverage Data
+                    </Typography>
+                    <Typography variant="body2" color="text.disabled">
+                      Create a coverage session or load the technique registry to track your security testing coverage.
+                    </Typography>
+                  </CardContent>
+                </Card>
+              )}
+            </Grid>
+          </Grid>
+        </Box>
+      )}
+
+      {/* Coverage Report Dialog */}
+      <Dialog
+        open={showCoverageReport}
+        onClose={() => setShowCoverageReport(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <RadarIcon color="secondary" />
+            Coverage Report
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Paper sx={{ p: 2, bgcolor: "#1e1e1e", borderRadius: 2 }}>
+            <Typography
+              component="pre"
+              sx={{
+                fontFamily: "monospace",
+                fontSize: "0.85rem",
+                color: "#d4d4d4",
+                whiteSpace: "pre-wrap",
+                m: 0,
+              }}
+            >
+              {coverageReportContent}
+            </Typography>
+          </Paper>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            startIcon={<ContentCopyIcon />}
+            onClick={() => navigator.clipboard.writeText(coverageReportContent)}
+          >
+            Copy
+          </Button>
+          <Button
+            startIcon={<DownloadIcon />}
+            onClick={() => {
+              const blob = new Blob([coverageReportContent], { type: "text/markdown" });
+              saveAs(blob, `coverage-report-${Date.now()}.md`);
+            }}
+          >
+            Download
+          </Button>
+          <Button onClick={() => setShowCoverageReport(false)} variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Save Session Dialog */}
       <Dialog 
@@ -6407,6 +9518,444 @@ const FuzzingPage: React.FC = () => {
             Copy Text
           </Button>
           <Button onClick={() => setShowWrittenReportDialog(false)} variant="contained" color="success">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Repeater Dialog */}
+      <Dialog 
+        open={repeaterOpen} 
+        onClose={() => setRepeaterOpen(false)} 
+        maxWidth="xl" 
+        fullWidth
+        PaperProps={{ sx: { minHeight: "80vh" } }}
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <RefreshIcon color="secondary" />
+            <Typography variant="h6">Repeater</Typography>
+            {repeaterRequest?.originalPayload && (
+              <Chip 
+                label={`Original: ${repeaterRequest.originalPayload.slice(0, 30)}${repeaterRequest.originalPayload.length > 30 ? "..." : ""}`}
+                size="small"
+                variant="outlined"
+              />
+            )}
+          </Box>
+          <IconButton onClick={() => setRepeaterOpen(false)}>
+            <ExpandMoreIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {repeaterRequest && (
+            <Grid container spacing={2}>
+              {/* Request Panel */}
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                    <SendIcon fontSize="small" color="primary" />
+                    Request
+                  </Typography>
+                  
+                  {/* Method & URL */}
+                  <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+                    <FormControl size="small" sx={{ minWidth: 100 }}>
+                      <Select
+                        value={repeaterRequest.method}
+                        onChange={(e) => setRepeaterRequest({ ...repeaterRequest, method: e.target.value })}
+                      >
+                        {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map(m => (
+                          <MenuItem key={m} value={m}>{m}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      value={repeaterRequest.url}
+                      onChange={(e) => setRepeaterRequest({ ...repeaterRequest, url: e.target.value })}
+                      placeholder="URL"
+                      sx={{ fontFamily: "monospace" }}
+                    />
+                  </Box>
+                  
+                  {/* Headers */}
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    Headers
+                  </Typography>
+                  <Paper variant="outlined" sx={{ p: 1, mb: 2, maxHeight: 200, overflow: "auto" }}>
+                    {Object.entries(repeaterRequest.headers).map(([key, value]) => (
+                      <Box key={key} sx={{ display: "flex", gap: 1, mb: 1 }}>
+                        <TextField
+                          size="small"
+                          placeholder="Header name"
+                          value={key}
+                          onChange={(e) => updateRepeaterHeader(key, e.target.value, value)}
+                          sx={{ flex: 1, "& input": { fontFamily: "monospace", fontSize: "0.85rem" } }}
+                        />
+                        <TextField
+                          size="small"
+                          placeholder="Value"
+                          value={value}
+                          onChange={(e) => updateRepeaterHeader(key, key, e.target.value)}
+                          sx={{ flex: 2, "& input": { fontFamily: "monospace", fontSize: "0.85rem" } }}
+                        />
+                        <IconButton size="small" onClick={() => deleteRepeaterHeader(key)} color="error">
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                    <Button size="small" startIcon={<AddIcon />} onClick={addRepeaterHeader}>
+                      Add Header
+                    </Button>
+                  </Paper>
+                  
+                  {/* Body */}
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    Body
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={6}
+                    value={repeaterRequest.body}
+                    onChange={(e) => setRepeaterRequest({ ...repeaterRequest, body: e.target.value })}
+                    placeholder="Request body..."
+                    sx={{ "& textarea": { fontFamily: "monospace", fontSize: "0.85rem" } }}
+                  />
+                  
+                  {/* Proxy */}
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1, mt: 2 }}>
+                    Proxy (optional)
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={repeaterRequest.proxyUrl}
+                    onChange={(e) => setRepeaterRequest({ ...repeaterRequest, proxyUrl: e.target.value })}
+                    placeholder="http://127.0.0.1:8080 (Burp Suite)"
+                    helperText="Route through Burp Suite, ZAP, or mitmproxy"
+                    sx={{ "& input": { fontFamily: "monospace", fontSize: "0.85rem" } }}
+                  />
+                  
+                  {/* Send Button */}
+                  <Box sx={{ mt: 2 }}>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="large"
+                      fullWidth
+                      startIcon={repeaterSending ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+                      onClick={sendRepeaterRequest}
+                      disabled={repeaterSending}
+                    >
+                      {repeaterSending ? "Sending..." : "Send"}
+                    </Button>
+                  </Box>
+                </Paper>
+              </Grid>
+              
+              {/* Response Panel */}
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                    <HttpIcon fontSize="small" color="success" />
+                    Response
+                    {repeaterResponse && (
+                      <Chip 
+                        label={repeaterResponse.statusCode}
+                        size="small"
+                        color={repeaterResponse.statusCode < 300 ? "success" : repeaterResponse.statusCode < 400 ? "warning" : "error"}
+                      />
+                    )}
+                  </Typography>
+                  
+                  {repeaterResponse ? (
+                    <>
+                      {/* Response Stats */}
+                      <Grid container spacing={1} sx={{ mb: 2 }}>
+                        <Grid item xs={4}>
+                          <Paper sx={{ p: 1, textAlign: "center", bgcolor: alpha("#10b981", 0.1) }}>
+                            <Typography variant="caption" color="text.secondary">Status</Typography>
+                            <Typography variant="h6" fontWeight={700}>{repeaterResponse.statusCode}</Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Paper sx={{ p: 1, textAlign: "center", bgcolor: alpha("#3b82f6", 0.1) }}>
+                            <Typography variant="caption" color="text.secondary">Time</Typography>
+                            <Typography variant="h6" fontWeight={700}>{repeaterResponse.responseTime}ms</Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Paper sx={{ p: 1, textAlign: "center", bgcolor: alpha("#8b5cf6", 0.1) }}>
+                            <Typography variant="caption" color="text.secondary">Length</Typography>
+                            <Typography variant="h6" fontWeight={700}>{repeaterResponse.contentLength}</Typography>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+                      
+                      {/* Response Headers */}
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                        Headers
+                      </Typography>
+                      <Paper variant="outlined" sx={{ p: 1, mb: 2, maxHeight: 150, overflow: "auto", bgcolor: "#f8f9fa" }}>
+                        {Object.entries(repeaterResponse.headers).map(([key, value]) => (
+                          <Typography key={key} variant="caption" sx={{ display: "block", fontFamily: "monospace" }}>
+                            <span style={{ color: "#6366f1" }}>{key}:</span> {value}
+                          </Typography>
+                        ))}
+                      </Paper>
+                      
+                      {/* Response Body */}
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                        Body
+                      </Typography>
+                      <Paper 
+                        variant="outlined" 
+                        sx={{ 
+                          p: 1, 
+                          bgcolor: "#1e1e1e", 
+                          maxHeight: 300, 
+                          overflow: "auto",
+                        }}
+                      >
+                        <Typography
+                          component="pre"
+                          sx={{
+                            fontFamily: "monospace",
+                            fontSize: "0.8rem",
+                            color: "#d4d4d4",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-all",
+                            m: 0,
+                          }}
+                        >
+                          {repeaterResponse.body || "(Empty response)"}
+                        </Typography>
+                      </Paper>
+                    </>
+                  ) : (
+                    <Box sx={{ textAlign: "center", py: 8, color: "text.disabled" }}>
+                      <HttpIcon sx={{ fontSize: 64, mb: 2, opacity: 0.3 }} />
+                      <Typography>Send a request to see the response</Typography>
+                    </Box>
+                  )}
+                </Paper>
+              </Grid>
+              
+              {/* History Panel */}
+              {repeaterHistory.length > 0 && (
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2 }}>
+                    <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                      <AccessTimeIcon fontSize="small" />
+                      Request History ({repeaterHistory.length})
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                      {repeaterHistory.slice(0, 10).map((item) => (
+                        <Chip
+                          key={item.id}
+                          label={`${item.request?.method} → ${item.response?.statusCode}`}
+                          size="small"
+                          variant={item.response?.statusCode && item.response.statusCode < 300 ? "filled" : "outlined"}
+                          color={item.response?.statusCode && item.response.statusCode < 300 ? "success" : item.response?.statusCode && item.response.statusCode < 400 ? "warning" : "error"}
+                          onClick={() => {
+                            if (item.request) setRepeaterRequest(item.request);
+                            if (item.response) setRepeaterResponse(item.response);
+                          }}
+                          sx={{ cursor: "pointer" }}
+                        />
+                      ))}
+                    </Box>
+                  </Paper>
+                </Grid>
+              )}
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            startIcon={<ContentCopyIcon />}
+            onClick={() => {
+              if (repeaterRequest) {
+                const curlCmd = `curl -X ${repeaterRequest.method} "${repeaterRequest.url}" ${Object.entries(repeaterRequest.headers).map(([k, v]) => `-H "${k}: ${v}"`).join(" ")} ${repeaterRequest.body ? `-d '${repeaterRequest.body}'` : ""}`;
+                navigator.clipboard.writeText(curlCmd);
+              }
+            }}
+          >
+            Copy as cURL
+          </Button>
+          <Button onClick={() => setRepeaterOpen(false)} variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Compare Dialog */}
+      <Dialog 
+        open={compareDialogOpen} 
+        onClose={() => setCompareDialogOpen(false)} 
+        maxWidth="xl" 
+        fullWidth
+        PaperProps={{ sx: { minHeight: "70vh" } }}
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <SearchIcon color="primary" />
+          Response Comparison
+        </DialogTitle>
+        <DialogContent dividers>
+          {compareResults[0] && compareResults[1] && (
+            <Grid container spacing={2}>
+              {/* Summary Comparison */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05) }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>Quick Comparison</Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Metric</TableCell>
+                        <TableCell align="center">Response A</TableCell>
+                        <TableCell align="center">Response B</TableCell>
+                        <TableCell align="center">Diff</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell>Payload</TableCell>
+                        <TableCell align="center" sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{compareResults[0].payload.slice(0, 30)}</TableCell>
+                        <TableCell align="center" sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{compareResults[1].payload.slice(0, 30)}</TableCell>
+                        <TableCell align="center">
+                          {compareResults[0].payload === compareResults[1].payload 
+                            ? <Chip label="Same" size="small" color="default" /> 
+                            : <Chip label="Different" size="small" color="info" />
+                          }
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Status Code</TableCell>
+                        <TableCell align="center">
+                          <Chip label={compareResults[0].statusCode} size="small" color={compareResults[0].statusCode < 300 ? "success" : "error"} />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Chip label={compareResults[1].statusCode} size="small" color={compareResults[1].statusCode < 300 ? "success" : "error"} />
+                        </TableCell>
+                        <TableCell align="center">
+                          {compareResults[0].statusCode === compareResults[1].statusCode 
+                            ? <Chip label="Same" size="small" color="success" /> 
+                            : <Chip label={`Δ ${compareResults[1].statusCode - compareResults[0].statusCode}`} size="small" color="warning" />
+                          }
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Response Length</TableCell>
+                        <TableCell align="center">{compareResults[0].responseLength} bytes</TableCell>
+                        <TableCell align="center">{compareResults[1].responseLength} bytes</TableCell>
+                        <TableCell align="center">
+                          {compareResults[0].responseLength === compareResults[1].responseLength 
+                            ? <Chip label="Same" size="small" color="success" /> 
+                            : <Chip 
+                                label={`Δ ${compareResults[1].responseLength - compareResults[0].responseLength}`} 
+                                size="small" 
+                                color={Math.abs(compareResults[1].responseLength - compareResults[0].responseLength) > 100 ? "warning" : "default"} 
+                              />
+                          }
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Response Time</TableCell>
+                        <TableCell align="center">{compareResults[0].responseTime}ms</TableCell>
+                        <TableCell align="center">{compareResults[1].responseTime}ms</TableCell>
+                        <TableCell align="center">
+                          {compareResults[0].responseTime === compareResults[1].responseTime 
+                            ? <Chip label="Same" size="small" color="success" /> 
+                            : <Chip 
+                                label={`Δ ${compareResults[1].responseTime - compareResults[0].responseTime}ms`} 
+                                size="small" 
+                                color={Math.abs(compareResults[1].responseTime - compareResults[0].responseTime) > 500 ? "warning" : "default"} 
+                              />
+                          }
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </Paper>
+              </Grid>
+              
+              {/* Side-by-side Bodies */}
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                    Response A - {compareResults[0].payload.slice(0, 20)}...
+                  </Typography>
+                  <Paper 
+                    variant="outlined" 
+                    sx={{ 
+                      p: 1, 
+                      bgcolor: "#1e1e1e", 
+                      maxHeight: 400, 
+                      overflow: "auto",
+                    }}
+                  >
+                    <Typography
+                      component="pre"
+                      sx={{
+                        fontFamily: "monospace",
+                        fontSize: "0.75rem",
+                        color: "#d4d4d4",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-all",
+                        m: 0,
+                      }}
+                    >
+                      {compareResults[0].body || "(No body)"}
+                    </Typography>
+                  </Paper>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                    Response B - {compareResults[1].payload.slice(0, 20)}...
+                  </Typography>
+                  <Paper 
+                    variant="outlined" 
+                    sx={{ 
+                      p: 1, 
+                      bgcolor: "#1e1e1e", 
+                      maxHeight: 400, 
+                      overflow: "auto",
+                    }}
+                  >
+                    <Typography
+                      component="pre"
+                      sx={{
+                        fontFamily: "monospace",
+                        fontSize: "0.75rem",
+                        color: "#d4d4d4",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-all",
+                        m: 0,
+                      }}
+                    >
+                      {compareResults[1].body || "(No body)"}
+                    </Typography>
+                  </Paper>
+                </Paper>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setCompareResults([null, null]);
+              setCompareDialogOpen(false);
+            }}
+          >
+            Clear Selection
+          </Button>
+          <Button onClick={() => setCompareDialogOpen(false)} variant="contained">
             Close
           </Button>
         </DialogActions>

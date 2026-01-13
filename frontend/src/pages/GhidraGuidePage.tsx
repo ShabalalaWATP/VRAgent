@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -31,6 +31,10 @@ import {
   alpha,
   useTheme,
   Button,
+  Drawer,
+  Fab,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -52,6 +56,9 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import QuizIcon from "@mui/icons-material/Quiz";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 // Question bank for the quiz (75 questions)
@@ -1206,105 +1213,835 @@ const ghidraExtensions = [
 
 const GhidraGuidePage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const navigate = useNavigate();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const mainContentRef = useRef<HTMLDivElement>(null);
+
+  // Navigation items for sidebar
+  const sectionNavItems = [
+    { id: 0, label: "Getting Started", icon: <PlayArrowIcon fontSize="small" /> },
+    { id: 1, label: "Interface", icon: <AccountTreeIcon fontSize="small" /> },
+    { id: 2, label: "Analysis", icon: <SearchIcon fontSize="small" /> },
+    { id: 3, label: "Scripting", icon: <CodeIcon fontSize="small" /> },
+    { id: 4, label: "Tips & Tricks", icon: <LightbulbIcon fontSize="small" /> },
+    { id: "quiz", label: "Knowledge Quiz", icon: <QuizIcon fontSize="small" /> },
+  ];
+
+  // Handle scroll to show/hide scroll-to-top button
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const handleNavClick = (id: number | string) => {
+    if (typeof id === "number") {
+      setTabValue(id);
+      // Scroll to tabs section
+      const tabsElement = document.getElementById("ghidra-tabs-section");
+      if (tabsElement) {
+        tabsElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } else if (id === "quiz") {
+      const quizElement = document.getElementById("quiz-section");
+      if (quizElement) {
+        quizElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+    setNavDrawerOpen(false);
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
+  // Calculate progress based on current tab
+  const progressPercent = ((tabValue + 1) / 5) * 100;
+
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        position: "sticky",
+        top: 90,
+        p: 2,
+        borderRadius: 3,
+        bgcolor: alpha("#0f1024", 0.9),
+        border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+        backdropFilter: "blur(10px)",
+        maxHeight: "calc(100vh - 120px)",
+        overflowY: "auto",
+      }}
+    >
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="subtitle2" sx={{ color: "grey.400", mb: 1, fontWeight: 600 }}>
+          Progress
+        </Typography>
+        <LinearProgress
+          variant="determinate"
+          value={progressPercent}
+          sx={{
+            height: 6,
+            borderRadius: 3,
+            bgcolor: alpha("#8b5cf6", 0.1),
+            "& .MuiLinearProgress-bar": {
+              bgcolor: "#8b5cf6",
+              borderRadius: 3,
+            },
+          }}
+        />
+        <Typography variant="caption" sx={{ color: "grey.500", mt: 0.5, display: "block" }}>
+          {Math.round(progressPercent)}% Complete
+        </Typography>
+      </Box>
+      <Divider sx={{ my: 2, borderColor: alpha("#8b5cf6", 0.1) }} />
+      <Typography variant="subtitle2" sx={{ color: "grey.400", mb: 1, fontWeight: 600 }}>
+        Sections
+      </Typography>
+      <List dense disablePadding>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={typeof item.id === "number" ? item.id : item.id}
+            component="div"
+            onClick={() => handleNavClick(item.id)}
+            sx={{
+              borderRadius: 2,
+              mb: 0.5,
+              cursor: "pointer",
+              bgcolor: (typeof item.id === "number" && tabValue === item.id) ? alpha("#8b5cf6", 0.15) : "transparent",
+              borderLeft: (typeof item.id === "number" && tabValue === item.id) ? `3px solid #8b5cf6` : "3px solid transparent",
+              "&:hover": {
+                bgcolor: alpha("#8b5cf6", 0.1),
+              },
+              transition: "all 0.2s ease",
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: (typeof item.id === "number" && tabValue === item.id) ? "#8b5cf6" : "grey.500" }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                variant: "body2",
+                sx: {
+                  color: (typeof item.id === "number" && tabValue === item.id) ? "#8b5cf6" : "grey.300",
+                  fontWeight: (typeof item.id === "number" && tabValue === item.id) ? 600 : 400,
+                },
+              }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
+
   const pageContext = `Ghidra Reverse Engineering Guide - Complete NSA-developed reverse engineering tool reference. Covers: installation and project setup, code browser interface, disassembly and decompilation, function analysis and renaming, cross-references (XREFs), data types and structures, Python scripting (Ghidra API), Java scripting, headless analysis, memory mapping, symbol management, function graphs, patch diffing, debugging integration, keyboard shortcuts, and community extensions. Essential for malware analysis, vulnerability research, and binary reverse engineering.`;
 
   return (
     <LearnPageLayout pageTitle="Ghidra Reverse Engineering Guide" pageContext={pageContext}>
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Back Button */}
-      <Chip
-        component={Link}
-        to="/learn"
-        icon={<ArrowBackIcon />}
-        label="Back to Learning Hub"
-        clickable
-        variant="outlined"
-        sx={{ borderRadius: 2, mb: 3 }}
-      />
+    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
+      <Container maxWidth="xl">
+        <Box sx={{ display: "flex", gap: 3 }}>
+          {/* Sidebar Navigation - Desktop Only */}
+          {!isMobile && (
+            <Box sx={{ width: 260, flexShrink: 0 }}>
+              {sidebarNav}
+            </Box>
+          )}
 
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <MemoryIcon sx={{ fontSize: 40, color: "primary.main" }} />
-          <Box>
-            <Typography variant="h4" fontWeight="bold">
-              Ghidra Reverse Engineering Guide
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary">
-              NSA's powerful open-source software reverse engineering framework
+          {/* Main Content */}
+          <Box ref={mainContentRef} sx={{ flex: 1, minWidth: 0 }}>
+        {/* Header */}
+        <Box sx={{ mb: 4 }}>
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+            <MemoryIcon sx={{ fontSize: 40, color: "#8b5cf6" }} />
+            <Typography
+              variant="h3"
+              sx={{
+                fontWeight: 700,
+                background: "linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)",
+                backgroundClip: "text",
+                WebkitBackgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              Ghidra RE Guide
             </Typography>
           </Box>
+          <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
+            NSA's powerful open-source software reverse engineering framework
+          </Typography>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip icon={<BugReportIcon />} label="Malware Analysis" size="small" />
+            <Chip icon={<SecurityIcon />} label="Vulnerability Research" size="small" />
+            <Chip icon={<CodeIcon />} label="Disassembly" size="small" />
+            <Chip icon={<FunctionsIcon />} label="Decompilation" size="small" />
+          </Box>
         </Box>
-      </Box>
 
       {/* Introduction Section */}
-      <Paper sx={{ p: 4, mb: 4, borderRadius: 2 }}>
-        <Typography variant="h5" gutterBottom color="primary" fontWeight="bold">
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.15)} 0%, ${alpha("#a855f7", 0.1)} 50%, ${alpha("#7c3aed", 0.05)} 100%)`,
+          border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+        }}
+      >
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: "#e0e0e0" }}>
           What is Ghidra?
         </Typography>
-        
-        <Typography paragraph sx={{ fontSize: "1.1rem", lineHeight: 1.8 }}>
-          <strong>Ghidra</strong> (pronounced "GEE-dra") is a free, open-source software reverse engineering (SRE) tool 
-          developed by the National Security Agency (NSA). Released to the public in 2019, Ghidra has quickly become 
-          one of the most popular tools for analyzing compiled programs - competing directly with expensive commercial 
+
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
+          <strong>Ghidra</strong> (pronounced "GEE-dra") is a free, open-source software reverse engineering (SRE) tool
+          developed by the National Security Agency (NSA). Released to the public in 2019, Ghidra has quickly become
+          one of the most popular tools for analyzing compiled programs - competing directly with expensive commercial
           tools like IDA Pro that can cost thousands of dollars.
         </Typography>
 
-        <Typography paragraph sx={{ fontSize: "1.1rem", lineHeight: 1.8 }}>
-          <strong>What does "reverse engineering" mean?</strong> When programmers write code, they use human-readable 
-          languages like C, Python, or Java. This code is then <em>compiled</em> into machine code (binary) that computers 
-          can execute. Reverse engineering is the process of taking that compiled binary and working backwards to understand 
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
+          <strong>What does "reverse engineering" mean?</strong> When programmers write code, they use human-readable
+          languages like C, Python, or Java. This code is then <em>compiled</em> into machine code (binary) that computers
+          can execute. Reverse engineering is the process of taking that compiled binary and working backwards to understand
           what it does - essentially trying to reconstruct the original logic and behavior of the program.
         </Typography>
 
-        <Typography paragraph sx={{ fontSize: "1.1rem", lineHeight: 1.8 }}>
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
           <strong>Why would you need to do this?</strong> There are many legitimate reasons:
         </Typography>
 
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {[
-            { icon: <BugReportIcon />, title: "Malware Analysis", desc: "Understanding how viruses, ransomware, and other threats work to develop defenses" },
-            { icon: <SecurityIcon />, title: "Vulnerability Research", desc: "Finding security bugs in software when source code isn't available" },
-            { icon: <BuildIcon />, title: "Legacy Software", desc: "Maintaining or updating old programs where the original source code is lost" },
-            { icon: <SchoolIcon />, title: "Learning", desc: "Understanding how compilers work and how high-level code becomes machine instructions" },
+            { icon: <BugReportIcon />, title: "Malware Analysis", desc: "Understanding how viruses, ransomware, and other threats work to develop defenses", color: "#ef4444" },
+            { icon: <SecurityIcon />, title: "Vulnerability Research", desc: "Finding security bugs in software when source code isn't available", color: "#f59e0b" },
+            { icon: <BuildIcon />, title: "Legacy Software", desc: "Maintaining or updating old programs where the original source code is lost", color: "#22c55e" },
+            { icon: <SchoolIcon />, title: "Learning", desc: "Understanding how compilers work and how high-level code becomes machine instructions", color: "#06b6d4" },
           ].map((item) => (
             <Grid item xs={12} sm={6} md={3} key={item.title}>
-              <Card variant="outlined" sx={{ height: "100%" }}>
+              <Card
+                sx={{
+                  height: "100%",
+                  bgcolor: alpha(item.color, 0.1),
+                  border: `1px solid ${alpha(item.color, 0.3)}`,
+                  borderRadius: 2,
+                }}
+              >
                 <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, color: "primary.main" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, color: item.color }}>
                     {item.icon}
-                    <Typography variant="subtitle2" fontWeight="bold">{item.title}</Typography>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ color: "#e0e0e0" }}>{item.title}</Typography>
                   </Box>
-                  <Typography variant="body2" color="text.secondary">{item.desc}</Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>
                 </CardContent>
               </Card>
             </Grid>
           ))}
         </Grid>
 
-        <Alert severity="info" sx={{ mt: 2 }}>
-          <AlertTitle>Ghidra vs IDA Pro</AlertTitle>
-          Ghidra is often compared to IDA Pro, the industry standard for reverse engineering. While IDA Pro has 
-          decades of refinement, Ghidra offers comparable features for free, has excellent decompilation, and 
-          supports collaborative analysis. For most tasks, Ghidra is an excellent choice.
+        <Alert severity="info" sx={{ mt: 2, bgcolor: alpha("#3b82f6", 0.1), border: `1px solid ${alpha("#3b82f6", 0.3)}` }}>
+          <AlertTitle sx={{ color: "#e0e0e0" }}>Ghidra vs IDA Pro</AlertTitle>
+          <Typography sx={{ color: "grey.300" }}>
+            Ghidra is often compared to IDA Pro, the industry standard for reverse engineering. While IDA Pro has
+            decades of refinement, Ghidra offers comparable features for free, has excellent decompilation, and
+            supports collaborative analysis. For most tasks, Ghidra is an excellent choice.
+          </Typography>
         </Alert>
       </Paper>
 
+      {/* VRAgent Ghidra Integration */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          bgcolor: "#0f1024",
+          border: `1px solid ${alpha("#22c55e", 0.3)}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #22c55e, #16a34a)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <MemoryIcon sx={{ color: "white", fontSize: 28 }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0" }}>
+              VRAgent Ghidra Integration
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.400" }}>
+              Automated binary analysis powered by Ghidra headless mode
+            </Typography>
+          </Box>
+        </Box>
+
+        <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+          VRAgent's RE Hub uses Ghidra's headless analyzer to automatically decompile and analyze binaries.
+          Upload any supported file and get instant AI-powered security insights.
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {[
+            {
+              title: "Headless Decompilation",
+              icon: <CodeIcon />,
+              color: "#8b5cf6",
+              features: [
+                "Automatic function decompilation (up to 5000 functions)",
+                "Export to pseudo-C code for AI analysis",
+                "Cross-reference extraction and mapping",
+                "String and constant identification",
+              ],
+            },
+            {
+              title: "AI Function Analysis",
+              icon: <FunctionsIcon />,
+              color: "#f59e0b",
+              features: [
+                "AI summarizes each decompiled function",
+                "Identifies security-relevant functions",
+                "Detects crypto, network, and file operations",
+                "Flags dangerous API usage patterns",
+              ],
+            },
+            {
+              title: "Vulnerability Detection",
+              icon: <BugReportIcon />,
+              color: "#ef4444",
+              features: [
+                "Pattern-based vulnerability scanning (80+ patterns)",
+                "Buffer overflow and format string detection",
+                "Hardcoded credentials and key discovery",
+                "Race condition and TOCTOU identification",
+              ],
+            },
+            {
+              title: "Attack Surface Mapping",
+              icon: <SecurityIcon />,
+              color: "#06b6d4",
+              features: [
+                "Entry point enumeration and analysis",
+                "Dangerous function call tracking",
+                "Import/export security assessment",
+                "Network and file I/O mapping",
+              ],
+            },
+          ].map((feature) => (
+            <Grid item xs={12} sm={6} key={feature.title}>
+              <Card
+                sx={{
+                  height: "100%",
+                  bgcolor: alpha(feature.color, 0.1),
+                  border: `1px solid ${alpha(feature.color, 0.3)}`,
+                  borderRadius: 2,
+                }}
+              >
+                <CardContent>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                    <Box sx={{ color: feature.color }}>{feature.icon}</Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#e0e0e0" }}>
+                      {feature.title}
+                    </Typography>
+                  </Box>
+                  <List dense disablePadding>
+                    {feature.features.map((item, idx) => (
+                      <ListItem key={idx} sx={{ py: 0.25, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 24 }}>
+                          <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: feature.color }} />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={item}
+                          primaryTypographyProps={{ variant: "body2", sx: { color: "grey.300" } }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+
+        <Divider sx={{ my: 2, borderColor: alpha("#22c55e", 0.2) }} />
+
+        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+          <Button
+            variant="contained"
+            startIcon={<MemoryIcon />}
+            component={Link}
+            to="/reverse-engineering"
+            sx={{
+              background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+              fontWeight: 600,
+              "&:hover": {
+                background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+              },
+            }}
+          >
+            Launch RE Hub
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<SchoolIcon />}
+            component={Link}
+            to="/learn/reverse-engineering"
+            sx={{
+              borderColor: alpha("#22c55e", 0.5),
+              color: "#22c55e",
+              "&:hover": {
+                borderColor: "#22c55e",
+                bgcolor: alpha("#22c55e", 0.1),
+              },
+            }}
+          >
+            Intro to RE Guide
+          </Button>
+        </Box>
+      </Paper>
+
+      {/* Malware Analysis with Ghidra */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          bgcolor: "#0f1024",
+          border: `1px solid ${alpha("#ef4444", 0.3)}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #ef4444, #dc2626)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <BugReportIcon sx={{ color: "white", fontSize: 28 }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0" }}>
+              Malware Analysis with Ghidra
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.400" }}>
+              Essential techniques for analyzing malicious software
+            </Typography>
+          </Box>
+        </Box>
+
+        <Alert severity="warning" sx={{ mb: 3, bgcolor: alpha("#f59e0b", 0.1), border: `1px solid ${alpha("#f59e0b", 0.3)}` }}>
+          <AlertTitle sx={{ color: "#e0e0e0" }}>Safety First</AlertTitle>
+          <Typography sx={{ color: "grey.300" }}>
+            Always analyze malware in an isolated environment (VM with snapshots). Disable network access,
+            use a dedicated analysis machine, and never execute samples on your host system.
+          </Typography>
+        </Alert>
+
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {[
+            {
+              tip: "Identify Packing",
+              desc: "Check entropy, section names (.UPX, .packed), and few imports - signs of packed malware",
+              color: "#ef4444",
+            },
+            {
+              tip: "Find C2 Communication",
+              desc: "Search for IP addresses, URLs, domains in strings. Look for WinINet/WinHTTP imports",
+              color: "#f59e0b",
+            },
+            {
+              tip: "Detect Anti-Analysis",
+              desc: "Look for IsDebuggerPresent, CPUID VM checks, timing attacks, and API hooking",
+              color: "#8b5cf6",
+            },
+            {
+              tip: "String Decryption",
+              desc: "Find XOR loops, RC4/AES calls. Trace backwards from interesting strings",
+              color: "#22c55e",
+            },
+            {
+              tip: "API Hashing",
+              desc: "Malware often resolves APIs by hash. Look for GetProcAddress patterns with constants",
+              color: "#06b6d4",
+            },
+            {
+              tip: "Persistence Mechanisms",
+              desc: "Registry keys (Run, Services), scheduled tasks, DLL hijacking, COM objects",
+              color: "#ec4899",
+            },
+          ].map((item) => (
+            <Grid item xs={12} sm={6} md={4} key={item.tip}>
+              <Paper
+                sx={{
+                  p: 2,
+                  height: "100%",
+                  bgcolor: alpha(item.color, 0.08),
+                  border: `1px solid ${alpha(item.color, 0.2)}`,
+                  borderRadius: 2,
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ color: item.color, fontWeight: 700, mb: 1 }}>
+                  {item.tip}
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400" }}>
+                  {item.desc}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        <Accordion sx={{ bgcolor: "#12121a", mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
+            <Typography sx={{ fontWeight: 600, color: "#e0e0e0" }}>Common Malware Indicators in Ghidra</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              {[
+                { category: "Process Injection", apis: ["VirtualAllocEx", "WriteProcessMemory", "CreateRemoteThread", "NtMapViewOfSection"] },
+                { category: "Credential Theft", apis: ["CredEnumerate", "CryptUnprotectData", "LsaRetrievePrivateData", "NetUserEnum"] },
+                { category: "Evasion", apis: ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess", "GetTickCount"] },
+                { category: "Persistence", apis: ["RegSetValueEx", "CreateService", "SHSetValue", "CoRegisterClassObject"] },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} key={item.category}>
+                  <Typography variant="subtitle2" sx={{ color: "#ef4444", fontWeight: 600, mb: 1 }}>
+                    {item.category}
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                    {item.apis.map((api) => (
+                      <Chip
+                        key={api}
+                        label={api}
+                        size="small"
+                        sx={{ bgcolor: alpha("#ef4444", 0.15), color: "grey.300", fontFamily: "monospace", fontSize: "0.75rem" }}
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        <Accordion sx={{ bgcolor: "#12121a" }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
+            <Typography sx={{ fontWeight: 600, color: "#e0e0e0" }}>Unpacking Techniques</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <List dense>
+              {[
+                { step: "Identify the packer", desc: "Use tools like Detect It Easy (DIE) or check Ghidra's analysis for known signatures" },
+                { step: "Find OEP (Original Entry Point)", desc: "Look for JMP/CALL to unpacked code, often after VirtualProtect or VirtualAlloc" },
+                { step: "Dump at runtime", desc: "Use x64dbg to break at OEP, then dump with Scylla or similar tools" },
+                { step: "Fix imports", desc: "Rebuilt IAT using Scylla's IAT reconstruction feature" },
+                { step: "Re-analyze in Ghidra", desc: "Import the unpacked binary for clean analysis" },
+              ].map((item, idx) => (
+                <ListItem key={idx} sx={{ py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 32 }}>
+                    <Chip label={idx + 1} size="small" sx={{ bgcolor: "#ef4444", color: "white", fontWeight: 700, minWidth: 24, height: 24 }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={<Typography sx={{ color: "#e0e0e0", fontWeight: 600 }}>{item.step}</Typography>}
+                    secondary={<Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+      </Paper>
+
+      {/* Related Learning Pages */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          bgcolor: "#0f1024",
+          border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <SchoolIcon sx={{ color: "#8b5cf6" }} />
+          Related Learning Topics
+        </Typography>
+
+        <Grid container spacing={2}>
+          {[
+            {
+              title: "Intro to Reverse Engineering",
+              desc: "Fundamentals of RE, assembly basics, and VRAgent's 11-phase binary analysis",
+              link: "/learn/reverse-engineering",
+              color: "#8b5cf6",
+              icon: <MemoryIcon />,
+            },
+            {
+              title: "Buffer Overflow Exploitation",
+              desc: "Stack overflows, heap exploitation, ROP chains, and modern mitigations",
+              link: "/learn/buffer-overflow",
+              color: "#ef4444",
+              icon: <BugReportIcon />,
+            },
+            {
+              title: "Windows Internals for RE",
+              desc: "PE format, DLL loading, system calls, and Windows security mechanisms",
+              link: "/learn/windows-internals",
+              color: "#06b6d4",
+              icon: <SettingsIcon />,
+            },
+            {
+              title: "x86/x64 Assembly Guide",
+              desc: "Instruction reference, registers, calling conventions, and common patterns",
+              link: "/learn/reverse-engineering",
+              color: "#22c55e",
+              icon: <CodeIcon />,
+            },
+            {
+              title: "MITRE ATT&CK Framework",
+              desc: "Understand adversary tactics and techniques for threat hunting",
+              link: "/learn/mitre-attack",
+              color: "#f59e0b",
+              icon: <SecurityIcon />,
+            },
+            {
+              title: "Kill Chain Methodology",
+              desc: "Cyber kill chain phases and how RE fits into threat analysis",
+              link: "/learn/kill-chain",
+              color: "#ec4899",
+              icon: <AccountTreeIcon />,
+            },
+          ].map((item) => (
+            <Grid item xs={12} sm={6} md={4} key={item.title}>
+              <Card
+                component={Link}
+                to={item.link}
+                sx={{
+                  height: "100%",
+                  bgcolor: alpha(item.color, 0.08),
+                  border: `1px solid ${alpha(item.color, 0.2)}`,
+                  borderRadius: 2,
+                  textDecoration: "none",
+                  transition: "all 0.2s",
+                  "&:hover": {
+                    bgcolor: alpha(item.color, 0.15),
+                    borderColor: item.color,
+                    transform: "translateY(-2px)",
+                  },
+                }}
+              >
+                <CardContent>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
+                    <Box sx={{ color: item.color }}>{item.icon}</Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#e0e0e0" }}>
+                      {item.title}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>
+                    {item.desc}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Paper>
+
+      {/* Quick Reference Card */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          bgcolor: "#0f1024",
+          border: `1px solid ${alpha("#f59e0b", 0.3)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <SpeedIcon sx={{ color: "#f59e0b" }} />
+          Quick Reference Card
+        </Typography>
+
+        <Grid container spacing={3}>
+          {/* Navigation Shortcuts */}
+          <Grid item xs={12} md={4}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b", mb: 2 }}>
+              Navigation
+            </Typography>
+            <List dense disablePadding>
+              {[
+                { key: "G", desc: "Go to address" },
+                { key: "Ctrl+E", desc: "Open decompiler" },
+                { key: "Space", desc: "Toggle function graph" },
+                { key: "X", desc: "Show cross-references" },
+                { key: "Alt+Left/Right", desc: "Navigate history" },
+                { key: "Ctrl+Shift+E", desc: "Open symbol tree" },
+              ].map((item) => (
+                <ListItem key={item.key} sx={{ py: 0.25, px: 0 }}>
+                  <Chip label={item.key} size="small" sx={{ mr: 1.5, minWidth: 90, bgcolor: alpha("#f59e0b", 0.15), color: "#f59e0b", fontFamily: "monospace", fontSize: "0.75rem" }} />
+                  <ListItemText primary={item.desc} primaryTypographyProps={{ variant: "body2", sx: { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Grid>
+
+          {/* Editing Shortcuts */}
+          <Grid item xs={12} md={4}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e", mb: 2 }}>
+              Editing & Annotation
+            </Typography>
+            <List dense disablePadding>
+              {[
+                { key: "L", desc: "Rename symbol/label" },
+                { key: ";", desc: "Add EOL comment" },
+                { key: "Ctrl+;", desc: "Add plate comment" },
+                { key: "T", desc: "Change data type" },
+                { key: "F", desc: "Create function" },
+                { key: "Ctrl+D", desc: "Add bookmark" },
+              ].map((item) => (
+                <ListItem key={item.key} sx={{ py: 0.25, px: 0 }}>
+                  <Chip label={item.key} size="small" sx={{ mr: 1.5, minWidth: 90, bgcolor: alpha("#22c55e", 0.15), color: "#22c55e", fontFamily: "monospace", fontSize: "0.75rem" }} />
+                  <ListItemText primary={item.desc} primaryTypographyProps={{ variant: "body2", sx: { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Grid>
+
+          {/* Analysis Shortcuts */}
+          <Grid item xs={12} md={4}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 2 }}>
+              Analysis & Search
+            </Typography>
+            <List dense disablePadding>
+              {[
+                { key: "Ctrl+Shift+F", desc: "Find strings" },
+                { key: "Ctrl+F", desc: "Text search" },
+                { key: "Ctrl+B", desc: "Search bytes" },
+                { key: "C", desc: "Disassemble as code" },
+                { key: "D", desc: "Define data" },
+                { key: "Ctrl+Shift+G", desc: "Script manager" },
+              ].map((item) => (
+                <ListItem key={item.key} sx={{ py: 0.25, px: 0 }}>
+                  <Chip label={item.key} size="small" sx={{ mr: 1.5, minWidth: 90, bgcolor: alpha("#8b5cf6", 0.15), color: "#8b5cf6", fontFamily: "monospace", fontSize: "0.75rem" }} />
+                  <ListItemText primary={item.desc} primaryTypographyProps={{ variant: "body2", sx: { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Grid>
+        </Grid>
+
+        <Divider sx={{ my: 3, borderColor: alpha("#f59e0b", 0.2) }} />
+
+        {/* Analysis Workflow */}
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#06b6d4", mb: 2 }}>
+          Recommended Analysis Workflow
+        </Typography>
+        <Grid container spacing={1}>
+          {[
+            { step: "1", title: "Import & Auto-Analyze", desc: "Let Ghidra perform initial analysis" },
+            { step: "2", title: "Review Strings", desc: "Search for interesting strings (Search → For Strings)" },
+            { step: "3", title: "Check Imports", desc: "Look at imported functions for capabilities" },
+            { step: "4", title: "Find Entry Points", desc: "Locate main(), DllMain, or exports" },
+            { step: "5", title: "Follow XRefs", desc: "Use X to trace code flow from interesting functions" },
+            { step: "6", title: "Rename & Comment", desc: "Document your findings as you go" },
+            { step: "7", title: "Define Structures", desc: "Create data types for better decompilation" },
+            { step: "8", title: "Write Scripts", desc: "Automate repetitive analysis tasks" },
+          ].map((item) => (
+            <Grid item xs={6} sm={3} key={item.step}>
+              <Paper sx={{ p: 1.5, bgcolor: alpha("#06b6d4", 0.08), border: `1px solid ${alpha("#06b6d4", 0.2)}`, borderRadius: 1, height: "100%" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                  <Chip label={item.step} size="small" sx={{ bgcolor: "#06b6d4", color: "white", fontWeight: 700, minWidth: 24, height: 22 }} />
+                  <Typography variant="caption" sx={{ color: "#06b6d4", fontWeight: 600 }}>{item.title}</Typography>
+                </Box>
+                <Typography variant="caption" sx={{ color: "grey.400" }}>{item.desc}</Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Paper>
+
+      {/* Processor Architectures */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          bgcolor: "#0f1024",
+          border: `1px solid ${alpha("#06b6d4", 0.3)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <SettingsIcon sx={{ color: "#06b6d4" }} />
+          Supported Processor Architectures
+        </Typography>
+
+        <Grid container spacing={2}>
+          {[
+            { arch: "x86/x64", desc: "Intel/AMD processors - most common for Windows/Linux analysis", icon: "💻", common: true },
+            { arch: "ARM/ARM64", desc: "Mobile devices, embedded systems, Apple Silicon Macs", icon: "📱", common: true },
+            { arch: "MIPS", desc: "Networking equipment, routers, older embedded systems", icon: "🔌", common: true },
+            { arch: "PowerPC", desc: "Game consoles (Wii, Xbox 360), IBM servers", icon: "🎮", common: false },
+            { arch: "SPARC", desc: "Oracle/Sun servers and high-performance computing", icon: "☀️", common: false },
+            { arch: "AVR", desc: "Arduino and microcontrollers", icon: "🔧", common: false },
+            { arch: "RISC-V", desc: "Open-source ISA, growing in embedded use", icon: "🆓", common: false },
+            { arch: "68000", desc: "Classic Motorola, retro gaming systems", icon: "👾", common: false },
+          ].map((item) => (
+            <Grid item xs={6} sm={3} key={item.arch}>
+              <Paper
+                sx={{
+                  p: 2,
+                  textAlign: "center",
+                  bgcolor: item.common ? alpha("#06b6d4", 0.1) : alpha("#6b7280", 0.1),
+                  border: `1px solid ${item.common ? alpha("#06b6d4", 0.3) : alpha("#6b7280", 0.2)}`,
+                  borderRadius: 2,
+                  height: "100%",
+                }}
+              >
+                <Typography variant="h5" sx={{ mb: 0.5 }}>{item.icon}</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.common ? "#06b6d4" : "#9ca3af" }}>
+                  {item.arch}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "grey.400" }}>{item.desc}</Typography>
+                {item.common && (
+                  <Chip label="Common" size="small" sx={{ mt: 1, bgcolor: alpha("#06b6d4", 0.2), color: "#06b6d4", fontSize: "0.65rem" }} />
+                )}
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Paper>
+
       {/* Tabs */}
-      <Paper sx={{ borderRadius: 2 }}>
+      <Paper id="ghidra-tabs-section" sx={{ borderRadius: 3, bgcolor: "#0f1024", border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
         <Tabs
           value={tabValue}
           onChange={handleTabChange}
           variant="scrollable"
           scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}
+          sx={{
+            borderBottom: 1,
+            borderColor: alpha("#8b5cf6", 0.2),
+            px: 2,
+            "& .MuiTab-root": {
+              color: "grey.400",
+              "&.Mui-selected": {
+                color: "#a855f7",
+              },
+            },
+            "& .MuiTabs-indicator": {
+              backgroundColor: "#8b5cf6",
+            },
+          }}
         >
           <Tab icon={<PlayArrowIcon />} label="Getting Started" />
           <Tab icon={<AccountTreeIcon />} label="Interface" />
@@ -2849,21 +3586,84 @@ cd $GHIDRA_HOME/server
         </TabPanel>
       </Paper>
 
-      {/* Quiz Section */}
-      <QuizSection />
+        {/* Quiz Section */}
+        <QuizSection />
 
-      {/* Bottom Navigation */}
-      <Box sx={{ mt: 4, textAlign: "center" }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6", "&:hover": { bgcolor: alpha("#8b5cf6", 0.1), borderColor: "#a855f7" } }}
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
+          </Box>
+        </Box>
+      </Container>
+
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: 280,
+            bgcolor: "#0f1024",
+            borderLeft: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+            <Typography variant="h6" sx={{ color: "#8b5cf6", fontWeight: 600 }}>
+              Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: "grey.400" }}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          {sidebarNav}
+        </Box>
+      </Drawer>
+
+      {/* Mobile Navigation FAB */}
+      {isMobile && (
+        <Fab
+          size="medium"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            bgcolor: "#8b5cf6",
+            "&:hover": { bgcolor: "#7c3aed" },
+          }}
         >
-          Back to Learning Hub
-        </Button>
-      </Box>
-    </Container>
+          <ListAltIcon />
+        </Fab>
+      )}
+
+      {/* Scroll to Top FAB */}
+      {showScrollTop && (
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            bgcolor: alpha("#8b5cf6", 0.8),
+            "&:hover": { bgcolor: "#8b5cf6" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      )}
+    </Box>
     </LearnPageLayout>
   );
 };

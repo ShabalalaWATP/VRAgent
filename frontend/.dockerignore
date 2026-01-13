@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
 
-# Build outputs
-dist/
+# Build outputs - NOT ignored so we can use pre-built dist
+# dist/
 
 # IDE
 .idea/

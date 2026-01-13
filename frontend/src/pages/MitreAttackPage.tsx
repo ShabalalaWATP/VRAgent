@@ -330,6 +330,68 @@ const tactics: Tactic[] = [
   },
 ];
 
+const operationalGuides = [
+  {
+    title: "Prioritize what matters",
+    color: "#dc2626",
+    points: [
+      "Start with tactics that threaten crown jewel assets",
+      "Use threat intel to focus on likely adversaries",
+      "Scope coverage by environment: on-prem, cloud, and SaaS",
+    ],
+  },
+  {
+    title: "Build detections per technique",
+    color: "#f59e0b",
+    points: [
+      "Map each detection rule to a technique ID",
+      "Identify required data sources before writing logic",
+      "Document expected false positives and tuning steps",
+    ],
+  },
+  {
+    title: "Validate with emulation",
+    color: "#3b82f6",
+    points: [
+      "Run atomic tests or purple team exercises",
+      "Capture telemetry and confirm alert fidelity",
+      "Record gaps as backlog items with owners",
+    ],
+  },
+  {
+    title: "Operationalize in response",
+    color: "#8b5cf6",
+    points: [
+      "Attach playbooks to high risk techniques",
+      "Train analysts on pivots and scoping",
+      "Use ATT&CK in incident reports and lessons learned",
+    ],
+  },
+];
+
+const telemetrySources = [
+  "Process creation and command line logs",
+  "Network flow, proxy, and DNS telemetry",
+  "Authentication and identity provider events",
+  "Endpoint file, registry, and module loads",
+  "Cloud audit and API activity logs",
+  "Email gateway and collaboration telemetry",
+];
+
+const validationSteps = [
+  "Execute technique simulations and capture evidence",
+  "Confirm detections trigger with real telemetry",
+  "Measure time to detect and contain",
+  "Tune noise and document alert context",
+];
+
+const reportingMetrics = [
+  "Technique coverage heatmaps by tactic",
+  "High risk technique backlog with owners",
+  "Playbooks mapped to critical techniques",
+  "Coverage by critical assets and environments",
+];
+
 const QUIZ_QUESTION_COUNT = 10;
 const QUIZ_ACCENT_COLOR = "#3b82f6";
 const quizQuestions: QuizQuestion[] = [
@@ -998,6 +1060,12 @@ export default function MitreAttackPage() {
             <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
               Unlike the linear Kill Chain, ATT&CK is a <strong>matrix</strong> organized by <strong>Tactics</strong> (the "why") and <strong>Techniques</strong> (the "how"). Each technique includes real-world examples, detection strategies, and mitigation guidance.
             </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+              If you are a beginner, think of ATT&CK as a dictionary of attacker behaviors. The left side of the matrix shows the goals (tactics) and each column is a collection of ways to reach that goal (techniques). Technique IDs like T1059 or T1566 are stable labels you can use in notes, incident reports, or detection rules. You do not need to memorize them to benefit; just use them as references when you look up details.
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+              ATT&CK is not a checklist of vulnerabilities, and it does not replace risk assessment. It is a shared language so that analysts, engineers, and leaders can talk about the same behaviors. When you see an alert or a red team report, mapping it to ATT&CK helps you compare it with past incidents and understand which gaps remain.
+            </Typography>
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
               <Chip label="14 Tactics" sx={{ bgcolor: alpha("#dc2626", 0.1), color: "#dc2626", fontWeight: 600 }} />
               <Chip label="200+ Techniques" variant="outlined" />
@@ -1025,9 +1093,88 @@ export default function MitreAttackPage() {
         </Grid>
       </Paper>
 
+      {/* Beginner Guide */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Beginner Guide to ATT&CK
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Start with tactics. A tactic is the adversary's objective at that point in the intrusion, such as "Initial Access" or "Credential Access." Once you understand the objective, look at the techniques underneath it. Techniques are the specific behaviors that achieve the objective, such as phishing, exploiting a public-facing app, or dumping credentials from memory. In practice, different tools can perform the same technique, which is why the framework focuses on behavior rather than product names.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Next, pick a familiar environment. For example, if you know Windows, focus on techniques that mention PowerShell, scheduled tasks, or registry changes. If you work in cloud environments, look for techniques that mention cloud accounts, tokens, or API abuse. This approach makes the matrix feel smaller and more relevant, which is helpful when you are starting out.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          Finally, use ATT&CK as a study aid. When you read a breach report, identify which tactics and techniques were involved. Over time, you will start to see patterns and recognize common attacker playbooks. That is the practical value of ATT&CK: it turns isolated incidents into a repeatable learning loop.
+        </Typography>
+      </Paper>
+
+      {/* Operational Guidance */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 5,
+          borderRadius: 3,
+          background: `linear-gradient(135deg, ${alpha("#1d4ed8", 0.05)}, ${alpha("#f59e0b", 0.05)})`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
+          Operationalizing ATT&CK
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          This section translates the framework into day to day security work. A common beginner mistake is to read ATT&CK like a static list. In practice, teams use it to guide prioritization, build detection backlogs, and structure incident reports. The goal is not to cover everything at once, but to make steady, measurable progress.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Think of ATT&CK as a bridge between threats and controls. When you map a technique to a detection or mitigation, you are making a simple promise: if that behavior happens, you will see it, stop it, or at least investigate it quickly. Over time, these promises add up to stronger security posture.
+        </Typography>
+        <Grid container spacing={3}>
+          {operationalGuides.map((guide) => (
+            <Grid item xs={12} md={6} key={guide.title}>
+              <Paper sx={{ p: 3, borderRadius: 2, border: `1px solid ${alpha(guide.color, 0.2)}`, bgcolor: alpha(guide.color, 0.04) }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: guide.color, mb: 1.5 }}>
+                  {guide.title}
+                </Typography>
+                {guide.points.map((point) => (
+                  <Box key={point} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1.2 }}>
+                    <Box sx={{ width: 6, height: 6, mt: 0.9, borderRadius: "50%", bgcolor: guide.color }} />
+                    <Typography variant="body2" color="text.secondary">
+                      {point}
+                    </Typography>
+                  </Box>
+                ))}
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+        <Alert severity="info" sx={{ mt: 3, borderRadius: 2 }}>
+          <Typography variant="body2">
+            <strong>Tip:</strong> Use ATT&CK as a behavior taxonomy, not a compliance checklist. Prioritize based on your environment and threat model.
+          </Typography>
+        </Alert>
+      </Paper>
+
+      {/* Workflow Example */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          A Simple Workflow Example
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Imagine you receive an alert that a user clicked a suspicious link and then a PowerShell process started. You might map the click to "Phishing" (Initial Access) and the PowerShell activity to "Command and Scripting Interpreter" (Execution). Once mapped, you can ask: do we have telemetry for this technique, and do we have a playbook for containing it?
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Next, you can look at adjacent techniques. If an attacker executed PowerShell, they may attempt Credential Access or Persistence soon after. That insight helps you scope your investigation and prioritize defensive actions. This is how ATT&CK turns single alerts into a broader, structured response.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          For beginners, try mapping a handful of real or simulated events to ATT&CK. The goal is not perfect accuracy but building familiarity with the taxonomy. Over time, mapping becomes second nature and helps you reason about incidents more quickly.
+        </Typography>
+      </Paper>
+
       {/* Tactics Overview Cards */}
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
         📋 14 Tactics Overview
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+        Each card represents a tactic, or attacker goal. Click a card to explore the techniques that support that goal. If you are new, start with Initial Access and Execution, then move to Persistence, Privilege Escalation, and Credential Access. These are common early steps in many real incidents and will give you a strong baseline.
       </Typography>
       <Box sx={{ display: "flex", overflowX: "auto", gap: 1.5, mb: 4, pb: 2 }}>
         {tactics.map((tactic, index) => (
@@ -1072,6 +1219,12 @@ export default function MitreAttackPage() {
           <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
             {tactics[selectedTab].description}
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
+            Beginner tip: use the search box below to narrow techniques by name, ID, or keyword. The technique cards show a short description, and the ID links to the official ATT&CK entry where you can read examples, detection ideas, and mitigations. As you learn, try to map real alerts or lab exercises to these techniques.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
+            You can also treat each tactic as a mini curriculum. Spend time with a single tactic, read a few technique pages, and note the common data sources and mitigations. This builds familiarity without overwhelming you. Once you are comfortable, expand to neighboring tactics that attackers often chain together.
+          </Typography>
           <Link
             href={`https://attack.mitre.org/tactics/${tactics[selectedTab].id}/`}
             target="_blank"
@@ -1105,6 +1258,9 @@ export default function MitreAttackPage() {
         <Box sx={{ p: 3 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
             {filteredTechniques.length} Techniques
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+            Techniques describe behaviors, not specific tools. The same technique can be executed by many different tools or scripts, which is why behavior based detection is so valuable. As you read each card, try to imagine how the behavior would appear in logs. That mental exercise is the bridge between theory and detection engineering.
           </Typography>
           {filteredTechniques.length === 0 ? (
             <Alert severity="info">No techniques match your search.</Alert>
@@ -1148,6 +1304,76 @@ export default function MitreAttackPage() {
             </Grid>
           )}
         </Box>
+      </Paper>
+
+      {/* Telemetry and Measurement */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
+          Telemetry, Validation, and Metrics
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          ATT&CK becomes practical when you connect techniques to data. Telemetry tells you what signals you actually have, validation tells you whether your detections work, and metrics tell you whether coverage is improving. Beginners often focus only on detections, but without good data and validation those detections can be misleading.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Use these panels as a starting point. If you do not have the data source for a technique, it is difficult to detect it reliably. If you do not test detections, you do not know if they work. If you do not measure progress, you cannot prioritize what to fix next.
+        </Typography>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}`, bgcolor: alpha("#3b82f6", 0.04), height: "100%" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 2 }}>
+                Common Data Sources
+              </Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {telemetrySources.map((source) => (
+                  <Chip key={source} label={source} size="small" sx={{ fontSize: "0.75rem", bgcolor: alpha("#3b82f6", 0.1), color: "#3b82f6" }} />
+                ))}
+              </Box>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, borderRadius: 2, border: `1px solid ${alpha("#10b981", 0.2)}`, bgcolor: alpha("#10b981", 0.04), height: "100%" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#10b981", mb: 2 }}>
+                Validation Checklist
+              </Typography>
+              {validationSteps.map((step) => (
+                <Box key={step} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1.2 }}>
+                  <Box sx={{ width: 6, height: 6, mt: 0.9, borderRadius: "50%", bgcolor: "#10b981" }} />
+                  <Typography variant="body2" color="text.secondary">
+                    {step}
+                  </Typography>
+                </Box>
+              ))}
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}`, bgcolor: alpha("#f59e0b", 0.04), height: "100%" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b", mb: 2 }}>
+                Reporting and Metrics
+              </Typography>
+              {reportingMetrics.map((metric) => (
+                <Box key={metric} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1.2 }}>
+                  <Box sx={{ width: 6, height: 6, mt: 0.9, borderRadius: "50%", bgcolor: "#f59e0b" }} />
+                  <Typography variant="body2" color="text.secondary">
+                    {metric}
+                  </Typography>
+                </Box>
+              ))}
+            </Paper>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Common Misconceptions */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.04), border: `1px solid ${alpha("#f59e0b", 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Common Misconceptions
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          A frequent misunderstanding is that ATT&CK is only for red teams. In reality, defenders use it to build detections, design response playbooks, and communicate incidents. Another misconception is that mapping a control to a technique means you are fully protected. A mapping is a hypothesis; you still need validation and monitoring to confirm it.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          Beginners also sometimes treat the matrix as a checklist to complete. This usually leads to shallow coverage. A better approach is depth over breadth: choose a few high risk techniques, build strong telemetry and detections for them, and expand steadily as your program matures.
+        </Typography>
       </Paper>
 
       {/* Resources */}

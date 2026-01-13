@@ -1046,6 +1046,206 @@ export default function NmapGuidePage() {
         </Paper>
       </Paper>
 
+      {/* VRAgent AI Analysis Features */}
+      <Paper sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#8b5cf6", 0.2)}`, background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.05)} 0%, ${alpha("#6366f1", 0.02)} 100%)` }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <AnalyticsIcon sx={{ color: "#8b5cf6", fontSize: 28 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            VRAgent AI-Powered Analysis
+          </Typography>
+        </Box>
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          VRAgent extends Nmap with AI-powered security analysis, providing structured reports and actionable insights beyond basic scan results.
+        </Typography>
+
+        <Grid container spacing={3}>
+          {/* Scan Types */}
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: "100%", borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <SpeedIcon sx={{ color: "#3b82f6" }} />
+                  14 Integrated Scan Profiles
+                </Typography>
+                <List dense>
+                  {[
+                    { name: "Ping Sweep", desc: "Host discovery only" },
+                    { name: "Quick Scan", desc: "Top 100 ports, fast" },
+                    { name: "Stealth SYN", desc: "Low-detection scanning" },
+                    { name: "Basic Scan", desc: "Top 1000 + service detection" },
+                    { name: "Version Detection", desc: "Detailed service versions" },
+                    { name: "Vulnerability Scan", desc: "Run vuln scripts" },
+                    { name: "Aggressive Scan", desc: "OS + version + scripts" },
+                    { name: "Full TCP Scan", desc: "All 65535 ports" },
+                  ].map((item) => (
+                    <ListItem key={item.name} sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: "#3b82f6" }} />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={<span><strong>{item.name}:</strong> {item.desc}</span>}
+                        primaryTypographyProps={{ variant: "body2" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* AI Analysis Features */}
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: "100%", borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <AnalyticsIcon sx={{ color: "#8b5cf6" }} />
+                  AI Analysis Report Contents
+                </Typography>
+                <List dense>
+                  {[
+                    "Executive summary for non-technical stakeholders",
+                    "Risk level and score (0-100)",
+                    "High-risk hosts with priority actions",
+                    "Vulnerable services with CVE references",
+                    "Attack vectors and entry points",
+                    "Compliance concerns (PCI-DSS, HIPAA, SOC2)",
+                    "Service analysis (web, databases, remote access)",
+                    "Network segmentation assessment",
+                    "Prioritized remediation recommendations",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: "#8b5cf6" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Scan Templates */}
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: "100%", borderRadius: 2, border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <SettingsIcon sx={{ color: "#10b981" }} />
+                  Scan Templates
+                </Typography>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Save and reuse custom scan configurations:
+                </Typography>
+                <List dense>
+                  {[
+                    "Save custom scan type, ports, and timing",
+                    "Public templates shared across teams",
+                    "Private templates for personal use",
+                    "Usage tracking and last-used timestamps",
+                    "Target patterns for quick re-scanning",
+                    "Extra Nmap arguments for advanced users",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Report & Export Features */}
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: "100%", borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <SaveIcon sx={{ color: "#f59e0b" }} />
+                  Reports & Exports
+                </Typography>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  All scans are automatically saved and exportable:
+                </Typography>
+                <List dense>
+                  {[
+                    "Auto-save to scan history with risk scoring",
+                    "Export to Markdown, PDF, or Word (DOCX)",
+                    "Project organization for related scans",
+                    "Filter reports by analysis type or project",
+                    "AI analysis included in all exports",
+                    "Network graph visualization per scan",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: "#f59e0b" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* AI Report Structure Preview */}
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
+            AI Analysis Output Structure
+          </Typography>
+          <Paper
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: "#1e1e1e",
+              maxHeight: 300,
+              overflow: "auto",
+            }}
+          >
+            <pre style={{ margin: 0, color: "#d4d4d4", fontSize: "0.75rem" }}>{`{
+  "risk_level": "High",
+  "risk_score": 75,
+  "executive_summary": "Network scan identified 3 critical vulnerabilities...",
+  "key_findings": [
+    {
+      "title": "Outdated SSH Server",
+      "severity": "High",
+      "affected_hosts": ["192.168.1.10"],
+      "recommendation": "Upgrade OpenSSH to 8.4 or later"
+    }
+  ],
+  "vulnerable_services": [
+    {
+      "service": "Apache httpd 2.4.41",
+      "vulnerability": "Known RCE vulnerability",
+      "cve_ids": ["CVE-2021-41773"],
+      "exploit_available": true
+    }
+  ],
+  "high_risk_hosts": [...],
+  "attack_vectors": [
+    {
+      "vector": "Remote Code Execution",
+      "entry_points": ["192.168.1.10:80"],
+      "severity": "Critical"
+    }
+  ],
+  "compliance_concerns": [...],
+  "recommendations": [
+    {
+      "priority": "Immediate",
+      "category": "Patching",
+      "action": "Update Apache to 2.4.51+",
+      "effort": "Low"
+    }
+  ]
+}`}</pre>
+          </Paper>
+        </Box>
+      </Paper>
+
       {/* Tips & Tricks */}
       <Paper
         sx={{

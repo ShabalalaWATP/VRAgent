@@ -67,12 +67,15 @@ import SendIcon from "@mui/icons-material/Send";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import PersonIcon from "@mui/icons-material/Person";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
+import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
 import HistoryIcon from "@mui/icons-material/History";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import ReactMarkdown from "react-markdown";
+import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import ForceGraph2D from "react-force-graph-2d";
 import { apiClient, NmapAnalysisResult, NmapScanType, ChatMessage, SavedNetworkReport } from "../api/client";
 
@@ -694,6 +697,7 @@ const NmapAnalyzerPage: React.FC = () => {
 
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatMaximized, setChatMaximized] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -788,13 +792,40 @@ const NmapAnalyzerPage: React.FC = () => {
     return parts.join(" ");
   }, [cmdTarget, cmdScanType, cmdPorts, cmdOutputFormat, cmdAdditionalFlags, cmdScanTypes, generateFilename]);
 
-  // Copy command to clipboard
-  const handleCopyCommand = useCallback(async () => {
-    if (buildNmapCommand) {
-      await navigator.clipboard.writeText(buildNmapCommand);
+  // Fallback clipboard function for older browsers or non-HTTPS contexts
+  const fallbackCopyToClipboard = useCallback((text: string) => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
       setCopySnackbarOpen(true);
+    } catch (err) {
+      console.error('Fallback: Failed to copy text:', err);
     }
-  }, [buildNmapCommand]);
+    document.body.removeChild(textArea);
+  }, []);
+
+  // Copy command to clipboard with fallback
+  const handleCopyCommand = useCallback(() => {
+    if (!buildNmapCommand) return;
+    
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(buildNmapCommand)
+        .then(() => setCopySnackbarOpen(true))
+        .catch((err) => {
+          console.warn('Clipboard API failed, using fallback:', err);
+          fallbackCopyToClipboard(buildNmapCommand);
+        });
+    } else {
+      fallbackCopyToClipboard(buildNmapCommand);
+    }
+  }, [buildNmapCommand, fallbackCopyToClipboard]);
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
@@ -2043,40 +2074,46 @@ const NmapAnalyzerPage: React.FC = () => {
         <Paper
           sx={{
             position: "fixed",
-            bottom: 0,
-            right: 24,
-            width: chatOpen ? 450 : 200,
-            maxHeight: chatOpen ? "60vh" : "auto",
+            bottom: 16,
+            right: 16,
+            left: chatMaximized ? { xs: 16, md: 256 } : "auto",
+            width: chatMaximized ? "auto" : chatOpen ? { xs: "calc(100% - 32px)", sm: 400 } : 200,
+            maxWidth: chatMaximized ? "none" : 400,
             zIndex: 1200,
-            borderRadius: "12px 12px 0 0",
+            borderRadius: 3,
             boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
             overflow: "hidden",
-            transition: "all 0.3s ease",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
           {/* Chat Header */}
           <Box
-            onClick={() => setChatOpen(!chatOpen)}
             sx={{
               p: 2,
               bgcolor: "#7c3aed",
               color: "white",
-              cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              "&:hover": { bgcolor: "#6d28d9" },
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box 
+              sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer", flex: 1 }}
+              onClick={() => setChatOpen(!chatOpen)}
+            >
               <ChatIcon />
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 Ask About This Scan
               </Typography>
             </Box>
-            <IconButton size="small" sx={{ color: "white" }}>
-              {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-            </IconButton>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <IconButton size="small" sx={{ color: "white" }} onClick={() => setChatMaximized(!chatMaximized)}>
+                {chatMaximized ? <CloseFullscreenIcon /> : <OpenInFullIcon />}
+              </IconButton>
+              <IconButton size="small" sx={{ color: "white" }} onClick={() => setChatOpen(!chatOpen)}>
+                {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+              </IconButton>
+            </Box>
           </Box>
 
           {/* Chat Content */}
@@ -2084,10 +2121,11 @@ const NmapAnalyzerPage: React.FC = () => {
             {/* Messages Area */}
             <Box
               sx={{
-                height: "calc(60vh - 140px)",
+                height: chatMaximized ? "calc(66vh - 120px)" : 280,
                 overflowY: "auto",
                 p: 2,
                 bgcolor: alpha(theme.palette.background.default, 0.5),
+                transition: "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
               {/* Welcome message */}
@@ -2156,18 +2194,22 @@ const NmapAnalyzerPage: React.FC = () => {
                         borderRadius: 2,
                         "& p": { m: 0 },
                         "& p:not(:last-child)": { mb: 1 },
-                        "& code": {
-                          bgcolor: alpha(msg.role === "user" ? "#fff" : "#7c3aed", 0.2),
-                          px: 0.5,
-                          borderRadius: 0.5,
-                          fontFamily: "monospace",
-                          fontSize: "0.85em",
-                        },
                         "& ul, & ol": { pl: 2, m: 0 },
                         "& li": { mb: 0.5 },
+                        "& strong": { fontWeight: 600 },
                       }}
                     >
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown
+                        components={{
+                          code: ({ className, children }) => (
+                            <ChatCodeBlock className={className} theme={theme}>
+                              {children}
+                            </ChatCodeBlock>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </Paper>
                     {msg.role === "user" && (
                       <Box

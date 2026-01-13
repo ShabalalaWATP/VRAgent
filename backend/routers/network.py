@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.auth import get_current_active_user
-from backend.models.models import NetworkAnalysisReport, User
+from backend.models.models import NetworkAnalysisReport, User, NmapScanTemplate
 from backend.services import pcap_service, nmap_service, network_export_service
 from backend.services import ssl_scanner_service, protocol_decoder_service
 
@@ -130,6 +130,53 @@ class NmapScanRequest(BaseModel):
     scan_type: str = "basic"
     ports: Optional[str] = None
     title: Optional[str] = None
+    template_id: Optional[int] = None  # Use settings from a saved template
+
+
+# ============================================================================
+# Nmap Scan Template Models
+# ============================================================================
+
+class NmapTemplateCreate(BaseModel):
+    """Request to create a scan template."""
+    name: str
+    description: Optional[str] = None
+    is_public: bool = False
+    scan_type: str = "basic"
+    ports: Optional[str] = None
+    timing: Optional[str] = None  # T0-T5
+    extra_args: Optional[str] = None
+    target_pattern: Optional[str] = None
+
+
+class NmapTemplateUpdate(BaseModel):
+    """Request to update a scan template."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_public: Optional[bool] = None
+    scan_type: Optional[str] = None
+    ports: Optional[str] = None
+    timing: Optional[str] = None
+    extra_args: Optional[str] = None
+    target_pattern: Optional[str] = None
+
+
+class NmapTemplateResponse(BaseModel):
+    """Response for a scan template."""
+    id: int
+    name: str
+    description: Optional[str] = None
+    is_public: bool
+    scan_type: str
+    ports: Optional[str] = None
+    timing: Optional[str] = None
+    extra_args: Optional[str] = None
+    target_pattern: Optional[str] = None
+    user_id: Optional[int] = None
+    use_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+    last_used_at: Optional[datetime] = None
 
 
 class CaptureProfileInfo(BaseModel):
@@ -175,6 +222,7 @@ class SSLScanRequest(BaseModel):
     timeout: int = 10
     include_ai: bool = True
     title: Optional[str] = None
+    project_id: Optional[int] = None  # Optional project association
 
 
 class SSLCertificateResponse(BaseModel):
@@ -215,6 +263,7 @@ class SSLScanResultResponse(BaseModel):
     findings: List[SSLFindingResponse] = []
     vulnerabilities: List[dict] = []  # Detected SSL/TLS vulnerabilities
     chain_info: Optional[dict] = None  # Certificate chain validation info
+    offensive_analysis: Optional[dict] = None  # JARM, cert intel, MITM analysis
 
 
 class SSLScanSummaryResponse(BaseModel):
@@ -231,6 +280,10 @@ class SSLScanSummaryResponse(BaseModel):
     critical_vulnerabilities: int = 0
     exploitable_vulnerabilities: int = 0
     chain_issues: int = 0
+    # Offensive analysis summary
+    hosts_with_c2_indicators: int = 0
+    hosts_with_suspicious_certs: int = 0
+    hosts_mitm_possible: int = 0
 
 
 class SSLScanAnalysisResponse(BaseModel):
@@ -824,6 +877,10 @@ async def run_nmap_scan(
     - `vuln`: Vulnerability detection scripts
     - `aggressive`: OS detection, version, scripts, traceroute
     
+    **Using Templates:**
+    - Pass `template_id` to use saved scan configuration
+    - Template settings override individual parameters
+    
     **Restrictions:**
     - Cannot scan localhost, loopback, or link-local addresses
     - Maximum network size is /24 (256 addresses)
@@ -835,18 +892,44 @@ async def run_nmap_scan(
             detail="Nmap is not installed on the server. Please upload Nmap XML output files instead."
         )
     
+    # Apply template settings if template_id provided
+    scan_type = request.scan_type
+    ports = request.ports
+    extra_args = None
+    
+    if request.template_id:
+        template = db.query(NmapScanTemplate).filter(NmapScanTemplate.id == request.template_id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Scan template not found")
+        
+        # Check access
+        if template.user_id != current_user.id and not template.is_public:
+            raise HTTPException(status_code=403, detail="Access denied to this template")
+        
+        # Apply template settings
+        scan_type = template.scan_type or scan_type
+        ports = template.ports or ports
+        extra_args = template.extra_args
+        
+        # Update template usage stats
+        template.use_count = (template.use_count or 0) + 1
+        template.last_used_at = datetime.utcnow()
+        db.commit()
+        
+        logger.info(f"Using scan template '{template.name}' (ID: {template.id})")
+    
     # Validate target
     is_valid, error = nmap_service.validate_target(request.target)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error)
     
-    logger.info(f"Starting live Nmap scan: target={request.target}, type={request.scan_type}")
+    logger.info(f"Starting live Nmap scan: target={request.target}, type={scan_type}")
     
     # Run the scan
     output_file, command_used, error = nmap_service.run_nmap_scan(
         target=request.target,
-        scan_type=request.scan_type,
-        ports=request.ports,
+        scan_type=scan_type,
+        ports=ports,
     )
     
     if error:
@@ -1209,6 +1292,9 @@ async def scan_ssl_hosts(
         # Convert cipher_suites from list of dicts to list of strings
         cipher_list = [c.get("name", str(c)) if isinstance(c, dict) else str(c) for c in r.cipher_suites]
         
+        # Convert offensive analysis
+        offensive_data = r.offensive_analysis.to_dict() if r.offensive_analysis else None
+        
         results.append(SSLScanResultResponse(
             host=r.host,
             port=r.port,
@@ -1220,6 +1306,7 @@ async def scan_ssl_hosts(
             findings=findings,
             vulnerabilities=vulnerabilities,
             chain_info=chain_info,
+            offensive_analysis=offensive_data,
         ))
     
     summary = SSLScanSummaryResponse(
@@ -1235,6 +1322,10 @@ async def scan_ssl_hosts(
         critical_vulnerabilities=result.summary.critical_vulnerabilities,
         exploitable_vulnerabilities=result.summary.exploitable_vulnerabilities,
         chain_issues=result.summary.chain_issues,
+        # Offensive analysis summary
+        hosts_with_c2_indicators=result.summary.hosts_with_c2_indicators,
+        hosts_with_suspicious_certs=result.summary.hosts_with_suspicious_certs,
+        hosts_mitm_possible=result.summary.hosts_mitm_possible,
     )
     
     # Save report
@@ -1245,12 +1336,18 @@ async def scan_ssl_hosts(
         if len(request.targets) > 10:
             targets_str += f" (+{len(request.targets) - 10} more)"
         
-        # Calculate risk (factor in vulnerabilities)
+        # Calculate risk (factor in vulnerabilities and C2 indicators)
         risk_level = "Low"
         risk_score = 0
-        if result.summary.critical_findings > 0 or result.summary.critical_vulnerabilities > 0:
+        if result.summary.hosts_with_c2_indicators > 0:
+            risk_level = "Critical"
+            risk_score = 95
+        elif result.summary.critical_findings > 0 or result.summary.critical_vulnerabilities > 0:
             risk_level = "Critical"
             risk_score = 90
+        elif result.summary.hosts_with_suspicious_certs > 0:
+            risk_level = "High"
+            risk_score = 75
         elif result.summary.high_findings > 0 or result.summary.exploitable_vulnerabilities > 0:
             risk_level = "High"
             risk_score = 70
@@ -1259,6 +1356,7 @@ async def scan_ssl_hosts(
             risk_score = 50
         
         db_report = NetworkAnalysisReport(
+            project_id=request.project_id,  # Associate with project if provided
             analysis_type="ssl",
             title=report_title,
             filename=targets_str,
@@ -1273,6 +1371,10 @@ async def scan_ssl_hosts(
                 "weak_ciphers": result.summary.hosts_with_weak_ciphers,
                 "total_vulnerabilities": result.summary.total_vulnerabilities,
                 "exploitable_vulnerabilities": result.summary.exploitable_vulnerabilities,
+                # Offensive analysis summary
+                "hosts_with_c2_indicators": result.summary.hosts_with_c2_indicators,
+                "hosts_with_suspicious_certs": result.summary.hosts_with_suspicious_certs,
+                "hosts_mitm_possible": result.summary.hosts_mitm_possible,
             },
             findings_data=[
                 {
@@ -1280,8 +1382,9 @@ async def scan_ssl_hosts(
                     "port": r.port,
                     "findings": [f.to_dict() for f in r.findings],
                     "vulnerabilities": [v.to_dict() for v in r.vulnerabilities] if r.vulnerabilities else [],
+                    "offensive_analysis": r.offensive_analysis.to_dict() if r.offensive_analysis else None,
                 }
-                for r in result.results if r.findings or r.vulnerabilities
+                for r in result.results if r.findings or r.vulnerabilities or r.offensive_analysis
             ],
             ai_report=ai_analysis,
         )
@@ -1309,15 +1412,23 @@ async def scan_ssl_single(
     """
     Quick SSL scan of a single host without saving to history.
     
-    Returns certificate info and security findings.
+    Returns certificate info, security findings, and offensive analysis.
     """
     result = ssl_scanner_service.scan_ssl_host(host, port, timeout)
     
     cert_response = None
     if result.certificate:
+        # Handle subject/issuer which may be dict or string
+        subject = result.certificate.subject
+        if isinstance(subject, dict):
+            subject = subject.get("commonName", str(subject))
+        issuer = result.certificate.issuer
+        if isinstance(issuer, dict):
+            issuer = issuer.get("commonName", str(issuer))
+            
         cert_response = SSLCertificateResponse(
-            subject=result.certificate.subject,
-            issuer=result.certificate.issuer,
+            subject=subject,
+            issuer=issuer,
             serial_number=result.certificate.serial_number,
             not_before=result.certificate.not_before,
             not_after=result.certificate.not_after,
@@ -1325,8 +1436,8 @@ async def scan_ssl_single(
             days_until_expiry=result.certificate.days_until_expiry,
             is_self_signed=result.certificate.is_self_signed,
             signature_algorithm=result.certificate.signature_algorithm,
-            key_type=result.certificate.key_type,
-            key_size=result.certificate.key_size,
+            key_type=result.certificate.public_key_type,
+            key_size=result.certificate.public_key_bits,
             san=result.certificate.san or [],
         )
     
@@ -1337,21 +1448,314 @@ async def scan_ssl_single(
             title=f.title,
             description=f.description,
             recommendation=f.recommendation,
-            cve=f.cve,
+            cve=f.cve_ids[0] if f.cve_ids else None,
         )
         for f in result.findings
     ]
+    
+    # Convert protocols_supported dict to list
+    supported_protocols = [proto for proto, supported in result.protocols_supported.items() if supported]
+    
+    # Convert cipher_suites
+    cipher_list = [c.get("name", str(c)) if isinstance(c, dict) else str(c) for c in result.cipher_suites]
+    
+    # Convert vulnerabilities
+    vulnerabilities = [v.to_dict() for v in result.vulnerabilities] if result.vulnerabilities else []
+    
+    # Convert chain info
+    chain_info = result.chain_info.to_dict() if result.chain_info else None
+    
+    # Convert offensive analysis
+    offensive_data = result.offensive_analysis.to_dict() if result.offensive_analysis else None
     
     return SSLScanResultResponse(
         host=result.host,
         port=result.port,
         certificate=cert_response,
-        supported_protocols=result.supported_protocols,
-        cipher_suites=result.cipher_suites,
-        has_ssl=result.has_ssl,
+        supported_protocols=supported_protocols,
+        cipher_suites=cipher_list,
+        has_ssl=result.is_ssl,
         error=result.error,
         findings=findings,
+        vulnerabilities=vulnerabilities,
+        chain_info=chain_info,
+        offensive_analysis=offensive_data,
     )
+
+
+# ============================================================================
+# SSL Chat Endpoint
+# ============================================================================
+
+class SSLChatRequest(BaseModel):
+    """Request to chat about SSL scan results."""
+    message: str
+    context: str = ""
+    scan_results: Optional[dict] = None
+
+
+class SSLChatResponse(BaseModel):
+    """Response from the SSL chat endpoint."""
+    response: str
+    error: Optional[str] = None
+
+
+@router.post("/ssl/chat", response_model=SSLChatResponse)
+async def chat_about_ssl_scan(request: SSLChatRequest):
+    """
+    Chat with AI about SSL/TLS scan results.
+    
+    Allows users to ask follow-up questions about SSL vulnerabilities,
+    certificate issues, and security recommendations.
+    """
+    from backend.core.config import settings
+    
+    if not settings.gemini_api_key:
+        return SSLChatResponse(
+            response="",
+            error="Chat unavailable: GEMINI_API_KEY not configured"
+        )
+    
+    try:
+        from google import genai
+        import json
+        
+        client = genai.Client(api_key=settings.gemini_api_key)
+        
+        # Build context from scan results
+        scan_context = request.context or ""
+        if request.scan_results:
+            results = request.scan_results.get("results", [])
+            summary = request.scan_results.get("summary", {})
+            ai_analysis = request.scan_results.get("ai_analysis", {})
+            
+            scan_context = f"""SSL/TLS Scan Results:
+
+## Summary
+- Total Hosts Scanned: {summary.get('total_hosts', 'N/A')}
+- Hosts with SSL: {summary.get('hosts_with_ssl', 'N/A')}
+- Expired Certificates: {summary.get('expired_certs', 0)}
+- Self-Signed Certificates: {summary.get('self_signed_certs', 0)}
+- Weak Protocols Detected: {summary.get('weak_protocols', 0)}
+- Weak Ciphers Detected: {summary.get('weak_ciphers', 0)}
+- Critical Findings: {summary.get('critical_findings', 0)}
+- High Severity Findings: {summary.get('high_findings', 0)}
+- Total Vulnerabilities: {summary.get('total_vulnerabilities', 0)}
+
+## Host Details
+{json.dumps(results[:10], indent=2, default=str) if results else "No host details"}
+
+## AI Security Analysis
+{json.dumps(ai_analysis.get('structured_report', ai_analysis) if ai_analysis else {}, indent=2, default=str)}
+"""
+
+        system_prompt = f"""You are an expert SSL/TLS security analyst assistant. You help users understand SSL/TLS scan results, certificate issues, and security vulnerabilities.
+
+{scan_context}
+
+Based on the above SSL/TLS scan context, answer the user's questions. Be specific about:
+- Certificate validity and expiration dates
+- Protocol vulnerabilities (SSLv3, TLS 1.0, etc.)
+- Cipher suite weaknesses
+- Known CVEs and their exploitation potential
+- Remediation recommendations
+
+Keep responses concise but informative. Use technical terms but explain them when needed."""
+
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[
+                {"role": "user", "parts": [{"text": system_prompt}]},
+                {"role": "user", "parts": [{"text": request.message}]}
+            ],
+        )
+        
+        return SSLChatResponse(response=response.text)
+        
+    except Exception as e:
+        logger.error(f"SSL chat error: {e}")
+        return SSLChatResponse(
+            response="",
+            error=f"Chat failed: {str(e)}"
+        )
+
+
+# ============================================================================
+# SSL Scan History Endpoints
+# ============================================================================
+
+class SSLScanHistoryItem(BaseModel):
+    """SSL scan history item for listing."""
+    id: int
+    title: str
+    targets: str
+    created_at: datetime
+    risk_level: Optional[str] = None
+    risk_score: Optional[int] = None
+    total_hosts: Optional[int] = None
+    findings_count: int = 0
+    project_id: Optional[int] = None
+    project_name: Optional[str] = None
+
+
+class SSLScanHistoryResponse(BaseModel):
+    """SSL scan history list response."""
+    scans: List[SSLScanHistoryItem]
+    total: int
+
+
+@router.get("/ssl/history", response_model=SSLScanHistoryResponse)
+async def get_ssl_scan_history(
+    project_id: Optional[int] = Query(None, description="Filter by project ID"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum results"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get SSL scan history.
+    
+    Returns list of past SSL scans with their metadata.
+    Optionally filter by project_id.
+    """
+    from backend.models.models import Project
+    
+    query = db.query(NetworkAnalysisReport).filter(
+        NetworkAnalysisReport.analysis_type == "ssl"
+    )
+    
+    if project_id is not None:
+        query = query.filter(NetworkAnalysisReport.project_id == project_id)
+    
+    total = query.count()
+    scans = query.order_by(NetworkAnalysisReport.created_at.desc()).offset(offset).limit(limit).all()
+    
+    items = []
+    for scan in scans:
+        summary = scan.summary_data or {}
+        findings_count = len(scan.findings_data) if scan.findings_data else 0
+        
+        # Get project name if associated
+        project_name = None
+        if scan.project_id:
+            project = db.query(Project).filter(Project.id == scan.project_id).first()
+            if project:
+                project_name = project.name
+        
+        items.append(SSLScanHistoryItem(
+            id=scan.id,
+            title=scan.title,
+            targets=scan.filename or "",
+            created_at=scan.created_at,
+            risk_level=scan.risk_level,
+            risk_score=scan.risk_score,
+            total_hosts=summary.get("total_hosts"),
+            findings_count=findings_count,
+            project_id=scan.project_id,
+            project_name=project_name,
+        ))
+    
+    return SSLScanHistoryResponse(scans=items, total=total)
+
+
+@router.get("/ssl/history/{scan_id}")
+async def get_ssl_scan_detail(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get detailed SSL scan by ID.
+    
+    Returns full scan data including all findings and AI analysis.
+    """
+    scan = db.query(NetworkAnalysisReport).filter(
+        NetworkAnalysisReport.id == scan_id,
+        NetworkAnalysisReport.analysis_type == "ssl"
+    ).first()
+    
+    if not scan:
+        raise HTTPException(status_code=404, detail="SSL scan not found")
+    
+    return {
+        "id": scan.id,
+        "title": scan.title,
+        "targets": scan.filename,
+        "created_at": scan.created_at,
+        "risk_level": scan.risk_level,
+        "risk_score": scan.risk_score,
+        "summary": scan.summary_data,
+        "findings": scan.findings_data,
+        "ai_analysis": scan.ai_report,
+        "project_id": scan.project_id,
+    }
+
+
+@router.put("/ssl/history/{scan_id}/project")
+async def associate_ssl_scan_with_project(
+    scan_id: int,
+    project_id: int = Query(..., description="Project ID to associate"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Associate an SSL scan with a project.
+    
+    This allows standalone SSL scans to be included in Combined Analysis.
+    """
+    from backend.models.models import Project
+    
+    scan = db.query(NetworkAnalysisReport).filter(
+        NetworkAnalysisReport.id == scan_id,
+        NetworkAnalysisReport.analysis_type == "ssl"
+    ).first()
+    
+    if not scan:
+        raise HTTPException(status_code=404, detail="SSL scan not found")
+    
+    # Verify project exists
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Verify user has access to project
+    if project.owner_id != current_user.id and current_user.role != "admin":
+        # Check if collaborator
+        from backend.models.models import ProjectCollaborator
+        collab = db.query(ProjectCollaborator).filter(
+            ProjectCollaborator.project_id == project_id,
+            ProjectCollaborator.user_id == current_user.id
+        ).first()
+        if not collab:
+            raise HTTPException(status_code=403, detail="No access to this project")
+    
+    scan.project_id = project_id
+    db.commit()
+    
+    return {"message": f"SSL scan associated with project '{project.name}'", "project_id": project_id}
+
+
+@router.delete("/ssl/history/{scan_id}")
+async def delete_ssl_scan(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Delete an SSL scan from history.
+    """
+    scan = db.query(NetworkAnalysisReport).filter(
+        NetworkAnalysisReport.id == scan_id,
+        NetworkAnalysisReport.analysis_type == "ssl"
+    ).first()
+    
+    if not scan:
+        raise HTTPException(status_code=404, detail="SSL scan not found")
+    
+    db.delete(scan)
+    db.commit()
+    
+    return {"message": "SSL scan deleted", "id": scan_id}
 
 
 # ============================================================================
@@ -1631,3 +2035,212 @@ Keep responses concise but informative. Use technical terms appropriately but ex
             response="",
             error=f"Failed to generate response: {str(e)}"
         )
+
+
+# ============================================================================
+# Nmap Scan Template Endpoints
+# ============================================================================
+
+@router.post("/nmap/templates", response_model=NmapTemplateResponse)
+async def create_scan_template(
+    template: NmapTemplateCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Create a new Nmap scan template.
+    
+    Templates can be private (only visible to creator) or public (visible to all).
+    Stores scan configuration for reuse.
+    """
+    db_template = NmapScanTemplate(
+        user_id=current_user.id,
+        name=template.name,
+        description=template.description,
+        is_public=template.is_public,
+        scan_type=template.scan_type,
+        ports=template.ports,
+        timing=template.timing,
+        extra_args=template.extra_args,
+        target_pattern=template.target_pattern,
+    )
+    db.add(db_template)
+    db.commit()
+    db.refresh(db_template)
+    
+    logger.info(f"User {current_user.id} created scan template '{template.name}'")
+    
+    return NmapTemplateResponse(
+        id=db_template.id,
+        name=db_template.name,
+        description=db_template.description,
+        is_public=db_template.is_public,
+        scan_type=db_template.scan_type,
+        ports=db_template.ports,
+        timing=db_template.timing,
+        extra_args=db_template.extra_args,
+        target_pattern=db_template.target_pattern,
+        user_id=db_template.user_id,
+        use_count=db_template.use_count,
+        created_at=db_template.created_at,
+        updated_at=db_template.updated_at,
+        last_used_at=db_template.last_used_at,
+    )
+
+
+@router.get("/nmap/templates", response_model=List[NmapTemplateResponse])
+async def list_scan_templates(
+    include_public: bool = Query(True, description="Include public templates"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    List available Nmap scan templates.
+    
+    Returns user's own templates plus public templates (if include_public=True).
+    """
+    query = db.query(NmapScanTemplate)
+    
+    if include_public:
+        # User's templates OR public templates
+        query = query.filter(
+            (NmapScanTemplate.user_id == current_user.id) |
+            (NmapScanTemplate.is_public == True)
+        )
+    else:
+        # Only user's templates
+        query = query.filter(NmapScanTemplate.user_id == current_user.id)
+    
+    templates = query.order_by(NmapScanTemplate.use_count.desc(), NmapScanTemplate.created_at.desc()).all()
+    
+    return [
+        NmapTemplateResponse(
+            id=t.id,
+            name=t.name,
+            description=t.description,
+            is_public=t.is_public,
+            scan_type=t.scan_type,
+            ports=t.ports,
+            timing=t.timing,
+            extra_args=t.extra_args,
+            target_pattern=t.target_pattern,
+            user_id=t.user_id,
+            use_count=t.use_count,
+            created_at=t.created_at,
+            updated_at=t.updated_at,
+            last_used_at=t.last_used_at,
+        )
+        for t in templates
+    ]
+
+
+@router.get("/nmap/templates/{template_id}", response_model=NmapTemplateResponse)
+async def get_scan_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get a specific scan template."""
+    template = db.query(NmapScanTemplate).filter(NmapScanTemplate.id == template_id).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    # Check access: must be owner or template must be public
+    if template.user_id != current_user.id and not template.is_public:
+        raise HTTPException(status_code=403, detail="Access denied to this template")
+    
+    return NmapTemplateResponse(
+        id=template.id,
+        name=template.name,
+        description=template.description,
+        is_public=template.is_public,
+        scan_type=template.scan_type,
+        ports=template.ports,
+        timing=template.timing,
+        extra_args=template.extra_args,
+        target_pattern=template.target_pattern,
+        user_id=template.user_id,
+        use_count=template.use_count,
+        created_at=template.created_at,
+        updated_at=template.updated_at,
+        last_used_at=template.last_used_at,
+    )
+
+
+@router.put("/nmap/templates/{template_id}", response_model=NmapTemplateResponse)
+async def update_scan_template(
+    template_id: int,
+    update: NmapTemplateUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Update a scan template (owner only)."""
+    template = db.query(NmapScanTemplate).filter(NmapScanTemplate.id == template_id).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    # Only owner can update
+    if template.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the template owner can update it")
+    
+    # Update fields
+    if update.name is not None:
+        template.name = update.name
+    if update.description is not None:
+        template.description = update.description
+    if update.is_public is not None:
+        template.is_public = update.is_public
+    if update.scan_type is not None:
+        template.scan_type = update.scan_type
+    if update.ports is not None:
+        template.ports = update.ports
+    if update.timing is not None:
+        template.timing = update.timing
+    if update.extra_args is not None:
+        template.extra_args = update.extra_args
+    if update.target_pattern is not None:
+        template.target_pattern = update.target_pattern
+    
+    db.commit()
+    db.refresh(template)
+    
+    return NmapTemplateResponse(
+        id=template.id,
+        name=template.name,
+        description=template.description,
+        is_public=template.is_public,
+        scan_type=template.scan_type,
+        ports=template.ports,
+        timing=template.timing,
+        extra_args=template.extra_args,
+        target_pattern=template.target_pattern,
+        user_id=template.user_id,
+        use_count=template.use_count,
+        created_at=template.created_at,
+        updated_at=template.updated_at,
+        last_used_at=template.last_used_at,
+    )
+
+
+@router.delete("/nmap/templates/{template_id}")
+async def delete_scan_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Delete a scan template (owner only)."""
+    template = db.query(NmapScanTemplate).filter(NmapScanTemplate.id == template_id).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    # Only owner can delete
+    if template.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the template owner can delete it")
+    
+    db.delete(template)
+    db.commit()
+    
+    return {"message": "Template deleted", "id": template_id}

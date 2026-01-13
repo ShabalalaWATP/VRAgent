@@ -90,7 +90,7 @@ export default function SocialPage() {
     try {
       const response = await fetch('/api/social/presence/me', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`,
         },
       });
       if (response.ok) {
@@ -116,7 +116,7 @@ export default function SocialPage() {
       const response = await fetch('/api/social/presence/me', {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

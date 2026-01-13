@@ -14,7 +14,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
 
@@ -338,6 +338,35 @@ class NetworkAnalysisReport(Base):
     
     # Relationship
     project = relationship("Project", back_populates="network_analysis_reports")
+
+
+class NmapScanTemplate(Base):
+    """Stores reusable Nmap scan templates."""
+    __tablename__ = "nmap_scan_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # null = system template
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    is_public = Column(Boolean, default=False)  # Whether template is visible to all users
+    
+    # Scan configuration
+    scan_type = Column(String(50), nullable=False, default="basic")  # basic, quick, full, etc.
+    ports = Column(String(500), nullable=True)  # Custom port specification
+    timing = Column(String(10), nullable=True)  # T0-T5
+    extra_args = Column(Text, nullable=True)  # Additional nmap arguments
+    
+    # Target patterns (for reference, not actual targets)
+    target_pattern = Column(String(200), nullable=True)  # e.g., "192.168.1.0/24", "*.example.com"
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    use_count = Column(Integer, default=0)  # How many times this template has been used
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationship
+    user = relationship("User", backref=backref("nmap_templates", cascade="all, delete-orphan"))
 
 
 class FuzzingSession(Base):
@@ -971,6 +1000,7 @@ class KanbanCard(Base):
     labels = Column(JSON, nullable=True)  # Array of label objects [{name, color}]
     due_date = Column(DateTime(timezone=True), nullable=True)
     estimated_hours = Column(Float, nullable=True)
+    color = Column(String, nullable=True)  # Card background color (hex)
     
     # Assignees (stored as JSON array of user IDs)
     assignee_ids = Column(JSON, nullable=True)
@@ -1012,3 +1042,643 @@ class KanbanCardComment(Base):
     # Relationships
     card = relationship("KanbanCard", back_populates="comments")
     user = relationship("User", backref="kanban_comments")
+
+
+class AgenticFuzzerReport(Base):
+    """Stores AI-generated reports from agentic fuzzing sessions."""
+    __tablename__ = "agentic_fuzzer_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    # Session metadata
+    title = Column(String, nullable=False)
+    target_url = Column(String, nullable=False)
+    scan_profile = Column(String, nullable=True)
+    
+    # Timing
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True), server_default=func.now())
+    duration_seconds = Column(Float, nullable=True)
+    
+    # Results summary
+    total_iterations = Column(Integer, default=0)
+    total_requests = Column(Integer, default=0)
+    
+    # Findings counts by severity
+    findings_critical = Column(Integer, default=0)
+    findings_high = Column(Integer, default=0)
+    findings_medium = Column(Integer, default=0)
+    findings_low = Column(Integer, default=0)
+    findings_info = Column(Integer, default=0)
+    duplicates_filtered = Column(Integer, default=0)
+    
+    # Full report data (JSON)
+    executive_summary = Column(Text, nullable=True)
+    ai_report = Column(JSON, nullable=True)  # Full LLM-generated report
+    findings = Column(JSON, nullable=True)  # Array of all findings
+    techniques_used = Column(JSON, nullable=True)  # List of techniques
+    correlation_analysis = Column(JSON, nullable=True)  # Attack chains, root causes
+    engine_stats = Column(JSON, nullable=True)  # Passive scanner, mutation engine stats
+    crawl_results = Column(JSON, nullable=True)  # Sitemap, endpoints discovered
+    session_data = Column(JSON, nullable=True)  # Full session snapshot
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="fuzzer_reports")
+    project = relationship("Project", backref="fuzzer_reports")
+
+
+class AgenticScanReport(Base):
+    """Stores AI-generated reports from agentic AI security scans."""
+    __tablename__ = "agentic_scan_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scan_id = Column(String, unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    # Scan metadata
+    title = Column(String, nullable=False)
+    project_path = Column(String, nullable=True)
+    
+    # Timing
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True), server_default=func.now())
+    duration_seconds = Column(Float, nullable=True)
+    
+    # Analysis counts
+    total_chunks = Column(Integer, default=0)
+    analyzed_chunks = Column(Integer, default=0)
+    entry_points_found = Column(Integer, default=0)
+    flows_traced = Column(Integer, default=0)
+    
+    # Findings counts by severity
+    findings_critical = Column(Integer, default=0)
+    findings_high = Column(Integer, default=0)
+    findings_medium = Column(Integer, default=0)
+    findings_low = Column(Integer, default=0)
+    findings_info = Column(Integer, default=0)
+    
+    # Full report data (JSON)
+    executive_summary = Column(Text, nullable=True)
+    vulnerabilities = Column(JSON, nullable=True)  # Array of all vulnerabilities
+    entry_points = Column(JSON, nullable=True)  # Detected entry points
+    traced_flows = Column(JSON, nullable=True)  # Data flow traces
+    statistics = Column(JSON, nullable=True)  # Scan statistics
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="agentic_scan_reports")
+    project = relationship("Project", backref="agentic_scan_reports")
+
+
+class Whiteboard(Base):
+    """Collaborative whiteboard for project teams."""
+    __tablename__ = "whiteboards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Canvas settings
+    canvas_width = Column(Integer, default=3000)
+    canvas_height = Column(Integer, default=2000)
+    background_color = Column(String(20), default="#1e1e2e")
+    grid_enabled = Column(Boolean, default=True)
+    
+    # Collaboration settings
+    is_locked = Column(Boolean, default=False)  # Lock for editing
+    locked_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    
+    # Relationships
+    project = relationship("Project", backref="whiteboards")
+    creator = relationship("User", foreign_keys=[created_by], backref="created_whiteboards")
+    locker = relationship("User", foreign_keys=[locked_by])
+    elements = relationship("WhiteboardElement", back_populates="whiteboard", cascade="all, delete-orphan")
+
+
+class WhiteboardElement(Base):
+    """Individual elements on a whiteboard (shapes, text, images, sticky notes)."""
+    __tablename__ = "whiteboard_elements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    whiteboard_id = Column(Integer, ForeignKey("whiteboards.id", ondelete="CASCADE"), nullable=False, index=True)
+    element_id = Column(String(100), nullable=False, index=True)  # UUID for client-side tracking
+    
+    # Element type: 'rectangle', 'ellipse', 'line', 'arrow', 'text', 'sticky', 'image', 'freehand', 'connector'
+    element_type = Column(String(50), nullable=False)
+    
+    # Position and size
+    x = Column(Float, default=0)
+    y = Column(Float, default=0)
+    width = Column(Float, default=100)
+    height = Column(Float, default=100)
+    rotation = Column(Float, default=0)
+    
+    # Styling
+    fill_color = Column(String(20), nullable=True)
+    stroke_color = Column(String(20), default="#ffffff")
+    stroke_width = Column(Float, default=2)
+    opacity = Column(Float, default=1.0)
+    
+    # Content (for text, sticky notes)
+    content = Column(Text, nullable=True)
+    font_size = Column(Integer, default=16)
+    font_family = Column(String(100), default="Inter")
+    text_align = Column(String(20), default="left")
+    
+    # For images/screenshots
+    image_url = Column(String(500), nullable=True)
+    
+    # For lines/arrows/connectors
+    points = Column(JSON, nullable=True)  # Array of {x, y} points
+    start_element_id = Column(String(100), nullable=True)  # Connected to element
+    end_element_id = Column(String(100), nullable=True)
+    arrow_start = Column(Boolean, default=False)
+    arrow_end = Column(Boolean, default=True)
+    
+    # Layer ordering
+    z_index = Column(Integer, default=0)
+    
+    # Metadata
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    whiteboard = relationship("Whiteboard", back_populates="elements")
+    creator = relationship("User", backref="whiteboard_elements")
+
+
+class Annotation(Base):
+    """Screenshot annotations for evidence documentation."""
+    __tablename__ = "annotations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Source image
+    original_image_url = Column(String(500), nullable=False)
+    annotated_image_url = Column(String(500), nullable=True)  # After annotations applied
+    
+    # Annotation data (array of shapes/text overlays)
+    annotations_data = Column(JSON, nullable=True)
+    
+    # Context
+    title = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    
+    # Link to finding or note
+    finding_id = Column(Integer, ForeignKey("findings.id", ondelete="SET NULL"), nullable=True)
+    note_id = Column(Integer, ForeignKey("project_notes.id", ondelete="SET NULL"), nullable=True)
+    whiteboard_id = Column(Integer, ForeignKey("whiteboards.id", ondelete="SET NULL"), nullable=True)
+    
+    # Metadata
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    project = relationship("Project", backref="annotations")
+    finding = relationship("Finding", backref="annotations")
+    creator = relationship("User", backref="annotations")
+
+
+class Mention(Base):
+    """@mentions in notes, whiteboard text, and chat."""
+    __tablename__ = "mentions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Who was mentioned
+    mentioned_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Who made the mention
+    mentioned_by_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    # Where the mention occurred (one of these will be set)
+    note_id = Column(Integer, ForeignKey("project_notes.id", ondelete="CASCADE"), nullable=True, index=True)
+    whiteboard_element_id = Column(Integer, ForeignKey("whiteboard_elements.id", ondelete="CASCADE"), nullable=True)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=True)
+    
+    # Context
+    context_text = Column(Text, nullable=True)  # Surrounding text for notification
+    
+    # Status
+    is_read = Column(Boolean, default=False)
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    mentioned_user = relationship("User", foreign_keys=[mentioned_user_id], backref="mentions_received")
+    mentioned_by = relationship("User", foreign_keys=[mentioned_by_id], backref="mentions_made")
+    note = relationship("ProjectNote", backref="mentions")
+
+
+class WhiteboardPresence(Base):
+    """Track user presence and cursor positions on whiteboards."""
+    __tablename__ = "whiteboard_presence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    whiteboard_id = Column(Integer, ForeignKey("whiteboards.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Cursor position
+    cursor_x = Column(Float, nullable=True)
+    cursor_y = Column(Float, nullable=True)
+    
+    # Viewport
+    viewport_x = Column(Float, default=0)
+    viewport_y = Column(Float, default=0)
+    viewport_zoom = Column(Float, default=1.0)
+    
+    # Currently selected element
+    selected_element_id = Column(String(100), nullable=True)
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    last_activity = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Unique constraint - one presence per user per whiteboard
+    __table_args__ = (
+        UniqueConstraint('whiteboard_id', 'user_id', name='uq_whiteboard_user_presence'),
+    )
+    
+    # Relationships
+    whiteboard = relationship("Whiteboard", backref="active_users")
+    user = relationship("User", backref="whiteboard_presence")
+
+
+# ============================================================================
+# Combined Analysis Reports
+# ============================================================================
+
+class CombinedAnalysisReport(Base):
+    """
+    Stores combined analysis reports that aggregate findings from
+    Security Scans, Reverse Engineering reports, and Network Analysis.
+    """
+    __tablename__ = "combined_analysis_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Report metadata
+    title = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    
+    # Input data
+    selected_scans = Column(JSON, nullable=False)  # List of {scan_type, scan_id, title}
+    project_info = Column(Text, nullable=True)  # User-provided project context
+    user_requirements = Column(Text, nullable=True)  # What user wants from report
+    supporting_documents = Column(JSON, nullable=True)  # Metadata about uploaded docs
+    
+    # Report options used
+    report_options = Column(JSON, nullable=True)  # include_exploit_recommendations, etc.
+    
+    # Risk assessment
+    overall_risk_level = Column(String, nullable=True)  # Critical, High, Medium, Low, Clean
+    overall_risk_score = Column(Integer, nullable=True)  # 0-100
+    risk_justification = Column(Text, nullable=True)
+    
+    # Statistics
+    total_findings_analyzed = Column(Integer, default=0)
+    scans_included = Column(Integer, default=0)
+    scan_types_breakdown = Column(JSON, nullable=True)  # {security_scan: 2, network_report: 3, ...}
+    
+    # Generated report content
+    executive_summary = Column(Text, nullable=True)
+    report_sections = Column(JSON, nullable=True)  # List of {title, content, section_type, severity}
+    
+    # Cross-analysis results
+    cross_analysis_findings = Column(JSON, nullable=True)  # Findings spanning multiple scan types
+    
+    # Attack surface visualization (Mermaid diagram)
+    attack_surface_diagram = Column(Text, nullable=True)
+    
+    # Attack chains showing multi-step exploitation
+    attack_chains = Column(JSON, nullable=True)
+    
+    # Beginner-friendly attack guides
+    beginner_attack_guide = Column(JSON, nullable=True)
+    
+    # Proof-of-concept scripts
+    poc_scripts = Column(JSON, nullable=True)
+    
+    # Exploit development recommendations
+    exploit_development_areas = Column(JSON, nullable=True)
+    
+    # Prioritized vulnerabilities list
+    prioritized_vulnerabilities = Column(JSON, nullable=True)
+    
+    # Source code findings from deep dive analysis
+    source_code_findings = Column(JSON, nullable=True)  # Additional issues found in source code
+    
+    # Documentation analysis if supporting docs were provided
+    documentation_analysis = Column(Text, nullable=True)
+    
+    # Full raw AI response for debugging/reference
+    raw_ai_response = Column(Text, nullable=True)
+    
+    # Processing status
+    status = Column(String, default="pending", index=True)  # pending, processing, completed, failed
+    error_message = Column(Text, nullable=True)
+    
+    # Relationships - use passive_deletes to respect DB CASCADE
+    project = relationship("Project", backref=backref("combined_analysis_reports", passive_deletes=True))
+    creator = relationship("User", backref="created_combined_reports")
+
+
+# ============================================================================
+# API Tester - Collections, Environments, History (Postman-style)
+# ============================================================================
+
+class APICollection(Base):
+    """
+    A collection of API requests, similar to Postman collections.
+    Can contain folders and requests in a hierarchical structure.
+    """
+    __tablename__ = "api_collections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Collection-level variables (can be overridden by environment)
+    variables = Column(JSON, nullable=True)  # [{"key": "baseUrl", "value": "...", "enabled": true}]
+    
+    # Pre-request script (runs before every request in collection)
+    pre_request_script = Column(Text, nullable=True)
+    
+    # Test script (runs after every request in collection)
+    test_script = Column(Text, nullable=True)
+    
+    # Collection-level auth (inherited by requests unless overridden)
+    auth_type = Column(String(50), nullable=True)  # none, basic, bearer, api_key, oauth2, digest
+    auth_config = Column(JSON, nullable=True)
+    
+    # Collection-level headers
+    headers = Column(JSON, nullable=True)  # [{"key": "X-Custom", "value": "...", "enabled": true}]
+    
+    # Import/export metadata
+    imported_from = Column(String(50), nullable=True)  # postman, openapi, curl, insomnia
+    postman_id = Column(String(100), nullable=True)  # Original Postman collection ID if imported
+    
+    # Sharing
+    is_shared = Column(Boolean, default=False)
+    shared_with = Column(JSON, nullable=True)  # List of user IDs or "public"
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="api_collections")
+    folders = relationship("APIFolder", back_populates="collection", cascade="all, delete-orphan")
+    requests = relationship("APIRequest", back_populates="collection", cascade="all, delete-orphan")
+
+
+class APIFolder(Base):
+    """
+    A folder within an API collection for organizing requests.
+    Supports nested folders.
+    """
+    __tablename__ = "api_folders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    collection_id = Column(Integer, ForeignKey("api_collections.id", ondelete="CASCADE"), nullable=False, index=True)
+    parent_folder_id = Column(Integer, ForeignKey("api_folders.id", ondelete="CASCADE"), nullable=True, index=True)
+    
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Folder-level auth (overrides collection, inherited by requests)
+    auth_type = Column(String(50), nullable=True)
+    auth_config = Column(JSON, nullable=True)
+    
+    # Folder-level pre-request script
+    pre_request_script = Column(Text, nullable=True)
+    
+    # Folder-level test script
+    test_script = Column(Text, nullable=True)
+    
+    # Order within parent
+    sort_order = Column(Integer, default=0)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    collection = relationship("APICollection", back_populates="folders")
+    parent_folder = relationship("APIFolder", remote_side=[id], backref="subfolders")
+    requests = relationship("APIRequest", back_populates="folder", cascade="all, delete-orphan")
+
+
+class APIRequest(Base):
+    """
+    A saved API request within a collection.
+    """
+    __tablename__ = "api_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    collection_id = Column(Integer, ForeignKey("api_collections.id", ondelete="CASCADE"), nullable=False, index=True)
+    folder_id = Column(Integer, ForeignKey("api_folders.id", ondelete="CASCADE"), nullable=True, index=True)
+    
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Request details
+    method = Column(String(20), nullable=False, default="GET")
+    url = Column(Text, nullable=False)  # Can contain {{variables}}
+    
+    # Query parameters
+    params = Column(JSON, nullable=True)  # [{"key": "page", "value": "1", "enabled": true}]
+    
+    # Headers
+    headers = Column(JSON, nullable=True)  # [{"key": "Content-Type", "value": "application/json", "enabled": true}]
+    
+    # Request body
+    body_type = Column(String(50), nullable=True)  # none, json, form-data, x-www-form-urlencoded, raw, binary, graphql
+    body_content = Column(Text, nullable=True)
+    body_form_data = Column(JSON, nullable=True)  # For form-data: [{"key": "file", "type": "file", "src": "..."}]
+    
+    # GraphQL specific
+    graphql_query = Column(Text, nullable=True)
+    graphql_variables = Column(JSON, nullable=True)
+    
+    # Authentication (overrides folder/collection)
+    auth_type = Column(String(50), nullable=True)
+    auth_config = Column(JSON, nullable=True)
+    
+    # Pre-request script
+    pre_request_script = Column(Text, nullable=True)
+    
+    # Test script (assertions)
+    test_script = Column(Text, nullable=True)
+    
+    # Settings
+    timeout_ms = Column(Integer, default=30000)
+    follow_redirects = Column(Boolean, default=True)
+    
+    # Response examples (saved responses for documentation)
+    saved_responses = Column(JSON, nullable=True)  # [{"name": "Success", "status": 200, "body": "..."}]
+    
+    # Order within folder/collection
+    sort_order = Column(Integer, default=0)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    collection = relationship("APICollection", back_populates="requests")
+    folder = relationship("APIFolder", back_populates="requests")
+
+
+class APIEnvironment(Base):
+    """
+    An environment with variables that can be switched between (dev, staging, prod).
+    """
+    __tablename__ = "api_environments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    color = Column(String(20), nullable=True)  # For UI differentiation
+    
+    # Environment variables
+    variables = Column(JSON, nullable=False)  # [{"key": "baseUrl", "value": "...", "type": "default/secret", "enabled": true}]
+    
+    # Global environment (shared across all collections for this user)
+    is_global = Column(Boolean, default=False)
+    
+    # Active state
+    is_active = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="api_environments")
+
+
+class APIRequestHistory(Base):
+    """
+    History of executed API requests for replay and debugging.
+    """
+    __tablename__ = "api_request_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    collection_id = Column(Integer, ForeignKey("api_collections.id", ondelete="SET NULL"), nullable=True)
+    request_id = Column(Integer, ForeignKey("api_requests.id", ondelete="SET NULL"), nullable=True)
+    
+    # Request snapshot (full request as executed)
+    method = Column(String(20), nullable=False)
+    url = Column(Text, nullable=False)  # Resolved URL (variables substituted)
+    original_url = Column(Text, nullable=True)  # URL with {{variables}}
+    headers = Column(JSON, nullable=True)
+    body = Column(Text, nullable=True)
+    
+    # Response
+    status_code = Column(Integer, nullable=True)
+    status_text = Column(String(100), nullable=True)
+    response_headers = Column(JSON, nullable=True)
+    response_body = Column(Text, nullable=True)
+    response_size_bytes = Column(Integer, nullable=True)
+    response_time_ms = Column(Float, nullable=True)
+    
+    # Cookies
+    request_cookies = Column(JSON, nullable=True)
+    response_cookies = Column(JSON, nullable=True)
+    
+    # Test results
+    test_results = Column(JSON, nullable=True)  # [{"name": "Status is 200", "passed": true}]
+    tests_passed = Column(Integer, default=0)
+    tests_failed = Column(Integer, default=0)
+    
+    # Security scan results (if security tests were run)
+    security_findings = Column(JSON, nullable=True)
+    
+    # Error if request failed
+    error = Column(Text, nullable=True)
+    
+    # Environment used
+    environment_id = Column(Integer, ForeignKey("api_environments.id", ondelete="SET NULL"), nullable=True)
+    environment_name = Column(String(255), nullable=True)
+    
+    executed_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    
+    # Relationships
+    user = relationship("User", backref="api_request_history")
+
+
+class APIGlobalVariable(Base):
+    """
+    Global variables that persist across all requests and sessions.
+    Can be set by scripts using pm.globals.set()
+    """
+    __tablename__ = "api_global_variables"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    key = Column(String(255), nullable=False)
+    value = Column(Text, nullable=True)
+    var_type = Column(String(20), default="default")  # default, secret
+    enabled = Column(Boolean, default=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Unique per user
+    __table_args__ = (
+        UniqueConstraint('user_id', 'key', name='uq_user_global_var'),
+    )
+    
+    # Relationships
+    user = relationship("User", backref="api_global_variables")
+
+
+class APICookieJar(Base):
+    """
+    Cookie jar for storing cookies across requests (like a browser).
+    """
+    __tablename__ = "api_cookie_jars"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    domain = Column(String(255), nullable=False)
+    cookies = Column(JSON, nullable=False)  # [{"name": "...", "value": "...", "path": "/", "expires": "..."}]
+    
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Unique domain per user
+    __table_args__ = (
+        UniqueConstraint('user_id', 'domain', name='uq_user_cookie_domain'),
+    )
+    
+    # Relationships
+    user = relationship("User", backref="api_cookie_jars")

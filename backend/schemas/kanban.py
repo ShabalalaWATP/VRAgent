@@ -110,6 +110,7 @@ class CardCreate(BaseModel):
     assignee_ids: Optional[List[int]] = None
     finding_id: Optional[int] = None
     checklist: Optional[List[ChecklistItem]] = None
+    color: Optional[str] = None  # Card background color (hex)
 
 
 class CardUpdate(BaseModel):
@@ -123,6 +124,7 @@ class CardUpdate(BaseModel):
     assignee_ids: Optional[List[int]] = None
     checklist: Optional[List[ChecklistItem]] = None
     completed_at: Optional[datetime] = None
+    color: Optional[str] = None  # Card background color (hex)
 
 
 class CardMove(BaseModel):
@@ -166,6 +168,7 @@ class CardResponse(BaseModel):
     checklist: Optional[List[ChecklistItem]] = None
     attachment_count: int = 0
     comment_count: int = 0
+    color: Optional[str] = None  # Card background color (hex)
     
     model_config = ConfigDict(from_attributes=True)
 

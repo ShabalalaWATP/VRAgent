@@ -326,7 +326,13 @@ def get_exploit_context(scenario: models.ExploitScenario) -> Dict[str, Any]:
 
 
 def generate_ai_summaries(db: Session, report: models.Report, findings: List[models.Finding]) -> Dict[str, Optional[str]]:
-    """Generate AI summaries for app and security analysis.
+    """Generate COMPREHENSIVE AI summaries for app and security analysis.
+    
+    Matches the quality and depth of the APK Analyzer reports with:
+    - Detailed HTML formatting with styled headers and badges
+    - 15+ sections covering all aspects of the application
+    - Attacker-focused security analysis with PoC ideas
+    - Attack chains, playbooks, and exploitation scenarios
     
     First checks if summaries are cached in report.data, otherwise generates new ones.
     """
@@ -348,50 +354,151 @@ def generate_ai_summaries(db: Session, report: models.Report, findings: List[mod
     try:
         from google import genai
         
-        # Get codebase info for context
+        # Get MORE codebase info for comprehensive context
         chunks = db.query(models.CodeChunk).filter(
             models.CodeChunk.project_id == report.project_id
-        ).limit(50).all()
+        ).limit(100).all()  # Increased from 50 to 100
         
         if not chunks:
             return {"app_summary": None, "security_summary": None}
         
-        # Build code context
+        # Build comprehensive code context with more samples
         code_samples = []
-        for chunk in chunks[:30]:
-            code_samples.append(f"File: {chunk.file_path}\n```\n{chunk.code[:500]}...\n```")
+        for chunk in chunks[:50]:  # Increased from 30 to 50
+            code_samples.append(f"File: {chunk.file_path}\n```\n{chunk.code[:800]}...\n```")  # Increased from 500 to 800
         
         project = db.get(models.Project, report.project_id)
         
-        app_prompt = f"""You are a senior software architect analyzing a codebase. Provide a comprehensive overview of what this application does.
+        # Gather additional context for richer analysis
+        language_breakdown = {}
+        file_types = set()
+        for chunk in chunks:
+            lang = chunk.language or "Unknown"
+            language_breakdown[lang] = language_breakdown.get(lang, 0) + 1
+            if chunk.file_path:
+                ext = chunk.file_path.split('.')[-1] if '.' in chunk.file_path else 'unknown'
+                file_types.add(ext)
+        
+        # ==================== COMPREHENSIVE APP SUMMARY PROMPT ====================
+        app_prompt = f"""You are an expert software architect and code analyst. Your task is to provide a COMPREHENSIVE analysis of what this application does based on DEEP code inspection.
 
-Project: {project.name if project else 'Unknown'}
+## PROJECT INFORMATION
+Project Name: {project.name if project else 'Unknown'}
+Total Code Chunks Analyzed: {len(chunks)}
+Languages Detected: {', '.join(f'{k}: {v} files' for k, v in sorted(language_breakdown.items(), key=lambda x: -x[1]))}
+File Types: {', '.join(sorted(file_types))}
 
-CODE SAMPLES:
-{chr(10).join(code_samples[:15])}
+## COMPLETE CODE SAMPLES
+{chr(10).join(code_samples[:40])}
 
-Write a detailed analysis (300-400 words) covering:
+## YOUR TASK
+Perform a THOROUGH analysis of the codebase by:
+1. Reading ALL provided source code carefully
+2. Tracing data flows and feature implementations
+3. Identifying ALL major features and capabilities
+4. Understanding how different components work together
+5. Noting any hidden or non-obvious functionality
 
-**Purpose & Functionality:**
-- What is the main purpose of this application?
-- What core features and capabilities does it provide?
-- Who are the target users?
+Generate a DETAILED, COMPREHENSIVE report. Use HTML formatting.
 
-**Technology Stack:**
-- What programming languages are used?
-- What frameworks and libraries are employed?
-- What databases, caching, or messaging systems are involved?
+FORMAT YOUR RESPONSE AS CLEAN HTML (no markdown, no code blocks):
+- Use <h3> for section headers
+- Use <h4> for sub-sections
+- Use <ul> and <li> for bullet points
+- Use <strong> for emphasis
+- Use <p> for paragraphs
+- Use <code> for class/method names
 
-**Architecture:**
-- What architectural patterns are evident (MVC, microservices, serverless, etc.)?
-- How is the code organized (modules, services, layers)?
-- Any notable design patterns used?
+REQUIRED SECTIONS (BE THOROUGH):
 
-**Key Components:**
-- List the main modules or services
-- Describe how they interact
+<h3>📱 Application Overview</h3>
+<p>[2-3 sentences describing what this application is, its purpose, and target audience - base this on actual code analysis]</p>
 
-Use markdown formatting with headers and bullet points. Be specific and technical."""
+<h3>🎯 Core Features & Functionality</h3>
+<p>Based on deep code analysis, this application provides the following features:</p>
+
+<h4>Main Features</h4>
+<ul>
+<li><strong>[Feature Name]:</strong> [Detailed description of what it does, HOW it works based on the code you see, which classes/modules implement it]</li>
+[List ALL major features you can identify from the code]
+</ul>
+
+<h4>User Interface & Navigation</h4>
+<ul>
+<li>[Describe the app's UI patterns, components, pages/views, and navigation flow based on code analysis]</li>
+</ul>
+
+<h3>🔐 Authentication & User Management</h3>
+<ul>
+<li><strong>Authentication:</strong> [How authentication works - JWT? OAuth? Session-based? API keys?]</li>
+<li><strong>Authorization:</strong> [Role-based? Permission system? Access control patterns?]</li>
+<li><strong>Session Management:</strong> [How sessions/tokens are handled]</li>
+<li><strong>User Data:</strong> [What user data is collected/stored]</li>
+</ul>
+
+<h3>📡 API & Network Communication</h3>
+<h4>API Endpoints</h4>
+<ul>
+<li><strong>Endpoint Patterns:</strong> [REST? GraphQL? WebSocket?]</li>
+<li><strong>Key Routes:</strong> [List important API endpoints found in code]</li>
+<li><strong>Data Formats:</strong> [JSON? XML? How is data serialized?]</li>
+</ul>
+
+<h4>External Services</h4>
+<ul>
+<li>[Third-party APIs, cloud services, external dependencies]</li>
+</ul>
+
+<h3>💾 Data Storage & Persistence</h3>
+<ul>
+<li><strong>Database:</strong> [SQL? NoSQL? What ORM/driver? Schema patterns?]</li>
+<li><strong>Caching:</strong> [Redis? Memcached? In-memory?]</li>
+<li><strong>File Storage:</strong> [Local files? Cloud storage? How files are handled?]</li>
+<li><strong>Data Models:</strong> [Key entities and relationships]</li>
+</ul>
+
+<h3>⚙️ Technology Stack</h3>
+<ul>
+<li><strong>Languages:</strong> [Programming languages with specific versions if apparent]</li>
+<li><strong>Frameworks:</strong> [Web frameworks, libraries used]</li>
+<li><strong>Build Tools:</strong> [Package managers, build systems]</li>
+<li><strong>Runtime:</strong> [Node.js? Python? Docker?]</li>
+</ul>
+
+<h3>🏗️ Architecture & Design Patterns</h3>
+<ul>
+<li><strong>Architecture Style:</strong> [Monolith? Microservices? MVC? Clean Architecture?]</li>
+<li><strong>Design Patterns:</strong> [Repository? Factory? Observer? etc.]</li>
+<li><strong>Code Organization:</strong> [How is the codebase structured?]</li>
+<li><strong>Module Boundaries:</strong> [How do components interact?]</li>
+</ul>
+
+<h3>🔌 Background Processing & Jobs</h3>
+<ul>
+<li>[Scheduled tasks? Message queues? Worker processes? Cron jobs?]</li>
+</ul>
+
+<h3>🔗 Integrations & External Dependencies</h3>
+<ul>
+<li>[Email services? Payment processors? Analytics? Logging?]</li>
+</ul>
+
+<h3>🔍 Notable Implementation Details</h3>
+<ul>
+<li>[Interesting technical patterns you noticed in the code]</li>
+<li>[Unique approaches or clever solutions]</li>
+<li>[Technical debt or areas that could be improved]</li>
+</ul>
+
+<h3>📊 Application Complexity Assessment</h3>
+<p>[Simple utility / Medium complexity / Complex enterprise application - justify based on code analysis]</p>
+<ul>
+<li><strong>Lines of Code Estimate:</strong> [Based on chunks analyzed]</li>
+<li><strong>Component Count:</strong> [Approximate number of major modules]</li>
+<li><strong>Technical Sophistication:</strong> [Basic / Intermediate / Advanced]</li>
+</ul>
+
+BE THOROUGH AND SPECIFIC. Reference actual classes, functions, and files you see in the code. Don't make assumptions - only report what you can verify from the code."""
 
         from google import genai
         client = genai.Client(api_key=settings.gemini_api_key)
@@ -403,51 +510,252 @@ Use markdown formatting with headers and bullet points. Be specific and technica
         )
         if response and response.text:
             app_summary = response.text
+            # Clean up any markdown wrappers
+            app_summary = app_summary.strip()
+            if app_summary.startswith("```html"):
+                app_summary = app_summary[7:]
+            if app_summary.startswith("```"):
+                app_summary = app_summary[3:]
+            if app_summary.endswith("```"):
+                app_summary = app_summary[:-3]
+            app_summary = app_summary.strip()
         
-        # Generate security summary if there are findings
+        # Generate COMPREHENSIVE security summary if there are findings
         if findings:
             severity_counts = defaultdict(int)
             for f in findings:
                 severity_counts[f.severity.lower() if f.severity else "info"] += 1
             
-            findings_details = []
-            for f in findings[:20]:
-                findings_details.append(f"- [{f.severity.upper()}] {f.type}: {f.summary[:100]}")
+            # Build detailed findings context for comprehensive analysis
+            findings_by_type = {}
+            for f in findings:
+                ftype = f.type or "Unknown"
+                if ftype not in findings_by_type:
+                    findings_by_type[ftype] = []
+                findings_by_type[ftype].append({
+                    "severity": f.severity,
+                    "summary": f.summary[:200] if f.summary else "",
+                    "description": f.description[:300] if f.description else "",
+                    "file_path": f.file_path,
+                    "line_number": f.line_number,
+                    "code": f.vulnerable_code[:200] if f.vulnerable_code else ""
+                })
             
-            security_prompt = f"""You are a senior red team security consultant writing a defensive security assessment. Your goal is to help the blue team understand vulnerabilities from an attacker's perspective so they can better defend their systems.
+            findings_context = "\n".join(
+                f"[{ft}] ({len(items)} findings): " + 
+                "; ".join(f"{i['severity']}: {i['summary'][:80]}" for i in items[:5])
+                for ft, items in sorted(findings_by_type.items(), key=lambda x: -len(x[1]))[:15]
+            )
+            
+            detailed_findings = []
+            for f in findings[:30]:
+                detailed_findings.append(f"""
+- [{f.severity.upper() if f.severity else 'INFO'}] {f.type}: {f.summary[:150] if f.summary else 'N/A'}
+  File: {f.file_path or 'Unknown'}:{f.line_number or '?'}
+  Code: {f.vulnerable_code[:100] if f.vulnerable_code else 'N/A'}
+""")
 
-FINDINGS SUMMARY:
+            # ==================== COMPREHENSIVE SECURITY PROMPT ====================
+            security_prompt = f"""You are an elite RED TEAM OPERATOR performing offensive security assessment of this codebase. Your goal is to find EXPLOITABLE vulnerabilities and demonstrate HOW to attack this application.
+
+Think like an ATTACKER, not a compliance auditor. Focus on:
+- What can I ACTUALLY exploit?
+- How do I chain vulnerabilities together?
+- What's the realistic attack path to compromise the system?
+- What would I do FIRST if I wanted to hack this app?
+
+## CODEBASE CONTEXT
+Project: {project.name if project else 'Unknown'}
+Languages: {', '.join(language_breakdown.keys())}
+Total Files Analyzed: {len(chunks)}
+
+## SECURITY FINDINGS IDENTIFIED
+
+### Severity Distribution
 - Critical: {severity_counts['critical']}
 - High: {severity_counts['high']}
 - Medium: {severity_counts['medium']}
 - Low: {severity_counts['low']}
+- Info: {severity_counts['info']}
 Total: {len(findings)} security weaknesses identified
 
-TOP FINDINGS:
-{chr(10).join(findings_details)}
+### Findings by Category
+{findings_context}
 
-Write a detailed security analysis (300-400 words) from a red team perspective to help defenders understand and prioritize threats:
+### Detailed Top Findings
+{chr(10).join(detailed_findings)}
 
-**Attack Surface Assessment:**
-- Rate the overall attack surface exposure (Critical/High/Moderate/Low)
-- Summarize the most significant security gaps
+## RELEVANT CODE SAMPLES
+{chr(10).join(code_samples[:20])}
 
-**Primary Attack Vectors:**
-- What vulnerabilities would an attacker target first?
-- How might these be chained for maximum impact?
-- What high-value assets (data/systems) are at risk?
+## YOUR MISSION
+Perform an OFFENSIVE security assessment:
+1. Identify the ATTACK SURFACE - where can an attacker get in?
+2. Find EXPLOITABLE vulnerabilities with working attack scenarios
+3. Build ATTACK CHAINS - how do multiple weaknesses combine?
+4. Prioritize by REAL-WORLD EXPLOITABILITY, not theoretical risk
+5. Provide PROOF-OF-CONCEPT ideas for each finding
+6. Consider both REMOTE attacks (network) and LOCAL attacks (insider, supply chain)
 
-**Threat Prioritization:**
-1. **Critical Priority** - Vulnerabilities enabling immediate compromise
-2. **High Priority** - Significant weaknesses requiring urgent attention
-3. **Standard Priority** - Important issues for the remediation backlog
+Generate an ATTACKER-FOCUSED security report. Use HTML formatting.
 
-**Defensive Recommendations:**
-- What should the security team focus on first?
-- Quick wins that significantly reduce attack surface
-- Detection opportunities for monitoring
+FORMAT YOUR RESPONSE AS CLEAN HTML (no markdown, no code blocks):
+- Use <h3> for section headers
+- Use <h4> for sub-sections
+- Use <ul> and <li> for bullet points
+- Use <strong> for emphasis
+- Use <code> for code/commands
+- Severity badges: <span style="color: #dc2626; font-weight: bold;">CRITICAL</span>, <span style="color: #ea580c; font-weight: bold;">HIGH</span>, <span style="color: #ca8a04; font-weight: bold;">MEDIUM</span>, <span style="color: #16a34a; font-weight: bold;">LOW</span>
 
-Use markdown formatting. Write from an attacker's perspective to help defenders think like adversaries."""
+REQUIRED SECTIONS:
+
+<h3>⚔️ Attack Summary</h3>
+<p><strong>Hackability Score:</strong> [X/10] - How easy is this application to compromise?</p>
+<p><strong>Most Dangerous Finding:</strong> [One-liner of the worst issue]</p>
+<p><strong>Recommended Attack Path:</strong> [The attack chain I would use]</p>
+<p><strong>Attacker Value:</strong> [What's worth stealing? User data? Credentials? Money? Business logic?]</p>
+
+<h3>🎯 Attack Surface Analysis</h3>
+<h4>Entry Points (How I Get In)</h4>
+<ul>
+<li><strong>API Endpoints:</strong> [Which endpoints are vulnerable? Authentication bypasses?]</li>
+<li><strong>User Input:</strong> [Form fields, file uploads, query parameters at risk]</li>
+<li><strong>Authentication:</strong> [Login weaknesses, session handling issues]</li>
+<li><strong>File Operations:</strong> [Path traversal, file upload, file inclusion risks]</li>
+<li><strong>Database Queries:</strong> [SQL injection, NoSQL injection points]</li>
+<li><strong>External Dependencies:</strong> [Vulnerable libraries, supply chain risks]</li>
+</ul>
+
+<h4>Sensitive Assets (What I Want)</h4>
+<ul>
+<li>[User credentials, tokens, personal data, financial info, business data]</li>
+<li>[Where is each asset stored? How is it protected?]</li>
+</ul>
+
+<h3>💀 Critical Exploits</h3>
+<p>Vulnerabilities I can exploit RIGHT NOW:</p>
+
+<h4>Exploit 1: [Catchy Attack Name]</h4>
+<ul>
+<li><span style="color: #dc2626; font-weight: bold;">CRITICAL</span> or appropriate severity</li>
+<li><strong>What:</strong> [Technical description]</li>
+<li><strong>Where:</strong> <code>[File:Line or Component]</code></li>
+<li><strong>Vulnerable Code:</strong> <pre><code>[The actual vulnerable code snippet]</code></pre></li>
+<li><strong>Attack Scenario:</strong> [Step-by-step how I would exploit this]</li>
+<li><strong>PoC Idea:</strong> <code>[curl command / payload / script snippet]</code></li>
+<li><strong>Impact:</strong> [What I gain - RCE? Data theft? Account takeover? Privilege escalation?]</li>
+<li><strong>Difficulty:</strong> [Easy/Medium/Hard] - [Why]</li>
+</ul>
+
+[Repeat for top 3-5 most critical exploits]
+
+<h3>🔗 Attack Chains</h3>
+<p>How I combine multiple weaknesses for maximum impact:</p>
+
+<h4>Chain 1: [Attack Chain Name]</h4>
+<ol>
+<li><strong>Step 1:</strong> [First exploit/technique - initial access]</li>
+<li><strong>Step 2:</strong> [Second exploit/technique - escalation]</li>
+<li><strong>Step 3:</strong> [Third technique - lateral movement or data access]</li>
+<li><strong>Result:</strong> [What attacker achieves - full compromise, data exfil, etc.]</li>
+</ol>
+
+<h3>🔓 Authentication & Session Attacks</h3>
+<ul>
+<li><strong>Token Weakness:</strong> [Can I forge/steal/reuse tokens?]</li>
+<li><strong>Session Hijacking:</strong> [How would I steal a session?]</li>
+<li><strong>Credential Extraction:</strong> [Where are creds stored? Can I get them?]</li>
+<li><strong>Privilege Escalation:</strong> [Can regular user become admin?]</li>
+<li><strong>Password Reset:</strong> [Flaws in password reset flow?]</li>
+</ul>
+
+<h3>💉 Injection Attack Vectors</h3>
+<ul>
+<li><strong>SQL Injection:</strong> [Where? PoC query?]</li>
+<li><strong>Command Injection:</strong> [Any exec/system calls?]</li>
+<li><strong>XSS (Cross-Site Scripting):</strong> [User input reflected unsanitized?]</li>
+<li><strong>Template Injection:</strong> [SSTI opportunities?]</li>
+<li><strong>Path Traversal:</strong> [File operations I can abuse?]</li>
+<li><strong>LDAP/XML/Header Injection:</strong> [Other injection points?]</li>
+</ul>
+
+<h3>🔑 Secrets & Sensitive Data Exposure</h3>
+<ul>
+<li><strong>[Secret Type]:</strong> <code>[Location]</code>
+  <ul>
+  <li>Risk: [What access does this give me?]</li>
+  <li>Exploitation: [How I'd extract and use this]</li>
+  </ul>
+</li>
+</ul>
+
+<h3>📦 Vulnerable Dependencies</h3>
+<ul>
+<li><strong>[Library Name] v[X.X]:</strong> [Known CVEs or issues]
+  <ul>
+  <li>Exploitability: [Can I actually exploit this in context?]</li>
+  <li>Attack: [How would I leverage this vulnerability?]</li>
+  </ul>
+</li>
+</ul>
+
+<h3>🌐 Network & API Attack Vectors</h3>
+<ul>
+<li><strong>MITM Possibility:</strong> [Insecure communications?]</li>
+<li><strong>API Abuse:</strong> [Rate limiting? IDOR? Broken access control?]</li>
+<li><strong>SSRF:</strong> [Can I make the server fetch internal resources?]</li>
+<li><strong>Request Smuggling:</strong> [HTTP parsing issues?]</li>
+</ul>
+
+<h3>⚙️ Business Logic Flaws</h3>
+<ul>
+<li>[Logic bypasses, workflow manipulation, race conditions]</li>
+<li>[Price manipulation, discount abuse, feature abuse]</li>
+</ul>
+
+<h3>📋 Attack Playbook</h3>
+<p>If I had 1 hour to hack this application, I would:</p>
+<ol>
+<li><strong>[First 15 min]:</strong> [Initial reconnaissance and access technique]</li>
+<li><strong>[Next 15 min]:</strong> [Privilege escalation / deeper access]</li>
+<li><strong>[Next 15 min]:</strong> [Data exfiltration / persistence]</li>
+<li><strong>[Final 15 min]:</strong> [Cover tracks / maximize impact]</li>
+</ol>
+
+<h3>🛡️ Security Controls I'd Need to Bypass</h3>
+<ul>
+<li><strong>Authentication:</strong> [Strength assessment, bypass techniques]</li>
+<li><strong>Authorization:</strong> [Access control gaps]</li>
+<li><strong>Input Validation:</strong> [What's not being validated?]</li>
+<li><strong>Rate Limiting:</strong> [Present? Bypassable?]</li>
+<li><strong>Logging/Monitoring:</strong> [Would my attacks be detected?]</li>
+</ul>
+
+<h3>🎯 Bug Bounty Priority List</h3>
+<p>If this app had a bug bounty, I'd focus on:</p>
+<ol>
+<li>[Highest-impact vulnerability class] - [Why it's exploitable here]</li>
+<li>[Second target] - [Specific weakness and approach]</li>
+<li>[Third target] - [Attack vector and expected payout]</li>
+</ol>
+
+<h3>⚠️ Quick Wins for Defenders</h3>
+<p>Immediate fixes that would significantly reduce risk:</p>
+<ol>
+<li>[Critical fix #1 with specific code location]</li>
+<li>[Critical fix #2 with implementation guidance]</li>
+<li>[Critical fix #3 with detection/prevention tips]</li>
+</ol>
+
+## CRITICAL: REAL EXPLOITS ONLY
+- Only report vulnerabilities you could ACTUALLY EXPLOIT based on the findings
+- Provide SPECIFIC attack scenarios, not theoretical risks
+- Include PROOF-OF-CONCEPT ideas (payloads, curl commands, scripts)
+- Rate by EXPLOITABILITY (Easy/Medium/Hard), not just severity
+- Skip compliance issues that aren't really attackable
+- Focus on REAL, EXPLOITABLE issues that would affect users
+
+BE EXHAUSTIVE but ACCURATE. Analyze all provided findings. Reference specific code locations and files."""
 
             response = client.models.generate_content(
                 model=settings.gemini_model_id,
@@ -455,6 +763,15 @@ Use markdown formatting. Write from an attacker's perspective to help defenders 
             )
             if response and response.text:
                 security_summary = response.text
+                # Clean up any markdown wrappers
+                security_summary = security_summary.strip()
+                if security_summary.startswith("```html"):
+                    security_summary = security_summary[7:]
+                if security_summary.startswith("```"):
+                    security_summary = security_summary[3:]
+                if security_summary.endswith("```"):
+                    security_summary = security_summary[:-3]
+                security_summary = security_summary.strip()
         
         # Cache the generated summaries in report.data
         if app_summary or security_summary:

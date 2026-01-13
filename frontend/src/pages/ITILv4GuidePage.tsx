@@ -665,6 +665,306 @@ const quizQuestions: QuizQuestion[] = [
   },
 ];
 
+// ========== ADDITIONAL CONTENT DATA ==========
+
+// Key metrics and KPIs for ITIL practices
+const itilMetrics = [
+  {
+    practice: "Incident Management",
+    metrics: [
+      { name: "MTTR (Mean Time to Resolve)", target: "< 4 hours for P1", description: "Average time from incident detection to resolution" },
+      { name: "First Contact Resolution", target: "> 70%", description: "Percentage resolved on first contact with service desk" },
+      { name: "Incident Volume", target: "Trending down", description: "Total number of incidents over time" },
+      { name: "SLA Compliance", target: "> 95%", description: "Percentage meeting response/resolution targets" },
+    ],
+  },
+  {
+    practice: "Problem Management",
+    metrics: [
+      { name: "Known Errors Documented", target: "100%", description: "Problems with documented workarounds" },
+      { name: "Recurring Incidents", target: "< 10%", description: "Incidents caused by known problems" },
+      { name: "Root Cause Identified", target: "> 80%", description: "Problems with root cause determined" },
+      { name: "Time to Known Error", target: "< 5 days", description: "Time from problem to documented workaround" },
+    ],
+  },
+  {
+    practice: "Change Enablement",
+    metrics: [
+      { name: "Change Success Rate", target: "> 95%", description: "Changes implemented without causing incidents" },
+      { name: "Emergency Change %", target: "< 5%", description: "Percentage of changes that are emergency" },
+      { name: "Change Lead Time", target: "< 5 days", description: "Time from request to implementation" },
+      { name: "Failed Changes", target: "< 2%", description: "Changes that had to be backed out" },
+    ],
+  },
+  {
+    practice: "Service Level Management",
+    metrics: [
+      { name: "SLA Achievement", target: "> 98%", description: "Services meeting agreed service levels" },
+      { name: "Customer Satisfaction", target: "> 4.0/5", description: "Survey scores from service consumers" },
+      { name: "SLA Reviews", target: "Quarterly", description: "Regular review meetings completed" },
+      { name: "Service Availability", target: "> 99.9%", description: "Uptime for critical services" },
+    ],
+  },
+];
+
+// DevOps and Agile integration
+const devOpsIntegration = [
+  {
+    itilPractice: "Change Enablement",
+    devOpsEquivalent: "CI/CD Pipeline",
+    integration: "Automate standard changes through pipelines; use change records for audit trail",
+    benefits: "Faster deployment, automated testing, reduced manual approval bottlenecks",
+  },
+  {
+    itilPractice: "Incident Management",
+    devOpsEquivalent: "Observability & Alerting",
+    integration: "Integrate monitoring tools (Prometheus, Datadog) with incident management",
+    benefits: "Faster detection, automated ticket creation, reduced MTTR",
+  },
+  {
+    itilPractice: "Problem Management",
+    devOpsEquivalent: "Blameless Post-mortems",
+    integration: "Combine RCA with blameless retrospectives; feed learnings into backlog",
+    benefits: "Continuous learning, reduced recurring issues, improved reliability",
+  },
+  {
+    itilPractice: "Service Configuration",
+    devOpsEquivalent: "Infrastructure as Code",
+    integration: "Use IaC (Terraform, Ansible) as authoritative CMDB source",
+    benefits: "Always-current configuration data, version-controlled infrastructure",
+  },
+  {
+    itilPractice: "Release Management",
+    devOpsEquivalent: "GitOps / Feature Flags",
+    integration: "Use GitOps for declarative releases; feature flags for progressive rollouts",
+    benefits: "Controlled deployments, easy rollback, A/B testing capability",
+  },
+  {
+    itilPractice: "Continual Improvement",
+    devOpsEquivalent: "SRE Error Budgets",
+    integration: "Use error budgets to balance reliability with feature velocity",
+    benefits: "Data-driven decisions, clear reliability targets, innovation enablement",
+  },
+];
+
+// Common challenges and solutions
+const commonChallenges = [
+  {
+    challenge: "Process Overhead / Red Tape",
+    symptoms: "Slow changes, frustrated developers, shadow IT",
+    solution: "Streamline approvals, automate standard changes, adopt risk-based change categorization",
+    principle: "Keep it simple and practical",
+  },
+  {
+    challenge: "Siloed Teams",
+    symptoms: "Blame culture, poor handoffs, duplicated work",
+    solution: "Cross-functional teams, shared objectives, collaborative tooling",
+    principle: "Collaborate and promote visibility",
+  },
+  {
+    challenge: "Tool Sprawl",
+    symptoms: "Data in multiple systems, manual data entry, inconsistent reporting",
+    solution: "Integrate tools via APIs, establish single source of truth, automate data sync",
+    principle: "Think and work holistically",
+  },
+  {
+    challenge: "Reactive Culture",
+    symptoms: "Fighting fires, no time for improvement, high incident volume",
+    solution: "Invest in problem management, automate toil, dedicate time for proactive work",
+    principle: "Focus on value",
+  },
+  {
+    challenge: "Unclear Value",
+    symptoms: "IT seen as cost center, budget cuts, low business engagement",
+    solution: "Define and communicate value, align IT services with business outcomes",
+    principle: "Focus on value",
+  },
+  {
+    challenge: "Big Bang Implementation",
+    symptoms: "Failed transformation, change fatigue, abandoned processes",
+    solution: "Start small, iterate based on feedback, celebrate quick wins",
+    principle: "Progress iteratively with feedback",
+  },
+];
+
+// Real-world case studies
+const caseStudies = [
+  {
+    company: "Global Financial Services Firm",
+    challenge: "50,000+ incidents per month, 4+ hour average resolution time",
+    approach: "Implemented AI-assisted incident categorization, automated known error matching, self-service portal",
+    results: "60% reduction in tickets, MTTR down to 45 minutes, $2M annual savings",
+    practices: ["Incident Management", "Knowledge Management", "Service Desk"],
+  },
+  {
+    company: "Healthcare Technology Provider",
+    challenge: "Compliance requirements slowing down releases, 6-week change lead time",
+    approach: "Risk-based change categorization, automated testing, pre-approved standard changes",
+    results: "Lead time reduced to 3 days, 200% increase in deployment frequency, maintained compliance",
+    practices: ["Change Enablement", "Release Management", "Service Validation"],
+  },
+  {
+    company: "Retail E-commerce Platform",
+    challenge: "Recurring outages during peak sales, unknown infrastructure dependencies",
+    approach: "Built service dependency maps, proactive problem management, chaos engineering",
+    results: "99.99% availability during Black Friday, 70% reduction in major incidents",
+    practices: ["Problem Management", "Service Configuration", "Availability Management"],
+  },
+  {
+    company: "Government Agency",
+    challenge: "No visibility into service performance, dissatisfied citizens",
+    approach: "Defined citizen-centric SLAs, implemented real-time dashboards, regular service reviews",
+    results: "Satisfaction scores up 40%, response times cut in half, transparent reporting",
+    practices: ["Service Level Management", "Measurement and Reporting", "Continual Improvement"],
+  },
+];
+
+// Detailed practice deep-dives
+const practiceDeepDives = [
+  {
+    practice: "Incident Management",
+    purpose: "Minimize negative impact of incidents by restoring normal service operation as quickly as possible",
+    keyActivities: [
+      "Incident detection and logging",
+      "Categorization and prioritization",
+      "Initial diagnosis and escalation",
+      "Investigation and diagnosis",
+      "Resolution and recovery",
+      "Incident closure and documentation",
+    ],
+    roles: ["Incident Manager", "Service Desk Agent", "Technical Support", "Major Incident Manager"],
+    tools: ["ServiceNow", "Jira Service Management", "PagerDuty", "Zendesk"],
+    tips: [
+      "Establish clear priority matrix based on impact and urgency",
+      "Automate routine triage with AI/ML categorization",
+      "Have dedicated major incident process with communication plan",
+      "Conduct post-incident reviews for all P1/P2 incidents",
+    ],
+  },
+  {
+    practice: "Change Enablement",
+    purpose: "Maximize the number of successful IT changes by ensuring proper risk assessment and authorization",
+    keyActivities: [
+      "Change request submission and recording",
+      "Change assessment and evaluation",
+      "Change authorization (CAB or delegated)",
+      "Change scheduling and coordination",
+      "Change implementation and testing",
+      "Post-implementation review",
+    ],
+    roles: ["Change Manager", "Change Advisory Board (CAB)", "Change Implementer", "Change Authority"],
+    tools: ["ServiceNow Change Management", "Jira", "Azure DevOps", "GitHub Actions"],
+    tips: [
+      "Implement standard changes for low-risk, repetitive changes",
+      "Use automation to enforce change policies in CI/CD",
+      "Measure change failure rate and continuously improve",
+      "Separate change approval from deployment execution",
+    ],
+  },
+  {
+    practice: "Problem Management",
+    purpose: "Reduce the likelihood and impact of incidents by identifying root causes and managing workarounds and known errors",
+    keyActivities: [
+      "Problem identification (reactive and proactive)",
+      "Problem logging and categorization",
+      "Problem investigation and analysis",
+      "Workaround identification and documentation",
+      "Known error record creation",
+      "Problem resolution and closure",
+    ],
+    roles: ["Problem Manager", "Problem Analyst", "Subject Matter Experts", "Service Owner"],
+    tools: ["Root Cause Analysis tools", "Kepner-Tregoe", "Five Whys", "Ishikawa diagrams"],
+    tips: [
+      "Don't wait for incidents - proactively analyze trends",
+      "Ensure workarounds are actionable and documented",
+      "Link known errors to incidents for faster resolution",
+      "Review problem management effectiveness regularly",
+    ],
+  },
+];
+
+// ITIL vs ITIL v3 comparison
+const itilComparison = [
+  {
+    aspect: "Core Framework",
+    itilV3: "Service Lifecycle (5 stages: Strategy, Design, Transition, Operation, Improvement)",
+    itil4: "Service Value System (flexible, non-linear approach)",
+    impact: "More adaptable to Agile and DevOps ways of working",
+  },
+  {
+    aspect: "Processes vs Practices",
+    itilV3: "26 Processes with detailed procedures",
+    itil4: "34 Practices (more flexible, outcome-focused)",
+    impact: "Easier to adopt gradually and customize",
+  },
+  {
+    aspect: "Guiding Principles",
+    itilV3: "9 Guiding Principles (introduced later)",
+    itil4: "7 Guiding Principles (core to framework)",
+    impact: "Principles-first approach enables better decisions",
+  },
+  {
+    aspect: "Value Focus",
+    itilV3: "Internal IT efficiency focus",
+    itil4: "Value co-creation with customers",
+    impact: "Better alignment with business outcomes",
+  },
+  {
+    aspect: "Integration",
+    itilV3: "Standalone ITSM framework",
+    itil4: "Designed for integration with Agile, DevOps, Lean",
+    impact: "Fits modern software delivery practices",
+  },
+];
+
+// Implementation roadmap
+const implementationRoadmap = [
+  {
+    phase: "1. Assess & Align",
+    duration: "4-6 weeks",
+    activities: [
+      "Current state assessment of ITSM capabilities",
+      "Identify business priorities and pain points",
+      "Map existing processes to ITIL practices",
+      "Define vision and success metrics",
+    ],
+    deliverables: ["Maturity assessment report", "Improvement roadmap", "Business case"],
+  },
+  {
+    phase: "2. Foundation",
+    duration: "8-12 weeks",
+    activities: [
+      "Establish governance structure",
+      "Implement core practices (Incident, Change, Service Desk)",
+      "Deploy ITSM tooling or improve existing",
+      "Train key staff on ITIL fundamentals",
+    ],
+    deliverables: ["Governance charter", "Core process documentation", "Trained staff"],
+  },
+  {
+    phase: "3. Expand & Optimize",
+    duration: "12-24 weeks",
+    activities: [
+      "Implement additional practices based on priority",
+      "Integrate with DevOps toolchain",
+      "Establish measurement and reporting",
+      "Begin continual improvement program",
+    ],
+    deliverables: ["Extended practice adoption", "Integrated tooling", "KPI dashboards"],
+  },
+  {
+    phase: "4. Mature & Transform",
+    duration: "Ongoing",
+    activities: [
+      "Advanced automation and AI adoption",
+      "Proactive and predictive capabilities",
+      "Service-centric organization design",
+      "Continuous value optimization",
+    ],
+    deliverables: ["High maturity practices", "Proactive service management", "Sustained improvement"],
+  },
+];
+
 // ========== SIDEBAR SECTIONS ==========
 const sections = [
   { id: "introduction", label: "Introduction" },
@@ -678,6 +978,13 @@ const sections = [
   { id: "general-practices", label: "General Practices" },
   { id: "service-practices", label: "Service Practices" },
   { id: "technical-practices", label: "Technical Practices" },
+  { id: "practice-deep-dives", label: "Practice Deep Dives" },
+  { id: "metrics-kpis", label: "Metrics & KPIs" },
+  { id: "devops-integration", label: "DevOps Integration" },
+  { id: "challenges-solutions", label: "Challenges & Solutions" },
+  { id: "case-studies", label: "Case Studies" },
+  { id: "itil-comparison", label: "ITIL v3 vs v4" },
+  { id: "implementation", label: "Implementation Roadmap" },
   { id: "continual-improvement", label: "Continual Improvement" },
   { id: "certifications", label: "Certifications" },
   { id: "quiz", label: "Knowledge Check" },
@@ -1381,6 +1688,309 @@ export default function ITILv4GuidePage() {
                       <Typography variant="body2" color="text.secondary">
                         {p.purpose}
                       </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          {/* Practice Deep Dives */}
+          <Paper id="practice-deep-dives" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <BuildIcon sx={{ color: ACCENT_COLOR }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Practice Deep Dives
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Detailed look at key ITIL practices with activities, roles, tools, and implementation tips.
+            </Typography>
+            {practiceDeepDives.map((practice) => (
+              <Accordion key={practice.practice} sx={{ mb: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography sx={{ fontWeight: 700, color: ACCENT_COLOR }}>{practice.practice}</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box sx={{ bgcolor: alpha(ACCENT_COLOR, 0.03), p: 2, borderRadius: 2, mb: 2 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Purpose:</Typography>
+                    <Typography variant="body2" color="text.secondary">{practice.purpose}</Typography>
+                  </Box>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Key Activities</Typography>
+                      <List dense>
+                        {practice.keyActivities.map((activity, i) => (
+                          <ListItem key={i} sx={{ py: 0 }}>
+                            <ListItemIcon sx={{ minWidth: 24 }}>
+                              <CheckCircleIcon sx={{ fontSize: 14, color: ACCENT_COLOR }} />
+                            </ListItemIcon>
+                            <ListItemText primary={activity} primaryTypographyProps={{ variant: "body2" }} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Key Roles</Typography>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 2 }}>
+                        {practice.roles.map((role) => (
+                          <Chip key={role} label={role} size="small" sx={{ fontSize: "0.7rem" }} />
+                        ))}
+                      </Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Common Tools</Typography>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {practice.tools.map((tool) => (
+                          <Chip key={tool} label={tool} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                        ))}
+                      </Box>
+                    </Grid>
+                  </Grid>
+                  <Box sx={{ mt: 2, p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>Implementation Tips</Typography>
+                    <List dense>
+                      {practice.tips.map((tip, i) => (
+                        <ListItem key={i} sx={{ py: 0 }}>
+                          <ListItemIcon sx={{ minWidth: 24 }}>
+                            <TipsAndUpdatesIcon sx={{ fontSize: 14, color: "#22c55e" }} />
+                          </ListItemIcon>
+                          <ListItemText primary={tip} primaryTypographyProps={{ variant: "body2" }} />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </Paper>
+
+          {/* Metrics & KPIs */}
+          <Paper id="metrics-kpis" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <TrendingUpIcon sx={{ color: "#3b82f6" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Metrics & KPIs
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Key performance indicators for measuring the effectiveness of ITIL practices. These targets should be
+              customized based on your organization's maturity and business requirements.
+            </Typography>
+            {itilMetrics.map((practice) => (
+              <Box key={practice.practice} sx={{ mb: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#3b82f6", mb: 2 }}>{practice.practice}</Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: alpha("#3b82f6", 0.05) }}>
+                        <TableCell sx={{ fontWeight: 700 }}>Metric</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Target</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {practice.metrics.map((metric) => (
+                        <TableRow key={metric.name}>
+                          <TableCell sx={{ fontWeight: 600 }}>{metric.name}</TableCell>
+                          <TableCell>
+                            <Chip label={metric.target} size="small" sx={{ bgcolor: alpha("#3b82f6", 0.1), color: "#3b82f6" }} />
+                          </TableCell>
+                          <TableCell>{metric.description}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            ))}
+          </Paper>
+
+          {/* DevOps Integration */}
+          <Paper id="devops-integration" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <LoopIcon sx={{ color: "#8b5cf6" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                ITIL + DevOps Integration
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              ITIL 4 is designed to work alongside DevOps and Agile practices. Here's how to integrate them effectively.
+            </Typography>
+            <Grid container spacing={2}>
+              {devOpsIntegration.map((item) => (
+                <Grid item xs={12} md={6} key={item.itilPractice}>
+                  <Card sx={{ height: "100%", borderTop: `4px solid #8b5cf6` }}>
+                    <CardContent>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{item.itilPractice}</Typography>
+                        <Chip label={item.devOpsEquivalent} size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6" }} />
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{item.integration}</Typography>
+                      <Box sx={{ p: 1.5, bgcolor: alpha("#22c55e", 0.05), borderRadius: 1 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: "#22c55e" }}>Benefits: </Typography>
+                        <Typography variant="caption" color="text.secondary">{item.benefits}</Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          {/* Challenges & Solutions */}
+          <Paper id="challenges-solutions" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <SecurityIcon sx={{ color: "#f59e0b" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Common Challenges & Solutions
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Practical solutions for the most common obstacles organizations face when implementing ITIL.
+            </Typography>
+            <Grid container spacing={2}>
+              {commonChallenges.map((item) => (
+                <Grid item xs={12} md={6} key={item.challenge}>
+                  <Card sx={{ height: "100%", bgcolor: alpha("#f59e0b", 0.02) }}>
+                    <CardContent>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>
+                        {item.challenge}
+                      </Typography>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>Symptoms: </Typography>
+                        <Typography variant="caption" color="text.secondary">{item.symptoms}</Typography>
+                      </Box>
+                      <Box sx={{ p: 1.5, bgcolor: alpha("#22c55e", 0.05), borderRadius: 1, mb: 2 }}>
+                        <Typography variant="body2">{item.solution}</Typography>
+                      </Box>
+                      <Chip label={`Principle: ${item.principle}`} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          {/* Case Studies */}
+          <Paper id="case-studies" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <GroupsIcon sx={{ color: "#22c55e" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Real-World Case Studies
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Learn from organizations that have successfully implemented ITIL practices to achieve measurable results.
+            </Typography>
+            <Grid container spacing={3}>
+              {caseStudies.map((study) => (
+                <Grid item xs={12} key={study.company}>
+                  <Card sx={{ borderLeft: `4px solid #22c55e` }}>
+                    <CardContent>
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>{study.company}</Typography>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} md={4}>
+                          <Box sx={{ p: 2, bgcolor: alpha("#dc2626", 0.05), borderRadius: 2, height: "100%" }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>Challenge</Typography>
+                            <Typography variant="body2">{study.challenge}</Typography>
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Box sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2, height: "100%" }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Approach</Typography>
+                            <Typography variant="body2">{study.approach}</Typography>
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Box sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, height: "100%" }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>Results</Typography>
+                            <Typography variant="body2">{study.results}</Typography>
+                          </Box>
+                        </Grid>
+                      </Grid>
+                      <Box sx={{ mt: 2, display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                        {study.practices.map((practice) => (
+                          <Chip key={practice} label={practice} size="small" sx={{ bgcolor: alpha(ACCENT_COLOR, 0.1), color: ACCENT_COLOR }} />
+                        ))}
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          {/* ITIL v3 vs v4 Comparison */}
+          <Paper id="itil-comparison" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <AccountTreeIcon sx={{ color: "#8b5cf6" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                ITIL v3 vs ITIL 4
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Understanding the key differences between ITIL v3 (2011) and ITIL 4 helps organizations plan their upgrade path.
+            </Typography>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Aspect</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>ITIL v3 / 2011</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>ITIL 4</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Impact</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {itilComparison.map((row) => (
+                    <TableRow key={row.aspect}>
+                      <TableCell sx={{ fontWeight: 600 }}>{row.aspect}</TableCell>
+                      <TableCell>{row.itilV3}</TableCell>
+                      <TableCell>{row.itil4}</TableCell>
+                      <TableCell sx={{ color: "#22c55e" }}>{row.impact}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          {/* Implementation Roadmap */}
+          <Paper id="implementation" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <AccountTreeIcon sx={{ color: ACCENT_COLOR }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Implementation Roadmap
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              A phased approach to implementing ITIL practices in your organization.
+            </Typography>
+            <Grid container spacing={3}>
+              {implementationRoadmap.map((phase, idx) => (
+                <Grid item xs={12} md={6} key={phase.phase}>
+                  <Card sx={{ height: "100%", borderTop: `4px solid ${["#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6"][idx]}` }}>
+                    <CardContent>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>{phase.phase}</Typography>
+                        <Chip label={phase.duration} size="small" variant="outlined" />
+                      </Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Activities</Typography>
+                      <List dense>
+                        {phase.activities.map((activity, i) => (
+                          <ListItem key={i} sx={{ py: 0 }}>
+                            <ListItemIcon sx={{ minWidth: 24 }}>
+                              <CheckCircleIcon sx={{ fontSize: 14, color: ACCENT_COLOR }} />
+                            </ListItemIcon>
+                            <ListItemText primary={activity} primaryTypographyProps={{ variant: "body2" }} />
+                          </ListItem>
+                        ))}
+                      </List>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>Deliverables</Typography>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {phase.deliverables.map((d) => (
+                          <Chip key={d} label={d} size="small" sx={{ fontSize: "0.7rem", bgcolor: alpha(ACCENT_COLOR, 0.1), color: ACCENT_COLOR }} />
+                        ))}
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>

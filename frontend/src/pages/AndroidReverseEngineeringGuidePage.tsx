@@ -1,11 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
-  Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Table,
@@ -23,11 +20,15 @@ import {
   Grid,
   Card,
   CardContent,
+  Drawer,
+  Fab,
   alpha,
   Divider,
   Alert,
   AlertTitle,
+  LinearProgress,
   useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -40,7 +41,6 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import StorageIcon from "@mui/icons-material/Storage";
 import CodeIcon from "@mui/icons-material/Code";
 import BuildIcon from "@mui/icons-material/Build";
-import MemoryIcon from "@mui/icons-material/Memory";
 import SchoolIcon from "@mui/icons-material/School";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import TerminalIcon from "@mui/icons-material/Terminal";
@@ -48,6 +48,9 @@ import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import QuizIcon from "@mui/icons-material/Quiz";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { useNavigate, Link } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
@@ -889,21 +892,6 @@ function QuizSection() {
   );
 }
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
-
 const CodeBlock: React.FC<{ code: string; language?: string; title?: string }> = ({
   code,
   language = "bash",
@@ -962,11 +950,59 @@ const CodeBlock: React.FC<{ code: string; language?: string; title?: string }> =
 
 const AndroidReverseEngineeringGuidePage: React.FC = () => {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const theme = useTheme();
+  const accent = "#22c55e";
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Overview", icon: <AndroidIcon /> },
+    { id: "fundamentals", label: "Fundamentals", icon: <SchoolIcon /> },
+    { id: "architecture", label: "Architecture", icon: <PhoneAndroidIcon /> },
+    { id: "tools-setup", label: "Tools & Setup", icon: <BuildIcon /> },
+    { id: "static-analysis", label: "Static Analysis", icon: <CodeIcon /> },
+    { id: "dynamic-analysis", label: "Dynamic Analysis", icon: <TerminalIcon /> },
+    { id: "vulnerabilities", label: "Vulnerabilities", icon: <BugReportIcon /> },
+    { id: "resources", label: "Resources", icon: <TipsAndUpdatesIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
   };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   // Essential tools for Android RE
   const essentialTools = [
@@ -1059,10 +1095,275 @@ const AndroidReverseEngineeringGuidePage: React.FC = () => {
 
   const pageContext = `This page covers Android Reverse Engineering fundamentals including Android OS architecture, APK structure, Dalvik/ART runtime, smali code, static analysis with JADX and APKTool, dynamic analysis with Frida, common vulnerability patterns, root detection bypass, certificate pinning bypass, and VRAgent AI-assisted analysis tools.`;
 
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Android Reverse Engineering" pageContext={pageContext}>
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
-      <Container maxWidth="lg">
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#16a34a" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
+            <Box sx={{ maxWidth: 1200, mx: "auto" }}>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
           <Chip
@@ -1090,8 +1391,65 @@ const AndroidReverseEngineeringGuidePage: React.FC = () => {
           </Box>
         </Box>
 
-        {/* Comprehensive Introduction Section */}
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+        {/* Quick Navigation */}
+        <Paper
+          sx={{
+            p: 2,
+            mb: 4,
+            borderRadius: 3,
+            position: "sticky",
+            top: 70,
+            zIndex: 100,
+            backdropFilter: "blur(10px)",
+            bgcolor: alpha(theme.palette.background.paper, 0.9),
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            boxShadow: `0 4px 20px ${alpha("#000", 0.1)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+            <Chip
+              label="Learning Hub"
+              size="small"
+              clickable
+              onClick={() => navigate("/learn")}
+              sx={{
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                bgcolor: alpha(accent, 0.1),
+                color: accent,
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.2),
+                },
+              }}
+            />
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+              Quick Navigation
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {sectionNavItems.map((nav) => (
+              <Chip
+                key={nav.id}
+                label={nav.label}
+                size="small"
+                clickable
+                onClick={() => scrollToSection(nav.id)}
+                sx={{
+                  fontWeight: 600,
+                  fontSize: "0.75rem",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.15),
+                    color: accent,
+                  },
+                }}
+              />
+            ))}
+          </Box>
+        </Paper>
+
+        <Box id="intro" sx={{ scrollMarginTop: 180, mb: 5 }}>
+          {/* Comprehensive Introduction Section */}
+          <Paper sx={{ p: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
             🔬 What is Android Reverse Engineering?
           </Typography>
@@ -1200,34 +1558,15 @@ const AndroidReverseEngineeringGuidePage: React.FC = () => {
             and examine how data flows through the app. Once comfortable, move to dynamic analysis with Frida.
           </Alert>
         </Paper>
+        </Box>
 
-        {/* Tabs */}
-        <Paper sx={{ bgcolor: "#111118", borderRadius: 3, mb: 3 }}>
-          <Tabs
-            value={tabValue}
-            onChange={handleTabChange}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              borderBottom: 1,
-              borderColor: "divider",
-              "& .MuiTab-root": { color: "grey.400", fontWeight: 600 },
-              "& .Mui-selected": { color: "#22c55e" },
-              "& .MuiTabs-indicator": { bgcolor: "#22c55e" },
-            }}
-          >
-            <Tab icon={<SchoolIcon />} label="Fundamentals" />
-            <Tab icon={<PhoneAndroidIcon />} label="Android Architecture" />
-            <Tab icon={<BuildIcon />} label="Tools & Setup" />
-            <Tab icon={<CodeIcon />} label="Static Analysis" />
-            <Tab icon={<TerminalIcon />} label="Dynamic Analysis" />
-            <Tab icon={<BugReportIcon />} label="Vulnerabilities" />
-            <Tab icon={<TipsAndUpdatesIcon />} label="Resources" />
-          </Tabs>
-        </Paper>
-
-        {/* Tab 0: Fundamentals */}
-        <TabPanel value={tabValue} index={0}>
+        <Box id="fundamentals" sx={{ scrollMarginTop: 180, mb: 5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
+            Fundamentals
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Core concepts to understand APK structure, bytecode, and Android RE goals.
+          </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -1349,10 +1688,15 @@ apktool d app.apk -o decoded/`}
               </Paper>
             </Grid>
           </Grid>
-        </TabPanel>
+        </Box>
 
-        {/* Tab 1: Android Architecture */}
-        <TabPanel value={tabValue} index={1}>
+        <Box id="architecture" sx={{ scrollMarginTop: 180, mb: 5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
+            Android Architecture
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            A layered view of Android internals and the core app components.
+          </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -1481,10 +1825,15 @@ java -jar abe.jar unpack backup.ab backup.tar`}
               </Paper>
             </Grid>
           </Grid>
-        </TabPanel>
+        </Box>
 
-        {/* Tab 2: Tools & Setup */}
-        <TabPanel value={tabValue} index={2}>
+        <Box id="tools-setup" sx={{ scrollMarginTop: 180, mb: 5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
+            Tools & Setup
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            The core toolkit for Android RE, from decompilers to dynamic instrumentation.
+          </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -1646,10 +1995,15 @@ adb reverse tcp:8080 tcp:8080`}
               </Paper>
             </Grid>
           </Grid>
-        </TabPanel>
+        </Box>
 
-        {/* Tab 3: Static Analysis */}
-        <TabPanel value={tabValue} index={3}>
+        <Box id="static-analysis" sx={{ scrollMarginTop: 180, mb: 5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
+            Static Analysis
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Decompile and inspect APKs without executing them.
+          </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -1831,10 +2185,15 @@ strings lib/arm64-v8a/libnative.so | grep -i "password\\|key\\|secret\\|http"`}
               </Paper>
             </Grid>
           </Grid>
-        </TabPanel>
+        </Box>
 
-        {/* Tab 4: Dynamic Analysis */}
-        <TabPanel value={tabValue} index={4}>
+        <Box id="dynamic-analysis" sx={{ scrollMarginTop: 180, mb: 5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
+            Dynamic Analysis
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Hook, trace, and intercept behavior while the app runs.
+          </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -2026,10 +2385,15 @@ frida -U -f com.target.app -l ssl_bypass.js --no-pause
               </Paper>
             </Grid>
           </Grid>
-        </TabPanel>
+        </Box>
 
-        {/* Tab 5: Vulnerabilities */}
-        <TabPanel value={tabValue} index={5}>
+        <Box id="vulnerabilities" sx={{ scrollMarginTop: 180, mb: 5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
+            Vulnerabilities
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Common Android security issues and the patterns to search for.
+          </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -2170,10 +2534,15 @@ frida -U -f com.target.app -l ssl_bypass.js --no-pause
               </Paper>
             </Grid>
           </Grid>
-        </TabPanel>
+        </Box>
 
-        {/* Tab 6: Resources */}
-        <TabPanel value={tabValue} index={6}>
+        <Box id="resources" sx={{ scrollMarginTop: 180, mb: 5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
+            Resources
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Documentation, practice apps, and curated references for Android RE.
+          </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2, height: "100%" }}>
@@ -2305,12 +2674,44 @@ frida -U -f com.target.app -l ssl_bypass.js --no-pause
               </Paper>
             </Grid>
           </Grid>
-        </TabPanel>
+        </Box>
 
-        {/* Quiz Section */}
-        <QuizSection />
-      </Container>
+        <Box id="quiz" sx={{ scrollMarginTop: 180, mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
+            Knowledge Quiz
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Test your understanding of Android reverse engineering fundamentals.
+          </Typography>
+          <QuizSection />
+        </Box>
+
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+          <Button
+            variant="outlined"
+            size="large"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{
+              borderRadius: 2,
+              px: 4,
+              py: 1.5,
+              fontWeight: 600,
+              borderColor: alpha(accent, 0.3),
+              color: accent,
+              "&:hover": {
+                borderColor: accent,
+                bgcolor: alpha(accent, 0.05),
+              },
+            }}
+          >
+            Return to Learning Hub
+          </Button>
+        </Box>
+      </Box>
     </Box>
+  </Box>
+  </Box>
     </LearnPageLayout>
   );
 };

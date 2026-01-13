@@ -63,6 +63,17 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import CloseIcon from "@mui/icons-material/Close";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ShieldIcon from "@mui/icons-material/Shield";
+import VpnKeyIcon from "@mui/icons-material/VpnKey";
+import PolicyIcon from "@mui/icons-material/Policy";
+import DnsIcon from "@mui/icons-material/Dns";
+import RouterIcon from "@mui/icons-material/Router";
+import GppGoodIcon from "@mui/icons-material/GppGood";
+import FindInPageIcon from "@mui/icons-material/FindInPage";
+import LockIcon from "@mui/icons-material/Lock";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import UpdateIcon from "@mui/icons-material/Update";
+import DataObjectIcon from "@mui/icons-material/DataObject";
 
 // Core Windows concepts
 const windowsConcepts = [
@@ -467,6 +478,567 @@ const environmentVariables = [
   { variable: "%USERDOMAIN%", example: "CONTOSO", description: "User's domain name" },
   { variable: "%PROGRAMFILES%", example: "C:\\Program Files", description: "64-bit program installations" },
   { variable: "%PROGRAMFILES(X86)%", example: "C:\\Program Files (x86)", description: "32-bit program installations" },
+  { variable: "%WINDIR%", example: "C:\\Windows", description: "Windows directory (alias for SYSTEMROOT)" },
+  { variable: "%HOMEDRIVE%", example: "C:", description: "Drive letter of user's home" },
+  { variable: "%HOMEPATH%", example: "\\Users\\username", description: "Path to user's home from drive root" },
+  { variable: "%PUBLIC%", example: "C:\\Users\\Public", description: "Public user profile folder" },
+  { variable: "%ALLUSERSPROFILE%", example: "C:\\ProgramData", description: "All users profile data" },
+  { variable: "%LOGONSERVER%", example: "\\\\DC01", description: "Domain controller that authenticated user" },
+];
+
+// Windows Security Features
+const windowsSecurityFeatures = [
+  {
+    name: "Windows Defender Antivirus",
+    icon: <ShieldIcon />,
+    color: "#10b981",
+    description: "Built-in real-time malware protection",
+    keyFeatures: [
+      "Real-time protection against malware, viruses, and spyware",
+      "Cloud-delivered protection for faster threat detection",
+      "Automatic sample submission for new threats",
+      "Behavior monitoring and suspicious activity blocking",
+      "Network inspection for exploit-based attacks",
+      "Controlled folder access (ransomware protection)",
+      "Attack Surface Reduction (ASR) rules",
+    ],
+    commands: [
+      { cmd: "Get-MpComputerStatus", desc: "Check Defender status" },
+      { cmd: "Update-MpSignature", desc: "Update definitions" },
+      { cmd: "Start-MpScan -ScanType QuickScan", desc: "Run quick scan" },
+      { cmd: "Get-MpThreatDetection", desc: "View detected threats" },
+    ],
+  },
+  {
+    name: "Windows Firewall",
+    icon: <GppGoodIcon />,
+    color: "#3b82f6",
+    description: "Host-based firewall for network traffic filtering",
+    keyFeatures: [
+      "Inbound and outbound traffic filtering",
+      "Domain, Private, and Public profiles",
+      "Application-specific rules",
+      "Connection security rules (IPsec)",
+      "Logging of blocked connections",
+      "Integration with Windows Defender",
+      "PowerShell and netsh management",
+    ],
+    commands: [
+      { cmd: "Get-NetFirewallProfile", desc: "View firewall profiles" },
+      { cmd: "Get-NetFirewallRule", desc: "List firewall rules" },
+      { cmd: "netsh advfirewall show allprofiles", desc: "Show profile status" },
+      { cmd: "New-NetFirewallRule", desc: "Create new rule" },
+    ],
+  },
+  {
+    name: "BitLocker Drive Encryption",
+    icon: <LockIcon />,
+    color: "#8b5cf6",
+    description: "Full disk encryption for data protection",
+    keyFeatures: [
+      "Full volume encryption using AES-128 or AES-256",
+      "TPM integration for secure key storage",
+      "Pre-boot authentication options",
+      "Recovery key for emergency access",
+      "BitLocker To Go for removable drives",
+      "Network unlock for enterprise deployments",
+      "Used space only encryption option",
+    ],
+    commands: [
+      { cmd: "manage-bde -status", desc: "Check encryption status" },
+      { cmd: "Get-BitLockerVolume", desc: "View BitLocker volumes" },
+      { cmd: "Enable-BitLocker", desc: "Enable encryption" },
+      { cmd: "(Get-BitLockerVolume).KeyProtector", desc: "View recovery keys" },
+    ],
+  },
+  {
+    name: "Credential Guard",
+    icon: <VpnKeyIcon />,
+    color: "#ef4444",
+    description: "Virtualization-based credential protection",
+    keyFeatures: [
+      "Isolates LSASS secrets using VBS",
+      "Protects NTLM hashes and Kerberos tickets",
+      "Prevents pass-the-hash and pass-the-ticket attacks",
+      "Requires UEFI Secure Boot and TPM 2.0",
+      "Hardware-based security isolation",
+      "Integrated with Windows 10/11 Enterprise",
+    ],
+    commands: [
+      { cmd: "Get-CimInstance -ClassName Win32_DeviceGuard", desc: "Check Device Guard status" },
+      { cmd: "msinfo32.exe", desc: "System Information (shows VBS status)" },
+    ],
+  },
+  {
+    name: "User Account Control (UAC)",
+    icon: <AdminPanelSettingsIcon />,
+    color: "#f59e0b",
+    description: "Elevation prompts for administrative actions",
+    keyFeatures: [
+      "Prompts for elevation when admin rights needed",
+      "Standard user token for regular operations",
+      "Admin Approval Mode for administrators",
+      "Configurable notification levels",
+      "Secure Desktop for elevation prompts",
+      "File and registry virtualization for legacy apps",
+    ],
+    commands: [
+      { cmd: "whoami /priv", desc: "Check current privileges" },
+      { cmd: "Get-ExecutionPolicy", desc: "Check PS execution policy" },
+      { cmd: "runas /user:Administrator cmd", desc: "Run as different user" },
+    ],
+  },
+  {
+    name: "Windows Defender SmartScreen",
+    icon: <VerifiedUserIcon />,
+    color: "#06b6d4",
+    description: "Reputation-based protection against untrusted downloads",
+    keyFeatures: [
+      "Checks files against known malware database",
+      "Blocks downloads from unknown sources",
+      "Application reputation checking",
+      "Microsoft Edge integration",
+      "Phishing and malware site blocking",
+      "Enterprise configurable via Group Policy",
+    ],
+    commands: [
+      { cmd: "Get-MpPreference | Select SmartScreen*", desc: "Check SmartScreen settings" },
+    ],
+  },
+];
+
+// Group Policy Important Settings
+const groupPolicySettings = [
+  {
+    category: "Password Policy",
+    path: "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy",
+    settings: [
+      { name: "Minimum password length", recommended: "14+ characters", risk: "Short passwords easily cracked" },
+      { name: "Password complexity requirements", recommended: "Enabled", risk: "Simple passwords vulnerable" },
+      { name: "Maximum password age", recommended: "90-365 days", risk: "Never-expiring passwords" },
+      { name: "Password history", recommended: "24 passwords", risk: "Password reuse" },
+    ],
+  },
+  {
+    category: "Account Lockout Policy",
+    path: "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy",
+    settings: [
+      { name: "Account lockout threshold", recommended: "5-10 attempts", risk: "Unlimited attempts allow brute force" },
+      { name: "Account lockout duration", recommended: "15-30 minutes", risk: "Too short allows rapid retries" },
+      { name: "Reset lockout counter after", recommended: "15 minutes", risk: "Immediate reset enables attacks" },
+    ],
+  },
+  {
+    category: "Audit Policy",
+    path: "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration",
+    settings: [
+      { name: "Audit logon events", recommended: "Success, Failure", risk: "No visibility into auth attempts" },
+      { name: "Audit process creation", recommended: "Success", risk: "Cannot track malware execution" },
+      { name: "Audit privilege use", recommended: "Success, Failure", risk: "No admin activity tracking" },
+      { name: "Audit object access", recommended: "Success, Failure", risk: "No file access auditing" },
+    ],
+  },
+  {
+    category: "User Rights Assignment",
+    path: "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment",
+    settings: [
+      { name: "Debug programs (SeDebugPrivilege)", recommended: "Administrators only", risk: "Allows memory access to any process" },
+      { name: "Act as part of OS", recommended: "No one", risk: "Highly privileged, rarely needed" },
+      { name: "Load and unload device drivers", recommended: "Administrators only", risk: "Can load malicious drivers" },
+      { name: "Take ownership of files", recommended: "Administrators only", risk: "Can access any file" },
+    ],
+  },
+  {
+    category: "Windows Defender Settings",
+    path: "Computer Configuration > Administrative Templates > Windows Components > Microsoft Defender Antivirus",
+    settings: [
+      { name: "Turn off real-time protection", recommended: "Not Configured/Disabled", risk: "No malware protection" },
+      { name: "Configure Attack Surface Reduction rules", recommended: "Enabled with rules", risk: "Missing exploit protection" },
+      { name: "Cloud-based protection", recommended: "Enabled", risk: "Slower threat detection" },
+    ],
+  },
+];
+
+// Forensic Artifacts
+const forensicArtifacts = [
+  {
+    category: "User Activity",
+    color: "#3b82f6",
+    artifacts: [
+      { name: "NTUSER.DAT", location: "C:\\Users\\<user>\\NTUSER.DAT", description: "User registry hive - MRU lists, typed paths, user settings" },
+      { name: "UsrClass.dat", location: "C:\\Users\\<user>\\AppData\\Local\\Microsoft\\Windows\\UsrClass.dat", description: "ShellBags - folder access history" },
+      { name: "Recent Items", location: "C:\\Users\\<user>\\AppData\\Roaming\\Microsoft\\Windows\\Recent", description: "Recently accessed files (LNK files)" },
+      { name: "Jump Lists", location: "C:\\Users\\<user>\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\AutomaticDestinations", description: "Application-specific recent items" },
+      { name: "Prefetch", location: "C:\\Windows\\Prefetch", description: "Application execution history (.pf files)" },
+      { name: "BAM/DAM", location: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\bam\\State\\UserSettings", description: "Background/Desktop Activity Moderator - execution times" },
+    ],
+  },
+  {
+    category: "Network Activity",
+    color: "#10b981",
+    artifacts: [
+      { name: "SRUM Database", location: "C:\\Windows\\System32\\sru\\SRUDB.dat", description: "Network data usage by application" },
+      { name: "Network Profiles", location: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList", description: "Connected networks history" },
+      { name: "DNS Cache", location: "ipconfig /displaydns (memory)", description: "Recent DNS resolutions" },
+      { name: "Firewall Logs", location: "C:\\Windows\\System32\\LogFiles\\Firewall\\pfirewall.log", description: "Blocked connection attempts" },
+    ],
+  },
+  {
+    category: "File System",
+    color: "#f59e0b",
+    artifacts: [
+      { name: "$MFT", location: "C:\\$MFT (hidden)", description: "Master File Table - all file metadata" },
+      { name: "$UsnJrnl", location: "C:\\$Extend\\$UsnJrnl", description: "Change journal - file modifications" },
+      { name: "$LogFile", location: "C:\\$LogFile", description: "NTFS transaction log" },
+      { name: "Recycle Bin", location: "C:\\$Recycle.Bin\\<SID>", description: "Deleted files with original path info" },
+      { name: "Thumbcache", location: "C:\\Users\\<user>\\AppData\\Local\\Microsoft\\Windows\\Explorer", description: "Thumbnail database - viewed images" },
+    ],
+  },
+  {
+    category: "System Logs",
+    color: "#ef4444",
+    artifacts: [
+      { name: "Security.evtx", location: "C:\\Windows\\System32\\winevt\\Logs\\Security.evtx", description: "Authentication and authorization events" },
+      { name: "System.evtx", location: "C:\\Windows\\System32\\winevt\\Logs\\System.evtx", description: "Driver and service events" },
+      { name: "Application.evtx", location: "C:\\Windows\\System32\\winevt\\Logs\\Application.evtx", description: "Application errors and info" },
+      { name: "PowerShell Logs", location: "C:\\Windows\\System32\\winevt\\Logs\\Microsoft-Windows-PowerShell%4Operational.evtx", description: "PowerShell execution history" },
+      { name: "Sysmon Logs", location: "C:\\Windows\\System32\\winevt\\Logs\\Microsoft-Windows-Sysmon%4Operational.evtx", description: "Detailed process and network monitoring (if installed)" },
+    ],
+  },
+  {
+    category: "Persistence Locations",
+    color: "#8b5cf6",
+    artifacts: [
+      { name: "Run Keys", location: "HKLM/HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", description: "Startup programs" },
+      { name: "Startup Folder", location: "C:\\Users\\<user>\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", description: "User startup items" },
+      { name: "Scheduled Tasks", location: "C:\\Windows\\System32\\Tasks", description: "Task Scheduler XML files" },
+      { name: "Services", location: "HKLM\\SYSTEM\\CurrentControlSet\\Services", description: "Windows services registry" },
+      { name: "WMI Subscriptions", location: "WMI Repository", description: "WMI event subscriptions (advanced persistence)" },
+    ],
+  },
+];
+
+// Additional Security Event IDs
+const additionalSecurityEvents = [
+  { eventId: "4634", description: "Account logoff", category: "Authentication", notes: "Correlate with 4624 for session duration" },
+  { eventId: "4647", description: "User-initiated logoff", category: "Authentication", notes: "User explicitly logged off" },
+  { eventId: "4648", description: "Explicit credentials logon", category: "Authentication", notes: "Runas or network with different creds" },
+  { eventId: "4656", description: "Handle to object requested", category: "Object Access", notes: "File/registry access attempt" },
+  { eventId: "4663", description: "Attempt to access object", category: "Object Access", notes: "Actual access to file/registry" },
+  { eventId: "4670", description: "Permissions on object changed", category: "Object Access", notes: "ACL modification" },
+  { eventId: "4697", description: "Service installed", category: "Persistence", notes: "New service (need to enable auditing)" },
+  { eventId: "4700", description: "Scheduled task enabled", category: "Persistence", notes: "Task Scheduler changes" },
+  { eventId: "4701", description: "Scheduled task disabled", category: "Persistence", notes: "Possible defense evasion" },
+  { eventId: "4702", description: "Scheduled task updated", category: "Persistence", notes: "Task modification" },
+  { eventId: "4703", description: "User right adjusted", category: "Privileges", notes: "Token manipulation" },
+  { eventId: "4719", description: "Audit policy changed", category: "Defense Evasion", notes: "Attacker may disable logging" },
+  { eventId: "4724", description: "Password reset attempted", category: "Account", notes: "Admin reset user password" },
+  { eventId: "4728", description: "Member added to global group", category: "Account", notes: "Domain group changes" },
+  { eventId: "4756", description: "Member added to universal group", category: "Account", notes: "Universal group changes" },
+  { eventId: "4768", description: "Kerberos TGT requested", category: "Kerberos", notes: "Initial authentication to DC" },
+  { eventId: "4769", description: "Kerberos service ticket requested", category: "Kerberos", notes: "Access to specific service" },
+  { eventId: "4771", description: "Kerberos pre-auth failed", category: "Kerberos", notes: "Possible password spray" },
+  { eventId: "4776", description: "NTLM authentication", category: "Authentication", notes: "Legacy NTLM authentication" },
+  { eventId: "5140", description: "Network share accessed", category: "Object Access", notes: "SMB share access" },
+  { eventId: "5145", description: "Network share object checked", category: "Object Access", notes: "Share permission check" },
+  { eventId: "5156", description: "Connection allowed by firewall", category: "Network", notes: "Allowed network connection" },
+  { eventId: "5157", description: "Connection blocked by firewall", category: "Network", notes: "Blocked network connection" },
+];
+
+// Network Configuration
+const networkConfiguration = [
+  {
+    topic: "IP Configuration",
+    commands: [
+      { cmd: "ipconfig /all", desc: "Full IP configuration" },
+      { cmd: "Get-NetIPConfiguration", desc: "PowerShell IP config" },
+      { cmd: "Get-NetIPAddress", desc: "List all IP addresses" },
+      { cmd: "netsh interface ip show config", desc: "Netsh IP config" },
+    ],
+  },
+  {
+    topic: "DNS",
+    commands: [
+      { cmd: "ipconfig /displaydns", desc: "Show DNS cache" },
+      { cmd: "ipconfig /flushdns", desc: "Clear DNS cache" },
+      { cmd: "Get-DnsClientCache", desc: "PowerShell DNS cache" },
+      { cmd: "Resolve-DnsName google.com", desc: "DNS lookup" },
+      { cmd: "nslookup -type=any domain.com", desc: "Advanced DNS query" },
+    ],
+  },
+  {
+    topic: "Network Connections",
+    commands: [
+      { cmd: "netstat -ano", desc: "All connections with PIDs" },
+      { cmd: "netstat -b", desc: "Connections with process names" },
+      { cmd: "Get-NetTCPConnection", desc: "PowerShell TCP connections" },
+      { cmd: "Get-NetUDPEndpoint", desc: "PowerShell UDP endpoints" },
+    ],
+  },
+  {
+    topic: "Routing",
+    commands: [
+      { cmd: "route print", desc: "Display routing table" },
+      { cmd: "Get-NetRoute", desc: "PowerShell routing table" },
+      { cmd: "tracert hostname", desc: "Trace route to host" },
+      { cmd: "pathping hostname", desc: "Combined ping and tracert" },
+    ],
+  },
+  {
+    topic: "Network Shares",
+    commands: [
+      { cmd: "net share", desc: "List local shares" },
+      { cmd: "net use", desc: "List mapped drives" },
+      { cmd: "Get-SmbShare", desc: "PowerShell list shares" },
+      { cmd: "Get-SmbConnection", desc: "Active SMB connections" },
+    ],
+  },
+  {
+    topic: "Firewall",
+    commands: [
+      { cmd: "netsh advfirewall show allprofiles", desc: "Firewall status" },
+      { cmd: "Get-NetFirewallProfile", desc: "PowerShell firewall profiles" },
+      { cmd: "Get-NetFirewallRule | Where Enabled -eq True", desc: "Active rules" },
+      { cmd: "netsh advfirewall firewall show rule name=all", desc: "All firewall rules" },
+    ],
+  },
+];
+
+// PowerShell Security Commands
+const powershellSecurityCommands = [
+  {
+    category: "User & Group Management",
+    commands: [
+      { cmd: "Get-LocalUser", desc: "List local users" },
+      { cmd: "Get-LocalGroup", desc: "List local groups" },
+      { cmd: "Get-LocalGroupMember Administrators", desc: "List admin group members" },
+      { cmd: "New-LocalUser -Name 'Test' -NoPassword", desc: "Create user" },
+      { cmd: "Add-LocalGroupMember -Group 'Users' -Member 'Test'", desc: "Add to group" },
+      { cmd: "Disable-LocalUser -Name 'Test'", desc: "Disable user" },
+    ],
+  },
+  {
+    category: "Process Analysis",
+    commands: [
+      { cmd: "Get-Process | Sort CPU -Descending | Select -First 10", desc: "Top CPU processes" },
+      { cmd: "Get-Process | Where {$_.Path} | Select Name, Path", desc: "Processes with paths" },
+      { cmd: "Get-CimInstance Win32_Process | Select Name, CommandLine", desc: "Process command lines" },
+      { cmd: "Get-Process -IncludeUserName", desc: "Processes with owners" },
+      { cmd: "Stop-Process -Name notepad -Force", desc: "Kill process by name" },
+    ],
+  },
+  {
+    category: "Network Security",
+    commands: [
+      { cmd: "Get-NetTCPConnection -State Established", desc: "Active connections" },
+      { cmd: "Get-NetTCPConnection | Where RemotePort -eq 443", desc: "HTTPS connections" },
+      { cmd: "Test-NetConnection -ComputerName host -Port 445", desc: "Test port connectivity" },
+      { cmd: "Get-NetFirewallRule -Direction Inbound -Enabled True", desc: "Inbound firewall rules" },
+    ],
+  },
+  {
+    category: "File Security",
+    commands: [
+      { cmd: "Get-Acl C:\\folder | Format-List", desc: "View ACL details" },
+      { cmd: "Get-ChildItem -Recurse -Hidden", desc: "Find hidden files" },
+      { cmd: "Get-ChildItem -Recurse | Where {$_.Attributes -band [IO.FileAttributes]::Hidden}", desc: "Hidden files (alt)" },
+      { cmd: "Get-FileHash -Algorithm SHA256 file.exe", desc: "Get file hash" },
+      { cmd: "Get-AuthenticodeSignature file.exe", desc: "Check digital signature" },
+    ],
+  },
+  {
+    category: "Service Management",
+    commands: [
+      { cmd: "Get-Service | Where Status -eq Running", desc: "Running services" },
+      { cmd: "Get-WmiObject Win32_Service | Select Name, PathName, StartName", desc: "Service details" },
+      { cmd: "Get-Service | Where {$_.StartType -eq 'Automatic'}", desc: "Auto-start services" },
+      { cmd: "Set-Service -Name Spooler -StartupType Disabled", desc: "Disable service" },
+    ],
+  },
+  {
+    category: "Event Log Analysis",
+    commands: [
+      { cmd: "Get-EventLog -LogName Security -Newest 100", desc: "Recent security events" },
+      { cmd: "Get-WinEvent -FilterHashtable @{LogName='Security';ID=4624}", desc: "Successful logons" },
+      { cmd: "Get-WinEvent -FilterHashtable @{LogName='Security';ID=4625} -MaxEvents 50", desc: "Failed logons" },
+      { cmd: "Get-WinEvent -FilterHashtable @{LogName='System';Level=2}", desc: "System errors" },
+    ],
+  },
+  {
+    category: "Scheduled Tasks",
+    commands: [
+      { cmd: "Get-ScheduledTask | Where State -eq Ready", desc: "Active scheduled tasks" },
+      { cmd: "Get-ScheduledTask | Get-ScheduledTaskInfo", desc: "Task run history" },
+      { cmd: "Export-ScheduledTask -TaskName 'TaskName'", desc: "Export task as XML" },
+      { cmd: "Unregister-ScheduledTask -TaskName 'TaskName'", desc: "Remove task" },
+    ],
+  },
+  {
+    category: "Registry Security",
+    commands: [
+      { cmd: "Get-ItemProperty HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", desc: "Startup programs" },
+      { cmd: "Get-ChildItem HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", desc: "Installed programs" },
+      { cmd: "Test-Path 'HKLM:\\SOFTWARE\\Malware'", desc: "Check registry path exists" },
+      { cmd: "Get-Acl HKLM:\\SOFTWARE | Format-List", desc: "Registry ACL" },
+    ],
+  },
+];
+
+// Windows Hardening Checklist
+const hardeningChecklist = [
+  {
+    category: "User Accounts",
+    items: [
+      "Rename or disable built-in Administrator account",
+      "Disable Guest account",
+      "Enforce strong password policy (14+ characters, complexity)",
+      "Enable account lockout after 5-10 failed attempts",
+      "Use separate admin accounts (not daily use accounts)",
+      "Implement Managed Service Accounts where possible",
+      "Enable MFA for all privileged accounts",
+      "Regular review of group memberships",
+    ],
+  },
+  {
+    category: "Network Security",
+    items: [
+      "Enable Windows Firewall on all profiles",
+      "Block inbound SMB (port 445) from internet",
+      "Disable NetBIOS and LLMNR if not needed",
+      "Enable SMB signing",
+      "Disable SMBv1 protocol",
+      "Use IPsec for sensitive communications",
+      "Segment networks appropriately",
+      "Monitor outbound connections",
+    ],
+  },
+  {
+    category: "System Configuration",
+    items: [
+      "Enable Secure Boot and UEFI",
+      "Enable BitLocker on all drives",
+      "Keep system and software updated",
+      "Disable unnecessary services",
+      "Remove unnecessary features/roles",
+      "Configure AppLocker or WDAC policies",
+      "Enable Credential Guard on supported hardware",
+      "Configure Windows Defender properly",
+    ],
+  },
+  {
+    category: "Logging & Monitoring",
+    items: [
+      "Enable advanced audit policy",
+      "Configure PowerShell logging (Script Block, Module, Transcription)",
+      "Enable command-line process auditing (Event 4688)",
+      "Forward logs to SIEM",
+      "Monitor for suspicious Event IDs",
+      "Install and configure Sysmon",
+      "Set appropriate log retention periods",
+      "Alert on critical events",
+    ],
+  },
+  {
+    category: "Endpoint Protection",
+    items: [
+      "Keep Windows Defender definitions updated",
+      "Enable real-time protection",
+      "Configure Attack Surface Reduction rules",
+      "Enable cloud-delivered protection",
+      "Enable Controlled Folder Access (ransomware protection)",
+      "Configure SmartScreen",
+      "Use application whitelisting",
+      "Enable Exploit Protection",
+    ],
+  },
+];
+
+// Common Windows Ports
+const commonPorts = [
+  { port: "20-21", protocol: "TCP", service: "FTP", notes: "File Transfer Protocol (avoid - use SFTP)" },
+  { port: "22", protocol: "TCP", service: "SSH", notes: "Secure Shell (OpenSSH on modern Windows)" },
+  { port: "23", protocol: "TCP", service: "Telnet", notes: "Unsecure - should be disabled" },
+  { port: "25", protocol: "TCP", service: "SMTP", notes: "Email relay" },
+  { port: "53", protocol: "TCP/UDP", service: "DNS", notes: "Domain Name System" },
+  { port: "67-68", protocol: "UDP", service: "DHCP", notes: "Dynamic Host Configuration Protocol" },
+  { port: "80", protocol: "TCP", service: "HTTP", notes: "Web traffic (unencrypted)" },
+  { port: "88", protocol: "TCP/UDP", service: "Kerberos", notes: "AD authentication" },
+  { port: "123", protocol: "UDP", service: "NTP", notes: "Network Time Protocol" },
+  { port: "135", protocol: "TCP", service: "RPC Endpoint Mapper", notes: "Windows RPC - often targeted" },
+  { port: "137-139", protocol: "TCP/UDP", service: "NetBIOS", notes: "Legacy name service - consider disabling" },
+  { port: "389", protocol: "TCP/UDP", service: "LDAP", notes: "Active Directory queries" },
+  { port: "443", protocol: "TCP", service: "HTTPS", notes: "Encrypted web traffic" },
+  { port: "445", protocol: "TCP", service: "SMB", notes: "File sharing - major attack vector" },
+  { port: "464", protocol: "TCP/UDP", service: "Kerberos Password", notes: "Kerberos password change" },
+  { port: "636", protocol: "TCP", service: "LDAPS", notes: "LDAP over SSL" },
+  { port: "3268-3269", protocol: "TCP", service: "Global Catalog", notes: "AD Global Catalog queries" },
+  { port: "3389", protocol: "TCP", service: "RDP", notes: "Remote Desktop - high value target" },
+  { port: "5985", protocol: "TCP", service: "WinRM HTTP", notes: "PowerShell Remoting" },
+  { port: "5986", protocol: "TCP", service: "WinRM HTTPS", notes: "PowerShell Remoting (encrypted)" },
+];
+
+// Active Directory Basics
+const activeDirectoryBasics = [
+  {
+    component: "Domain Controller (DC)",
+    description: "Server hosting Active Directory services",
+    keyPoints: [
+      "Stores directory database (NTDS.dit)",
+      "Handles authentication requests",
+      "Replicates data to other DCs",
+      "Hosts DNS for AD",
+    ],
+  },
+  {
+    component: "Organizational Units (OUs)",
+    description: "Containers for organizing AD objects",
+    keyPoints: [
+      "Can contain users, groups, computers",
+      "Group Policy can be linked to OUs",
+      "Delegation of admin rights at OU level",
+      "Hierarchical structure",
+    ],
+  },
+  {
+    component: "Security Groups",
+    description: "Collections of users/computers for permission assignment",
+    keyPoints: [
+      "Domain Local, Global, Universal scopes",
+      "Used for resource access control",
+      "Nested group memberships",
+      "Critical groups: Domain Admins, Enterprise Admins",
+    ],
+  },
+  {
+    component: "Group Policy Objects (GPOs)",
+    description: "Policy settings applied to users/computers",
+    keyPoints: [
+      "Computer and User configuration sections",
+      "Linked to Sites, Domains, OUs",
+      "Inheritance and precedence rules",
+      "gpresult /r to check applied policies",
+    ],
+  },
+  {
+    component: "LDAP/LDAPS",
+    description: "Protocol for querying and modifying AD",
+    keyPoints: [
+      "Port 389 (LDAP) and 636 (LDAPS)",
+      "Distinguished Names (DN) identify objects",
+      "Attributes store object properties",
+      "Tools: ldapsearch, ADExplorer",
+    ],
+  },
+  {
+    component: "Kerberos",
+    description: "Primary authentication protocol for AD",
+    keyPoints: [
+      "Ticket-based authentication",
+      "KDC on Domain Controller",
+      "TGT and Service Tickets",
+      "Vulnerable to Kerberoasting, Pass-the-Ticket",
+    ],
+  },
 ];
 
 const ACCENT_COLOR = "#0078d4";
@@ -1124,12 +1696,20 @@ export default function WindowsBasicsPage() {
     { id: "boot-process", label: "Boot Process", icon: <SpeedIcon /> },
     { id: "core-concepts", label: "Core Concepts", icon: <DesktopWindowsIcon /> },
     { id: "architecture", label: "Architecture", icon: <AccountTreeIcon /> },
+    { id: "security-features", label: "Security Features", icon: <ShieldIcon /> },
     { id: "directories", label: "Directories", icon: <FolderIcon /> },
     { id: "registry-keys", label: "Registry Keys", icon: <KeyIcon /> },
     { id: "cmd-commands", label: "CMD Commands", icon: <TerminalIcon /> },
     { id: "powershell", label: "PowerShell", icon: <TerminalIcon /> },
+    { id: "powershell-security", label: "PS Security", icon: <SecurityIcon /> },
     { id: "processes", label: "Processes", icon: <MemoryIcon /> },
+    { id: "networking", label: "Networking", icon: <NetworkCheckIcon /> },
+    { id: "common-ports", label: "Common Ports", icon: <RouterIcon /> },
+    { id: "active-directory", label: "Active Directory", icon: <DnsIcon /> },
+    { id: "group-policy", label: "Group Policy", icon: <PolicyIcon /> },
     { id: "security-events", label: "Security Events", icon: <SecurityIcon /> },
+    { id: "forensic-artifacts", label: "Forensics", icon: <FindInPageIcon /> },
+    { id: "hardening", label: "Hardening", icon: <GppGoodIcon /> },
     { id: "shortcuts", label: "Shortcuts", icon: <KeyboardArrowUpIcon /> },
     { id: "tools", label: "Tools", icon: <BuildIcon /> },
     { id: "environment-vars", label: "Environment Vars", icon: <SettingsIcon /> },
@@ -1755,6 +2335,126 @@ export default function WindowsBasicsPage() {
           ))}
         </Grid>
 
+        </Box>
+
+        {/* Windows Security Features Section */}
+        <Box id="security-features" sx={{ mt: 5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+            <Divider sx={{ flex: 1 }} />
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
+              SECURITY FEATURES
+            </Typography>
+            <Divider sx={{ flex: 1 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🛡️ Windows Security Features
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Built-in security technologies that protect Windows systems
+          </Typography>
+
+          <Grid container spacing={3} sx={{ mb: 5 }}>
+            {windowsSecurityFeatures.map((feature) => (
+              <Grid item xs={12} md={6} key={feature.name}>
+                <Paper
+                  sx={{
+                    p: 0,
+                    height: "100%",
+                    borderRadius: 4,
+                    overflow: "hidden",
+                    border: `1px solid ${alpha(feature.color, 0.2)}`,
+                    transition: "all 0.3s ease",
+                    "&:hover": {
+                      transform: "translateY(-4px)",
+                      boxShadow: `0 12px 40px ${alpha(feature.color, 0.15)}`,
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      p: 2,
+                      background: `linear-gradient(135deg, ${alpha(feature.color, 0.15)} 0%, ${alpha(feature.color, 0.05)} 100%)`,
+                      borderBottom: `1px solid ${alpha(feature.color, 0.1)}`,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Box
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 2,
+                          background: `linear-gradient(135deg, ${feature.color}, ${alpha(feature.color, 0.7)})`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "white",
+                        }}
+                      >
+                        {feature.icon}
+                      </Box>
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                          {feature.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {feature.description}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+                  <Box sx={{ p: 2.5 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                      Key Features
+                    </Typography>
+                    <List dense>
+                      {feature.keyFeatures.slice(0, 5).map((point) => (
+                        <ListItem key={point} sx={{ py: 0.2, px: 0 }}>
+                          <ListItemIcon sx={{ minWidth: 20 }}>
+                            <CheckCircleIcon sx={{ fontSize: 14, color: feature.color }} />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={point}
+                            primaryTypographyProps={{ variant: "body2", fontSize: "0.8rem" }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                    
+                    <Accordion 
+                      sx={{ 
+                        mt: 1.5, 
+                        boxShadow: "none", 
+                        bgcolor: alpha(feature.color, 0.03),
+                        "&:before": { display: "none" },
+                        borderRadius: "8px !important",
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 40 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: feature.color }}>
+                          Management Commands
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ pt: 0 }}>
+                        {feature.commands.map((cmd) => (
+                          <Box key={cmd.cmd} sx={{ mb: 1 }}>
+                            <Typography variant="caption" sx={{ fontFamily: "monospace", color: feature.color, fontWeight: 600 }}>
+                              {cmd.cmd}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {cmd.desc}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+
         {/* Section Divider */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
           <Divider sx={{ flex: 1 }} />
@@ -1762,8 +2462,6 @@ export default function WindowsBasicsPage() {
             FILE SYSTEM
           </Typography>
           <Divider sx={{ flex: 1 }} />
-        </Box>
-
         </Box>
 
         {/* Important Directories */}
@@ -2090,15 +2788,321 @@ export default function WindowsBasicsPage() {
           </Table>
         </TableContainer>
 
+        </Box>
+
+        {/* PowerShell Security Commands Section */}
+        <Box id="powershell-security" sx={{ mt: 5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🔒 PowerShell Security Commands
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Essential PowerShell cmdlets for security analysis and administration
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 5 }}>
+            {powershellSecurityCommands.map((category) => (
+              <Grid item xs={12} md={6} key={category.category}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    height: "100%",
+                    borderRadius: 3,
+                    border: `1px solid ${alpha("#8b5cf6", 0.15)}`,
+                  }}
+                >
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 1 }}
+                  >
+                    <TerminalIcon sx={{ fontSize: 20 }} />
+                    {category.category}
+                  </Typography>
+                  {category.commands.map((cmd) => (
+                    <Box
+                      key={cmd.cmd}
+                      sx={{
+                        p: 1,
+                        mb: 1,
+                        borderRadius: 2,
+                        bgcolor: alpha("#8b5cf6", 0.03),
+                        borderLeft: `3px solid ${alpha("#8b5cf6", 0.3)}`,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        sx={{ fontFamily: "monospace", color: "#8b5cf6", fontWeight: 600, display: "block" }}
+                      >
+                        {cmd.cmd}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {cmd.desc}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+
+        {/* Networking Section */}
+        <Box id="networking" sx={{ mt: 5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+            <Divider sx={{ flex: 1 }} />
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
+              NETWORKING
+            </Typography>
+            <Divider sx={{ flex: 1 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🌐 Network Configuration
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Commands for network troubleshooting and analysis
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 5 }}>
+            {networkConfiguration.map((topic) => (
+              <Grid item xs={12} sm={6} md={4} key={topic.topic}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    height: "100%",
+                    borderRadius: 3,
+                    border: `1px solid ${alpha("#06b6d4", 0.15)}`,
+                    transition: "all 0.2s",
+                    "&:hover": {
+                      borderColor: "#06b6d4",
+                    },
+                  }}
+                >
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 700, mb: 2, color: "#06b6d4", display: "flex", alignItems: "center", gap: 1 }}
+                  >
+                    <NetworkCheckIcon sx={{ fontSize: 20 }} />
+                    {topic.topic}
+                  </Typography>
+                  {topic.commands.map((cmd) => (
+                    <Box key={cmd.cmd} sx={{ mb: 1 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ fontFamily: "monospace", color: "#06b6d4", fontWeight: 600, display: "block" }}
+                      >
+                        {cmd.cmd}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {cmd.desc}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+
+        {/* Common Ports Section */}
+        <Box id="common-ports">
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🔌 Common Windows Ports
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Important ports to know for Windows networking and security
+          </Typography>
+
+          <TableContainer
+            component={Paper}
+            sx={{
+              mb: 5,
+              borderRadius: 4,
+              border: `1px solid ${alpha("#f59e0b", 0.15)}`,
+            }}
+          >
+            <Table size="small">
+              <TableHead>
+                <TableRow
+                  sx={{
+                    background: `linear-gradient(135deg, ${alpha("#f59e0b", 0.1)} 0%, ${alpha("#f97316", 0.1)} 100%)`,
+                  }}
+                >
+                  <TableCell sx={{ fontWeight: 700 }}>Port</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Protocol</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Service</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {commonPorts.map((port, index) => (
+                  <TableRow
+                    key={port.port}
+                    sx={{
+                      bgcolor: index % 2 === 0 ? "transparent" : alpha("#f59e0b", 0.02),
+                    }}
+                  >
+                    <TableCell>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontFamily: "monospace", fontWeight: 700, color: "#f59e0b", fontSize: "0.85rem" }}
+                      >
+                        {port.port}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={port.protocol} size="small" sx={{ fontSize: "0.7rem", fontWeight: 600 }} />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: "0.85rem" }}>
+                        {port.service}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">
+                        {port.notes}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+
+        {/* Active Directory Section */}
+        <Box id="active-directory" sx={{ mt: 5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+            <Divider sx={{ flex: 1 }} />
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
+              ACTIVE DIRECTORY
+            </Typography>
+            <Divider sx={{ flex: 1 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🏢 Active Directory Basics
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Fundamental concepts of Windows domain environments
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 5 }}>
+            {activeDirectoryBasics.map((item) => (
+              <Grid item xs={12} sm={6} md={4} key={item.component}>
+                <Paper
+                  sx={{
+                    p: 2.5,
+                    height: "100%",
+                    borderRadius: 3,
+                    border: `1px solid ${alpha("#3b82f6", 0.15)}`,
+                    transition: "all 0.2s",
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                      borderColor: "#3b82f6",
+                    },
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>
+                    {item.component}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: "0.85rem" }}>
+                    {item.description}
+                  </Typography>
+                  <List dense>
+                    {item.keyPoints.map((point) => (
+                      <ListItem key={point} sx={{ py: 0.2, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 20 }}>
+                          <CheckCircleIcon sx={{ fontSize: 12, color: "#3b82f6" }} />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={point}
+                          primaryTypographyProps={{ variant: "caption", fontSize: "0.75rem" }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+
+        {/* Group Policy Section */}
+        <Box id="group-policy" sx={{ mt: 5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            📋 Group Policy Settings
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Important security-related Group Policy configurations
+          </Typography>
+
+          {groupPolicySettings.map((category) => (
+            <Accordion
+              key={category.category}
+              sx={{
+                mb: 2,
+                borderRadius: 3,
+                "&:before": { display: "none" },
+                border: `1px solid ${alpha("#10b981", 0.2)}`,
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{ bgcolor: alpha("#10b981", 0.05) }}
+              >
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    {category.category}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: "0.65rem" }}>
+                    {category.path}
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>Setting</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Recommended</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Risk if Misconfigured</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {category.settings.map((setting) => (
+                      <TableRow key={setting.name}>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontSize: "0.85rem" }}>{setting.name}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={setting.recommended}
+                            size="small"
+                            sx={{ bgcolor: alpha("#10b981", 0.1), color: "#10b981", fontWeight: 600, fontSize: "0.7rem" }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" color="error">
+                            <WarningIcon sx={{ fontSize: 12, mr: 0.5, verticalAlign: "middle" }} />
+                            {setting.risk}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </AccordionDetails>
+            </Accordion>
+          ))}
+        </Box>
+
         {/* Important Processes Section */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 5 }}>
           <Divider sx={{ flex: 1 }} />
           <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
             PROCESSES
           </Typography>
           <Divider sx={{ flex: 1 }} />
-        </Box>
-
         </Box>
 
         {/* Processes Section */}
@@ -2191,7 +3195,7 @@ export default function WindowsBasicsPage() {
           Key Windows Security Log events for detection and forensics
         </Typography>
 
-        <Grid container spacing={2} sx={{ mb: 5 }}>
+        <Grid container spacing={2} sx={{ mb: 3 }}>
           {securityEventIds.map((evt) => (
             <Grid item xs={12} sm={6} md={4} key={evt.eventId}>
               <Paper
@@ -2235,6 +3239,50 @@ export default function WindowsBasicsPage() {
             </Grid>
           ))}
         </Grid>
+
+        {/* Additional Security Events */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+          Additional Important Event IDs
+        </Typography>
+        <TableContainer
+          component={Paper}
+          sx={{
+            mb: 5,
+            borderRadius: 4,
+            border: `1px solid ${alpha("#06b6d4", 0.15)}`,
+          }}
+        >
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.1)} 0%, ${alpha("#0891b2", 0.1)} 100%)` }}>
+                <TableCell sx={{ fontWeight: 700 }}>Event ID</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Security Relevance</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {additionalSecurityEvents.map((evt, index) => (
+                <TableRow key={evt.eventId} sx={{ bgcolor: index % 2 === 0 ? "transparent" : alpha("#06b6d4", 0.02) }}>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 700, color: "#06b6d4" }}>
+                      {evt.eventId}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 600, fontSize: "0.85rem" }}>{evt.description}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={evt.category} size="small" sx={{ fontSize: "0.65rem", fontWeight: 600 }} />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" color="text.secondary">{evt.notes}</Typography>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
         {/* Keyboard Shortcuts */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
@@ -2433,8 +3481,143 @@ export default function WindowsBasicsPage() {
 
         </Box>
 
+        {/* Forensic Artifacts Section */}
+        <Box id="forensic-artifacts" sx={{ mt: 5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+            <Divider sx={{ flex: 1 }} />
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
+              FORENSICS
+            </Typography>
+            <Divider sx={{ flex: 1 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🔍 Forensic Artifacts
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Key locations and files for Windows forensic analysis
+          </Typography>
+
+          {forensicArtifacts.map((category) => (
+            <Accordion
+              key={category.category}
+              sx={{
+                mb: 2,
+                borderRadius: 3,
+                "&:before": { display: "none" },
+                border: `1px solid ${alpha("#ec4899", 0.2)}`,
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{ bgcolor: alpha("#ec4899", 0.05) }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <FindInPageIcon sx={{ color: "#ec4899", fontSize: 20 }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    {category.category}
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  {category.artifacts.map((artifact) => (
+                    <Grid item xs={12} sm={6} key={artifact.name}>
+                      <Paper
+                        sx={{
+                          p: 2,
+                          bgcolor: alpha("#ec4899", 0.02),
+                          borderLeft: `3px solid ${alpha("#ec4899", 0.3)}`,
+                        }}
+                      >
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                          {artifact.name}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontFamily: "monospace",
+                            color: "#ec4899",
+                            display: "block",
+                            mb: 0.5,
+                            wordBreak: "break-all",
+                            fontSize: "0.65rem",
+                          }}
+                        >
+                          {artifact.location}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {artifact.description}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          ))}
+        </Box>
+
+        {/* Hardening Checklist Section */}
+        <Box id="hardening" sx={{ mt: 5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+            <Divider sx={{ flex: 1 }} />
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
+              HARDENING
+            </Typography>
+            <Divider sx={{ flex: 1 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            🛡️ Windows Hardening Checklist
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Essential security hardening measures for Windows systems
+          </Typography>
+
+          <Grid container spacing={2}>
+            {hardeningChecklist.map((category) => (
+              <Grid item xs={12} md={6} key={category.category}>
+                <Paper
+                  sx={{
+                    p: 2.5,
+                    height: "100%",
+                    borderRadius: 3,
+                    border: `1px solid ${alpha("#22c55e", 0.15)}`,
+                    transition: "all 0.2s",
+                    "&:hover": {
+                      borderColor: "#22c55e",
+                    },
+                  }}
+                >
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 700, mb: 2, color: "#22c55e", display: "flex", alignItems: "center", gap: 1 }}
+                  >
+                    <VerifiedUserIcon sx={{ fontSize: 20 }} />
+                    {category.category}
+                  </Typography>
+                  <List dense>
+                    {category.items.map((item, index) => (
+                      <ListItem key={index} sx={{ py: 0.3, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 24 }}>
+                          <CheckCircleIcon sx={{ fontSize: 14, color: "#22c55e" }} />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={item}
+                          primaryTypographyProps={{ variant: "body2", fontSize: "0.85rem" }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+
         {/* Pro Tips - Enhanced */}
-        <Box id="pro-tips">
+        <Box id="pro-tips" sx={{ mt: 5 }}>
           <Paper
             sx={{
               p: 3,

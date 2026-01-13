@@ -214,8 +214,8 @@ export const api = {
     request<CodeSnippet>(`/reports/${reportId}/findings/${findingId}/snippet`),
   getCodebaseStructure: (reportId: number) =>
     request<CodebaseStructure>(`/reports/${reportId}/codebase`),
-  getCodebaseSummary: (reportId: number) =>
-    request<CodebaseSummary>(`/reports/${reportId}/codebase/summary`),
+  getCodebaseSummary: (reportId: number, forceRegenerate: boolean = false) =>
+    request<CodebaseSummary>(`/reports/${reportId}/codebase/summary${forceRegenerate ? '?force_regenerate=true' : ''}`),
   getCodebaseDiagram: (reportId: number) =>
     request<CodebaseDiagram>(`/reports/${reportId}/codebase/diagram`),
   getFileContent: (reportId: number, filePath: string) =>
@@ -255,17 +255,28 @@ export const api = {
     reportId: number,
     message: string,
     conversationHistory: ChatMessage[],
-    contextTab: "findings" | "exploitability" = "findings"
+    contextTab: "findings" | "exploitability" = "findings",
+    retryOnAuth = true
   ): Promise<{ response: string; error?: string }> => {
     const resp = await fetch(`${API_URL}/reports/${reportId}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         message,
         conversation_history: conversationHistory,
         context_tab: contextTab,
       }),
     });
+    if (resp.status === 401 && retryOnAuth) {
+      const refreshed = await refreshTokenIfNeeded();
+      if (refreshed) {
+        return api.chatAboutReport(reportId, message, conversationHistory, contextTab, false);
+      }
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      window.location.href = "/login";
+      throw new Error("Unauthorized");
+    }
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -1044,7 +1055,10 @@ export async function analyzePcaps(
   includeAi: boolean = true,
   maxPackets: number = 100000,
   saveReport: boolean = true,
-  projectId?: number
+  projectId?: number,
+  includeDocumentAnalysis: boolean = false,
+  includeNotes: boolean = false,
+  userContext: string = ""
 ): Promise<MultiPcapAnalysisResponse> {
   const form = new FormData();
   files.forEach((file) => form.append("files", file));
@@ -1053,11 +1067,22 @@ export async function analyzePcaps(
     include_ai: String(includeAi),
     max_packets: String(maxPackets),
     save_report: String(saveReport),
+    include_document_analysis: String(includeDocumentAnalysis),
+    include_notes: String(includeNotes),
   });
   if (projectId !== undefined) params.append("project_id", String(projectId));
+  if (userContext.trim()) params.append("user_context", userContext.trim());
+
+  // Get auth token for authenticated request
+  const token = localStorage.getItem("vragent_access_token");
+  const headers: HeadersInit = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
   const resp = await fetch(`${API_URL}/pcap/analyze?${params}`, {
     method: "POST",
+    headers,
     body: form,
   });
 
@@ -1090,11 +1115,18 @@ export type PcapChatResponse = {
 };
 
 export async function chatAboutPcap(request: PcapChatRequest): Promise<PcapChatResponse> {
+  // Get auth token for authenticated request
+  const token = localStorage.getItem("vragent_access_token");
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const resp = await fetch(`${API_URL}/pcap/chat`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(request),
   });
 
@@ -1545,7 +1577,9 @@ export const apiClient = {
     const params = new URLSearchParams();
     if (noteType) params.append("note_type", noteType);
     const queryString = params.toString() ? `?${params.toString()}` : "";
-    const resp = await fetch(`${API_URL}/findings/${findingId}/notes${queryString}`);
+    const resp = await fetch(`${API_URL}/findings/${findingId}/notes${queryString}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -1553,7 +1587,7 @@ export const apiClient = {
   createFindingNote: async (findingId: number, note: FindingNoteCreate): Promise<FindingNote> => {
     const resp = await fetch(`${API_URL}/findings/${findingId}/notes`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(note),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -1563,7 +1597,7 @@ export const apiClient = {
   updateFindingNote: async (noteId: number, note: FindingNoteUpdate): Promise<FindingNote> => {
     const resp = await fetch(`${API_URL}/findings/notes/${noteId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(note),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -1571,12 +1605,17 @@ export const apiClient = {
   },
 
   deleteFindingNote: async (noteId: number): Promise<void> => {
-    const resp = await fetch(`${API_URL}/findings/notes/${noteId}`, { method: "DELETE" });
+    const resp = await fetch(`${API_URL}/findings/notes/${noteId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
   },
 
   getProjectNotesSummary: async (projectId: number): Promise<ProjectNotesSummary> => {
-    const resp = await fetch(`${API_URL}/findings/project/${projectId}/notes-summary`);
+    const resp = await fetch(`${API_URL}/findings/project/${projectId}/notes-summary`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -1590,7 +1629,9 @@ export const apiClient = {
     if (hasNotes !== undefined) params.append("has_notes", String(hasNotes));
     if (noteType) params.append("note_type", noteType);
     const queryString = params.toString() ? `?${params.toString()}` : "";
-    const resp = await fetch(`${API_URL}/findings/project/${projectId}/findings-with-notes${queryString}`);
+    const resp = await fetch(`${API_URL}/findings/project/${projectId}/findings-with-notes${queryString}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -1601,7 +1642,9 @@ export const apiClient = {
 
   getProjectGeneralNotes: async (projectId: number, noteType?: ProjectNoteType): Promise<ProjectNote[]> => {
     const params = noteType ? `?note_type=${noteType}` : "";
-    const resp = await fetch(`${API_URL}/findings/project/${projectId}/general-notes${params}`);
+    const resp = await fetch(`${API_URL}/findings/project/${projectId}/general-notes${params}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -1609,7 +1652,7 @@ export const apiClient = {
   createProjectNote: async (projectId: number, note: ProjectNoteCreate): Promise<ProjectNote> => {
     const resp = await fetch(`${API_URL}/findings/project/${projectId}/general-notes`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(note),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -1619,7 +1662,7 @@ export const apiClient = {
   updateProjectNote: async (noteId: number, note: ProjectNoteUpdate): Promise<ProjectNote> => {
     const resp = await fetch(`${API_URL}/findings/project-notes/${noteId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(note),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -1627,7 +1670,10 @@ export const apiClient = {
   },
 
   deleteProjectNote: async (noteId: number): Promise<void> => {
-    const resp = await fetch(`${API_URL}/findings/project-notes/${noteId}`, { method: "DELETE" });
+    const resp = await fetch(`${API_URL}/findings/project-notes/${noteId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
   },
 
@@ -1647,11 +1693,12 @@ export const apiClient = {
       hosts?: any[];
       ai_analysis?: any;
     },
-    analysisType: "nmap" | "pcap" = "nmap"
+    analysisType: "nmap" | "pcap" = "nmap",
+    retryOnAuth = true
   ): Promise<{ response: string; error?: string }> => {
     const resp = await fetch(`${API_URL}/network/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         message,
         conversation_history: conversationHistory,
@@ -1659,6 +1706,16 @@ export const apiClient = {
         analysis_type: analysisType,
       }),
     });
+    if (resp.status === 401 && retryOnAuth) {
+      const refreshed = await refreshTokenIfNeeded();
+      if (refreshed) {
+        return apiClient.chatAboutNetworkAnalysis(message, conversationHistory, context, analysisType, false);
+      }
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      window.location.href = "/login";
+      throw new Error("Unauthorized");
+    }
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -1669,6 +1726,7 @@ export const apiClient = {
     timeout?: number;
     include_ai?: boolean;
     title?: string;
+    project_id?: number;
   }): Promise<any> => {
     const resp = await fetch(`${API_URL}/network/ssl/scan`, {
       method: "POST",
@@ -1686,6 +1744,62 @@ export const apiClient = {
       timeout: String(timeout),
     });
     const resp = await fetch(`${API_URL}/network/ssl/scan-single?${params}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // SSL Scan History endpoints
+  getSSLScanHistory: async (projectId?: number, limit: number = 50, offset: number = 0): Promise<{
+    scans: Array<{
+      id: number;
+      title: string;
+      targets: string;
+      created_at: string;
+      risk_level: string | null;
+      risk_score: number | null;
+      total_hosts: number | null;
+      findings_count: number;
+      project_id: number | null;
+      project_name: string | null;
+    }>;
+    total: number;
+  }> => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (projectId) params.set("project_id", String(projectId));
+    const resp = await fetch(`${API_URL}/network/ssl/history?${params}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getSSLScanDetail: async (scanId: number): Promise<{
+    id: number;
+    title: string;
+    targets: string;
+    created_at: string;
+    risk_level: string | null;
+    risk_score: number | null;
+    summary: any;
+    findings: any;
+    ai_analysis: any;
+    project_id: number | null;
+  }> => {
+    const resp = await fetch(`${API_URL}/network/ssl/history/${scanId}`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  associateSSLScanWithProject: async (scanId: number, projectId: number): Promise<{ message: string; project_id: number }> => {
+    const resp = await fetch(`${API_URL}/network/ssl/history/${scanId}/project?project_id=${projectId}`, {
+      method: "PUT",
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteSSLScan: async (scanId: number): Promise<{ message: string; id: number }> => {
+    const resp = await fetch(`${API_URL}/network/ssl/history/${scanId}`, {
+      method: "DELETE",
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -1844,17 +1958,28 @@ export const apiClient = {
   chatAboutDns: async (
     message: string,
     dnsContext: Record<string, any>,
-    conversationHistory?: Array<{ role: string; content: string }>
+    conversationHistory?: Array<{ role: string; content: string }>,
+    retryOnAuth = true
   ): Promise<{ response: string; suggestions: string[] }> => {
     const resp = await fetch(`${API_URL}/dns/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         message,
         dns_context: dnsContext,
         conversation_history: conversationHistory,
       }),
     });
+    if (resp.status === 401 && retryOnAuth) {
+      const refreshed = await refreshTokenIfNeeded();
+      if (refreshed) {
+        return apiClient.chatAboutDns(message, dnsContext, conversationHistory, false);
+      }
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      window.location.href = "/login";
+      throw new Error("Unauthorized");
+    }
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -2003,17 +2128,28 @@ export const apiClient = {
   chatAboutTraceroute: async (
     message: string,
     tracerouteContext: Record<string, any>,
-    conversationHistory?: Array<{ role: string; content: string }>
+    conversationHistory?: Array<{ role: string; content: string }>,
+    retryOnAuth = true
   ): Promise<{ response: string; error?: string }> => {
     const resp = await fetch(`${API_URL}/traceroute/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         message,
         traceroute_context: tracerouteContext,
         chat_history: conversationHistory,
       }),
     });
+    if (resp.status === 401 && retryOnAuth) {
+      const refreshed = await refreshTokenIfNeeded();
+      if (refreshed) {
+        return apiClient.chatAboutTraceroute(message, tracerouteContext, conversationHistory, false);
+      }
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      window.location.href = "/login";
+      throw new Error("Unauthorized");
+    }
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -2035,6 +2171,16 @@ export const apiClient = {
       method: "DELETE",
     });
     if (!resp.ok) throw new Error(await resp.text());
+  },
+
+  runBatchTraceroute: async (request: BatchTracerouteRequest): Promise<BatchTracerouteResponse> => {
+    const resp = await fetch(`${API_URL}/traceroute/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
   },
 
   // ============================================================================
@@ -2494,9 +2640,53 @@ export type DNSSecurityAnalysis = {
   dnssec_details?: string;
   has_caa: boolean;
   caa_records: string[];
+  // BIMI (Brand Indicators for Message Identification)
+  has_bimi?: boolean;
+  bimi_record?: string;
+  // MTA-STS (Mail Transfer Agent Strict Transport Security)
+  has_mta_sts?: boolean;
+  mta_sts_record?: string;
   mail_security_score: number;
   overall_issues: string[];
   recommendations: string[];
+};
+
+// Subdomain takeover vulnerability information
+export type SubdomainTakeoverRisk = {
+  subdomain: string;
+  cname_target: string;
+  provider: string;
+  risk_level: "critical" | "high" | "medium" | "low";
+  reason: string;
+  is_vulnerable: boolean;
+};
+
+// Cloud provider detection result
+export type CloudProviderInfo = {
+  ip_or_domain: string;
+  provider: string; // aws, azure, gcp, cloudflare, akamai, fastly, etc.
+  service?: string; // S3, CloudFront, API Gateway, etc.
+  region?: string;
+  is_cdn: boolean;
+};
+
+// ASN/BGP information for an IP
+export type ASNInfo = {
+  ip_address: string;
+  asn?: string;
+  asn_name?: string;
+  organization?: string;
+  country?: string;
+  network_range?: string;
+};
+
+// Certificate Transparency log entry
+export type CTLogEntry = {
+  common_name: string;
+  issuer: string;
+  not_before: string;
+  not_after: string;
+  san_names: string[];
 };
 
 export type DNSReconResult = {
@@ -2516,6 +2706,24 @@ export type DNSReconResult = {
   unique_ips: string[];
   ai_analysis?: any;
   report_id?: number;
+  // Advanced reconnaissance fields
+  takeover_risks?: SubdomainTakeoverRisk[];
+  cloud_providers?: CloudProviderInfo[];
+  asn_info?: ASNInfo[];
+  ct_logs?: CTLogEntry[];
+  has_wildcard?: boolean;
+  wildcard_ips?: string[];
+  dangling_cnames?: Array<{ subdomain: string; cname: string; error: string }>;
+  geo_distribution?: Record<string, string[]>;
+  infrastructure_summary?: {
+    total_unique_ips: number;
+    total_asns: number;
+    cloud_providers_detected: string[];
+    cdn_usage: boolean;
+    potential_takeovers: number;
+    dangling_records: number;
+    has_wildcard: boolean;
+  };
 };
 
 export type SavedDNSReport = {
@@ -2679,6 +2887,80 @@ export type TracerouteReportDetail = {
   };
   ai_report: TracerouteAIAnalysis;
   created_at: string;
+};
+
+// Batch Traceroute Types
+export type BatchTracerouteRequest = {
+  targets: string[];
+  max_hops?: number;
+  timeout?: number;
+  queries?: number;
+  use_icmp?: boolean;
+  resolve_hostnames?: boolean;
+  save_reports?: boolean;
+  project_id?: number;
+};
+
+export type BatchTracerouteResult = {
+  target: string;
+  success: boolean;
+  result?: TracerouteResult;
+  ai_analysis?: TracerouteAIAnalysis;
+  error?: string;
+};
+
+export type BatchTracerouteCombinedTopology = {
+  nodes: Array<{
+    id: string;
+    ip: string;
+    type: "host" | "server" | "router" | "unknown";
+    hostname?: string;
+    riskLevel: "critical" | "high" | "medium" | "low" | "none";
+    targets?: string[];
+  }>;
+  links: Array<{
+    source: string;
+    target: string;
+    protocol: string;
+    packets: number;
+    targetHost: string;
+  }>;
+};
+
+export type BatchTracerouteComparativeAnalysis = {
+  summary: string;
+  shared_infrastructure: {
+    common_hops: string[];
+    shared_isps: string[];
+    convergence_analysis: string;
+  };
+  performance_comparison: {
+    fastest_target: string;
+    slowest_target: string;
+    hop_count_analysis: string;
+  };
+  geographic_analysis: {
+    regions_covered: string[];
+    routing_patterns: string;
+  };
+  security_observations: Array<{
+    observation: string;
+    affected_targets: string[];
+    severity: string;
+  }>;
+  recommendations: string[];
+};
+
+export type BatchTracerouteResponse = {
+  targets_requested: number;
+  targets_traced: number;
+  successful: number;
+  failed: number;
+  results: BatchTracerouteResult[];
+  validation_errors: Array<{ target: string; error: string }>;
+  combined_topology: BatchTracerouteCombinedTopology;
+  comparative_analysis?: BatchTracerouteComparativeAnalysis;
+  saved_reports?: Array<{ target: string; report_id: number }>;
 };
 
 // ============================================================================
@@ -3329,12 +3611,22 @@ export const apiTester = {
   },
 
   // Chat with AI about API security test results
-  chatAboutTests: async (request: APITesterChatRequest): Promise<APITesterChatResponse> => {
+  chatAboutTests: async (request: APITesterChatRequest, retryOnAuth = true): Promise<APITesterChatResponse> => {
     const resp = await fetch(`${API_URL}/api-tester/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(request),
     });
+    if (resp.status === 401 && retryOnAuth) {
+      const refreshed = await refreshTokenIfNeeded();
+      if (refreshed) {
+        return apiTester.chatAboutTests(request, false);
+      }
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      window.location.href = "/login";
+      throw new Error("Unauthorized");
+    }
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -3350,6 +3642,1027 @@ export const apiTester = {
     return resp.json();
   },
 };
+
+// ===== API Collections (Postman-style) =====
+
+// Types for Collections
+export interface APICollectionVariable {
+  key: string;
+  value: string;
+  type?: "default" | "secret";
+  enabled?: boolean;
+}
+
+export interface APICollectionHeader {
+  key: string;
+  value: string;
+  enabled?: boolean;
+}
+
+export interface APICollectionParam {
+  key: string;
+  value: string;
+  description?: string;
+  enabled?: boolean;
+}
+
+export interface APICollectionAuthConfig {
+  type: string;
+  username?: string;
+  password?: string;
+  token?: string;
+  api_key?: string;
+  api_key_header?: string;
+  oauth2_config?: Record<string, unknown>;
+}
+
+export interface APICollectionRequest {
+  id?: number;
+  collection_id?: number;
+  folder_id?: number | null;
+  name: string;
+  description?: string;
+  method: string;
+  url: string;
+  params?: APICollectionParam[];
+  headers?: APICollectionHeader[];
+  body_type?: string | null;
+  body_content?: string;
+  body_form_data?: Record<string, unknown>[];
+  graphql_query?: string;
+  graphql_variables?: Record<string, unknown>;
+  auth_type?: string | null;
+  auth_config?: Record<string, unknown> | null;
+  pre_request_script?: string;
+  test_script?: string;
+  timeout_ms?: number;
+  follow_redirects?: boolean;
+  saved_responses?: Array<{
+    name: string;
+    status: number;
+    headers: Record<string, string>;
+    body: string;
+    saved_at?: string;
+  }>;
+  sort_order?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface APICollectionFolder {
+  id?: number;
+  collection_id?: number;
+  parent_folder_id?: number | null;
+  name: string;
+  description?: string;
+  auth_type?: string | null;
+  auth_config?: Record<string, unknown> | null;
+  pre_request_script?: string;
+  test_script?: string;
+  sort_order?: number;
+  created_at?: string;
+  updated_at?: string;
+  subfolders?: APICollectionFolder[];
+  requests?: APICollectionRequest[];
+}
+
+export interface APICollection {
+  id?: number;
+  name: string;
+  description?: string;
+  variables?: APICollectionVariable[];
+  pre_request_script?: string;
+  test_script?: string;
+  auth_type?: string | null;
+  auth_config?: Record<string, unknown> | null;
+  headers?: APICollectionHeader[];
+  is_shared?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  folders?: APICollectionFolder[];
+  requests?: APICollectionRequest[];
+  request_count?: number;
+  folder_count?: number;
+}
+
+export interface APIEnvironment {
+  id?: number;
+  name: string;
+  description?: string;
+  variables: Array<{
+    key: string;
+    value: string;
+    type?: string;
+    enabled?: boolean;
+  }>;
+  is_active: boolean;
+  color: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface APIGlobalVariable {
+  id?: number;
+  key: string;
+  value: string;
+  description?: string;
+  is_secret: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface APIRequestHistoryEntry {
+  id?: number;
+  collection_id?: number;
+  request_id?: number;
+  method: string;
+  url: string;
+  original_url?: string;
+  headers?: Array<{ key: string; value: string }>;
+  body?: string;
+  status_code?: number;
+  status_text?: string;
+  response_headers?: Record<string, string>;
+  response_body?: string;
+  response_size_bytes?: number;
+  response_time_ms?: number;
+  request_cookies?: Array<{ name: string; value: string }>;
+  response_cookies?: Array<{ name: string; value: string }>;
+  test_results?: Array<{ name: string; passed: boolean; error?: string }>;
+  tests_passed: number;
+  tests_failed: number;
+  security_findings?: Array<Record<string, unknown>>;
+  error?: string;
+  environment_id?: number;
+  environment_name?: string;
+  executed_at?: string;
+}
+
+export interface APIRequestHistoryStats {
+  total_requests: number;
+  methods: Record<string, number>;
+  success_count: number;
+  error_count: number;
+  success_rate: number;
+  avg_response_time_ms?: number;
+}
+
+// API Collections Client
+export const apiCollections = {
+  // ===== Collections =====
+  
+  // Create a new collection
+  createCollection: async (data: {
+    name: string;
+    description?: string;
+    variables?: APICollectionVariable[];
+    headers?: APICollectionHeader[];
+    auth_type?: string;
+    auth_config?: Record<string, unknown>;
+    pre_request_script?: string;
+    test_script?: string;
+  }): Promise<{ success: boolean; collection: APICollection }> => {
+    const resp = await fetch(`${API_URL}/api-collections/collections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List all collections
+  listCollections: async (includeShared: boolean = true): Promise<{
+    success: boolean;
+    collections: APICollection[];
+    total: number;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/collections?include_shared=${includeShared}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a single collection with contents
+  getCollection: async (collectionId: number, includeContents: boolean = true): Promise<{
+    success: boolean;
+    collection: APICollection;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/collections/${collectionId}?include_contents=${includeContents}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update a collection
+  updateCollection: async (collectionId: number, data: Partial<APICollection>): Promise<{
+    success: boolean;
+    collection: APICollection;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/collections/${collectionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a collection
+  deleteCollection: async (collectionId: number): Promise<{ success: boolean; message: string }> => {
+    const resp = await fetch(`${API_URL}/api-collections/collections/${collectionId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Duplicate a collection
+  duplicateCollection: async (collectionId: number, newName?: string): Promise<{
+    success: boolean;
+    collection: APICollection;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/collections/${collectionId}/duplicate${newName ? `?new_name=${encodeURIComponent(newName)}` : ''}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Export a collection
+  exportCollection: async (collectionId: number, format: "json" | "postman" = "json"): Promise<{
+    success: boolean;
+    data: Record<string, unknown>;
+    format: string;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/collections/${collectionId}/export?format=${format}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Import a collection
+  importCollection: async (data: Record<string, unknown>, format: "auto" | "postman" | "native" = "auto"): Promise<{
+    success: boolean;
+    collection: APICollection;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/collections/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify({ data, format }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ===== Folders =====
+
+  // Create a folder
+  createFolder: async (data: {
+    collection_id: number;
+    name: string;
+    description?: string;
+    parent_folder_id?: number;
+    auth_type?: string;
+    auth_config?: Record<string, unknown>;
+    pre_request_script?: string;
+    test_script?: string;
+  }): Promise<{ success: boolean; folder: APICollectionFolder }> => {
+    const resp = await fetch(`${API_URL}/api-collections/folders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a folder
+  getFolder: async (folderId: number): Promise<{ success: boolean; folder: APICollectionFolder }> => {
+    const resp = await fetch(`${API_URL}/api-collections/folders/${folderId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update a folder
+  updateFolder: async (folderId: number, data: Partial<APICollectionFolder>): Promise<{
+    success: boolean;
+    folder: APICollectionFolder;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/folders/${folderId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a folder
+  deleteFolder: async (folderId: number): Promise<{ success: boolean; message: string }> => {
+    const resp = await fetch(`${API_URL}/api-collections/folders/${folderId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Move a folder
+  moveFolder: async (folderId: number, data: {
+    new_parent_folder_id?: number | null;
+    new_collection_id?: number;
+  }): Promise<{ success: boolean; folder: APICollectionFolder }> => {
+    const resp = await fetch(`${API_URL}/api-collections/folders/${folderId}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ===== Requests =====
+
+  // Create a request
+  createRequest: async (data: {
+    collection_id: number;
+    folder_id?: number;
+    name: string;
+    description?: string;
+    method?: string;
+    url: string;
+    params?: APICollectionParam[];
+    headers?: APICollectionHeader[];
+    body_type?: string;
+    body_content?: string;
+    body_form_data?: Record<string, unknown>[];
+    graphql_query?: string;
+    graphql_variables?: Record<string, unknown>;
+    auth_type?: string;
+    auth_config?: Record<string, unknown>;
+    pre_request_script?: string;
+    test_script?: string;
+    timeout_ms?: number;
+    follow_redirects?: boolean;
+  }): Promise<{ success: boolean; request: APICollectionRequest }> => {
+    const resp = await fetch(`${API_URL}/api-collections/requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a request
+  getRequest: async (requestId: number): Promise<{ success: boolean; request: APICollectionRequest }> => {
+    const resp = await fetch(`${API_URL}/api-collections/requests/${requestId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update a request
+  updateRequest: async (requestId: number, data: Partial<APICollectionRequest>): Promise<{
+    success: boolean;
+    request: APICollectionRequest;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/requests/${requestId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a request
+  deleteRequest: async (requestId: number): Promise<{ success: boolean; message: string }> => {
+    const resp = await fetch(`${API_URL}/api-collections/requests/${requestId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Duplicate a request
+  duplicateRequest: async (requestId: number, data?: {
+    new_name?: string;
+    target_folder_id?: number;
+    target_collection_id?: number;
+  }): Promise<{ success: boolean; request: APICollectionRequest }> => {
+    const resp = await fetch(`${API_URL}/api-collections/requests/${requestId}/duplicate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data || {}),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Move a request
+  moveRequest: async (requestId: number, data: {
+    target_folder_id?: number | null;
+    target_collection_id?: number;
+  }): Promise<{ success: boolean; request: APICollectionRequest }> => {
+    const resp = await fetch(`${API_URL}/api-collections/requests/${requestId}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Save a response example
+  saveResponseExample: async (requestId: number, data: {
+    name: string;
+    status: number;
+    headers: Record<string, string>;
+    body: string;
+  }): Promise<{ success: boolean; request: APICollectionRequest }> => {
+    const resp = await fetch(`${API_URL}/api-collections/requests/${requestId}/save-response`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ===== Bulk Operations =====
+
+  // Reorder items
+  reorderItems: async (items: Array<{
+    type: "folder" | "request";
+    id: number;
+    sort_order: number;
+  }>): Promise<{ success: boolean }> => {
+    const resp = await fetch(`${API_URL}/api-collections/reorder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify({ items }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ===== Environments =====
+
+  // Create a new environment
+  createEnvironment: async (data: {
+    name: string;
+    description?: string;
+    variables?: Array<{ key: string; value: string; type?: string; enabled?: boolean }>;
+    color?: string;
+  }): Promise<{ success: boolean; environment: APIEnvironment }> => {
+    const resp = await fetch(`${API_URL}/api-collections/environments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List all environments
+  listEnvironments: async (): Promise<{
+    success: boolean;
+    environments: APIEnvironment[];
+    count: number;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/environments`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get active environment
+  getActiveEnvironment: async (): Promise<{
+    success: boolean;
+    environment: APIEnvironment | null;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/environments/active`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a specific environment
+  getEnvironment: async (environmentId: number): Promise<{
+    success: boolean;
+    environment: APIEnvironment;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/environments/${environmentId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update an environment
+  updateEnvironment: async (environmentId: number, data: {
+    name?: string;
+    description?: string;
+    variables?: Array<{ key: string; value: string; type?: string; enabled?: boolean }>;
+    color?: string;
+  }): Promise<{ success: boolean; environment: APIEnvironment }> => {
+    const resp = await fetch(`${API_URL}/api-collections/environments/${environmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Activate an environment
+  activateEnvironment: async (environmentId: number): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/environments/${environmentId}/activate`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Deactivate all environments
+  deactivateEnvironments: async (): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/environments/deactivate`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete an environment
+  deleteEnvironment: async (environmentId: number): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/environments/${environmentId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Duplicate an environment
+  duplicateEnvironment: async (environmentId: number, newName?: string): Promise<{
+    success: boolean;
+    environment: APIEnvironment;
+  }> => {
+    const url = newName 
+      ? `${API_URL}/api-collections/environments/${environmentId}/duplicate?new_name=${encodeURIComponent(newName)}`
+      : `${API_URL}/api-collections/environments/${environmentId}/duplicate`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ===== Global Variables =====
+
+  // Create a global variable
+  createGlobalVariable: async (data: {
+    key: string;
+    value: string;
+    description?: string;
+    is_secret?: boolean;
+  }): Promise<{ success: boolean; variable: APIGlobalVariable }> => {
+    const resp = await fetch(`${API_URL}/api-collections/globals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List all global variables
+  listGlobalVariables: async (): Promise<{
+    success: boolean;
+    variables: APIGlobalVariable[];
+    count: number;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/globals`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a global variable
+  getGlobalVariable: async (variableId: number, includeSecret: boolean = false): Promise<{
+    success: boolean;
+    variable: APIGlobalVariable;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/globals/${variableId}?include_secret=${includeSecret}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update a global variable
+  updateGlobalVariable: async (variableId: number, data: {
+    key: string;
+    value: string;
+    description?: string;
+    is_secret?: boolean;
+  }): Promise<{ success: boolean; variable: APIGlobalVariable }> => {
+    const resp = await fetch(`${API_URL}/api-collections/globals/${variableId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a global variable
+  deleteGlobalVariable: async (variableId: number): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/globals/${variableId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ===== Variable Substitution =====
+
+  // Get all variables for substitution
+  getAllVariables: async (collectionId?: number): Promise<{
+    success: boolean;
+    environment_variables: Array<{ key: string; value: string; enabled: boolean }>;
+    global_variables: Array<{ key: string; value: string; enabled: boolean }>;
+    collection_variables: Array<{ key: string; value: string; enabled: boolean }>;
+  }> => {
+    const url = collectionId
+      ? `${API_URL}/api-collections/variables/all?collection_id=${collectionId}`
+      : `${API_URL}/api-collections/variables/all`;
+    const resp = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ===== Request History =====
+
+  // Create a history entry
+  createHistoryEntry: async (data: {
+    method: string;
+    url: string;
+    original_url?: string;
+    headers?: Array<{ key: string; value: string }>;
+    body?: string;
+    collection_id?: number;
+    request_id?: number;
+    status_code?: number;
+    status_text?: string;
+    response_headers?: Record<string, string>;
+    response_body?: string;
+    response_size_bytes?: number;
+    response_time_ms?: number;
+    request_cookies?: Array<{ name: string; value: string }>;
+    response_cookies?: Array<{ name: string; value: string }>;
+    test_results?: Array<{ name: string; passed: boolean; error?: string }>;
+    security_findings?: Array<Record<string, unknown>>;
+    error?: string;
+    environment_id?: number;
+    environment_name?: string;
+  }): Promise<{ success: boolean; entry: APIRequestHistoryEntry }> => {
+    const resp = await fetch(`${API_URL}/api-collections/history`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List history entries
+  listHistory: async (options?: {
+    limit?: number;
+    offset?: number;
+    method?: string;
+    url?: string;
+    status?: "success" | "error" | "redirect";
+    collection_id?: number;
+    from_date?: string;
+    to_date?: string;
+  }): Promise<{
+    success: boolean;
+    entries: APIRequestHistoryEntry[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> => {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.offset) params.set("offset", String(options.offset));
+    if (options?.method) params.set("method", options.method);
+    if (options?.url) params.set("url", options.url);
+    if (options?.status) params.set("status", options.status);
+    if (options?.collection_id) params.set("collection_id", String(options.collection_id));
+    if (options?.from_date) params.set("from_date", options.from_date);
+    if (options?.to_date) params.set("to_date", options.to_date);
+    
+    const resp = await fetch(`${API_URL}/api-collections/history?${params.toString()}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get history stats
+  getHistoryStats: async (): Promise<{ success: boolean } & APIRequestHistoryStats> => {
+    const resp = await fetch(`${API_URL}/api-collections/history/stats`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a single history entry
+  getHistoryEntry: async (historyId: number): Promise<{
+    success: boolean;
+    entry: APIRequestHistoryEntry;
+  }> => {
+    const resp = await fetch(`${API_URL}/api-collections/history/${historyId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a history entry
+  deleteHistoryEntry: async (historyId: number): Promise<{ success: boolean; message: string }> => {
+    const resp = await fetch(`${API_URL}/api-collections/history/${historyId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Clear history
+  clearHistory: async (options?: {
+    older_than_days?: number;
+    collection_id?: number;
+  }): Promise<{ success: boolean; deleted_count: number }> => {
+    const resp = await fetch(`${API_URL}/api-collections/history/clear`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(options || {}),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // AI-Powered Features
+  // ==========================================================================
+
+  // Generate API request from natural language
+  aiGenerateRequest: async (params: {
+    query: string;
+    base_url?: string;
+    available_endpoints?: string[];
+    auth_type?: string;
+    variables?: Record<string, string>;
+  }): Promise<AIGeneratedRequest> => {
+    const resp = await fetch(`${API_URL}/api-collections/ai/generate-request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(params),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Generate test assertions from request/response
+  aiGenerateTests: async (params: {
+    request: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      body?: string;
+    };
+    response: {
+      status_code: number;
+      status_text?: string;
+      headers?: Record<string, string>;
+      body?: string;
+      response_time_ms?: number;
+    };
+    test_types?: string[];
+  }): Promise<AIGeneratedTests> => {
+    const resp = await fetch(`${API_URL}/api-collections/ai/generate-tests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(params),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Suggest variables from response
+  aiSuggestVariables: async (params: {
+    response_body: string;
+    request_context?: Record<string, any>;
+  }): Promise<AISuggestedVariables> => {
+    const resp = await fetch(`${API_URL}/api-collections/ai/suggest-variables`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(params),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Analyze response for anomalies
+  aiAnalyzeResponse: async (params: {
+    request: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      body?: string;
+    };
+    response: {
+      status_code: number;
+      status_text?: string;
+      headers?: Record<string, string>;
+      body?: string;
+      response_time_ms?: number;
+      response_size_bytes?: number;
+    };
+    history?: Array<Record<string, any>>;
+  }): Promise<AIResponseAnalysis> => {
+    const resp = await fetch(`${API_URL}/api-collections/ai/analyze-response`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(params),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Generate API documentation from request/response
+  aiGenerateDocs: async (params: {
+    request: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      body?: string;
+    };
+    response: {
+      status_code: number;
+      status_text?: string;
+      headers?: Record<string, string>;
+      body?: string;
+    };
+  }): Promise<AIGeneratedDocs> => {
+    const resp = await fetch(`${API_URL}/api-collections/ai/generate-docs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(params),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+// ==========================================================================
+// AI API Types for Collections
+// ==========================================================================
+
+export interface AIGeneratedRequest {
+  success: boolean;
+  request: {
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    body?: string;
+    body_type: string;
+  };
+  description: string;
+  confidence: number;
+  suggestions: string[];
+}
+
+export interface AIGeneratedTest {
+  name: string;
+  type: string; // status, json_path, header, response_time, contains, schema
+  target: string;
+  operator: string; // equals, not_equals, contains, greater_than, less_than, exists, matches
+  expected: any;
+  code: string; // JavaScript test code
+  description: string;
+}
+
+export interface AIGeneratedTests {
+  success: boolean;
+  tests: AIGeneratedTest[];
+}
+
+export interface AISuggestedVariable {
+  name: string;
+  json_path: string;
+  sample_value: any;
+  description: string;
+  scope: string; // environment, collection, global
+}
+
+export interface AISuggestedVariables {
+  success: boolean;
+  variables: AISuggestedVariable[];
+}
+
+export interface AIResponseAnomaly {
+  type: string; // security, performance, data, schema
+  severity: string; // info, warning, error
+  title: string;
+  description: string;
+  location?: string;
+  suggestion?: string;
+}
+
+export interface AIResponseAnalysis {
+  success: boolean;
+  anomalies: AIResponseAnomaly[];
+  total_count: number;
+  by_severity: {
+    error: number;
+    warning: number;
+    info: number;
+  };
+  by_type: {
+    security: number;
+    performance: number;
+    data: number;
+    schema: number;
+  };
+}
+
+export interface AIGeneratedDocs {
+  success: boolean;
+  documentation: {
+    summary: string;
+    description: string;
+    parameters: Array<{
+      name: string;
+      in: string;
+      type: string;
+      required: boolean;
+      description: string;
+    }>;
+    request_body?: {
+      content_type: string;
+      schema: Record<string, any>;
+      example: any;
+    };
+    responses: Record<string, {
+      description: string;
+      schema?: Record<string, any>;
+      example?: any;
+    }>;
+    tags: string[];
+    security?: string[];
+    examples?: Array<{
+      title: string;
+      request: any;
+      response: any;
+    }>;
+  };
+}
 
 // ===== Security Fuzzer API =====
 
@@ -3428,12 +4741,19 @@ export interface Wordlist {
 
 export const fuzzer = {
   // Run a complete fuzzing session
-  run: async (config: FuzzerConfig): Promise<FuzzerResult> => {
+  run: async (config: FuzzerConfig, retryOnAuth = true): Promise<FuzzerResult> => {
     const resp = await fetch(`${API_URL}/fuzzer/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(config),
     });
+    if (resp.status === 401 && retryOnAuth) {
+      const refreshed = await refreshTokenIfNeeded();
+      if (refreshed) {
+        return fuzzer.run(config, false);
+      }
+      window.location.href = "/login";
+    }
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -3445,7 +4765,7 @@ export const fuzzer = {
     
     fetch(`${API_URL}/fuzzer/stream`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(config),
       signal: controller.signal,
     })
@@ -3509,7 +4829,7 @@ export const fuzzer = {
   exportResults: async (result: FuzzerResult, format: "json" | "markdown"): Promise<{ content: string; filename: string; mime_type: string }> => {
     const resp = await fetch(`${API_URL}/fuzzer/export`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ result, format }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3547,7 +4867,7 @@ export const fuzzer = {
   ): Promise<{ encoded: Record<string, any>; available_encodings: string[] }> => {
     const resp = await fetch(`${API_URL}/fuzzer/encode`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ payloads, encodings, chain }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3561,7 +4881,7 @@ export const fuzzer = {
   ): Promise<{ payloads: string[]; count: number; generator_type: string }> => {
     const resp = await fetch(`${API_URL}/fuzzer/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ generator_type: generatorType, params }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3575,7 +4895,7 @@ export const fuzzer = {
   ): Promise<{ mutations: Record<string, string[]>; total_variants: number }> => {
     const resp = await fetch(`${API_URL}/fuzzer/mutate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ payloads, mutation_types: mutationTypes }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3590,7 +4910,7 @@ export const fuzzer = {
   ): Promise<{ matches: any[]; match_count: number; extracted: Record<string, string[]> }> => {
     const resp = await fetch(`${API_URL}/fuzzer/grep`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ content, rules, use_common_rules: useCommonRules }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3604,7 +4924,7 @@ export const fuzzer = {
   ): Promise<{ clusters: any[]; total_clusters: number; anomalous_responses: string[] }> => {
     const resp = await fetch(`${API_URL}/fuzzer/cluster`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ responses, similarity_threshold: similarityThreshold }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3632,7 +4952,7 @@ export const fuzzer = {
   }> => {
     const resp = await fetch(`${API_URL}/fuzzer/analyze`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         responses,
         detect_waf: options.detectWaf ?? true,
@@ -3683,7 +5003,7 @@ export const fuzzer = {
   }): Promise<{ id: number; name: string; target_url: string; status: string; created_at: string; message: string }> => {
     const resp = await fetch(`${API_URL}/fuzzer/sessions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3729,7 +5049,9 @@ export const fuzzer = {
     if (params.search) queryParams.append("search", params.search);
     if (params.project_id !== undefined) queryParams.append("project_id", params.project_id.toString());
     
-    const resp = await fetch(`${API_URL}/fuzzer/sessions?${queryParams}`);
+    const resp = await fetch(`${API_URL}/fuzzer/sessions?${queryParams}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -3757,7 +5079,9 @@ export const fuzzer = {
     analysis?: any;
     tags: string[];
   }> => {
-    const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}`);
+    const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -3779,7 +5103,7 @@ export const fuzzer = {
   }): Promise<{ id: number; name: string; status: string; message: string }> => {
     const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3790,6 +5114,7 @@ export const fuzzer = {
   deleteSession: async (sessionId: number): Promise<{ message: string; id: number }> => {
     const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}`, {
       method: "DELETE",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -3799,6 +5124,7 @@ export const fuzzer = {
   duplicateSession: async (sessionId: number): Promise<{ id: number; name: string; message: string }> => {
     const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}/duplicate`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -3812,6 +5138,7 @@ export const fuzzer = {
   }> => {
     const resp = await fetch(`${API_URL}/fuzzer/sessions/${sessionId}/auto-analyze`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -3846,7 +5173,7 @@ export const fuzzer = {
   }> => {
     const resp = await fetch(`${API_URL}/fuzzer/smart-detect/vulnerabilities`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ responses, baseline_response: baselineResponse }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3873,7 +5200,7 @@ export const fuzzer = {
   }> => {
     const resp = await fetch(`${API_URL}/fuzzer/smart-detect/anomalies`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ responses, sensitivity }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3898,7 +5225,7 @@ export const fuzzer = {
   }> => {
     const resp = await fetch(`${API_URL}/fuzzer/smart-detect/differential`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ baseline_response: baselineResponse, test_responses: testResponses }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3912,7 +5239,7 @@ export const fuzzer = {
   }> => {
     const resp = await fetch(`${API_URL}/fuzzer/smart-detect/categorize`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ responses }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -3959,7 +5286,7 @@ export const fuzzer = {
   }> => {
     const resp = await fetch(`${API_URL}/fuzzer/smart-detect/auto-analyze`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         responses,
         detect_vulnerabilities: options.detect_vulnerabilities ?? true,
@@ -4012,15 +5339,22 @@ export interface MITMProxy {
 export interface MITMTrafficRequest {
   method: string;
   path: string;
+  host?: string;
+  url?: string;
+  protocol?: string;
   headers: Record<string, string>;
-  body: string;
+  body?: string;
+  body_text?: string;
 }
 
 export interface MITMTrafficResponse {
   status_code: number;
   status_text: string;
+  status_message?: string;
   headers: Record<string, string>;
-  body: string;
+  body?: string;
+  body_text?: string;
+  response_time_ms?: number;
 }
 
 export interface MITMTrafficEntry {
@@ -4031,22 +5365,45 @@ export interface MITMTrafficEntry {
   duration_ms: number;
   modified: boolean;
   rules_applied: string[];
+  tags?: string[];
+  notes?: string;
+}
+
+export interface MITMSession {
+  id: string;
+  name: string;
+  created_at: string;
+  entries: number;
+}
+
+export interface MITMSessionResponse {
+  entries: MITMTrafficEntry[];
+  total: number;
+  meta?: MITMSession;
 }
 
 export interface MITMRule {
   id: string;
   name: string;
   enabled: boolean;
+  priority?: number;
+  group?: string | null;
   match_direction: 'request' | 'response' | 'both';
   match_host?: string;
   match_path?: string;
   match_method?: string;
   match_content_type?: string;
   match_status_code?: number;
+  match_query?: Record<string, string>;
   action: 'modify' | 'drop' | 'delay';
   modify_headers?: Record<string, string>;
   remove_headers?: string[];
+  modify_body?: string;
   body_find_replace?: Record<string, string>;
+  body_find_replace_regex?: boolean;
+  json_path_edits?: Array<{ path: string; op?: string; value?: any }>;
+  modify_status_code?: number;
+  modify_path?: string;
   delay_ms?: number;
 }
 
@@ -4061,7 +5418,7 @@ export const mitmClient = {
   createProxy: async (config: MITMProxyConfig): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(config),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -4070,14 +5427,18 @@ export const mitmClient = {
 
   // List all MITM proxy instances
   listProxies: async (): Promise<MITMProxy[]> => {
-    const resp = await fetch(`${API_URL}/mitm/proxies`);
+    const resp = await fetch(`${API_URL}/mitm/proxies`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
 
   // Get status and stats for a proxy
   getProxyStatus: async (proxyId: string): Promise<MITMProxy> => {
-    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}`);
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -4086,6 +5447,7 @@ export const mitmClient = {
   startProxy: async (proxyId: string): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/start`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -4095,6 +5457,7 @@ export const mitmClient = {
   stopProxy: async (proxyId: string): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/stop`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -4104,6 +5467,7 @@ export const mitmClient = {
   deleteProxy: async (proxyId: string): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}`, {
       method: "DELETE",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -4113,22 +5477,117 @@ export const mitmClient = {
   setProxyMode: async (proxyId: string, mode: string): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/mode?mode=${mode}`, {
       method: "PUT",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
 
   // Get intercepted traffic for a proxy
-  getTraffic: async (proxyId: string, limit: number = 100, offset: number = 0): Promise<{ entries: MITMTrafficEntry[] }> => {
-    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/traffic?limit=${limit}&offset=${offset}`);
+  getTraffic: async (proxyId: string, limit: number = 100, offset: number = 0): Promise<{ entries: MITMTrafficEntry[]; total?: number }> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/traffic?limit=${limit}&offset=${offset}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    const data = await resp.json();
+    if (Array.isArray(data)) {
+      return { entries: data, total: data.length };
+    }
+    return data;
   },
 
   // Clear traffic log for a proxy
   clearTraffic: async (proxyId: string): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/traffic`, {
       method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update traffic entry notes/tags
+  updateTrafficEntry: async (
+    proxyId: string,
+    entryId: string,
+    update: { notes?: string; tags?: string[] }
+  ): Promise<MITMTrafficEntry> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/traffic/${entryId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(update),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Export traffic log
+  exportTraffic: async (
+    proxyId: string,
+    format: 'json' | 'pcap',
+    options?: { start?: number; end?: number; limit?: number; offset?: number }
+  ): Promise<Blob> => {
+    const params = new URLSearchParams();
+    params.append("format", format);
+    if (options?.start !== undefined) params.append("start", String(options.start));
+    if (options?.end !== undefined) params.append("end", String(options.end));
+    if (options?.limit !== undefined) params.append("limit", String(options.limit));
+    if (options?.offset !== undefined) params.append("offset", String(options.offset));
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/traffic/export?${params.toString()}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  // List saved sessions
+  listSessions: async (proxyId: string): Promise<MITMSession[]> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/sessions`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Create a session snapshot
+  createSession: async (proxyId: string, name?: string): Promise<MITMSession> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/sessions`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Load a saved session
+  getSession: async (proxyId: string, sessionId: string, limit = 200, offset = 0): Promise<MITMSessionResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/sessions/${sessionId}?limit=${limit}&offset=${offset}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Replay a traffic entry
+  replayTrafficEntry: async (
+    proxyId: string,
+    entryId: string,
+    payload: {
+      method?: string;
+      path?: string;
+      body?: any;
+      add_headers?: Record<string, string>;
+      remove_headers?: string[];
+      base_url?: string;
+      timeout?: number;
+      verify_tls?: boolean;
+    }
+  ): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/replay/${entryId}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -4138,7 +5597,7 @@ export const mitmClient = {
   addRule: async (proxyId: string, rule: Partial<MITMRule>): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(rule),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -4147,7 +5606,9 @@ export const mitmClient = {
 
   // Get all rules for a proxy
   getRules: async (proxyId: string): Promise<MITMRule[]> => {
-    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules`);
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -4156,6 +5617,7 @@ export const mitmClient = {
   removeRule: async (proxyId: string, ruleId: string): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules/${ruleId}`, {
       method: "DELETE",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -4165,6 +5627,17 @@ export const mitmClient = {
   toggleRule: async (proxyId: string, ruleId: string, enabled: boolean): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules/${ruleId}/toggle?enabled=${enabled}`, {
       method: "PUT",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Enable/disable a rule group
+  toggleRuleGroup: async (proxyId: string, group: string, enabled: boolean): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/rules/group/${encodeURIComponent(group)}/toggle?enabled=${enabled}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -4172,7 +5645,9 @@ export const mitmClient = {
 
   // Get available preset rules
   getPresets: async (): Promise<MITMPresetRule[]> => {
-    const resp = await fetch(`${API_URL}/mitm/presets`);
+    const resp = await fetch(`${API_URL}/mitm/presets`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -4181,6 +5656,7 @@ export const mitmClient = {
   applyPreset: async (proxyId: string, presetId: string): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/presets/${presetId}`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -4190,6 +5666,7 @@ export const mitmClient = {
   analyzeTraffic: async (proxyId: string): Promise<MITMAnalysisResult> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/analyze`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -4197,14 +5674,18 @@ export const mitmClient = {
 
   // Export analysis report
   exportReport: async (proxyId: string, format: 'markdown' | 'pdf' | 'docx'): Promise<Blob> => {
-    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/export/${format}`);
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/export/${format}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.blob();
   },
 
   // Get guided setup information
   getGuidedSetup: async (): Promise<MITMGuidedSetup> => {
-    const resp = await fetch(`${API_URL}/mitm/guided-setup`);
+    const resp = await fetch(`${API_URL}/mitm/guided-setup`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -4302,14 +5783,18 @@ export interface MITMProxyHealth {
 Object.assign(mitmClient, {
   // Get all test scenarios
   getTestScenarios: async (): Promise<MITMTestScenario[]> => {
-    const resp = await fetch(`${API_URL}/mitm/test-scenarios`);
+    const resp = await fetch(`${API_URL}/mitm/test-scenarios`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
 
   // Get a specific test scenario
   getTestScenario: async (scenarioId: string): Promise<MITMTestScenario> => {
-    const resp = await fetch(`${API_URL}/mitm/test-scenarios/${scenarioId}`);
+    const resp = await fetch(`${API_URL}/mitm/test-scenarios/${scenarioId}`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -4318,6 +5803,7 @@ Object.assign(mitmClient, {
   runTestScenario: async (proxyId: string, scenarioId: string): Promise<MITMScenarioResult> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/run-scenario/${scenarioId}`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -4325,7 +5811,9 @@ Object.assign(mitmClient, {
 
   // Check proxy health
   checkProxyHealth: async (proxyId: string): Promise<MITMProxyHealth> => {
-    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/health`);
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/health`, {
+      headers: getAuthHeaders(),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -4376,6 +5864,111 @@ export interface AISuggestionsResponse {
   generated_at: string;
 }
 
+// WebSocket Deep Inspection Types
+export interface WebSocketConnection {
+  id: string;
+  proxy_id: string;
+  created_at: string;
+  client_ip: string;
+  client_port: number;
+  target_host: string;
+  target_port: number;
+  upgrade_request_id: string;
+  status: 'active' | 'closed';
+  total_frames: number;
+  bytes_sent: number;
+  bytes_received: number;
+  closed_at?: string;
+  close_code?: number;
+  close_reason?: string;
+}
+
+export interface WebSocketFrame {
+  id: string;
+  timestamp: string;
+  direction: 'client_to_server' | 'server_to_client';
+  opcode: number;
+  opcode_name: string;
+  fin: boolean;
+  masked: boolean;
+  payload_length: number;
+  payload_text?: string;
+  payload_json?: any;
+  payload_hex?: string;
+  is_control: boolean;
+  connection_id: string;
+  modified: boolean;
+}
+
+export interface WebSocketRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  match_direction: string;
+  match_opcode?: number;
+  match_payload_pattern?: string;
+  match_json_path?: string;
+  action: string;
+  payload_find_replace?: Record<string, string>;
+  json_path_edits?: Array<{ path: string; op?: string; value?: any }>;
+  delay_ms: number;
+  hit_count: number;
+}
+
+export interface WebSocketStats {
+  frames_client_to_server: number;
+  frames_server_to_client: number;
+  bytes_client_to_server: number;
+  bytes_server_to_client: number;
+  text_frames: number;
+  binary_frames: number;
+  control_frames: number;
+  rules_applied: number;
+  active_connections: number;
+  total_connections: number;
+}
+
+// Certificate Management Types
+export interface CACertificate {
+  common_name: string;
+  organization: string;
+  country: string;
+  serial: number;
+  valid_from: string;
+  valid_until: string;
+  fingerprint_sha256: string;
+  created_at: string;
+  certificate_pem: string;
+}
+
+export interface HostCertificate {
+  hostname: string;
+  serial: number;
+  valid_from: string;
+  valid_until: string;
+  fingerprint_sha256: string;
+  created_at: string;
+  certificate_pem?: string;
+}
+
+export interface CertificateInstallationInstructions {
+  ca_certificate: {
+    common_name: string;
+    fingerprint: string;
+    valid_until: string;
+    pem: string;
+  };
+  instructions: {
+    [platform: string]: {
+      title: string;
+      steps: string[];
+      command?: string;
+      note?: string;
+    };
+  };
+}
+
 // Add Natural Language and AI Suggestions methods
 Object.assign(mitmClient, {
   // Create a rule from natural language description
@@ -4385,7 +5978,7 @@ Object.assign(mitmClient, {
   ): Promise<NaturalLanguageRuleResponse> => {
     const resp = await fetch(`${API_URL}/mitm/ai/create-rule`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ description, proxy_id: proxyId }),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -4394,7 +5987,322 @@ Object.assign(mitmClient, {
 
   // Get AI-generated suggestions based on traffic patterns
   getAISuggestions: async (proxyId: string): Promise<AISuggestionsResponse> => {
-    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/ai-suggestions`);
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/ai-suggestions`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ========== WebSocket Deep Inspection ==========
+  
+  // Get WebSocket connections for a proxy
+  getWebSocketConnections: async (proxyId: string): Promise<WebSocketConnection[]> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/websocket/connections`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get WebSocket frames for a connection
+  getWebSocketFrames: async (
+    proxyId: string,
+    connectionId: string,
+    limit: number = 100,
+    offset: number = 0
+  ): Promise<{ frames: WebSocketFrame[]; total: number; connection_id: string }> => {
+    const resp = await fetch(
+      `${API_URL}/mitm/proxies/${proxyId}/websocket/connections/${connectionId}/frames?limit=${limit}&offset=${offset}`,
+      { headers: getAuthHeaders() }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get WebSocket stats
+  getWebSocketStats: async (proxyId: string): Promise<WebSocketStats> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/websocket/stats`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Add WebSocket rule
+  addWebSocketRule: async (proxyId: string, rule: Partial<WebSocketRule>): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/websocket/rules`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(rule),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get WebSocket rules
+  getWebSocketRules: async (proxyId: string): Promise<WebSocketRule[]> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/websocket/rules`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Remove WebSocket rule
+  removeWebSocketRule: async (proxyId: string, ruleId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/websocket/rules/${ruleId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ========== Certificate Management ==========
+
+  // Get CA certificate info
+  getCACertificate: async (): Promise<CACertificate | { status: string; message: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/certificates/ca`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Generate CA certificate
+  generateCACertificate: async (config?: {
+    common_name?: string;
+    organization?: string;
+    country?: string;
+    validity_days?: number;
+  }): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/certificates/ca/generate`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(config || {}),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Download CA certificate
+  downloadCACertificate: async (format: 'pem' | 'crt' | 'der' = 'pem'): Promise<Blob> => {
+    const resp = await fetch(`${API_URL}/mitm/certificates/ca/download?format=${format}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  // Get certificate installation instructions
+  getCertificateInstallationInstructions: async (): Promise<CertificateInstallationInstructions> => {
+    const resp = await fetch(`${API_URL}/mitm/certificates/ca/installation`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List host certificates
+  listHostCertificates: async (): Promise<HostCertificate[]> => {
+    const resp = await fetch(`${API_URL}/mitm/certificates/hosts`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get/generate host certificate
+  getHostCertificate: async (hostname: string): Promise<HostCertificate> => {
+    const resp = await fetch(`${API_URL}/mitm/certificates/hosts/${encodeURIComponent(hostname)}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete host certificate
+  deleteHostCertificate: async (hostname: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/certificates/hosts/${encodeURIComponent(hostname)}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ========== Traffic Diff Viewer ==========
+
+  // Get diff for a specific traffic entry
+  getTrafficDiff: async (proxyId: string, entryId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/traffic/${entryId}/diff`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Compare two traffic entries directly
+  compareTraffic: async (data: {
+    original_request: any;
+    modified_request?: any;
+    original_response?: any;
+    modified_response?: any;
+  }): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/diff/compare`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ========== HTTP/2 & gRPC ==========
+
+  // Get HTTP/2 frames
+  getHTTP2Frames: async (
+    proxyId: string,
+    options?: { stream_id?: number; frame_type?: string; limit?: number; offset?: number }
+  ): Promise<any> => {
+    const params = new URLSearchParams();
+    if (options?.stream_id) params.append('stream_id', options.stream_id.toString());
+    if (options?.frame_type) params.append('frame_type', options.frame_type);
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.offset) params.append('offset', options.offset.toString());
+    
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/http2/frames?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get HTTP/2 streams
+  getHTTP2Streams: async (proxyId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/http2/streams`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get gRPC messages
+  getGRPCMessages: async (
+    proxyId: string,
+    options?: { service?: string; method?: string; limit?: number; offset?: number }
+  ): Promise<any> => {
+    const params = new URLSearchParams();
+    if (options?.service) params.append('service', options.service);
+    if (options?.method) params.append('method', options.method);
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.offset) params.append('offset', options.offset.toString());
+    
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/grpc/messages?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Parse raw HTTP/2 data
+  parseHTTP2Data: async (data: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/http2/parse`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ data }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ========== Match & Replace Templates ==========
+
+  // Get all templates
+  getTemplates: async (options?: { category?: string; tag?: string }): Promise<any[]> => {
+    const params = new URLSearchParams();
+    if (options?.category) params.append('category', options.category);
+    if (options?.tag) params.append('tag', options.tag);
+    
+    const resp = await fetch(`${API_URL}/mitm/templates?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get template categories
+  getTemplateCategories: async (): Promise<{ categories: string[] }> => {
+    const resp = await fetch(`${API_URL}/mitm/templates/categories`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a specific template
+  getTemplate: async (templateId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/templates/${templateId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Create custom template
+  createTemplate: async (config: {
+    name: string;
+    category?: string;
+    description: string;
+    match_type: string;
+    match_pattern: string;
+    replace_pattern: string;
+    is_regex?: boolean;
+    case_sensitive?: boolean;
+    direction?: string;
+    tags?: string[];
+  }): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/templates`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(config),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete custom template
+  deleteTemplate: async (templateId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/templates/${templateId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Apply template to proxy
+  applyTemplate: async (proxyId: string, templateId: string): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/apply-template/${templateId}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Test template against sample data
+  testTemplate: async (templateId: string, requestData: any, responseData?: any): Promise<any> => {
+    const resp = await fetch(`${API_URL}/mitm/templates/test`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        template_id: templateId,
+        request_data: requestData,
+        response_data: responseData,
+      }),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -4412,6 +6320,44 @@ declare module './client' {
     getTestScenario: (scenarioId: string) => Promise<MITMTestScenario>;
     runTestScenario: (proxyId: string, scenarioId: string) => Promise<MITMScenarioResult>;
     checkProxyHealth: (proxyId: string) => Promise<MITMProxyHealth>;
+    updateTrafficEntry: (proxyId: string, entryId: string, update: { notes?: string; tags?: string[] }) => Promise<MITMTrafficEntry>;
+    exportTraffic: (proxyId: string, format: 'json' | 'pcap', options?: { start?: number; end?: number; limit?: number; offset?: number }) => Promise<Blob>;
+    listSessions: (proxyId: string) => Promise<MITMSession[]>;
+    createSession: (proxyId: string, name?: string) => Promise<MITMSession>;
+    getSession: (proxyId: string, sessionId: string, limit?: number, offset?: number) => Promise<MITMSessionResponse>;
+    replayTrafficEntry: (proxyId: string, entryId: string, payload: { method?: string; path?: string; body?: any; add_headers?: Record<string, string>; remove_headers?: string[]; base_url?: string; timeout?: number; verify_tls?: boolean; }) => Promise<any>;
+    toggleRuleGroup: (proxyId: string, group: string, enabled: boolean) => Promise<any>;
+    // WebSocket Deep Inspection
+    getWebSocketConnections: (proxyId: string) => Promise<WebSocketConnection[]>;
+    getWebSocketFrames: (proxyId: string, connectionId: string, limit?: number, offset?: number) => Promise<{ frames: WebSocketFrame[]; total: number; connection_id: string }>;
+    getWebSocketStats: (proxyId: string) => Promise<WebSocketStats>;
+    addWebSocketRule: (proxyId: string, rule: Partial<WebSocketRule>) => Promise<any>;
+    getWebSocketRules: (proxyId: string) => Promise<WebSocketRule[]>;
+    removeWebSocketRule: (proxyId: string, ruleId: string) => Promise<any>;
+    // Certificate Management
+    getCACertificate: () => Promise<CACertificate | { status: string; message: string }>;
+    generateCACertificate: (config?: { common_name?: string; organization?: string; country?: string; validity_days?: number }) => Promise<any>;
+    downloadCACertificate: (format?: 'pem' | 'crt' | 'der') => Promise<Blob>;
+    getCertificateInstallationInstructions: () => Promise<CertificateInstallationInstructions>;
+    listHostCertificates: () => Promise<HostCertificate[]>;
+    getHostCertificate: (hostname: string) => Promise<HostCertificate>;
+    deleteHostCertificate: (hostname: string) => Promise<any>;
+    // Traffic Diff Viewer
+    getTrafficDiff: (proxyId: string, entryId: string) => Promise<any>;
+    compareTraffic: (data: { original_request: any; modified_request?: any; original_response?: any; modified_response?: any }) => Promise<any>;
+    // HTTP/2 & gRPC
+    getHTTP2Frames: (proxyId: string, options?: { stream_id?: number; frame_type?: string; limit?: number; offset?: number }) => Promise<any>;
+    getHTTP2Streams: (proxyId: string) => Promise<any>;
+    getGRPCMessages: (proxyId: string, options?: { service?: string; method?: string; limit?: number; offset?: number }) => Promise<any>;
+    parseHTTP2Data: (data: string) => Promise<any>;
+    // Match & Replace Templates
+    getTemplates: (options?: { category?: string; tag?: string }) => Promise<any[]>;
+    getTemplateCategories: () => Promise<{ categories: string[] }>;
+    getTemplate: (templateId: string) => Promise<any>;
+    createTemplate: (config: { name: string; category?: string; description: string; match_type: string; match_pattern: string; replace_pattern: string; is_regex?: boolean; case_sensitive?: boolean; direction?: string; tags?: string[] }) => Promise<any>;
+    deleteTemplate: (templateId: string) => Promise<any>;
+    applyTemplate: (proxyId: string, templateId: string) => Promise<any>;
+    testTemplate: (templateId: string, requestData: any, responseData?: any) => Promise<any>;
   }
 }
 
@@ -4683,6 +6629,82 @@ export const agenticScanClient = {
     if (token) headers["Authorization"] = `Bearer ${token}`;
     
     const resp = await fetch(`${API_URL}/agentic-scan/cancel/${scanId}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Save an agentic scan report to the project.
+   */
+  saveReport: async (request: {
+    scan_id: string;
+    project_id: number;
+    title: string;
+    project_path?: string;
+    started_at: string;
+    completed_at?: string;
+    duration_seconds?: number;
+    total_chunks?: number;
+    analyzed_chunks?: number;
+    entry_points_found?: number;
+    flows_traced?: number;
+    executive_summary?: string;
+    vulnerabilities?: any[];
+    entry_points?: any[];
+    traced_flows?: any[];
+    statistics?: any;
+  }): Promise<{ message: string; report_id: number; scan_id: string }> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/save-report`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get all saved reports for a project.
+   */
+  getProjectReports: async (projectId: number): Promise<{ reports: any[]; count: number }> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/reports/${projectId}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Get a single saved report by ID.
+   */
+  getReport: async (reportId: number): Promise<any> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/report/${reportId}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Delete a saved report.
+   */
+  deleteReport: async (reportId: number): Promise<{ message: string; report_id: number }> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    const resp = await fetch(`${API_URL}/agentic-scan/report/${reportId}`, {
       method: "DELETE",
       headers,
     });
@@ -12194,6 +14216,7 @@ export interface KanbanCard {
   created_at: string;
   updated_at: string;
   completed_at?: string;
+  color?: string;  // Card background color (hex)
 }
 
 export interface KanbanColumn {
@@ -12242,6 +14265,7 @@ export interface KanbanCardCreate {
   due_date?: string;
   assignee_ids?: number[];
   checklist?: KanbanChecklistItem[];
+  color?: string;  // Card background color (hex)
 }
 
 // ============================================================================
@@ -12397,4 +14421,1422 @@ export const kanbanApi = {
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
+
+  // WebSocket URL for real-time collaboration
+  getWebSocketUrl: (boardId: number): string => {
+    const token = localStorage.getItem("token") || "";
+    const wsHost = API_URL.replace(/^http/, "ws");
+    return `${wsHost}/ws/kanban/${boardId}?token=${token}`;
+  },
 };
+
+
+// ============== Whiteboard Types ==============
+
+export interface WhiteboardElement {
+  id?: number;
+  element_id: string;
+  element_type: 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'bidirectional_arrow' | 'text' | 'sticky' | 'image' | 'freehand' | 'symbol' | 'triangle' | 'diamond' | 'hexagon' | 'star' | 'timer' | 'table' | 'connector' | 'code' | 'checklist' | 'link';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  fill_color: string | null;
+  stroke_color: string;
+  stroke_width: number;
+  opacity: number;
+  content?: string;
+  font_size?: number;
+  font_family?: string;
+  text_align?: string;
+  image_url?: string;
+  points?: { x: number; y: number }[];
+  start_element_id?: string;
+  end_element_id?: string;
+  arrow_start?: boolean;
+  arrow_end?: boolean;
+  z_index: number;
+  created_by?: number;
+  symbol_type?: string;  // For network symbols
+  label?: string;        // Text label on shapes/symbols
+  // Timer properties
+  timer_duration?: number;      // Duration in seconds
+  timer_started_at?: number;    // Unix timestamp
+  timer_paused_at?: number;     // Unix timestamp
+  // Table properties
+  table_rows?: number;
+  table_cols?: number;
+  table_data?: string[][];
+  // Connector properties
+  connector_style?: 'straight' | 'curved' | 'elbow';
+  // Voting/Status properties
+  votes?: { user_id: number; color: string }[];
+  status?: 'none' | 'on_track' | 'at_risk' | 'blocked' | 'done';
+  priority?: 'none' | 'p1' | 'p2' | 'p3';
+  // Gradient fill
+  gradient?: { start: string; end: string; direction: 'horizontal' | 'vertical' | 'diagonal' };
+  // Rich text formatting
+  text_bold?: boolean;
+  text_italic?: boolean;
+  text_underline?: boolean;
+  text_bullet_list?: boolean;
+  // Code block properties
+  code_language?: string;
+  // Checklist properties
+  checklist_items?: { id: string; text: string; checked: boolean }[];
+  // AI category
+  ai_category?: string;
+  // Link/URL properties
+  link_url?: string;
+  link_title?: string;
+  link_description?: string;
+  link_favicon?: string;
+  // Comments/Threads
+  comments?: { id: string; user_id: number; username: string; text: string; created_at: string; mentions?: number[] }[];
+  // Element Grouping
+  group_id?: string;
+  // Sticky note sizing
+  sticky_size?: 'small' | 'medium' | 'large';
+}
+
+export interface Whiteboard {
+  id: number;
+  project_id: number;
+  name: string;
+  description?: string;
+  canvas_width: number;
+  canvas_height: number;
+  background_color: string;
+  grid_enabled: boolean;
+  is_locked: boolean;
+  locked_by?: number;
+  created_at: string;
+  updated_at?: string;
+  elements: WhiteboardElement[];
+  active_users?: {
+    user_id: number;
+    username: string;
+    cursor_x: number;
+    cursor_y: number;
+    selected_element_id?: string;
+    color: string;
+  }[];
+}
+
+export interface WhiteboardSummary {
+  id: number;
+  name: string;
+  description?: string;
+  is_locked: boolean;
+  created_at: string;
+  updated_at?: string;
+  element_count: number;
+  active_users: number;
+}
+
+export interface Annotation {
+  id: number;
+  project_id: number;
+  original_image_url: string;
+  annotated_image_url?: string;
+  annotations_data?: Record<string, any>;
+  title?: string;
+  description?: string;
+  finding_id?: number;
+  note_id?: number;
+  whiteboard_id?: number;
+  created_at: string;
+}
+
+export interface Mention {
+  id: number;
+  mentioned_by: {
+    id: number;
+    username: string;
+  };
+  note_id?: number;
+  whiteboard_element_id?: number;
+  message_id?: number;
+  context_text?: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+
+// ============== Whiteboard API ==============
+
+export const whiteboardClient = {
+  // Whiteboard CRUD
+  create: async (data: {
+    project_id: number;
+    name: string;
+    description?: string;
+    canvas_width?: number;
+    canvas_height?: number;
+    background_color?: string;
+    grid_enabled?: boolean;
+  }): Promise<Whiteboard> => {
+    const resp = await fetch(`${API_URL}/whiteboard/create`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getProjectWhiteboards: async (projectId: number): Promise<WhiteboardSummary[]> => {
+    const resp = await fetch(`${API_URL}/whiteboard/project/${projectId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  get: async (whiteboardId: number): Promise<Whiteboard> => {
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  update: async (whiteboardId: number, data: Partial<{
+    name: string;
+    description: string;
+    canvas_width: number;
+    canvas_height: number;
+    background_color: string;
+    grid_enabled: boolean;
+    is_locked: boolean;
+  }>): Promise<{ success: boolean; message: string }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  delete: async (whiteboardId: number): Promise<{ success: boolean; message: string }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Element operations
+  createElement: async (whiteboardId: number, element: Partial<WhiteboardElement>): Promise<{
+    id: number;
+    element_id: string;
+    element_type: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    created_by: number;
+  }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}/element`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(element),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateElement: async (whiteboardId: number, elementId: string, updates: Partial<WhiteboardElement>): Promise<{ success: boolean }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}/element/${elementId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updates),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteElement: async (whiteboardId: number, elementId: string): Promise<{ success: boolean }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}/element/${elementId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  batchUpdateElements: async (whiteboardId: number, updates: Partial<WhiteboardElement>[]): Promise<{ success: boolean; updated_count: number }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}/elements/batch`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updates),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Presence
+  updatePresence: async (whiteboardId: number, data: {
+    cursor_x?: number;
+    cursor_y?: number;
+    viewport_x?: number;
+    viewport_y?: number;
+    viewport_zoom?: number;
+    selected_element_id?: string;
+  }): Promise<{ success: boolean }> => {
+    const params = new URLSearchParams();
+    if (data.cursor_x !== undefined) params.append('cursor_x', String(data.cursor_x));
+    if (data.cursor_y !== undefined) params.append('cursor_y', String(data.cursor_y));
+    if (data.viewport_x !== undefined) params.append('viewport_x', String(data.viewport_x));
+    if (data.viewport_y !== undefined) params.append('viewport_y', String(data.viewport_y));
+    if (data.viewport_zoom !== undefined) params.append('viewport_zoom', String(data.viewport_zoom));
+    if (data.selected_element_id) params.append('selected_element_id', data.selected_element_id);
+    
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}/presence?${params}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  leaveWhiteboard: async (whiteboardId: number): Promise<{ success: boolean }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}/presence`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getActiveUsers: async (whiteboardId: number): Promise<{
+    user_id: number;
+    username: string;
+    first_name?: string;
+    avatar_url?: string;
+    cursor_x: number;
+    cursor_y: number;
+    selected_element_id?: string;
+    last_activity: string;
+  }[]> => {
+    const resp = await fetch(`${API_URL}/whiteboard/${whiteboardId}/users`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+
+// ============== AI Client for Whiteboard ==============
+
+export const aiClient = {
+  chat: async (messages: { role: string; content: string }[]): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/ai/chat`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ messages }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+
+// ============== Annotations API ==============
+
+export const annotationClient = {
+  create: async (data: {
+    project_id: number;
+    original_image_url: string;
+    annotated_image_url?: string;
+    annotations_data?: Record<string, any>;
+    title?: string;
+    description?: string;
+    finding_id?: number;
+    note_id?: number;
+    whiteboard_id?: number;
+  }): Promise<Annotation> => {
+    const resp = await fetch(`${API_URL}/whiteboard/annotation`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getProjectAnnotations: async (projectId: number): Promise<Annotation[]> => {
+    const resp = await fetch(`${API_URL}/whiteboard/annotation/project/${projectId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  update: async (annotationId: number, data: {
+    annotations_data: Record<string, any>;
+    annotated_image_url?: string;
+  }): Promise<{ success: boolean }> => {
+    const params = new URLSearchParams();
+    if (data.annotated_image_url) params.append('annotated_image_url', data.annotated_image_url);
+    
+    const resp = await fetch(`${API_URL}/whiteboard/annotation/${annotationId}?${params}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data.annotations_data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  delete: async (annotationId: number): Promise<{ success: boolean }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/annotation/${annotationId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+
+// ============== Mentions API ==============
+
+export const mentionClient = {
+  create: async (data: {
+    mentioned_user_id: number;
+    note_id?: number;
+    whiteboard_element_id?: number;
+    message_id?: number;
+    context_text?: string;
+  }): Promise<{ id: number; created_at: string }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/mention`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getUnread: async (): Promise<Mention[]> => {
+    const resp = await fetch(`${API_URL}/whiteboard/mentions/unread`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  markAsRead: async (mentionId: number): Promise<{ success: boolean }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/mention/${mentionId}/read`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  markAllAsRead: async (): Promise<{ success: boolean }> => {
+    const resp = await fetch(`${API_URL}/whiteboard/mentions/read-all`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+
+// ============== Notes Collaboration WebSocket ==============
+
+export type NotesCollaborationUser = {
+  user_id: number;
+  username: string;
+  color: string;
+  connected_at: string;
+};
+
+export type NotesCursorPosition = {
+  start: number;
+  end: number;
+};
+
+export type NotesCollaborationMessage = {
+  type: 
+    | 'presence_sync' 
+    | 'user_joined' 
+    | 'user_left'
+    | 'cursor_move'
+    | 'typing_start'
+    | 'typing_stop'
+    | 'note_edit'
+    | 'note_focus'
+    | 'note_blur'
+    | 'note_created'
+    | 'note_deleted';
+  timestamp: string;
+  // For presence_sync
+  users?: NotesCollaborationUser[];
+  active_editors?: Record<number, number[]>;
+  // For user events
+  user?: NotesCollaborationUser;
+  user_id?: number;
+  username?: string;
+  color?: string;
+  // For note events
+  note_id?: number;
+  note?: ProjectNote;
+  position?: NotesCursorPosition;
+  changes?: { content?: string; title?: string };
+  editors?: number[];
+};
+
+export class NotesCollaborationClient {
+  private ws: WebSocket | null = null;
+  private projectId: number;
+  private userId: number;
+  private username: string;
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 5;
+  private reconnectDelay: number = 1000;
+  private pingInterval: NodeJS.Timeout | null = null;
+  private onMessage: (message: NotesCollaborationMessage) => void;
+  private onConnectionChange: (connected: boolean) => void;
+
+  constructor(
+    projectId: number,
+    userId: number,
+    username: string,
+    onMessage: (message: NotesCollaborationMessage) => void,
+    onConnectionChange: (connected: boolean) => void
+  ) {
+    this.projectId = projectId;
+    this.userId = userId;
+    this.username = username;
+    this.onMessage = onMessage;
+    this.onConnectionChange = onConnectionChange;
+  }
+
+  connect(): void {
+    if (this.ws?.readyState === WebSocket.OPEN) return;
+
+    const token = localStorage.getItem('vragent_access_token');
+    if (!token) {
+      console.warn('No auth token available for notes WebSocket');
+      return;
+    }
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = API_URL.replace(/^https?:/, wsProtocol).replace(/\/api$/, '');
+    const wsUrl = `${wsHost}/api/ws/notes/${this.projectId}?token=${encodeURIComponent(token)}`;
+
+    this.ws = new WebSocket(wsUrl);
+
+    this.ws.onopen = () => {
+      console.log('Notes collaboration WebSocket connected');
+      this.reconnectAttempts = 0;
+      this.onConnectionChange(true);
+      this.startPing();
+    };
+
+    this.ws.onmessage = (event) => {
+      if (event.data === 'pong') return;
+      try {
+        const message = JSON.parse(event.data) as NotesCollaborationMessage;
+        this.onMessage(message);
+      } catch (e) {
+        console.error('Failed to parse notes WebSocket message:', e);
+      }
+    };
+
+    this.ws.onclose = () => {
+      console.log('Notes collaboration WebSocket closed');
+      this.onConnectionChange(false);
+      this.stopPing();
+      this.attemptReconnect();
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('Notes collaboration WebSocket error:', error);
+    };
+  }
+
+  private startPing(): void {
+    this.pingInterval = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send('ping');
+      }
+    }, 30000);
+  }
+
+  private stopPing(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  private attemptReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log('Max reconnection attempts reached for notes WebSocket');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    console.log(`Attempting notes WebSocket reconnection in ${delay}ms...`);
+    
+    setTimeout(() => this.connect(), delay);
+  }
+
+  disconnect(): void {
+    this.stopPing();
+    this.reconnectAttempts = this.maxReconnectAttempts; // Prevent reconnection
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+
+  // Send cursor position update
+  sendCursorMove(noteId: number, position: NotesCursorPosition): void {
+    this.send({
+      type: 'cursor_move',
+      note_id: noteId,
+      position,
+    });
+  }
+
+  // Send typing start indicator
+  sendTypingStart(noteId: number): void {
+    this.send({
+      type: 'typing_start',
+      note_id: noteId,
+    });
+  }
+
+  // Send typing stop indicator
+  sendTypingStop(noteId: number): void {
+    this.send({
+      type: 'typing_stop',
+      note_id: noteId,
+    });
+  }
+
+  // Send note content edit
+  sendNoteEdit(noteId: number, changes: { content?: string; title?: string }): void {
+    this.send({
+      type: 'note_edit',
+      note_id: noteId,
+      changes,
+    });
+  }
+
+  // Send note focus event
+  sendNoteFocus(noteId: number): void {
+    this.send({
+      type: 'note_focus',
+      note_id: noteId,
+    });
+  }
+
+  // Send note blur event
+  sendNoteBlur(noteId: number): void {
+    this.send({
+      type: 'note_blur',
+      note_id: noteId,
+    });
+  }
+
+  // Send note created event
+  sendNoteCreated(note: ProjectNote): void {
+    this.send({
+      type: 'note_created',
+      note,
+    });
+  }
+
+  // Send note deleted event
+  sendNoteDeleted(noteId: number): void {
+    this.send({
+      type: 'note_deleted',
+      note_id: noteId,
+    });
+  }
+
+  private send(data: Record<string, any>): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+}
+
+
+// ============================================================================
+// Combined Analysis Types
+// ============================================================================
+
+export interface SelectedScan {
+  scan_type: 'security_scan' | 'network_report' | 're_report' | 'fuzzing_session';
+  scan_id: number;
+  title?: string;
+}
+
+export interface SupportingDocument {
+  filename: string;
+  content_type: string;
+  content_base64: string;
+  description?: string;
+}
+
+export interface CombinedAnalysisRequest {
+  project_id: number;
+  title: string;
+  selected_scans: SelectedScan[];
+  supporting_documents?: SupportingDocument[];
+  project_info?: string;
+  user_requirements?: string;
+  include_exploit_recommendations?: boolean;
+  include_attack_surface_map?: boolean;
+  include_risk_prioritization?: boolean;
+}
+
+export interface AvailableScanItem {
+  scan_type: string;
+  scan_id: number;
+  title: string;
+  created_at: string;
+  summary?: string;
+  risk_level?: string;
+  findings_count?: number;
+}
+
+export interface AvailableScansResponse {
+  project_id: number;
+  project_name: string;
+  security_scans: AvailableScanItem[];
+  network_reports: AvailableScanItem[];
+  ssl_scans: AvailableScanItem[];
+  dns_scans: AvailableScanItem[];
+  traceroute_scans: AvailableScanItem[];
+  re_reports: AvailableScanItem[];
+  fuzzing_sessions: AvailableScanItem[];
+  total_available: number;
+}
+
+export interface ReportSection {
+  title: string;
+  content: string;
+  section_type: string;
+  severity?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface CrossAnalysisFinding {
+  title: string;
+  description: string;
+  severity: string;
+  sources: string[];
+  source_details?: Record<string, any>[];
+  exploitability_score?: number;
+  exploit_narrative?: string;
+  exploit_guidance?: string;
+  poc_available?: boolean;
+  remediation?: string;
+}
+
+export interface ExploitDevelopmentArea {
+  title: string;
+  description: string;
+  vulnerability_chain: string[];
+  attack_vector: string;
+  complexity: string;
+  impact: string;
+  prerequisites?: string[];
+  poc_guidance?: string;
+  full_poc_script?: string;
+  testing_notes?: string;
+  detection_evasion?: string;
+}
+
+export interface AttackTool {
+  tool: string;
+  installation?: string;
+  purpose?: string;
+}
+
+export interface BeginnerAttackStep {
+  step_number: number;
+  title: string;
+  explanation: string;
+  command_or_action?: string;
+  expected_output?: string;
+  troubleshooting?: string;
+}
+
+export interface BeginnerAttackGuide {
+  attack_name: string;
+  difficulty_level: string;
+  estimated_time?: string;
+  prerequisites: string[];
+  tools_needed: AttackTool[];
+  step_by_step_guide: BeginnerAttackStep[];
+  success_indicators: string[];
+  what_you_can_do_after?: string;
+}
+
+export interface PoCScript {
+  vulnerability_name: string;
+  language: string;
+  description: string;
+  usage_instructions?: string;
+  script_code: string;
+  expected_output?: string;
+  customization_notes?: string;
+}
+
+export interface CombinedAttackChainStep {
+  step: number;
+  action: string;
+  vulnerability_used?: string;
+  outcome?: string;
+}
+
+export interface CombinedAttackChain {
+  chain_name: string;
+  entry_point: string;
+  steps: CombinedAttackChainStep[];
+  final_impact?: string;
+  likelihood?: string;
+  diagram?: string;
+}
+
+export interface SourceCodeFinding {
+  file_path: string;
+  issue_type: string;
+  severity: string;
+  description: string;
+  code_snippet?: string;
+  vulnerable_code_snippet?: string;
+  line_numbers?: string;
+  exploitation_example?: string;
+  related_scan_findings?: string[];
+  secure_code_fix?: string;
+  remediation?: string;
+}
+
+export interface CombinedAnalysisReport {
+  id: number;
+  project_id: number;
+  title: string;
+  created_at: string;
+  executive_summary: string;
+  overall_risk_level: string;
+  overall_risk_score: number;
+  risk_justification: string;
+  total_findings_analyzed: number;
+  scans_included: number;
+  scan_types_breakdown: Record<string, number>;
+  sections: ReportSection[];
+  cross_analysis_findings: CrossAnalysisFinding[];
+  attack_surface_diagram?: string;
+  attack_chains?: CombinedAttackChain[];
+  beginner_attack_guide?: BeginnerAttackGuide[];
+  poc_scripts?: PoCScript[];
+  exploit_development_areas: ExploitDevelopmentArea[];
+  prioritized_vulnerabilities?: Record<string, any>[];
+  source_code_findings?: SourceCodeFinding[];
+  documentation_analysis?: string;
+  included_scans: SelectedScan[];
+}
+
+export interface CombinedAnalysisListItem {
+  id: number;
+  project_id: number;
+  title: string;
+  created_at: string;
+  overall_risk_level: string;
+  overall_risk_score: number;
+  total_findings_analyzed: number;
+  scans_included: number;
+}
+
+export interface CombinedAnalysisListResponse {
+  reports: CombinedAnalysisListItem[];
+  total: number;
+}
+
+// ============================================================================
+// Combined Analysis API Client
+// ============================================================================
+
+export const combinedAnalysisApi = {
+  getAvailableScans: async (projectId: number): Promise<AvailableScansResponse> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/projects/${projectId}/available-scans`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  generateReport: async (projectId: number, request: CombinedAnalysisRequest): Promise<CombinedAnalysisReport> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/projects/${projectId}/generate`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  listReports: async (projectId: number, limit = 50, offset = 0): Promise<CombinedAnalysisListResponse> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/projects/${projectId}/reports?limit=${limit}&offset=${offset}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getReport: async (reportId: number): Promise<CombinedAnalysisReport> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/reports/${reportId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteReport: async (reportId: number): Promise<{ status: string; id: number }> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/reports/${reportId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  exportMarkdown: async (reportId: number): Promise<Blob> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/reports/${reportId}/export/markdown`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  exportWord: async (reportId: number): Promise<Blob> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/reports/${reportId}/export/word`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  exportPdf: async (reportId: number): Promise<Blob> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/reports/${reportId}/export/pdf`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  sendToTeamChat: async (reportId: number): Promise<{ status: string; message: string; conversation_id: number; message_id: number }> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/reports/${reportId}/send-to-team-chat`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  chat: async (reportId: number, message: string, history: { role: string; content: string }[] = []): Promise<{ response: string; suggestions?: string[] }> => {
+    const resp = await fetch(`${API_URL}/combined-analysis/reports/${reportId}/chat`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ message, history }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
+// ============================================================================
+// MITM Low Priority Feature Types
+// ============================================================================
+
+// Network Throttling Types
+export interface ThrottleProfile {
+  id: string;
+  name: string;
+  description: string;
+  bandwidth_kbps: number;
+  latency_ms: number;
+  packet_loss_percent: number;
+  jitter_ms: number;
+  is_builtin: boolean;
+}
+
+export interface ThrottleProfileCreate {
+  name: string;
+  description: string;
+  bandwidth_kbps?: number;
+  latency_ms?: number;
+  packet_loss_percent?: number;
+  jitter_ms?: number;
+}
+
+// Macro Types
+export interface MacroStep {
+  id: string;
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body?: string;
+  expected_status?: number;
+  extract_variables?: Record<string, string>;
+  delay_ms: number;
+}
+
+export interface Macro {
+  id: string;
+  name: string;
+  description: string;
+  steps: MacroStep[];
+  variables: Record<string, string>;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  last_run_at?: string;
+  run_count: number;
+}
+
+export interface MacroRunResult {
+  macro_id: string;
+  success: boolean;
+  steps_completed: number;
+  total_steps: number;
+  total_time_ms: number;
+  step_results: Array<{
+    step_id: string;
+    success: boolean;
+    status_code?: number;
+    error?: string;
+    response_body?: any;
+    extracted_variables: Record<string, string>;
+    time_ms: number;
+  }>;
+  final_variables: Record<string, string>;
+  error?: string;
+}
+
+// Protocol Decoder Types
+export interface ProtocolDecoder {
+  id: string;
+  name: string;
+  description: string;
+  content_types: string[];
+  magic_bytes?: number[][];
+  is_builtin: boolean;
+  enabled: boolean;
+}
+
+export interface DecodeResult {
+  decoder_id: string;
+  decoder_name: string;
+  success: boolean;
+  decoded_data?: any;
+  error?: string;
+  original_size: number;
+  decoded_type: string;
+}
+
+// Session Sharing Types
+export interface SharedSession {
+  id: string;
+  proxy_id: string;
+  name: string;
+  description: string;
+  owner_id: string;
+  owner_name: string;
+  participants: string[];
+  access_level: 'view' | 'interact' | 'full';
+  created_at: string;
+  expires_at?: string;
+  share_token?: string;
+  share_link?: string;
+  settings: Record<string, any>;
+  active_viewers: number;
+  enable_link_sharing: boolean;
+}
+
+// ============================================================================
+// MITM Low Priority Feature API Extensions
+// ============================================================================
+
+// Add low priority methods to mitmClient
+Object.assign(mitmClient, {
+  // Network Throttling
+  listThrottleProfiles: async (): Promise<ThrottleProfile[]> => {
+    const resp = await fetch(`${API_URL}/mitm/throttle/profiles`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getThrottleProfile: async (profileId: string): Promise<ThrottleProfile> => {
+    const resp = await fetch(`${API_URL}/mitm/throttle/profiles/${profileId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getActiveThrottle: async (): Promise<{ active_profile: ThrottleProfile | null }> => {
+    const resp = await fetch(`${API_URL}/mitm/throttle/active`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  activateThrottle: async (profileId: string): Promise<{ status: string; profile_id: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/throttle/activate/${profileId}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deactivateThrottle: async (): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/throttle/deactivate`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  createThrottleProfile: async (config: ThrottleProfileCreate): Promise<ThrottleProfile> => {
+    const resp = await fetch(`${API_URL}/mitm/throttle/profiles`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(config),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteThrottleProfile: async (profileId: string): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/throttle/profiles/${profileId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Macro Recorder
+  listMacros: async (): Promise<Macro[]> => {
+    const resp = await fetch(`${API_URL}/mitm/macros`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getMacro: async (macroId: string): Promise<Macro> => {
+    const resp = await fetch(`${API_URL}/mitm/macros/${macroId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  startMacroRecording: async (name: string, description?: string): Promise<{ status: string; macro_id: string; macro: Macro }> => {
+    const resp = await fetch(`${API_URL}/mitm/macros/start-recording`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name, description: description || "" }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  stopMacroRecording: async (): Promise<{ status: string; macro: Macro }> => {
+    const resp = await fetch(`${API_URL}/mitm/macros/stop-recording`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getMacroRecordingStatus: async (): Promise<{ recording: boolean; macro_id: string | null }> => {
+    const resp = await fetch(`${API_URL}/mitm/macros/recording-status`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  createMacroFromTraffic: async (
+    proxyId: string,
+    trafficIds: string[],
+    name: string,
+    description?: string
+  ): Promise<Macro> => {
+    const resp = await fetch(`${API_URL}/mitm/macros/from-traffic`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        proxy_id: proxyId,
+        traffic_ids: trafficIds,
+        name,
+        description: description || "",
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateMacro: async (
+    macroId: string,
+    update: { name?: string; description?: string; variables?: Record<string, string>; tags?: string[] }
+  ): Promise<Macro> => {
+    const resp = await fetch(`${API_URL}/mitm/macros/${macroId}`, {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(update),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteMacro: async (macroId: string): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/macros/${macroId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  runMacro: async (
+    macroId: string,
+    baseUrl: string,
+    variables?: Record<string, string>,
+    timeoutPerStep?: number
+  ): Promise<MacroRunResult> => {
+    const resp = await fetch(`${API_URL}/mitm/macros/${macroId}/run`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        base_url: baseUrl,
+        variables,
+        timeout_per_step: timeoutPerStep || 30.0,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getMacroLastResult: async (macroId: string): Promise<MacroRunResult> => {
+    const resp = await fetch(`${API_URL}/mitm/macros/${macroId}/last-result`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // HAR Export
+  exportTrafficAsHAR: async (proxyId: string, limit?: number, offset?: number): Promise<Blob> => {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.append("limit", limit.toString());
+    if (offset !== undefined) params.append("offset", offset.toString());
+    const query = params.toString() ? `?${params.toString()}` : "";
+    
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/export/har${query}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  // Protocol Decoders
+  listProtocolDecoders: async (): Promise<ProtocolDecoder[]> => {
+    const resp = await fetch(`${API_URL}/mitm/decoders`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getProtocolDecoder: async (decoderId: string): Promise<ProtocolDecoder> => {
+    const resp = await fetch(`${API_URL}/mitm/decoders/${decoderId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  decodeData: async (contentType: string, data: string): Promise<DecodeResult> => {
+    const resp = await fetch(`${API_URL}/mitm/decoders/decode`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ content_type: contentType, data }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Session Sharing
+  listSharedSessions: async (): Promise<SharedSession[]> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getSharedSession: async (sessionId: string): Promise<SharedSession> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared/${sessionId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  createSharedSession: async (config: {
+    proxy_id: string;
+    name: string;
+    description?: string;
+    access_level?: 'view' | 'interact' | 'full';
+    expires_hours?: number;
+    enable_link_sharing?: boolean;
+  }): Promise<SharedSession> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(config),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  shareSessionWithUser: async (sessionId: string, userId: string): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared/${sessionId}/share`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ user_id: userId }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  revokeSessionAccess: async (sessionId: string, userId: string): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared/${sessionId}/share/${userId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  joinSharedSession: async (sessionId: string): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared/${sessionId}/join`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  leaveSharedSession: async (sessionId: string): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared/${sessionId}/leave`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getSharedSessionByToken: async (token: string): Promise<SharedSession> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared/token/${token}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  updateSharedSession: async (
+    sessionId: string,
+    update: { name?: string; description?: string; access_level?: string; settings?: Record<string, any> }
+  ): Promise<SharedSession> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared/${sessionId}`, {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(update),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  deleteSharedSession: async (sessionId: string): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions/shared/${sessionId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+});
+
+// TypeScript interface extension for low priority features
+declare module './client' {
+  interface MITMClientLowPriority {
+    // Network Throttling
+    listThrottleProfiles: () => Promise<ThrottleProfile[]>;
+    getThrottleProfile: (profileId: string) => Promise<ThrottleProfile>;
+    getActiveThrottle: () => Promise<{ active_profile: ThrottleProfile | null }>;
+    activateThrottle: (profileId: string) => Promise<{ status: string; profile_id: string }>;
+    deactivateThrottle: () => Promise<{ status: string }>;
+    createThrottleProfile: (config: ThrottleProfileCreate) => Promise<ThrottleProfile>;
+    deleteThrottleProfile: (profileId: string) => Promise<{ status: string }>;
+    // Macro Recorder
+    listMacros: () => Promise<Macro[]>;
+    getMacro: (macroId: string) => Promise<Macro>;
+    startMacroRecording: (name: string, description?: string) => Promise<{ status: string; macro_id: string; macro: Macro }>;
+    stopMacroRecording: () => Promise<{ status: string; macro: Macro }>;
+    getMacroRecordingStatus: () => Promise<{ recording: boolean; macro_id: string | null }>;
+    createMacroFromTraffic: (proxyId: string, trafficIds: string[], name: string, description?: string) => Promise<Macro>;
+    updateMacro: (macroId: string, update: { name?: string; description?: string; variables?: Record<string, string>; tags?: string[] }) => Promise<Macro>;
+    deleteMacro: (macroId: string) => Promise<{ status: string }>;
+    runMacro: (macroId: string, baseUrl: string, variables?: Record<string, string>, timeoutPerStep?: number) => Promise<MacroRunResult>;
+    getMacroLastResult: (macroId: string) => Promise<MacroRunResult>;
+    // HAR Export
+    exportTrafficAsHAR: (proxyId: string, limit?: number, offset?: number) => Promise<Blob>;
+    // Protocol Decoders
+    listProtocolDecoders: () => Promise<ProtocolDecoder[]>;
+    getProtocolDecoder: (decoderId: string) => Promise<ProtocolDecoder>;
+    decodeData: (contentType: string, data: string) => Promise<DecodeResult>;
+    // Session Sharing
+    listSharedSessions: () => Promise<SharedSession[]>;
+    getSharedSession: (sessionId: string) => Promise<SharedSession>;
+    createSharedSession: (config: { proxy_id: string; name: string; description?: string; access_level?: 'view' | 'interact' | 'full'; expires_hours?: number; enable_link_sharing?: boolean }) => Promise<SharedSession>;
+    shareSessionWithUser: (sessionId: string, userId: string) => Promise<{ status: string }>;
+    revokeSessionAccess: (sessionId: string, userId: string) => Promise<{ status: string }>;
+    joinSharedSession: (sessionId: string) => Promise<{ status: string }>;
+    leaveSharedSession: (sessionId: string) => Promise<{ status: string }>;
+    getSharedSessionByToken: (token: string) => Promise<SharedSession>;
+    updateSharedSession: (sessionId: string, update: { name?: string; description?: string; access_level?: string; settings?: Record<string, any> }) => Promise<SharedSession>;
+    deleteSharedSession: (sessionId: string) => Promise<{ status: string }>;
+  }
+}

@@ -5,7 +5,6 @@ import {
   Typography,
   TextField,
   IconButton,
-  Drawer,
   Fab,
   Chip,
   Avatar,
@@ -42,6 +41,8 @@ import {
   MoreVert as MoreIcon,
   FindInPage as FindingIcon,
   Security as SecurityIcon,
+  OpenInFull as OpenInFullIcon,
+  CloseFullscreen as CloseFullscreenIcon,
 } from "@mui/icons-material";
 import { reverseEngineeringClient, type ApkChatMessage, type ApkChatResponse, type UnifiedApkScanResult } from "../api/client";
 
@@ -80,6 +81,7 @@ export default function ApkChatPanel({
   const theme = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessageWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -380,17 +382,20 @@ export default function ApkChatPanel({
   }
 
   return (
-    <Drawer
-      anchor="right"
-      open={isOpen}
-      onClose={() => setIsOpen(false)}
-      PaperProps={{
-        sx: {
-          width: { xs: "100%", sm: 450 },
-          maxWidth: "100vw",
-          display: "flex",
-          flexDirection: "column",
-        },
+    <Paper
+      elevation={8}
+      sx={{
+        position: "fixed",
+        bottom: 16,
+        right: 16,
+        left: isMaximized ? { xs: 16, md: 280 } : "auto",
+        width: isMaximized ? "auto" : { xs: "calc(100% - 32px)", sm: 420 },
+        maxWidth: isMaximized ? "none" : 420,
+        borderRadius: 3,
+        overflow: "hidden",
+        zIndex: 1300,
+        boxShadow: `0 8px 32px ${alpha("#000", 0.2)}`,
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
       {/* Header */}
@@ -415,6 +420,13 @@ export default function ApkChatPanel({
               onClick={(e) => setMenuAnchor(e.currentTarget)}
             >
               <MoreIcon />
+            </IconButton>
+            <IconButton
+              size="small"
+              sx={{ color: "white" }}
+              onClick={() => setIsMaximized(!isMaximized)}
+            >
+              {isMaximized ? <CloseFullscreenIcon /> : <OpenInFullIcon />}
             </IconButton>
             <IconButton
               size="small"
@@ -499,17 +511,18 @@ export default function ApkChatPanel({
         </MenuItem>
       </Menu>
 
-      <Collapse in={!isMinimized} sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <Collapse in={!isMinimized} sx={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
         {/* Messages */}
         <Box
           sx={{
-            flex: 1,
+            height: isMaximized ? "calc(66vh - 180px)" : 350,
             overflowY: "auto",
             p: 2,
             display: "flex",
             flexDirection: "column",
             gap: 2,
             bgcolor: alpha(theme.palette.background.default, 0.5),
+            transition: "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
           {/* Welcome message */}
@@ -756,6 +769,6 @@ export default function ApkChatPanel({
           )}
         </Box>
       </Collapse>
-    </Drawer>
+    </Paper>
   );
 }

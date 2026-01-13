@@ -1,11 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Grid,
   Card,
   CardContent,
@@ -32,6 +30,14 @@ import {
   AlertTitle,
   Button,
   Avatar,
+  Container,
+  useTheme,
+  Drawer,
+  Fab,
+  IconButton,
+  LinearProgress,
+  useMediaQuery,
+  alpha,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -63,22 +69,11 @@ import ScienceIcon from "@mui/icons-material/Science";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import TimelineIcon from "@mui/icons-material/Timeline";
+import InfoIcon from "@mui/icons-material/Info";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import LearnPageLayout from "../components/LearnPageLayout";
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
-}
 
 // Code block component
 const CodeBlock = ({ children, language }: { children: string; language?: string }) => (
@@ -296,6 +291,32 @@ DDoS Attack:
       "pps measures network device processing load",
       "rps measures application-level request load",
       "Different attack types optimize for different metrics"
+    ]
+  },
+  typesOfDDoS: {
+    title: "Types of DDoS Attacks",
+    icon: "🎭",
+    beginnerExplanation: `DDoS attacks come in three main flavors, each targeting different parts of the network:
+
+1. VOLUMETRIC - Flood the network with raw data
+2. PROTOCOL - Exploit weaknesses in network protocols  
+3. APPLICATION - Target specific applications with smart requests
+
+Understanding these categories helps you identify and defend against different attacks.`,
+    categories: [
+      { name: "Volumetric", color: "#f44336", description: "Overwhelm bandwidth with massive traffic (UDP floods, amplification)" },
+      { name: "Protocol", color: "#ff9800", description: "Exhaust server resources with protocol exploits (SYN floods)" },
+      { name: "Application", color: "#9c27b0", description: "Target app layer with expensive requests (HTTP floods, Slowloris)" }
+    ]
+  },
+  realWorldExamples: {
+    title: "Famous DDoS Attacks",
+    icon: "📰",
+    intro: "These real-world attacks show how devastating DDoS can be and what we can learn from them:",
+    examples: [
+      { name: "GitHub Attack", year: "2018", impact: "1.35 Tbps - largest at the time", method: "Memcached amplification", lesson: "Even giants are vulnerable; proper DDoS protection is essential" },
+      { name: "Dyn DNS Attack", year: "2016", impact: "Major websites down (Twitter, Netflix, Reddit)", method: "Mirai botnet IoT devices", lesson: "IoT security matters; DNS is a critical single point of failure" },
+      { name: "AWS Shield Attack", year: "2020", impact: "2.3 Tbps - largest ever mitigated", method: "CLDAP reflection", lesson: "Cloud providers offer massive absorption capacity" }
     ]
   }
 };
@@ -634,8 +655,10 @@ const attackCategories = [
   {
     name: "Volumetric Attacks",
     icon: <CloudIcon />,
+    color: "#f44336",
     description: "Overwhelm bandwidth with massive traffic volume",
     longDescription: "Volumetric attacks are the most common type of DDoS. They work by flooding the target with so much traffic that the network connection becomes saturated. Think of it like trying to drink from a fire hose - there's simply too much coming at once. These attacks are measured in bits per second (bps) and can reach terabits of traffic.",
+    examples: ["UDP Flood", "ICMP Flood", "DNS Amplification", "NTP Amplification"],
     techniques: [
       { name: "UDP Flood", description: "Sends massive UDP packets to random ports, forcing the server to check for applications and respond with ICMP 'destination unreachable'" },
       { name: "ICMP Flood", description: "Also called 'Ping Flood' - overwhelms target with ICMP echo requests (pings) without waiting for replies" },
@@ -647,8 +670,10 @@ const attackCategories = [
   {
     name: "Protocol Attacks",
     icon: <NetworkCheckIcon />,
+    color: "#ff9800",
     description: "Exploit weaknesses in network protocols (Layer 3/4)",
     longDescription: "Protocol attacks exploit weaknesses in how network protocols work. Instead of using raw bandwidth, they consume server resources or intermediate equipment like firewalls and load balancers. These are measured in packets per second (pps) and target the 'handshake' process that computers use to establish connections.",
+    examples: ["SYN Flood", "Ping of Death", "Smurf Attack", "Fragmentation Attacks"],
     techniques: [
       { name: "SYN Flood", description: "Exploits TCP handshake by sending SYN requests but never completing the connection, exhausting server's connection table" },
       { name: "Ping of Death", description: "Sends malformed or oversized ping packets that crash the target system when reassembled" },
@@ -659,8 +684,10 @@ const attackCategories = [
   {
     name: "Application Layer Attacks",
     icon: <StorageIcon />,
+    color: "#9c27b0",
     description: "Target application vulnerabilities (Layer 7)",
     longDescription: "Application layer attacks are the most sophisticated type. They target the actual web server or application, mimicking legitimate user behavior to evade detection. These are measured in requests per second (rps) and often require fewer resources to execute but can be devastating because they're hard to distinguish from real traffic.",
+    examples: ["HTTP Flood", "Slowloris", "RUDY", "DNS Query Flood"],
     techniques: [
       { name: "HTTP Flood", description: "Sends seemingly legitimate HTTP GET or POST requests to overwhelm web servers" },
       { name: "Slowloris", description: "Opens connections and sends partial HTTP headers very slowly, keeping connections open and exhausting server limits" },
@@ -2328,2282 +2355,1476 @@ const dataHandlingGuidelines = [
   "Coordinate disclosure with stakeholders.",
 ];
 
+// Additional data for sections
+const economicsData = [
+  {
+    title: "Attack Costs",
+    color: "#ffebee",
+    items: [
+      "Basic DDoS-for-hire: $10-50/hour",
+      "Sophisticated botnet rental: $500-5000/day",
+      "Large-scale attack infrastructure: $10,000+",
+    ],
+  },
+  {
+    title: "Defense Costs",
+    color: "#e8f5e9",
+    items: [
+      "Cloud DDoS protection: $3,000-50,000/month",
+      "On-premise appliances: $25,000-500,000",
+      "24/7 SOC monitoring: $100,000+/year",
+    ],
+  },
+  {
+    title: "Damage Costs",
+    color: "#fff3e0",
+    items: [
+      "Average downtime cost: $5,600/minute",
+      "Reputation damage: Hard to quantify",
+      "Customer churn: 5-10% increase",
+    ],
+  },
+];
+
+const attackVectors = [
+  { name: "UDP Flood", layer: "L3/L4", mechanism: "Massive UDP packets to random ports", mitigation: "Rate limiting, traffic scrubbing" },
+  { name: "SYN Flood", layer: "L3/L4", mechanism: "Incomplete TCP handshakes", mitigation: "SYN cookies, connection limits" },
+  { name: "HTTP Flood", layer: "L7", mechanism: "Legitimate-looking HTTP requests", mitigation: "WAF rules, behavioral analysis" },
+  { name: "DNS Amplification", layer: "L3/L4", mechanism: "Spoofed DNS queries to open resolvers", mitigation: "BCP38, rate limiting" },
+  { name: "Slowloris", layer: "L7", mechanism: "Keep connections open with partial headers", mitigation: "Timeout tuning, connection limits" },
+];
+
+const amplificationSteps = [
+  { label: "IP Spoofing", description: "Attacker sends requests with victim's IP as source address" },
+  { label: "Request to Reflector", description: "Requests sent to servers with amplification potential (DNS, NTP, Memcached)" },
+  { label: "Amplified Response", description: "Reflector sends much larger response to spoofed IP (victim)" },
+  { label: "Target Overwhelmed", description: "Victim receives massive traffic from multiple reflectors" },
+];
+
+const amplificationFactors = [
+  { protocol: "DNS", factor: "28-54", port: "53/UDP", notes: "ANY query type gives largest amplification" },
+  { protocol: "NTP", factor: "556", port: "123/UDP", notes: "monlist command (deprecated)" },
+  { protocol: "Memcached", factor: "51,000", port: "11211/UDP", notes: "Most powerful known vector" },
+  { protocol: "SSDP", factor: "30", port: "1900/UDP", notes: "UPnP devices on home networks" },
+  { protocol: "CLDAP", factor: "56-70", port: "389/UDP", notes: "Microsoft Active Directory" },
+  { protocol: "CharGEN", factor: "358", port: "19/UDP", notes: "Legacy protocol, rarely seen" },
+];
+
+const botnetInfo = [
+  {
+    title: "Botnet Composition",
+    icon: <RouterIcon />,
+    points: [
+      "IoT devices (cameras, routers, DVRs)",
+      "Compromised servers and VPS",
+      "Infected home computers",
+      "Hijacked cloud instances",
+    ],
+  },
+  {
+    title: "Command & Control",
+    icon: <SecurityIcon />,
+    points: [
+      "Centralized C2 servers",
+      "Peer-to-peer communication",
+      "Domain generation algorithms (DGA)",
+      "Tor hidden services",
+    ],
+  },
+  {
+    title: "Attack Capabilities",
+    icon: <SpeedIcon />,
+    points: [
+      "Multi-vector attacks",
+      "Geographic distribution",
+      "On-demand scaling",
+      "Evasion techniques",
+    ],
+  },
+  {
+    title: "Monetization",
+    icon: <MonetizationOnIcon />,
+    points: [
+      "DDoS-for-hire services",
+      "Ransom/extortion demands",
+      "Competitive attacks",
+      "Hacktivism campaigns",
+    ],
+  },
+];
+
+const notableBotnets = [
+  { name: "Mirai", size: "600,000+ devices", capability: "1.2 Tbps attacks", targets: "Dyn DNS, OVH, Krebs on Security" },
+  { name: "Mēris", size: "250,000+ devices", capability: "21.8M RPS HTTP attacks", targets: "Yandex, Cloudflare customers" },
+  { name: "Emotet", size: "1M+ endpoints", capability: "Multi-purpose including DDoS", targets: "Financial institutions, enterprises" },
+  { name: "Mantis", size: "5,000 VMs", capability: "26M RPS HTTPS attacks", targets: "Cloudflare customers" },
+];
+
+const mitigationLayers = [
+  {
+    name: "Network Layer",
+    color: "#2196f3",
+    description: "First line of defense at the network edge",
+    techniques: [
+      "Anycast network distribution",
+      "BGP flowspec and RTBH",
+      "ISP scrubbing centers",
+      "Rate limiting at edge",
+    ],
+  },
+  {
+    name: "Infrastructure Layer",
+    color: "#4caf50",
+    description: "Protect servers and services",
+    techniques: [
+      "Load balancer configuration",
+      "SYN cookies and proxies",
+      "Connection timeouts",
+      "Resource isolation",
+    ],
+  },
+  {
+    name: "Application Layer",
+    color: "#ff9800",
+    description: "Defend against L7 attacks",
+    techniques: [
+      "WAF rules and signatures",
+      "Bot detection and CAPTCHA",
+      "Rate limiting per endpoint",
+      "Caching strategies",
+    ],
+  },
+];
+
+const detectionCommandsData = [
+  {
+    title: "Network Traffic Analysis",
+    lang: "bash",
+    command: "tcpdump -i eth0 -n 'udp and port 53' -c 1000 | \\\n  awk '{print $3}' | sort | uniq -c | sort -rn | head -20",
+    description: "Identify top DNS query sources",
+  },
+  {
+    title: "Connection State Check",
+    lang: "bash",
+    command: "ss -s\nnetstat -an | awk '/tcp/ {print $6}' | sort | uniq -c | sort -rn",
+    description: "Check TCP connection states for SYN flood indicators",
+  },
+  {
+    title: "Real-time Bandwidth",
+    lang: "bash",
+    command: "iftop -i eth0 -nNP",
+    description: "Monitor bandwidth usage by connection",
+  },
+  {
+    title: "HTTP Request Rate",
+    lang: "bash",
+    command: "tail -f /var/log/nginx/access.log | \\\n  awk '{print $1}' | uniq -c | sort -rn | head -10",
+    description: "Watch for HTTP flood patterns",
+  },
+];
+
+const safeLabOptions = [
+  {
+    name: "Local Virtual Lab",
+    color: "#4caf50",
+    description: "Completely isolated environment on your machine",
+    features: [
+      "VirtualBox/VMware with isolated networks",
+      "Docker containers with network isolation",
+      "No internet connectivity required",
+      "Full control over all components",
+    ],
+  },
+  {
+    name: "Cloud Sandbox",
+    color: "#2196f3",
+    description: "Isolated cloud environment for testing",
+    features: [
+      "AWS/Azure/GCP isolated VPCs",
+      "Controlled egress rules",
+      "Auto-teardown after testing",
+      "Cost controls and limits",
+    ],
+  },
+  {
+    name: "Commercial Platforms",
+    color: "#ff9800",
+    description: "Purpose-built DDoS testing platforms",
+    features: [
+      "Authorized stress testing services",
+      "Compliance with legal requirements",
+      "Detailed reporting and analytics",
+      "Insurance and liability coverage",
+    ],
+  },
+  {
+    name: "CTF Environments",
+    color: "#9c27b0",
+    description: "Capture The Flag competitions",
+    features: [
+      "Legal hacking challenges",
+      "Learn attack techniques safely",
+      "Community and mentorship",
+      "Real-world scenario simulation",
+    ],
+  },
+];
+
+const labSetupYaml = `# docker-compose.yml for DDoS Lab
+version: '3.8'
+services:
+  target-web:
+    image: nginx:alpine
+    networks:
+      - ddos-lab
+    ports:
+      - "8080:80"
+    
+  target-dns:
+    image: coredns/coredns
+    networks:
+      - ddos-lab
+    ports:
+      - "5353:53/udp"
+    
+  attacker:
+    image: kalilinux/kali-rolling
+    networks:
+      - ddos-lab
+    cap_add:
+      - NET_ADMIN
+    command: sleep infinity
+
+  monitor:
+    image: grafana/grafana
+    networks:
+      - ddos-lab
+    ports:
+      - "3000:3000"
+
+networks:
+  ddos-lab:
+    driver: bridge
+    internal: true  # No external access`;
+
+const legalInfo = [
+  { region: "United States", law: "Computer Fraud and Abuse Act (CFAA)", penalty: "Up to 10 years imprisonment, $500K+ fines" },
+  { region: "United Kingdom", law: "Computer Misuse Act 1990", penalty: "Up to 10 years imprisonment" },
+  { region: "European Union", law: "Directive on Attacks Against Information Systems", penalty: "Varies by member state, up to 10 years" },
+  { region: "Canada", law: "Criminal Code Section 342.1", penalty: "Up to 10 years imprisonment" },
+  { region: "Australia", law: "Criminal Code Act 1995", penalty: "Up to 10 years imprisonment" },
+];
+
 // =============================================================================
 // MAIN COMPONENT
 // =============================================================================
 
 const DDoSAttackTechniquesPage: React.FC = () => {
+  const theme = useTheme();
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const accent = "#ef4444"; // Red accent for DDoS/attack theme
+
+  // Section navigation items
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <InfoIcon /> },
+    { id: "fundamentals", label: "Fundamentals", icon: <SchoolIcon /> },
+    { id: "overview", label: "Attack Overview", icon: <WarningIcon /> },
+    { id: "attack-types", label: "Attack Types", icon: <CloudIcon /> },
+    { id: "amplification", label: "Amplification", icon: <SpeedIcon /> },
+    { id: "botnets", label: "Botnets", icon: <RouterIcon /> },
+    { id: "mitigation", label: "Mitigation", icon: <ShieldIcon /> },
+    { id: "detection", label: "Detection", icon: <NetworkCheckIcon /> },
+    { id: "safe-lab", label: "Safe Lab", icon: <ScienceIcon /> },
+    { id: "legal", label: "Legal & Ethics", icon: <GavelIcon /> },
+  ];
+
+  // Scroll to section
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
   };
+
+  // Track active section on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Scroll to top
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // Progress calculation
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   const pageContext = `This page covers DDoS attack techniques including volumetric, protocol, and application layer attacks. Topics include amplification methods, botnet coordination, attack detection, traffic analysis, baseline metrics, response runbooks, and mitigation strategies.`;
 
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="DDoS Attack Techniques" pageContext={pageContext}>
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ mb: 3 }}>
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2 }}
-        />
-      </Box>
-      <Typography variant="h4" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <SecurityIcon color="error" />
-        DDoS Attack Techniques
-      </Typography>
-      <Typography variant="body1" color="text.secondary" paragraph>
-        Understanding Distributed Denial of Service attacks for defense and security research
-      </Typography>
+      <Box sx={{ display: "flex", gap: 3, position: "relative" }}>
+        {/* Sidebar Navigation */}
+        {sidebarNav}
 
-      <Alert severity="warning" sx={{ mb: 3 }}>
-        <AlertTitle>Educational Purpose Only</AlertTitle>
-        This content is for defensive security understanding and authorized penetration testing.
-        Launching DDoS attacks against systems you don't own is illegal and unethical.
-      </Alert>
+        {/* Main Content */}
+        <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
+          {/* Back Button */}
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
 
-      <Paper sx={{ mb: 3 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-        >
-          <Tab icon={<SchoolIcon />} label="Fundamentals" />
-          <Tab icon={<WarningIcon />} label="Overview" />
-          <Tab icon={<CloudIcon />} label="Attack Types" />
-          <Tab icon={<SpeedIcon />} label="Amplification" />
-          <Tab icon={<RouterIcon />} label="Botnets" />
-          <Tab icon={<ShieldIcon />} label="Mitigation" />
-          <Tab icon={<NetworkCheckIcon />} label="Detection" />
-          <Tab icon={<ScienceIcon />} label="Safe Lab" />
-          <Tab icon={<GavelIcon />} label="Legal & Ethics" />
-        </Tabs>
-      </Paper>
-
-      {/* Tab 0: Fundamentals */}
-      <TabPanel value={tabValue} index={0}>
-        <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <SchoolIcon color="primary" />
-          DDoS Fundamentals for Beginners
-        </Typography>
-
-        <Alert severity="success" sx={{ mb: 3 }}>
-          <AlertTitle>Start Here If You're New!</AlertTitle>
-          This section explains DDoS concepts from the ground up. No prior networking knowledge required.
-          Work through each section in order for the best learning experience.
-        </Alert>
-
-        {/* What is DDoS */}
-        <Accordion defaultExpanded sx={{ mb: 2, border: '2px solid', borderColor: 'primary.main' }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'primary.dark' }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography variant="h4">{ddosFundamentals.whatIsDDoS.icon}</Typography>
+          {/* Hero Banner */}
+          <Paper
+            sx={{
+              p: 4,
+              mb: 4,
+              borderRadius: 4,
+              background: `linear-gradient(135deg, ${alpha(accent, 0.15)} 0%, ${alpha("#f97316", 0.1)} 100%)`,
+              border: `1px solid ${alpha(accent, 0.2)}`,
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <Box
+              sx={{
+                position: "absolute",
+                top: -50,
+                right: -50,
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                background: `linear-gradient(135deg, ${alpha(accent, 0.1)}, transparent)`,
+              }}
+            />
+            <Box sx={{ display: "flex", alignItems: "center", gap: 3, position: "relative" }}>
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: 3,
+                  background: `linear-gradient(135deg, ${accent}, #f97316)`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: `0 8px 32px ${alpha(accent, 0.3)}`,
+                }}
+              >
+                <SecurityIcon sx={{ fontSize: 45, color: "white" }} />
+              </Box>
               <Box>
-                <Typography variant="h6" color="white">{ddosFundamentals.whatIsDDoS.title}</Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.7)">Essential • 5 min read</Typography>
+                <Chip label="Offensive Security" size="small" sx={{ mb: 1, fontWeight: 600, bgcolor: alpha(accent, 0.1), color: accent }} />
+                <Typography variant="h3" sx={{ fontWeight: 800, mb: 1 }}>
+                  DDoS Attack Techniques
+                </Typography>
+                <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 600 }}>
+                  Understanding Distributed Denial of Service attacks for defense and security research
+                </Typography>
               </Box>
             </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <AlertTitle>Beginner-Friendly Explanation</AlertTitle>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                {ddosFundamentals.whatIsDDoS.beginnerExplanation}
+          </Paper>
+
+          {/* Tags */}
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+            <Chip label="Network Security" size="small" sx={{ bgcolor: alpha("#ef4444", 0.1), color: "#ef4444" }} />
+            <Chip label="Traffic Analysis" size="small" sx={{ bgcolor: alpha("#f97316", 0.1), color: "#f97316" }} />
+            <Chip label="Incident Response" size="small" sx={{ bgcolor: alpha("#eab308", 0.1), color: "#eab308" }} />
+            <Chip label="Intermediate" size="small" variant="outlined" />
+          </Box>
+
+          {/* Introduction Section */}
+          <Box id="intro">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <InfoIcon sx={{ color: accent }} />
+                Overview
               </Typography>
-            </Alert>
-
-            <Paper sx={{ p: 2, mb: 2, bgcolor: 'success.dark' }}>
-              <Typography variant="subtitle1" fontWeight="bold" color="white" gutterBottom>
-                🍕 {ddosFundamentals.whatIsDDoS.realWorldAnalogy}
+              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+                Distributed Denial of Service (DDoS) attacks are among the most disruptive and common cyber threats 
+                facing organizations today. These attacks aim to overwhelm target systems, networks, or services with 
+                a flood of traffic, rendering them unavailable to legitimate users.
               </Typography>
-              <Typography variant="body2" color="rgba(255,255,255,0.9)" sx={{ whiteSpace: 'pre-line' }}>
-                {ddosFundamentals.whatIsDDoS.analogyExplanation}
+              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+                Understanding DDoS attack techniques is essential for security professionals who need to defend against 
+                these threats. This comprehensive guide covers attack vectors, amplification methods, botnet infrastructure, 
+                detection techniques, and mitigation strategies.
               </Typography>
-            </Paper>
-
-            <Accordion sx={{ mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography fontWeight="bold">🔧 Technical Details (Advanced)</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
-                  {ddosFundamentals.whatIsDDoS.technicalDetails}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
-            <List dense>
-              {ddosFundamentals.whatIsDDoS.keyPoints.map((point, idx) => (
-                <ListItem key={idx}>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary={point} />
-                </ListItem>
-              ))}
-            </List>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* How Internet Works */}
-        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'info.main' }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'info.dark' }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography variant="h4">{ddosFundamentals.howInternetWorks.icon}</Typography>
-              <Box>
-                <Typography variant="h6" color="white">{ddosFundamentals.howInternetWorks.title}</Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.7)">Background Knowledge • 4 min read</Typography>
-              </Box>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <AlertTitle>Understanding the Basics</AlertTitle>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                {ddosFundamentals.howInternetWorks.beginnerExplanation}
+              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+                Whether you're a security analyst, network administrator, or incident responder, this guide will equip 
+                you with the knowledge needed to identify, analyze, and defend against DDoS attacks effectively.
               </Typography>
-            </Alert>
 
-            <Accordion sx={{ mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography fontWeight="bold">🔧 Technical Details (Network Layers)</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
-                  {ddosFundamentals.howInternetWorks.technicalDetails}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <AlertTitle>Educational Purpose Only</AlertTitle>
+                This content is for defensive security understanding and authorized penetration testing.
+                Launching DDoS attacks against systems you don't own is illegal and unethical.
+              </Alert>
 
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
-            <List dense>
-              {ddosFundamentals.howInternetWorks.keyPoints.map((point, idx) => (
-                <ListItem key={idx}>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary={point} />
-                </ListItem>
-              ))}
-            </List>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Bandwidth */}
-        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'warning.main' }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'warning.dark' }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography variant="h4">{ddosFundamentals.bandwidth.icon}</Typography>
-              <Box>
-                <Typography variant="h6" color="white">{ddosFundamentals.bandwidth.title}</Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.7)">Core Concept • 3 min read</Typography>
-              </Box>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <AlertTitle>The Highway Analogy</AlertTitle>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                {ddosFundamentals.bandwidth.beginnerExplanation}
-              </Typography>
-            </Alert>
-
-            <CodeBlock language="diagram">{visualLearningAids.bandwidthPipeDiagram}</CodeBlock>
-
-            <Accordion sx={{ mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography fontWeight="bold">🔧 Technical Details</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
-                  {ddosFundamentals.bandwidth.technicalDetails}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
-            <List dense>
-              {ddosFundamentals.bandwidth.keyPoints.map((point, idx) => (
-                <ListItem key={idx}>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary={point} />
-                </ListItem>
-              ))}
-            </List>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Packets and Connections */}
-        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'secondary.main' }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'secondary.dark' }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography variant="h4">{ddosFundamentals.packetsAndConnections.icon}</Typography>
-              <Box>
-                <Typography variant="h6" color="white">{ddosFundamentals.packetsAndConnections.title}</Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.7)">Core Concept • 4 min read</Typography>
-              </Box>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <AlertTitle>Data Travels in Packets</AlertTitle>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                {ddosFundamentals.packetsAndConnections.beginnerExplanation}
-              </Typography>
-            </Alert>
-
-            <CodeBlock language="diagram">{visualLearningAids.tcpHandshakeDiagram}</CodeBlock>
-
-            <Accordion sx={{ mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography fontWeight="bold">🔧 Technical Details (TCP Handshake)</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
-                  {ddosFundamentals.packetsAndConnections.technicalDetails}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
-            <List dense>
-              {ddosFundamentals.packetsAndConnections.keyPoints.map((point, idx) => (
-                <ListItem key={idx}>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary={point} />
-                </ListItem>
-              ))}
-            </List>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* DoS vs DDoS */}
-        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'error.main' }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'error.dark' }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography variant="h4">{ddosFundamentals.dosVsDDoS.icon}</Typography>
-              <Box>
-                <Typography variant="h6" color="white">{ddosFundamentals.dosVsDDoS.title}</Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.7)">Key Distinction • 3 min read</Typography>
-              </Box>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <AlertTitle>The Critical Difference</AlertTitle>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                {ddosFundamentals.dosVsDDoS.beginnerExplanation}
-              </Typography>
-            </Alert>
-
-            <CodeBlock language="diagram">{visualLearningAids.ddosVsDosDiagram}</CodeBlock>
-
-            <Accordion sx={{ mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography fontWeight="bold">🔧 Technical Comparison</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
-                  {ddosFundamentals.dosVsDDoS.technicalDetails}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
-            <List dense>
-              {ddosFundamentals.dosVsDDoS.keyPoints.map((point, idx) => (
-                <ListItem key={idx}>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary={point} />
-                </ListItem>
-              ))}
-            </List>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Attack Metrics */}
-        <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'success.main' }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'success.dark' }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography variant="h4">{ddosFundamentals.attackMetrics.icon}</Typography>
-              <Box>
-                <Typography variant="h6" color="white">{ddosFundamentals.attackMetrics.title}</Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.7)">Understanding Scale • 4 min read</Typography>
-              </Box>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <AlertTitle>Three Ways to Measure Attacks</AlertTitle>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                {ddosFundamentals.attackMetrics.beginnerExplanation}
-              </Typography>
-            </Alert>
-
-            <Accordion sx={{ mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography fontWeight="bold">🔧 Why Different Metrics Matter</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
-                  {ddosFundamentals.attackMetrics.technicalDetails}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
-            <List dense>
-              {ddosFundamentals.attackMetrics.keyPoints.map((point, idx) => (
-                <ListItem key={idx}>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary={point} />
-                </ListItem>
-              ))}
-            </List>
-          </AccordionDetails>
-        </Accordion>
-
-        <Divider sx={{ my: 4 }} />
-
-        {/* Expanded Glossary */}
-        <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <MenuBookIcon color="primary" />
-          DDoS Glossary
-        </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
-          Key terms you'll encounter when learning about DDoS attacks. Click to expand each term for a detailed explanation.
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 4 }}>
-          {Object.entries(expandedGlossary).map(([key, term]) => (
-            <Grid item xs={12} md={6} key={key}>
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, width: "100%" }}>
-                    <Typography fontWeight="bold">{term.term}</Typography>
-                    <Chip 
-                      label={term.difficulty} 
-                      size="small" 
-                      color={term.difficulty === 'beginner' ? 'success' : term.difficulty === 'intermediate' ? 'warning' : 'error'}
-                      sx={{ ml: 'auto' }}
-                    />
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography paragraph>{term.definition}</Typography>
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    <AlertTitle>Example</AlertTitle>
-                    {term.example}
-                  </Alert>
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                    <Typography variant="caption" color="text.secondary">Related:</Typography>
-                    {term.relatedTerms.map((related) => (
-                      <Chip key={related} label={related} size="small" variant="outlined" />
-                    ))}
-                  </Box>
-                </AccordionDetails>
-              </Accordion>
-            </Grid>
-          ))}
-        </Grid>
-
-        <Divider sx={{ my: 4 }} />
-
-        {/* Real-World Incidents */}
-        <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <TimelineIcon color="error" />
-          Notable DDoS Incidents
-        </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
-          Learn from real attacks that made headlines. Understanding what happened helps you defend against future attacks.
-        </Typography>
-
-        {realWorldIncidents.map((incident) => (
-          <Accordion key={incident.name} sx={{ mb: 2 }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
-                <Typography variant="h6">{incident.name}</Typography>
-                <Chip label={incident.attackSize} color="error" size="small" />
-                <Chip label={incident.attackType} size="small" sx={{ ml: "auto" }} />
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={8}>
-                  <Typography paragraph>{incident.description}</Typography>
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    <AlertTitle>Outcome</AlertTitle>
-                    {incident.outcome}
-                  </Alert>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#10b981", 0.05), border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>Who This Is For</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Security analysts, network administrators, SOC teams, and incident responders who need to 
+                      understand and defend against DDoS attacks.
+                    </Typography>
+                  </Box>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: "action.hover" }}>
-                    <Typography variant="subtitle2" fontWeight="bold">Attack Details</Typography>
-                    <List dense>
-                      <ListItem>
-                        <ListItemText primary="Target" secondary={incident.target} />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Size" secondary={incident.attackSize} />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Duration" secondary={incident.duration} />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Type" secondary={incident.attackType} />
-                      </ListItem>
-                    </List>
-                  </Paper>
-                </Grid>
-              </Grid>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
-                Lessons Learned:
-              </Typography>
-              <List dense>
-                {incident.lessonsLearned.map((lesson, idx) => (
-                  <ListItem key={idx}>
-                    <ListItemIcon><LightbulbIcon color="warning" /></ListItemIcon>
-                    <ListItemText primary={lesson} />
-                  </ListItem>
-                ))}
-              </List>
-            </AccordionDetails>
-          </Accordion>
-        ))}
-
-        <Divider sx={{ my: 4 }} />
-
-        {/* Knowledge Check Quiz */}
-        <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <QuizIcon color="secondary" />
-          Knowledge Check
-        </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
-          Test your understanding of DDoS fundamentals. Click on an answer to check if you're right!
-        </Typography>
-
-        {beginnerQuiz.map((q, qIdx) => (
-          <Accordion key={qIdx} sx={{ mb: 2 }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography fontWeight="bold">Question {qIdx + 1}: {q.question}</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={1}>
-                {q.options.map((option, oIdx) => (
-                  <Grid item xs={12} sm={6} key={oIdx}>
-                    <Paper 
-                      sx={{ 
-                        p: 2, 
-                        cursor: "pointer",
-                        border: "2px solid",
-                        borderColor: oIdx === q.correctIndex ? "success.main" : "divider",
-                        bgcolor: oIdx === q.correctIndex ? "success.dark" : "background.paper",
-                        "&:hover": { borderColor: "primary.main" }
-                      }}
-                    >
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        {oIdx === q.correctIndex ? (
-                          <CheckCircleIcon color="success" />
-                        ) : (
-                          <CancelIcon color="disabled" />
-                        )}
-                        <Typography color={oIdx === q.correctIndex ? "white" : "text.primary"}>
-                          {option}
-                        </Typography>
-                      </Box>
-                    </Paper>
-                  </Grid>
-                ))}
-              </Grid>
-              <Alert severity="success" sx={{ mt: 2 }}>
-                <AlertTitle>Explanation</AlertTitle>
-                {q.explanation}
-              </Alert>
-            </AccordionDetails>
-          </Accordion>
-        ))}
-      </TabPanel>
-
-      {/* Tab 1: Overview */}
-      <TabPanel value={tabValue} index={1}>
-        <Typography variant="h5" gutterBottom>What is a DDoS Attack?</Typography>
-        
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>Simple Explanation</AlertTitle>
-          Imagine a popular restaurant that can serve 100 customers per hour. A DDoS attack is like 
-          sending 10,000 fake customers to stand in line, making it impossible for real customers 
-          to get served. The restaurant isn't broken - it's just overwhelmed.
-        </Alert>
-
-        <Typography paragraph>
-          A <strong>Distributed Denial of Service (DDoS)</strong> attack attempts to make an online service 
-          unavailable by overwhelming it with traffic from multiple sources. Unlike a simple DoS attack 
-          (which comes from one source), DDoS attacks use thousands or millions of compromised computers, 
-          making them much harder to stop.
-        </Typography>
-
-        <Typography paragraph>
-          These attacks don't try to "hack" into systems or steal data - they simply try to make 
-          services unavailable. Think of it as the difference between picking a lock (hacking) and 
-          blocking the door with a crowd (DDoS).
-        </Typography>
-
-        <Divider sx={{ my: 3 }} />
-
-        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <LightbulbIcon color="primary" />
-          DoS vs DDoS: What's the Difference?
-        </Typography>
-        
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ height: "100%", borderLeft: "4px solid orange" }}>
-              <CardContent>
-                <Typography variant="h6">DoS (Denial of Service)</Typography>
-                <List dense>
-                  <ListItem><ListItemText primary="Single attack source" /></ListItem>
-                  <ListItem><ListItemText primary="Easier to identify and block" /></ListItem>
-                  <ListItem><ListItemText primary="Limited attack power" /></ListItem>
-                  <ListItem><ListItemText primary="Example: One computer flooding a server" /></ListItem>
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ height: "100%", borderLeft: "4px solid red" }}>
-              <CardContent>
-                <Typography variant="h6">DDoS (Distributed DoS)</Typography>
-                <List dense>
-                  <ListItem><ListItemText primary="Multiple attack sources (botnet)" /></ListItem>
-                  <ListItem><ListItemText primary="Very difficult to mitigate" /></ListItem>
-                  <ListItem><ListItemText primary="Can generate terabits of traffic" /></ListItem>
-                  <ListItem><ListItemText primary="Example: 100,000 bots flooding a server" /></ListItem>
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <TrendingUpIcon color="primary" />
-          Key Metrics to Track
-        </Typography>
-        <TableContainer component={Paper} sx={{ mb: 3 }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: "action.hover" }}>
-                <TableCell><strong>Metric</strong></TableCell>
-                <TableCell><strong>What It Tells You</strong></TableCell>
-                <TableCell><strong>Defensive Use</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {keyMetrics.map((row) => (
-                <TableRow key={row.metric}>
-                  <TableCell>{row.metric}</TableCell>
-                  <TableCell>{row.meaning}</TableCell>
-                  <TableCell>{row.defense}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <PublicIcon color="primary" />
-          Common Targets and Dependencies
-        </Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {commonTargets.map((target) => (
-              <ListItem key={target.name}>
-                <ListItemIcon>{target.icon}</ListItemIcon>
-                <ListItemText primary={target.name} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-
-        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <GroupsIcon color="primary" />
-          Who Launches DDoS Attacks and Why?
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          {[
-            { title: "Hacktivists", icon: <PublicIcon />, reason: "Political protest, drawing attention to causes" },
-            { title: "Competitors", icon: <MonetizationOnIcon />, reason: "Disrupting rival businesses, especially during peak times" },
-            { title: "Extortionists", icon: <WarningIcon />, reason: "Ransom DDoS (RDoS) - demanding payment to stop attacks" },
-            { title: "Nation States", icon: <GavelIcon />, reason: "Cyber warfare, disrupting critical infrastructure" },
-            { title: "Script Kiddies", icon: <ComputerIcon />, reason: "Bragging rights, testing skills, causing chaos for fun" },
-            { title: "Disgruntled Users", icon: <BugReportIcon />, reason: "Revenge against companies or gaming servers" },
-          ].map((actor) => (
-            <Grid item xs={12} sm={6} md={4} key={actor.title}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                    {actor.icon}
-                    <Typography variant="subtitle1" fontWeight="bold">{actor.title}</Typography>
+                  <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.05), border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Prerequisites</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Basic networking knowledge (TCP/IP, OSI model, routing). Familiarity with traffic analysis 
+                      tools is helpful but not required.
+                    </Typography>
                   </Box>
-                  <Typography variant="body2" color="text.secondary">{actor.reason}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.05), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>What You'll Learn</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Attack vectors, amplification techniques, botnet infrastructure, detection methods, 
+                      mitigation strategies, and safe lab practices.
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Box>
 
-        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <AccessTimeIcon color="primary" />
-          Attack Lifecycle
-        </Typography>
-
-        <Stepper orientation="vertical" sx={{ mb: 3 }}>
-          {attackLifecycle.map((step, index) => (
-            <Step key={step.label} active>
-              <StepLabel>{step.label}</StepLabel>
-              <StepContent>
-                <Typography>{step.description}</Typography>
-              </StepContent>
-            </Step>
-          ))}
-        </Stepper>
-
-        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <TrendingUpIcon color="primary" />
-          Service Impact Chain
-        </Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {impactChain.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon>
-                  <TrendingUpIcon color="warning" />
-                </ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-
-        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <MonetizationOnIcon color="primary" />
-          Real-World Impact & Costs
-        </Typography>
-
-        <Alert severity="error" sx={{ mb: 2 }}>
-          The average cost of a DDoS attack to a business is <strong>$40,000 per hour</strong> of downtime. 
-          For large enterprises, this can exceed <strong>$1 million per hour</strong>.
-        </Alert>
-
-        <Grid container spacing={2}>
-          {[
-            { stat: "$2.5M+", label: "Average total cost per attack", desc: "Including lost revenue, recovery, reputation damage" },
-            { stat: "6 hours", label: "Average attack duration", desc: "Though some last days or weeks" },
-            { stat: "2.9 Tbps", label: "Largest recorded attack", desc: "Microsoft Azure, November 2021" },
-            { stat: "15.3M", label: "DDoS attacks in 2023", desc: "One attack every 2 seconds globally" },
-          ].map((item) => (
-            <Grid item xs={12} sm={6} md={3} key={item.label}>
-              <Card sx={{ textAlign: "center" }}>
-                <CardContent>
-                  <Typography variant="h4" color="error.main">{item.stat}</Typography>
-                  <Typography variant="subtitle2" fontWeight="bold">{item.label}</Typography>
-                  <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      </TabPanel>
-
-      {/* Tab 2: Attack Types */}
-      <TabPanel value={tabValue} index={2}>
-        <Typography variant="h5" gutterBottom>Attack Categories</Typography>
-        
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>The Three Layers of DDoS</AlertTitle>
-          DDoS attacks target different parts of the network stack. Understanding which layer is being 
-          attacked is crucial for choosing the right defense. Most sophisticated attacks combine multiple types.
-        </Alert>
-
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={4}>
-            <Card sx={{ height: "100%", bgcolor: "error.dark" }}>
-              <CardContent>
-                <Typography variant="h6" color="white">Volumetric (Layer 3/4)</Typography>
-                <Typography color="rgba(255,255,255,0.8)" variant="body2">
-                  Measured in: <strong>Gbps/Tbps</strong>
-                </Typography>
-                <Typography color="rgba(255,255,255,0.7)" variant="body2">
-                  Goal: Saturate bandwidth
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Card sx={{ height: "100%", bgcolor: "warning.dark" }}>
-              <CardContent>
-                <Typography variant="h6" color="white">Protocol (Layer 3/4)</Typography>
-                <Typography color="rgba(255,255,255,0.8)" variant="body2">
-                  Measured in: <strong>Packets/sec</strong>
-                </Typography>
-                <Typography color="rgba(255,255,255,0.7)" variant="body2">
-                  Goal: Exhaust state tables
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Card sx={{ height: "100%", bgcolor: "info.dark" }}>
-              <CardContent>
-                <Typography variant="h6" color="white">Application (Layer 7)</Typography>
-                <Typography color="rgba(255,255,255,0.8)" variant="body2">
-                  Measured in: <strong>Requests/sec</strong>
-                </Typography>
-                <Typography color="rgba(255,255,255,0.7)" variant="body2">
-                  Goal: Crash applications
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Typography variant="h6" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-          <MenuBookIcon color="primary" />
-          Attack Comparison Matrix
-        </Typography>
-        <TableContainer component={Paper} sx={{ mb: 4 }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: "primary.dark" }}>
-                <TableCell sx={{ color: "white" }}><strong>Attack Type</strong></TableCell>
-                <TableCell sx={{ color: "white" }}><strong>Layer</strong></TableCell>
-                <TableCell sx={{ color: "white" }}><strong>Measurement</strong></TableCell>
-                <TableCell sx={{ color: "white" }}><strong>Difficulty</strong></TableCell>
-                <TableCell sx={{ color: "white" }}><strong>Primary Defense</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {attackComparison.map((row) => (
-                <TableRow key={row.attack}>
-                  <TableCell><strong>{row.attack}</strong></TableCell>
-                  <TableCell><Chip label={`Layer ${row.layer}`} size="small" /></TableCell>
-                  <TableCell>{row.measurement}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={row.difficulty} 
-                      size="small" 
-                      color={row.difficulty === 'Easy' ? 'success' : row.difficulty === 'Medium' ? 'warning' : 'error'} 
-                    />
-                  </TableCell>
-                  <TableCell><Typography variant="body2">{row.defense}</Typography></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        
-        <Typography variant="h5" gutterBottom sx={{ mt: 4, display: "flex", alignItems: "center", gap: 1 }}>
-          <BugReportIcon color="error" />
-          Attack Deep Dives
-        </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
-          Click on each attack type to learn how it works, see packet structures, and understand detection and defense.
-        </Typography>
-
-        {Object.entries(attackTypeDeepDives).map(([key, attack]) => (
-          <Accordion key={key} sx={{ mb: 2, border: '2px solid', borderColor: attack.category === 'volumetric' ? 'error.main' : attack.category === 'protocol' ? 'warning.main' : 'info.main' }}>
-            <AccordionSummary 
-              expandIcon={<ExpandMoreIcon />}
-              sx={{ bgcolor: attack.category === 'volumetric' ? 'error.dark' : attack.category === 'protocol' ? 'warning.dark' : 'info.dark' }}
+          {/* Fundamentals Section */}
+          <Box id="fundamentals">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
-                <Typography variant="h5">{attack.icon}</Typography>
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" color="white">{attack.name}</Typography>
-                  <Typography variant="caption" color="rgba(255,255,255,0.7)">
-                    {attack.category.toUpperCase()} • Execute: {attack.difficultyToExecute} • Defend: {attack.difficultyToDefend}
-                  </Typography>
-                </Box>
-                <Chip 
-                  label={attack.category} 
-                  size="small" 
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.2)', 
-                    color: 'white',
-                    textTransform: 'uppercase'
-                  }} 
-                />
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              {/* Beginner Explanation */}
-              <Alert severity="info" sx={{ mb: 3 }}>
-                <AlertTitle>🎓 Beginner Explanation</AlertTitle>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                  {attack.beginnerExplanation}
-                </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <SchoolIcon sx={{ color: accent }} />
+                DDoS Fundamentals for Beginners
+              </Typography>
+
+              <Alert severity="success" sx={{ mb: 3 }}>
+                <AlertTitle>Start Here If You're New!</AlertTitle>
+                This section explains DDoS concepts from the ground up. No prior networking knowledge required.
+                Work through each section in order for the best learning experience.
               </Alert>
 
-              {/* How It Works */}
-              <Paper sx={{ p: 2, mb: 3, bgcolor: 'action.hover' }}>
-                <Typography variant="h6" gutterBottom>How It Works</Typography>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                  {attack.howItWorks}
-                </Typography>
-              </Paper>
-
-              {/* Technical Details */}
-              <Accordion sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography fontWeight="bold">🔧 Technical Details</Typography>
+              {/* What is DDoS */}
+              <Accordion defaultExpanded sx={{ mb: 2, border: '2px solid', borderColor: 'primary.main' }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'primary.dark' }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Typography variant="h4">{ddosFundamentals.whatIsDDoS.icon}</Typography>
+                    <Box>
+                      <Typography variant="h6" color="white">{ddosFundamentals.whatIsDDoS.title}</Typography>
+                      <Typography variant="caption" color="rgba(255,255,255,0.7)">Essential • 5 min read</Typography>
+                    </Box>
+                  </Box>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
-                    {attack.technicalDetails}
-                  </Typography>
-                </AccordionDetails>
-              </Accordion>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <AlertTitle>Beginner-Friendly Explanation</AlertTitle>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                      {ddosFundamentals.whatIsDDoS.beginnerExplanation}
+                    </Typography>
+                  </Alert>
 
-              {/* Packet Structure */}
-              {attack.packetStructure && (
-                <Accordion sx={{ mb: 2 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography fontWeight="bold">📦 Packet Structure</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <CodeBlock language="diagram">{attack.packetStructure}</CodeBlock>
-                  </AccordionDetails>
-                </Accordion>
-              )}
+                  <Paper sx={{ p: 2, mb: 2, bgcolor: 'success.dark' }}>
+                    <Typography variant="subtitle1" fontWeight="bold" color="white" gutterBottom>
+                      🍕 {ddosFundamentals.whatIsDDoS.realWorldAnalogy}
+                    </Typography>
+                    <Typography variant="body2" color="rgba(255,255,255,0.9)" sx={{ whiteSpace: 'pre-line' }}>
+                      {ddosFundamentals.whatIsDDoS.analogyExplanation}
+                    </Typography>
+                  </Paper>
 
-              {/* Attack Timeline */}
-              <Accordion sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography fontWeight="bold">⏱️ Attack Timeline</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <CodeBlock language="timeline">{attack.attackTimeline}</CodeBlock>
-                </AccordionDetails>
-              </Accordion>
-
-              {/* Real World Example */}
-              <Paper sx={{ p: 2, mb: 3, bgcolor: 'error.dark' }}>
-                <Typography variant="h6" color="white" gutterBottom>
-                  🌍 Real-World Example: {attack.realWorldExample.name}
-                </Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.7)">
-                  {attack.realWorldExample.date}
-                </Typography>
-                <Typography variant="body2" color="rgba(255,255,255,0.9)" sx={{ mt: 1 }}>
-                  {attack.realWorldExample.description}
-                </Typography>
-              </Paper>
-
-              <Grid container spacing={2}>
-                {/* Indicators */}
-                <Grid item xs={12} md={6}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                        <SearchIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                        Detection Indicators
+                  <Accordion sx={{ mb: 2 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography fontWeight="bold">🔧 Technical Details (Advanced)</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+                        {ddosFundamentals.whatIsDDoS.technicalDetails}
                       </Typography>
+                    </AccordionDetails>
+                  </Accordion>
+
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Takeaways:</Typography>
+                  <List dense>
+                    {ddosFundamentals.whatIsDDoS.keyPoints.map((point, idx) => (
+                      <ListItem key={idx}>
+                        <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                        <ListItemText primary={point} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
+
+              {/* How Internet Works */}
+              <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'info.main' }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'info.dark' }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Typography variant="h4">{ddosFundamentals.howInternetWorks.icon}</Typography>
+                    <Box>
+                      <Typography variant="h6" color="white">{ddosFundamentals.howInternetWorks.title}</Typography>
+                      <Typography variant="caption" color="rgba(255,255,255,0.7)">Background Knowledge • 4 min read</Typography>
+                    </Box>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <AlertTitle>Understanding the Basics</AlertTitle>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                      {ddosFundamentals.howInternetWorks.beginnerExplanation}
+                    </Typography>
+                  </Alert>
+
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Key Points:</Typography>
+                  <List dense>
+                    {ddosFundamentals.howInternetWorks.keyPoints.map((point, idx) => (
+                      <ListItem key={idx}>
+                        <ListItemIcon><CheckCircleIcon color="info" /></ListItemIcon>
+                        <ListItemText primary={point} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
+
+              {/* Types of DDoS */}
+              <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'warning.main' }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'warning.dark' }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Typography variant="h4">{ddosFundamentals.typesOfDDoS.icon}</Typography>
+                    <Box>
+                      <Typography variant="h6" color="white">{ddosFundamentals.typesOfDDoS.title}</Typography>
+                      <Typography variant="caption" color="rgba(255,255,255,0.7)">Core Knowledge • 6 min read</Typography>
+                    </Box>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <AlertTitle>The Three Categories</AlertTitle>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                      {ddosFundamentals.typesOfDDoS.beginnerExplanation}
+                    </Typography>
+                  </Alert>
+
+                  <Grid container spacing={2} sx={{ mb: 2 }}>
+                    {ddosFundamentals.typesOfDDoS.categories.map((cat, idx) => (
+                      <Grid item xs={12} md={4} key={idx}>
+                        <Card sx={{ height: '100%', bgcolor: cat.color }}>
+                          <CardContent>
+                            <Typography variant="h6" color="white" gutterBottom>{cat.name}</Typography>
+                            <Typography variant="body2" color="rgba(255,255,255,0.9)">{cat.description}</Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </AccordionDetails>
+              </Accordion>
+
+              {/* Real World Examples */}
+              <Accordion sx={{ mb: 2, border: '2px solid', borderColor: 'error.main' }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'error.dark' }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Typography variant="h4">{ddosFundamentals.realWorldExamples.icon}</Typography>
+                    <Box>
+                      <Typography variant="h6" color="white">{ddosFundamentals.realWorldExamples.title}</Typography>
+                      <Typography variant="caption" color="rgba(255,255,255,0.7)">Case Studies • 5 min read</Typography>
+                    </Box>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    {ddosFundamentals.realWorldExamples.intro}
+                  </Typography>
+
+                  {ddosFundamentals.realWorldExamples.examples.map((example, idx) => (
+                    <Card key={idx} sx={{ mb: 2 }}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>{example.name} ({example.year})</Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}><strong>Impact:</strong> {example.impact}</Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}><strong>Method:</strong> {example.method}</Typography>
+                        <Typography variant="body2"><strong>Lesson:</strong> {example.lesson}</Typography>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </AccordionDetails>
+              </Accordion>
+            </Paper>
+          </Box>
+
+          {/* Overview Section */}
+          <Box id="overview">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <WarningIcon sx={{ color: accent }} />
+                What is a DDoS Attack?
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>Simple Explanation</AlertTitle>
+                Imagine a popular restaurant that can serve 100 customers per hour. A DDoS attack is like 
+                sending 10,000 fake customers to stand in line, making it impossible for real customers 
+                to get served. The restaurant isn't broken - it's just overwhelmed.
+              </Alert>
+
+              <Typography paragraph>
+                A <strong>Distributed Denial of Service (DDoS)</strong> attack attempts to make an online service 
+                unavailable by overwhelming it with traffic from multiple sources. Unlike a simple DoS attack 
+                (which comes from one source), DDoS attacks use thousands or millions of compromised computers, 
+                making them much harder to stop.
+              </Typography>
+
+              <Typography paragraph>
+                These attacks don't try to "hack" into systems or steal data - they simply try to make 
+                services unavailable. Think of it as the difference between picking a lock (hacking) and 
+                blocking the door with a crowd (DDoS).
+              </Typography>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <LightbulbIcon color="primary" />
+                DoS vs DDoS: What's the Difference?
+              </Typography>
+              
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={6}>
+                  <Card sx={{ height: "100%", borderLeft: "4px solid orange" }}>
+                    <CardContent>
+                      <Typography variant="h6">DoS (Denial of Service)</Typography>
                       <List dense>
-                        {attack.indicators.map((indicator, idx) => (
-                          <ListItem key={idx}>
-                            <ListItemIcon><WarningIcon color="warning" fontSize="small" /></ListItemIcon>
-                            <ListItemText primary={indicator} />
-                          </ListItem>
-                        ))}
+                        <ListItem><ListItemText primary="Single attack source" /></ListItem>
+                        <ListItem><ListItemText primary="Easier to identify and block" /></ListItem>
+                        <ListItem><ListItemText primary="Limited attack power" /></ListItem>
+                        <ListItem><ListItemText primary="Example: One computer flooding a server" /></ListItem>
                       </List>
                     </CardContent>
                   </Card>
                 </Grid>
-
-                {/* Defenses */}
                 <Grid item xs={12} md={6}>
-                  <Card>
+                  <Card sx={{ height: "100%", borderLeft: "4px solid red" }}>
                     <CardContent>
-                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                        <ShieldIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                        Defenses
-                      </Typography>
+                      <Typography variant="h6">DDoS (Distributed DoS)</Typography>
                       <List dense>
-                        {attack.defenses.map((defense, idx) => (
-                          <ListItem key={idx}>
-                            <ListItemIcon><CheckCircleIcon color="success" fontSize="small" /></ListItemIcon>
-                            <ListItemText primary={defense} />
-                          </ListItem>
-                        ))}
+                        <ListItem><ListItemText primary="Multiple attack sources (botnet)" /></ListItem>
+                        <ListItem><ListItemText primary="Very difficult to mitigate" /></ListItem>
+                        <ListItem><ListItemText primary="Can generate terabits of traffic" /></ListItem>
+                        <ListItem><ListItemText primary="Example: 100,000 bots flooding a server" /></ListItem>
                       </List>
                     </CardContent>
                   </Card>
                 </Grid>
               </Grid>
 
-              {/* Code Example */}
-              {attack.codeExample && (
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                    💻 Detection & Defense Commands
-                  </Typography>
-                  <CodeBlock language="bash">{attack.codeExample}</CodeBlock>
-                </Box>
-              )}
-            </AccordionDetails>
-          </Accordion>
-        ))}
-
-        <Divider sx={{ my: 4 }} />
-
-        <Typography variant="h5" gutterBottom>Original Attack Categories</Typography>
-        
-        {attackCategories.map((category) => (
-          <Accordion key={category.name}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                {category.icon}
-                <Typography variant="h6">{category.name}</Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Alert severity="info" sx={{ mb: 2 }}>{category.longDescription}</Alert>
-              
-              <TableContainer component={Paper} variant="outlined">
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <TrendingUpIcon color="primary" />
+                Key Metrics to Track
+              </Typography>
+              <TableContainer component={Paper} sx={{ mb: 3 }}>
                 <Table size="small">
                   <TableHead>
-                    <TableRow>
-                      <TableCell><strong>Technique</strong></TableCell>
-                      <TableCell><strong>How It Works</strong></TableCell>
+                    <TableRow sx={{ bgcolor: "action.hover" }}>
+                      <TableCell><strong>Metric</strong></TableCell>
+                      <TableCell><strong>What It Tells You</strong></TableCell>
+                      <TableCell><strong>Defensive Use</strong></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {category.techniques.map((tech) => (
-                      <TableRow key={tech.name}>
-                        <TableCell>
-                          <Chip label={tech.name} size="small" color="primary" />
-                        </TableCell>
-                        <TableCell>{tech.description}</TableCell>
+                    {keyMetrics.map((row) => (
+                      <TableRow key={row.metric}>
+                        <TableCell><Chip label={row.metric} size="small" /></TableCell>
+                        <TableCell>{row.meaning}</TableCell>
+                        <TableCell>{row.defense}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
-            </AccordionDetails>
-          </Accordion>
-        ))}
 
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>Signals and First Response</Typography>
-        <TableContainer component={Paper} sx={{ mb: 3 }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: "action.hover" }}>
-                <TableCell><strong>Category</strong></TableCell>
-                <TableCell><strong>Common Signals</strong></TableCell>
-                <TableCell><strong>First Response</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {attackSignalMatrix.map((row) => (
-                <TableRow key={row.category}>
-                  <TableCell>{row.category}</TableCell>
-                  <TableCell>{row.signals}</TableCell>
-                  <TableCell>{row.response}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <HttpIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Application Layer Hotspots
-                </Typography>
-                <List dense>
-                  {appLayerHotspots.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon><HttpIcon fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={item} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <NetworkCheckIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Protocol Pressure Points
-                </Typography>
-                <List dense>
-                  {protocolPressurePoints.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon><NetworkCheckIcon fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={item} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Typography variant="h6" sx={{ mb: 2 }}>Multi-Vector Patterns</Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {hybridPatterns.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon><WarningIcon color="warning" fontSize="small" /></ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>SYN Flood Explained (Visual)</Typography>
-        <CodeBlock language="diagram">
-{`Normal TCP Handshake:          SYN Flood Attack:
-Client    Server               Attacker   Server
-  |         |                     |          |
-  |--SYN--->|                     |--SYN---->| (Spoofed IP)
-  |<-SYN/ACK|                     |--SYN---->| (Spoofed IP)
-  |--ACK--->|                     |--SYN---->| (Spoofed IP)
-  |Connected|                     |    ...   | 
-                                  |          |
-                                  Server waits for ACK
-                                  that never comes...
-                                  Connection table fills up
-                                  Legitimate users can't connect`}
-        </CodeBlock>
-      </TabPanel>
-
-      {/* Tab 3: Amplification */}
-      <TabPanel value={tabValue} index={3}>
-        <Typography variant="h5" gutterBottom>Amplification Attacks</Typography>
-        
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>What is Amplification?</AlertTitle>
-          Amplification attacks use third-party servers to multiply attack traffic. The attacker sends 
-          small requests with the victim's spoofed IP address, and the servers send much larger responses 
-          to the victim. It's like writing 100 postcards requesting catalogs with someone else's return address.
-        </Alert>
-
-        <Typography variant="h6" gutterBottom>How Amplification Works</Typography>
-        <CodeBlock language="diagram">
-{`Attacker (1 Mbps)                    Victim
-      |                                 |
-      |-- Small request (spoofed IP)-->|
-      |      to 1000 DNS servers        |
-      |                                 |
-      |   DNS servers send              |
-      |   large responses               |
-      |        (50x larger)             |
-      |                                 |
-      |                     <-----------| 50 Gbps flood!
-      
-Example: 1 Mbps × 50x amplification × 1000 servers = 50 Gbps attack`}
-        </CodeBlock>
-        
-        <Typography variant="h6" gutterBottom>Amplification Principles</Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {amplificationPrinciples.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon><SpeedIcon color="warning" fontSize="small" /></ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-
-        <Typography variant="h6" gutterBottom>Reflection vs Amplification</Typography>
-        <TableContainer component={Paper} sx={{ mb: 3 }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: "action.hover" }}>
-                <TableCell><strong>Aspect</strong></TableCell>
-                <TableCell><strong>Reflection</strong></TableCell>
-                <TableCell><strong>Amplification</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {reflectionComparison.map((row) => (
-                <TableRow key={row.aspect}>
-                  <TableCell>{row.aspect}</TableCell>
-                  <TableCell>{row.reflection}</TableCell>
-                  <TableCell>{row.amplification}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <ShieldIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Source Spoofing Controls
-                </Typography>
-                <List dense>
-                  {spoofingControls.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon><ShieldIcon color="success" fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={item} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <SecurityIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Defender Checklist
-                </Typography>
-                <List dense>
-                  {amplificationDefenderChecklist.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon><SecurityIcon color="primary" fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={item} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Amplification Vectors</Typography>
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: "action.hover" }}>
-                <TableCell><strong>Protocol</strong></TableCell>
-                <TableCell><strong>Amplification</strong></TableCell>
-                <TableCell><strong>Port</strong></TableCell>
-                <TableCell><strong>Description</strong></TableCell>
-                <TableCell><strong>Prevention</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {amplificationVectors.map((row) => (
-                <TableRow key={row.protocol}>
-                  <TableCell>
-                    <Chip label={row.protocol} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={row.amplification} 
-                      color={parseInt(row.amplification.replace(/[^0-9]/g, "")) > 100 ? "error" : "warning"} 
-                      size="small" 
-                    />
-                  </TableCell>
-                  <TableCell><code>{row.port}</code></TableCell>
-                  <TableCell><Typography variant="body2">{row.description}</Typography></TableCell>
-                  <TableCell><Typography variant="body2" color="success.main">{row.prevention}</Typography></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Alert severity="warning" sx={{ mt: 3 }}>
-          <AlertTitle>Memcached: The Most Dangerous Amplifier</AlertTitle>
-          In 2018, GitHub was hit with a 1.35 Tbps attack using Memcached amplification. A single 
-          attacker with just 100 Mbps of bandwidth could theoretically generate 5 Tbps of attack traffic 
-          using misconfigured Memcached servers.
-        </Alert>
-
-        <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>DNS Amplification Attack Example</Typography>
-        <CodeBlock language="bash">
-{`# Legitimate DNS query (small):
-dig ANY google.com @8.8.8.8
-# Request size: ~40 bytes
-
-# Response size: ~3000 bytes (75x amplification)
-
-# Attack command (DO NOT USE):
-# Attacker spoofs victim's IP and sends queries to open resolvers
-# hping3 --udp -p 53 --spoof <victim_ip> -d 40 <open_resolver>
-
-# Detection: Look for large outbound DNS responses
-tcpdump -i eth0 'udp port 53 and udp[10:2] > 512'`}
-        </CodeBlock>
-      </TabPanel>
-
-      {/* Tab 4: Botnets */}
-      <TabPanel value={tabValue} index={4}>
-        <Typography variant="h5" gutterBottom>Botnets & Attack Infrastructure</Typography>
-        
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>What is a Botnet?</AlertTitle>
-          A botnet is a network of compromised computers (called "bots" or "zombies") controlled by 
-          an attacker. These infected devices can be commanded to attack targets simultaneously, 
-          making the attack distributed and very difficult to stop.
-        </Alert>
-
-        <Typography paragraph>
-          Modern botnets primarily target <strong>IoT devices</strong> (cameras, routers, smart home devices) 
-          because they often have weak security, are always connected, and users rarely update them. 
-          A botnet of 100,000 IoT devices can generate massive attack traffic.
-        </Typography>
-
-        <Typography variant="h6" sx={{ mb: 2 }}>Botnet Lifecycle</Typography>
-        <Stepper orientation="vertical" sx={{ mb: 3 }}>
-          {botnetLifecycle.map((step) => (
-            <Step key={step.label} active>
-              <StepLabel>{step.label}</StepLabel>
-              <StepContent>
-                <Typography>{step.description}</Typography>
-              </StepContent>
-            </Step>
-          ))}
-        </Stepper>
-
-        <Typography variant="h6" gutterBottom>Command and Control Models</Typography>
-        <TableContainer component={Paper} sx={{ mb: 3 }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: "action.hover" }}>
-                <TableCell><strong>Model</strong></TableCell>
-                <TableCell><strong>Strengths</strong></TableCell>
-                <TableCell><strong>Weaknesses</strong></TableCell>
-                <TableCell><strong>Defender Signals</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {c2Models.map((row) => (
-                <TableRow key={row.model}>
-                  <TableCell>{row.model}</TableCell>
-                  <TableCell>{row.strengths}</TableCell>
-                  <TableCell>{row.weaknesses}</TableCell>
-                  <TableCell>{row.defenderSignals}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <BugReportIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Common Infection Vectors
-                </Typography>
-                <List dense>
-                  {infectionVectors.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon><BugReportIcon fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={item} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <SearchIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Signs of Bot Activity
-                </Typography>
-                <List dense>
-                  {botnetDefenderSignals.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon><SearchIcon fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={item} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Typography variant="h6" sx={{ mb: 2 }}>Famous Botnets</Typography>
-        <Grid container spacing={2}>
-          {botnets.map((botnet) => (
-            <Grid item xs={12} md={6} key={botnet.name}>
-              <Card sx={{ height: "100%" }}>
-                <CardContent>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                    <Typography variant="h6">{botnet.name}</Typography>
-                    <Chip label={botnet.year} size="small" color="primary" />
-                  </Box>
-                  <Typography variant="body2" paragraph>{botnet.description}</Typography>
-                  <Box sx={{ mb: 1 }}>
-                    <Typography variant="caption" color="text.secondary">Target:</Typography>
-                    <Typography variant="body2">{botnet.target}</Typography>
-                  </Box>
-                  <Box sx={{ mb: 1 }}>
-                    <Typography variant="caption" color="text.secondary">Peak Attack Size:</Typography>
-                    <Chip label={botnet.peakSize} size="small" color="error" sx={{ ml: 1 }} />
-                  </Box>
-                  <Typography variant="caption" color="text.secondary">Notable Attacks:</Typography>
-                  <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>
-                    {botnet.notableAttacks.map((attack) => (
-                      <Chip key={attack} label={attack} size="small" variant="outlined" />
-                    ))}
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>Botnet Architecture</Typography>
-        <CodeBlock language="diagram">
-{`                    ┌─────────────────┐
-                    │   Attacker /    │
-                    │   Bot Herder    │
-                    └────────┬────────┘
-                             │
-                    ┌────────▼────────┐
-                    │  C2 Server(s)   │  Command & Control
-                    │  (Command and   │  - IRC, HTTP, P2P
-                    │   Control)      │  - Tor hidden services
-                    └────────┬────────┘
-                             │
-         ┌───────────┬───────┴───────┬───────────┐
-         ▼           ▼               ▼           ▼
-    ┌─────────┐ ┌─────────┐    ┌─────────┐ ┌─────────┐
-    │  Bot 1  │ │  Bot 2  │    │ Bot 999 │ │Bot 1000 │
-    │ (IoT)   │ │ (Router)│    │  (PC)   │ │(Camera) │
-    └────┬────┘ └────┬────┘    └────┬────┘ └────┬────┘
-         │           │              │           │
-         └───────────┴──────┬───────┴───────────┘
-                            ▼
-                    ┌───────────────┐
-                    │    VICTIM     │
-                    │   (Target)    │
-                    └───────────────┘`}
-        </CodeBlock>
-
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>DDoS-for-Hire Services ("Booters/Stressers")</Typography>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          DDoS-for-hire services (marketed as "stress testing") are illegal when used against targets 
-          without authorization. Despite law enforcement takedowns, these services persist and cost as 
-          little as $20-50 per attack.
-        </Alert>
-
-        <Grid container spacing={2}>
-          {[
-            { title: "How They Work", items: ["Web-based control panel", "Payment via cryptocurrency", "Choose target, duration, attack type", "Uses shared botnet infrastructure"] },
-            { title: "Law Enforcement Response", items: ["Operation Power Off (2018+)", "Hundreds of services seized", "Users have been prosecuted", "Many services are FBI honeypots"] },
-          ].map((section) => (
-            <Grid item xs={12} md={6} key={section.title}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>{section.title}</Typography>
-                  <List dense>
-                    {section.items.map((item) => (
-                      <ListItem key={item}>
-                        <ListItemIcon><BugReportIcon fontSize="small" /></ListItemIcon>
-                        <ListItemText primary={item} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      </TabPanel>
-
-      {/* Tab 5: Mitigation */}
-      <TabPanel value={tabValue} index={5}>
-        <Typography variant="h5" gutterBottom>Mitigation Strategies</Typography>
-        
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>Defense in Depth</AlertTitle>
-          No single solution stops all DDoS attacks. Effective defense requires multiple layers of 
-          protection, from network-level filtering to application-aware inspection. The goal is to 
-          filter attack traffic while allowing legitimate users through.
-        </Alert>
-
-        <Typography variant="h6" gutterBottom>Preparation Checklist</Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {preparednessChecklist.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon><ShieldIcon color="success" fontSize="small" /></ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-
-        <Typography variant="h6" gutterBottom>Mitigation Layers</Typography>
-        <CodeBlock language="diagram">
-{`Internet Traffic
-        │
-        ▼
-┌───────────────────────────────┐
-│  ISP / Upstream Filtering     │  ← BGP Flowspec, Black hole routing
-│  (Filter at network edge)     │
-└───────────────┬───────────────┘
-                ▼
-┌───────────────────────────────┐
-│  CDN / Scrubbing Center       │  ← Anycast, traffic scrubbing
-│  (Absorb volumetric attacks)  │
-└───────────────┬───────────────┘
-                ▼
-┌───────────────────────────────┐
-│  Load Balancer / WAF          │  ← Rate limiting, bot detection
-│  (Filter application attacks) │
-└───────────────┬───────────────┘
-                ▼
-┌───────────────────────────────┐
-│  Your Server / Application    │  ← Connection limits, timeouts
-└───────────────────────────────┘`}
-        </CodeBlock>
-        
-        <Grid container spacing={2} sx={{ mt: 2 }}>
-          {mitigationStrategies.map((strategy) => (
-            <Grid item xs={12} md={6} key={strategy.name}>
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <ShieldIcon color="success" />
-                    <Typography variant="subtitle1" fontWeight="bold">{strategy.name}</Typography>
-                    <Chip label={strategy.layer} size="small" sx={{ ml: "auto" }} />
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography paragraph>{strategy.longDescription}</Typography>
-                  <Typography variant="subtitle2" color="primary">Implementation:</Typography>
-                  <CodeBlock language="config">{strategy.implementation}</CodeBlock>
-                </AccordionDetails>
-              </Accordion>
-            </Grid>
-          ))}
-        </Grid>
-
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>Quick Wins: Essential Configurations</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold">Linux Kernel Hardening</Typography>
-                <CodeBlock language="bash">
-{`# Enable SYN cookies
-echo 1 > /proc/sys/net/ipv4/tcp_syncookies
-
-# Reduce SYN-ACK retries
-echo 2 > /proc/sys/net/ipv4/tcp_synack_retries
-
-# Increase backlog queue
-echo 4096 > /proc/sys/net/core/netdev_max_backlog
-
-# Ignore ICMP broadcasts
-echo 1 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts`}
-                </CodeBlock>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold">Nginx Rate Limiting</Typography>
-                <CodeBlock language="nginx">
-{`# Define rate limit zone
-limit_req_zone $binary_remote_addr 
-    zone=one:10m rate=10r/s;
-
-# Apply to location
-location /api/ {
-    limit_req zone=one burst=20 nodelay;
-    limit_req_status 429;
-}
-
-# Connection limits
-limit_conn_zone $binary_remote_addr zone=addr:10m;
-limit_conn addr 100;`}
-                </CodeBlock>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>Incident Response Runbook</Typography>
-        <Stepper orientation="vertical" sx={{ mb: 3 }}>
-          {responseRunbook.map((step) => (
-            <Step key={step.label} active>
-              <StepLabel>{step.label}</StepLabel>
-              <StepContent>
-                <Typography>{step.description}</Typography>
-              </StepContent>
-            </Step>
-          ))}
-        </Stepper>
-
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>Capacity Planning Snapshot</Typography>
-        <TableContainer component={Paper} sx={{ mb: 3 }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: "action.hover" }}>
-                <TableCell><strong>Area</strong></TableCell>
-                <TableCell><strong>Target</strong></TableCell>
-                <TableCell><strong>Owner</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {capacityPlanning.map((row) => (
-                <TableRow key={row.item}>
-                  <TableCell>{row.item}</TableCell>
-                  <TableCell>{row.detail}</TableCell>
-                  <TableCell>{row.owner}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>Common Mitigation Pitfalls</Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {mitigationPitfalls.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon><WarningIcon color="warning" fontSize="small" /></ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>Post-Incident Hardening</Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {postIncidentHardening.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon><ShieldIcon color="success" fontSize="small" /></ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-      </TabPanel>
-
-      {/* Tab 6: Detection */}
-      <TabPanel value={tabValue} index={6}>
-        <Typography variant="h5" gutterBottom>Detection & Monitoring</Typography>
-        
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>Early Detection is Critical</AlertTitle>
-          The faster you detect an attack, the faster you can respond. Establish baseline traffic 
-          patterns during normal operations so you can quickly identify anomalies. Automated alerting 
-          is essential - attacks often start outside business hours.
-        </Alert>
-
-        <Typography variant="h6" gutterBottom>Baseline Metrics to Capture</Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {baselineMetrics.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon><TrendingUpIcon color="primary" fontSize="small" /></ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-
-        <Typography variant="h6" gutterBottom>DDoS vs Flash Crowd</Typography>
-        <TableContainer component={Paper} sx={{ mb: 3 }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: "action.hover" }}>
-                <TableCell><strong>Signal</strong></TableCell>
-                <TableCell><strong>Flash Crowd</strong></TableCell>
-                <TableCell><strong>DDoS Pattern</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {flashCrowdComparison.map((row) => (
-                <TableRow key={row.signal}>
-                  <TableCell>{row.signal}</TableCell>
-                  <TableCell>{row.flash}</TableCell>
-                  <TableCell>{row.ddos}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Typography variant="h6" gutterBottom>Detection Indicators</Typography>
-        <TableContainer component={Paper} sx={{ mb: 3 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: "action.hover" }}>
-                <TableCell><strong>Indicator</strong></TableCell>
-                <TableCell><strong>Severity</strong></TableCell>
-                <TableCell><strong>Detection Tool</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {detectionIndicators.map((item, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>{item.indicator}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={item.severity} 
-                      size="small" 
-                      color={item.severity === "high" ? "error" : "warning"} 
-                    />
-                  </TableCell>
-                  <TableCell><code>{item.tool}</code></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Typography variant="h6" gutterBottom>Detection Commands</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <SearchIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Check Connection States
-                </Typography>
-                <CodeBlock language="bash">
-{`# Count connections by state
-ss -s
-
-# Show SYN_RECV connections (SYN flood indicator)
-netstat -ant | grep SYN_RECV | wc -l
-
-# Top IPs by connection count
-netstat -ntu | awk '{print $5}' | cut -d: -f1 | \\
-  sort | uniq -c | sort -rn | head -20
-
-# Watch connections in real-time
-watch -n 1 'netstat -ant | wc -l'`}
-                </CodeBlock>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <AnalyticsIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Traffic Analysis
-                </Typography>
-                <CodeBlock language="bash">
-{`# Monitor bandwidth in real-time
-iftop -i eth0
-
-# Capture suspicious traffic
-tcpdump -i eth0 -w capture.pcap \\
-  'port 80 or port 443'
-
-# Analyze with tshark
-tshark -r capture.pcap -q -z io,stat,1
-
-# Top talkers
-tcpdump -tnn -c 10000 -i eth0 | \\
-  awk '{print $3}' | cut -d. -f1-4 | \\
-  sort | uniq -c | sort -rn | head`}
-                </CodeBlock>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Typography variant="h6" gutterBottom>Artifacts to Capture</Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {forensicArtifacts.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon><AnalyticsIcon color="primary" fontSize="small" /></ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-
-        <Typography variant="h6" gutterBottom>Common False Positives</Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {falsePositiveSources.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon><WarningIcon color="warning" fontSize="small" /></ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-        </Paper>
-
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>Monitoring Architecture</Typography>
-        <CodeBlock language="diagram">
-{`┌─────────────────────────────────────────────────────────────┐
-│                     Monitoring Stack                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐ │
-│  │ NetFlow  │   │ Server   │   │ WAF/LB   │   │ App      │ │
-│  │ Exporters│   │ Metrics  │   │ Logs     │   │ Logs     │ │
-│  └────┬─────┘   └────┬─────┘   └────┬─────┘   └────┬─────┘ │
-│       │              │              │              │        │
-│       └──────────────┴──────────────┴──────────────┘        │
-│                          │                                   │
-│                  ┌───────▼───────┐                          │
-│                  │  Log Aggregator│  (ELK, Splunk, Loki)    │
-│                  │  + SIEM        │                          │
-│                  └───────┬───────┘                          │
-│                          │                                   │
-│           ┌──────────────┼──────────────┐                   │
-│           ▼              ▼              ▼                   │
-│     ┌──────────┐  ┌──────────┐  ┌──────────┐               │
-│     │Dashboard │  │ Alerting │  │ Anomaly  │               │
-│     │(Grafana) │  │(PagerDuty│  │Detection │               │
-│     └──────────┘  └──────────┘  └──────────┘               │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘`}
-        </CodeBlock>
-      </TabPanel>
-
-      {/* Tab 7: Safe Lab */}
-      <TabPanel value={tabValue} index={7}>
-        <Typography variant="h5" gutterBottom>🧪 DDoS Defense Lab Environment</Typography>
-        
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>Safe Practice Environment</AlertTitle>
-          These labs are designed to be run in isolated virtual environments or containers.
-          <strong> NEVER test DDoS techniques on production systems or networks you don't own!</strong>
-          All exercises use safe, controlled traffic generation within your own lab.
-        </Alert>
-
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" gutterBottom color="primary">
-            <MenuBookIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-            Hands-On Lab Exercises
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Complete these labs in order to build your DDoS defense skills progressively.
-          </Typography>
-        </Box>
-
-        {/* Lab Exercises */}
-        {labExercisesDetailed.map((lab, labIndex) => (
-          <Accordion key={lab.id} sx={{ mb: 2 }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
-                <Avatar sx={{ 
-                  bgcolor: lab.difficulty === 'beginner' ? 'success.main' : 
-                           lab.difficulty === 'intermediate' ? 'warning.main' : 'error.main',
-                  width: 40, height: 40
-                }}>
-                  {labIndex + 1}
-                </Avatar>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="h6">{lab.title}</Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                    <Chip 
-                      size="small" 
-                      label={lab.difficulty}
-                      color={lab.difficulty === 'beginner' ? 'success' : 
-                             lab.difficulty === 'intermediate' ? 'warning' : 'error'}
-                    />
-                    <Chip size="small" label={lab.duration} icon={<TimelineIcon />} variant="outlined" />
-                  </Box>
-                </Box>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              {/* Description */}
-              <Typography variant="body1" sx={{ mb: 3 }}>{lab.description}</Typography>
-
-              {/* Objectives */}
-              <Paper sx={{ p: 2, mb: 3, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.200' }}>
-                <Typography variant="subtitle1" fontWeight="bold" color="success.dark" gutterBottom>
-                  🎯 Learning Objectives
-                </Typography>
-                <List dense>
-                  {lab.objectives.map((obj, i) => (
-                    <ListItem key={i}>
-                      <ListItemIcon><CheckCircleIcon color="success" fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={obj} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              {/* Prerequisites */}
-              <Paper sx={{ p: 2, mb: 3, bgcolor: 'warning.50', border: '1px solid', borderColor: 'warning.200' }}>
-                <Typography variant="subtitle1" fontWeight="bold" color="warning.dark" gutterBottom>
-                  📋 Prerequisites
-                </Typography>
-                <List dense>
-                  {lab.prerequisites.map((prereq, i) => (
-                    <ListItem key={i}>
-                      <ListItemIcon><SecurityIcon color="warning" fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={prereq} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              {/* Lab Environment */}
-              <Paper sx={{ p: 2, mb: 3, bgcolor: 'info.50', border: '1px solid', borderColor: 'info.200' }}>
-                <Typography variant="subtitle1" fontWeight="bold" color="info.dark" gutterBottom>
-                  🖥️ Lab Environment Setup
-                </Typography>
-                <CodeBlock language="text">
-                  {lab.labEnvironment}
-                </CodeBlock>
-              </Paper>
-
-              <Divider sx={{ my: 3 }} />
-
-              {/* Steps */}
-              <Typography variant="h6" gutterBottom color="primary">
-                📝 Step-by-Step Instructions
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <MonetizationOnIcon color="primary" />
+                The Economics of DDoS
               </Typography>
-              
-              {lab.steps.map((step) => (
-                <Paper key={step.step} sx={{ p: 2, mb: 2, border: '1px solid', borderColor: 'divider' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: '0.9rem' }}>
-                      {step.step}
-                    </Avatar>
-                    <Typography variant="subtitle1" fontWeight="bold">{step.title}</Typography>
-                  </Box>
-                  
-                  <Typography variant="body2" sx={{ mb: 2 }}>{step.description}</Typography>
-                  
-                  {step.commands && (
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="caption" color="text.secondary">Commands:</Typography>
-                      <CodeBlock language="bash">
-                        {step.commands}
-                      </CodeBlock>
-                    </Box>
-                  )}
-                  
-                  {step.expectedOutput && (
-                    <Accordion sx={{ bgcolor: 'grey.50' }}>
-                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography variant="body2" color="text.secondary">
-                          👁️ Expected Output
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails>
-                        <CodeBlock language="text">
-                          {step.expectedOutput}
-                        </CodeBlock>
-                      </AccordionDetails>
-                    </Accordion>
-                  )}
-                  
-                  {step.tips && step.tips.length > 0 && (
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                      <AlertTitle>💡 Tips</AlertTitle>
-                      <ul style={{ margin: 0, paddingLeft: 20 }}>
-                        {step.tips.map((tip, i) => (
-                          <li key={i}><Typography variant="body2">{tip}</Typography></li>
-                        ))}
-                      </ul>
-                    </Alert>
-                  )}
-                </Paper>
-              ))}
-
-              <Divider sx={{ my: 3 }} />
-
-              {/* Quiz Section */}
-              <Paper sx={{ p: 3, bgcolor: 'secondary.50', border: '2px solid', borderColor: 'secondary.200' }}>
-                <Typography variant="h6" gutterBottom color="secondary.dark">
-                  <QuizIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Lab Knowledge Check
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Test your understanding of the concepts covered in this lab.
-                </Typography>
-                
-                {lab.quiz.map((q, qIndex) => (
-                  <Accordion key={qIndex} sx={{ mb: 1 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body1">
-                        <strong>Q{qIndex + 1}:</strong> {q.question}
-                      </Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Box sx={{ mb: 2 }}>
-                        {q.options.map((option, optIdx) => (
-                          <Chip 
-                            key={optIdx}
-                            label={option}
-                            color={optIdx === q.correctIndex ? 'success' : 'default'}
-                            variant={optIdx === q.correctIndex ? 'filled' : 'outlined'}
-                            sx={{ m: 0.5 }}
-                            icon={optIdx === q.correctIndex ? <CheckCircleIcon /> : undefined}
-                          />
-                        ))}
-                      </Box>
-                      <Alert severity="success">
-                        <AlertTitle>Correct Answer</AlertTitle>
-                        {q.options[q.correctIndex]}
-                      </Alert>
-                      {q.explanation && (
-                        <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
-                          <strong>Explanation:</strong> {q.explanation}
-                        </Typography>
-                      )}
-                    </AccordionDetails>
-                  </Accordion>
+              <Grid container spacing={2}>
+                {economicsData.map((item, idx) => (
+                  <Grid item xs={12} md={4} key={idx}>
+                    <Card sx={{ height: "100%", bgcolor: item.color }}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>{item.title}</Typography>
+                        <List dense>
+                          {item.items.map((point, pIdx) => (
+                            <ListItem key={pIdx}>
+                              <ListItemText primary={point} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
                 ))}
-              </Paper>
-            </AccordionDetails>
-          </Accordion>
-        ))}
+              </Grid>
+            </Paper>
+          </Box>
 
-        {/* Detection Methodology Deep Dives */}
-        <Box sx={{ mt: 5, mb: 4 }}>
-          <Typography variant="h6" gutterBottom color="primary">
-            <AnalyticsIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-            Detection Methodology Deep Dives
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Advanced techniques for identifying and analyzing DDoS attacks.
-          </Typography>
-        </Box>
+          {/* Attack Types Section */}
+          <Box id="attack-types">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <CloudIcon sx={{ color: accent }} />
+                Attack Categories
+              </Typography>
 
-        {Object.entries(detectionMethodologyDetailed).map(([key, methodology]) => (
-          <Accordion key={key} sx={{ mb: 2 }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ bgcolor: 'error.main' }}>
-                  {methodology.icon === '📡' ? <NetworkCheckIcon /> : 
-                   methodology.icon === '📋' ? <StorageIcon /> : <SearchIcon />}
-                </Avatar>
-                <Box>
-                  <Typography variant="h6">{methodology.title}</Typography>
-                  <Typography variant="body2" color="text.secondary">{methodology.description}</Typography>
-                </Box>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              {/* Approach Overview */}
-              {methodology.approach && (
-                <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
-                  <Typography variant="body2" style={{ whiteSpace: 'pre-line' }}>
-                    {methodology.approach}
-                  </Typography>
-                </Paper>
-              )}
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>The Three Layers of DDoS</AlertTitle>
+                DDoS attacks target different parts of the network stack. Understanding which layer is being 
+                attacked is crucial for choosing the right defense. Most sophisticated attacks combine multiple types.
+              </Alert>
 
-              {/* Steps */}
-              {methodology.steps.map((step, stepIndex) => (
-                <Paper key={stepIndex} sx={{ p: 2, mb: 2, border: '1px solid', borderColor: 'divider' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: '0.9rem' }}>
-                      {step.step}
-                    </Avatar>
-                    <Typography variant="subtitle1" fontWeight="bold">{step.title}</Typography>
-                  </Box>
-                  <Typography variant="body2" sx={{ mb: 2 }}>{step.description}</Typography>
-                  
-                  {step.commands && (
-                    <Box sx={{ mb: 2 }}>
-                      <CodeBlock language="bash">
-                        {step.commands}
-                      </CodeBlock>
-                    </Box>
-                  )}
-                  
-                  {step.tips && step.tips.length > 0 && (
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                      <ul style={{ margin: 0, paddingLeft: 20 }}>
-                        {step.tips.map((tip, i) => (
-                          <li key={i}><Typography variant="body2">{tip}</Typography></li>
-                        ))}
-                      </ul>
-                    </Alert>
-                  )}
-                </Paper>
-              ))}
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {attackCategories.map((cat, idx) => (
+                  <Grid item xs={12} md={4} key={idx}>
+                    <Card sx={{ height: "100%", borderTop: `4px solid ${cat.color}` }}>
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                          {cat.icon}
+                          <Typography variant="h6">{cat.name}</Typography>
+                        </Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          {cat.description}
+                        </Typography>
+                        <Typography variant="subtitle2" gutterBottom>Examples:</Typography>
+                        <List dense>
+                          {cat.examples.map((ex, eIdx) => (
+                            <ListItem key={eIdx}>
+                              <ListItemIcon><BugReportIcon fontSize="small" /></ListItemIcon>
+                              <ListItemText primary={ex} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
 
-              {/* Indicators */}
-              {methodology.indicators && methodology.indicators.length > 0 && (
-                <Paper sx={{ p: 2, mb: 2, bgcolor: 'error.50', border: '1px solid', borderColor: 'error.200' }}>
-                  <Typography variant="subtitle1" fontWeight="bold" color="error.dark" gutterBottom>
-                    🚨 Key Indicators
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {methodology.indicators.map((indicator: string, i: number) => (
-                      <Chip key={i} label={indicator} size="small" color="error" variant="outlined" />
+              <Typography variant="h6" gutterBottom>Common Attack Vectors</Typography>
+              <TableContainer component={Paper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "action.hover" }}>
+                      <TableCell><strong>Attack Type</strong></TableCell>
+                      <TableCell><strong>Layer</strong></TableCell>
+                      <TableCell><strong>Mechanism</strong></TableCell>
+                      <TableCell><strong>Mitigation</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {attackVectors.map((attack) => (
+                      <TableRow key={attack.name}>
+                        <TableCell><strong>{attack.name}</strong></TableCell>
+                        <TableCell><Chip label={attack.layer} size="small" color={attack.layer === "L3/L4" ? "warning" : "error"} /></TableCell>
+                        <TableCell>{attack.mechanism}</TableCell>
+                        <TableCell>{attack.mitigation}</TableCell>
+                      </TableRow>
                     ))}
-                  </Box>
-                </Paper>
-              )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Box>
 
-              {/* Tools */}
-              {methodology.tools && methodology.tools.length > 0 && (
-                <Paper sx={{ p: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.200' }}>
-                  <Typography variant="subtitle1" fontWeight="bold" color="primary.dark" gutterBottom>
-                    🛠️ Recommended Tools
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {methodology.tools.map((tool: string, i: number) => (
-                      <Chip key={i} label={tool} size="small" color="primary" variant="outlined" />
+          {/* Amplification Section */}
+          <Box id="amplification">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <SpeedIcon sx={{ color: accent }} />
+                Amplification Attacks
+              </Typography>
+
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <AlertTitle>Understanding Amplification</AlertTitle>
+                Amplification attacks exploit protocols that respond with more data than they receive. 
+                A small request can trigger a response 50-500x larger, allowing attackers to multiply 
+                their bandwidth. This is why they're so dangerous.
+              </Alert>
+
+              <Typography variant="h6" gutterBottom>How Amplification Works</Typography>
+              <Stepper orientation="vertical" sx={{ mb: 3 }}>
+                {amplificationSteps.map((step, idx) => (
+                  <Step key={idx} active>
+                    <StepLabel>{step.label}</StepLabel>
+                    <StepContent>
+                      <Typography variant="body2">{step.description}</Typography>
+                    </StepContent>
+                  </Step>
+                ))}
+              </Stepper>
+
+              <Typography variant="h6" gutterBottom>Amplification Factors by Protocol</Typography>
+              <TableContainer component={Paper} sx={{ mb: 3 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "action.hover" }}>
+                      <TableCell><strong>Protocol</strong></TableCell>
+                      <TableCell><strong>Amplification Factor</strong></TableCell>
+                      <TableCell><strong>Port</strong></TableCell>
+                      <TableCell><strong>Notes</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {amplificationFactors.map((row) => (
+                      <TableRow key={row.protocol}>
+                        <TableCell><strong>{row.protocol}</strong></TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={`${row.factor}x`} 
+                            size="small" 
+                            color={parseInt(row.factor) > 100 ? "error" : "warning"} 
+                          />
+                        </TableCell>
+                        <TableCell>{row.port}</TableCell>
+                        <TableCell>{row.notes}</TableCell>
+                      </TableRow>
                     ))}
-                  </Box>
-                </Paper>
-              )}
-            </AccordionDetails>
-          </Accordion>
-        ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Box>
 
-        {/* Lab Completion Checklist */}
-        <Paper sx={{ p: 3, mt: 4, bgcolor: 'success.50', border: '2px solid', borderColor: 'success.300' }}>
-          <Typography variant="h6" gutterBottom color="success.dark">
-            ✅ Skills Acquired After Completing All Labs
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <List dense>
-                <ListItem>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary="Analyze DDoS attack traffic with Wireshark and tshark" />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary="Configure SYN cookies and kernel-level defenses" />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary="Implement rate limiting with iptables" />
-                </ListItem>
-              </List>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <List dense>
-                <ListItem>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary="Configure nginx for connection rate limiting" />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary="Identify attack patterns from network metrics" />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                  <ListItemText primary="Apply detection methodologies in real scenarios" />
-                </ListItem>
-              </List>
-            </Grid>
-          </Grid>
-        </Paper>
-      </TabPanel>
+          {/* Botnets Section */}
+          <Box id="botnets">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <RouterIcon sx={{ color: accent }} />
+                Botnets & Attack Infrastructure
+              </Typography>
 
-      {/* Tab 8: Legal & Ethics */}
-      <TabPanel value={tabValue} index={8}>
-        <Typography variant="h5" gutterBottom>Legal & Ethical Considerations</Typography>
-        
-        <Alert severity="error" sx={{ mb: 3 }}>
-          <AlertTitle>DDoS Attacks Are Serious Crimes</AlertTitle>
-          In virtually every country, launching a DDoS attack against systems you don't own (or 
-          don't have written permission to test) is a criminal offense. Penalties include 
-          significant prison time and fines. Even "testing" services or attacking gaming servers 
-          is illegal.
-        </Alert>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>What is a Botnet?</AlertTitle>
+                A botnet is a network of compromised computers (bots/zombies) controlled by an attacker. 
+                These can range from thousands to millions of devices, including IoT devices, and can 
+                generate massive amounts of attack traffic.
+              </Alert>
 
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <GavelIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Authorization Checklist
-                </Typography>
-                <List dense>
-                  {authorizationChecklist.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon><GavelIcon fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={item} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  <ShieldIcon sx={{ verticalAlign: "middle", mr: 1 }} />
-                  Scope and Rules of Engagement
-                </Typography>
-                <List dense>
-                  {scopeRules.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon><ShieldIcon fontSize="small" /></ListItemIcon>
-                      <ListItemText primary={item} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {botnetInfo.map((info, idx) => (
+                  <Grid item xs={12} md={6} key={idx}>
+                    <Card sx={{ height: "100%" }}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          {info.icon}
+                          {info.title}
+                        </Typography>
+                        <List dense>
+                          {info.points.map((point, pIdx) => (
+                            <ListItem key={pIdx}>
+                              <ListItemIcon><CheckCircleIcon color="success" fontSize="small" /></ListItemIcon>
+                              <ListItemText primary={point} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
 
-        <Typography variant="h6" gutterBottom>Criminal Laws by Jurisdiction</Typography>
-        <TableContainer component={Paper} sx={{ mb: 3 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: "error.dark" }}>
-                <TableCell sx={{ color: "white" }}><strong>Law</strong></TableCell>
-                <TableCell sx={{ color: "white" }}><strong>Jurisdiction</strong></TableCell>
-                <TableCell sx={{ color: "white" }}><strong>Maximum Penalty</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {legalConsiderations.map((item) => (
-                <TableRow key={item.law}>
-                  <TableCell>{item.law}</TableCell>
-                  <TableCell>{item.jurisdiction}</TableCell>
-                  <TableCell>
-                    <Chip label={item.penalty} size="small" color="error" variant="outlined" />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              <Typography variant="h6" gutterBottom>Notable Botnets in History</Typography>
+              <TableContainer component={Paper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "action.hover" }}>
+                      <TableCell><strong>Botnet</strong></TableCell>
+                      <TableCell><strong>Peak Size</strong></TableCell>
+                      <TableCell><strong>Attack Capability</strong></TableCell>
+                      <TableCell><strong>Notable Targets</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {notableBotnets.map((bot) => (
+                      <TableRow key={bot.name}>
+                        <TableCell><strong>{bot.name}</strong></TableCell>
+                        <TableCell>{bot.size}</TableCell>
+                        <TableCell>{bot.capability}</TableCell>
+                        <TableCell>{bot.targets}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Box>
 
-        <Typography variant="h6" gutterBottom>Data Handling and Privacy</Typography>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <List dense>
-            {dataHandlingGuidelines.map((item) => (
-              <ListItem key={item}>
-                <ListItemIcon><ShieldIcon color="success" fontSize="small" /></ListItemIcon>
-                <ListItemText primary={item} />
+          {/* Mitigation Section */}
+          <Box id="mitigation">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <ShieldIcon sx={{ color: accent }} />
+                Mitigation Strategies
+              </Typography>
+
+              <Alert severity="success" sx={{ mb: 3 }}>
+                <AlertTitle>Defense in Depth</AlertTitle>
+                Effective DDoS mitigation requires multiple layers of defense. No single solution can 
+                protect against all attack types. Combine network-level, application-level, and 
+                cloud-based protections.
+              </Alert>
+
+              <Typography variant="h6" gutterBottom>Mitigation Layers</Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {mitigationLayers.map((layer, idx) => (
+                  <Grid item xs={12} md={4} key={idx}>
+                    <Card sx={{ height: "100%", borderTop: `4px solid ${layer.color}` }}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>{layer.name}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          {layer.description}
+                        </Typography>
+                        <List dense>
+                          {layer.techniques.map((tech, tIdx) => (
+                            <ListItem key={tIdx}>
+                              <ListItemIcon><CheckCircleIcon color="success" fontSize="small" /></ListItemIcon>
+                              <ListItemText primary={tech} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Typography variant="h6" gutterBottom>Response Runbook</Typography>
+              <Stepper orientation="vertical">
+                {responseRunbook.map((step, idx) => (
+                  <Step key={idx} active>
+                    <StepLabel>
+                      <Typography variant="subtitle1">{step.label}</Typography>
+                    </StepLabel>
+                    <StepContent>
+                      <Typography variant="body2" color="text.secondary">
+                        {step.description}
+                      </Typography>
+                    </StepContent>
+                  </Step>
+                ))}
+              </Stepper>
+            </Paper>
+          </Box>
+
+          {/* Detection Section */}
+          <Box id="detection">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <NetworkCheckIcon sx={{ color: accent }} />
+                Detection & Analysis
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>Early Detection is Key</AlertTitle>
+                The faster you detect a DDoS attack, the faster you can respond. Establish baseline 
+                metrics for your normal traffic patterns so you can quickly identify anomalies.
+              </Alert>
+
+              <Typography variant="h6" gutterBottom>Traffic Analysis Indicators</Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {detectionIndicators.map((indicator, idx) => (
+                  <Grid item xs={12} md={6} key={idx}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <NetworkCheckIcon fontSize="small" sx={{ color: indicator.severity === "high" ? "#ef4444" : "#f59e0b" }} />
+                          {indicator.indicator}
+                        </Typography>
+                        <Chip 
+                          label={indicator.severity} 
+                          size="small" 
+                          color={indicator.severity === "high" ? "error" : "warning"} 
+                          sx={{ mb: 1 }} 
+                        />
+                        <Typography variant="body2" color="text.secondary">
+                          <strong>Tool:</strong> {indicator.tool}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Typography variant="h6" gutterBottom>Detection Tools & Commands</Typography>
+              <Grid container spacing={2}>
+                {detectionCommandsData.map((cmd, idx) => (
+                  <Grid item xs={12} md={6} key={idx}>
+                    <Card sx={{ bgcolor: "#1e1e1e" }}>
+                      <CardContent>
+                        <Typography variant="subtitle2" color="primary.light" gutterBottom>
+                          {cmd.title}
+                        </Typography>
+                        <CodeBlock language={cmd.lang}>{cmd.command}</CodeBlock>
+                        <Typography variant="caption" color="grey.500">
+                          {cmd.description}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Box>
+
+          {/* Safe Lab Section */}
+          <Box id="safe-lab">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <ScienceIcon sx={{ color: accent }} />
+                Safe Lab Environment
+              </Typography>
+
+              <Alert severity="error" sx={{ mb: 3 }}>
+                <AlertTitle>⚠️ Critical Warning</AlertTitle>
+                NEVER test DDoS techniques against systems you don't own or without explicit written 
+                permission. This includes public websites, cloud services, and shared networks. 
+                Violations can result in criminal charges and civil liability.
+              </Alert>
+
+              <Typography variant="h6" gutterBottom>Safe Testing Options</Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {safeLabOptions.map((option, idx) => (
+                  <Grid item xs={12} md={6} key={idx}>
+                    <Card sx={{ height: "100%", borderLeft: `4px solid ${option.color}` }}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>{option.name}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          {option.description}
+                        </Typography>
+                        <List dense>
+                          {option.features.map((feature, fIdx) => (
+                            <ListItem key={fIdx}>
+                              <ListItemIcon><CheckCircleIcon color="success" fontSize="small" /></ListItemIcon>
+                              <ListItemText primary={feature} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Typography variant="h6" gutterBottom>Recommended Lab Setup</Typography>
+              <CodeBlock language="yaml">{labSetupYaml}</CodeBlock>
+            </Paper>
+          </Box>
+
+          {/* Legal & Ethics Section */}
+          <Box id="legal">
+            <Paper
+              sx={{
+                p: 4,
+                mb: 5,
+                borderRadius: 4,
+                bgcolor: alpha(theme.palette.background.paper, 0.6),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <GavelIcon sx={{ color: accent }} />
+                Legal & Ethical Considerations
+              </Typography>
+
+              <Alert severity="error" sx={{ mb: 3 }}>
+                <AlertTitle>Legal Consequences</AlertTitle>
+                DDoS attacks are illegal in virtually all jurisdictions. Penalties can include:
+                imprisonment (up to 10+ years), massive fines ($250,000+), civil lawsuits, and 
+                permanent criminal records affecting future employment.
+              </Alert>
+
+              <Typography variant="h6" gutterBottom>Key Laws by Region</Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {legalInfo.map((info, idx) => (
+                  <Grid item xs={12} md={4} key={idx}>
+                    <Card sx={{ height: "100%" }}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>{info.region}</Typography>
+                        <Typography variant="subtitle2" color="primary">{info.law}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                          {info.penalty}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Typography variant="h6" gutterBottom>If You're Attacked</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Immediate Response</Typography>
+                      <List dense>
+                        <ListItem><ListItemText primary="1. Contact your ISP/hosting provider" /></ListItem>
+                        <ListItem><ListItemText primary="2. Enable any DDoS protection services" /></ListItem>
+                        <ListItem><ListItemText primary="3. Preserve logs for evidence" /></ListItem>
+                        <ListItem><ListItemText primary="4. Don't pay ransom demands" /></ListItem>
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Reporting</Typography>
+                      <List dense>
+                        <ListItem><ListItemText primary="US: FBI IC3 (ic3.gov)" /></ListItem>
+                        <ListItem><ListItemText primary="UK: Action Fraud / NCSC" /></ListItem>
+                        <ListItem><ListItemText primary="EU: Local CERT/CSIRT" /></ListItem>
+                        <ListItem><ListItemText primary="Include: timestamps, IPs, logs, damage estimate" /></ListItem>
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Box>
+
+          {/* Bottom Navigation */}
+          <Box sx={{ mt: 4, textAlign: "center" }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{ borderColor: accent, color: accent, "&:hover": { bgcolor: alpha(accent, 0.1) } }}
+            >
+              Back to Learning Hub
+            </Button>
+          </Box>
+        </Container>
+      </Box>
+
+      {/* Floating Action Buttons */}
+      <Fab
+        color="primary"
+        onClick={() => setNavDrawerOpen(true)}
+        sx={{
+          position: "fixed",
+          bottom: 90,
+          right: 24,
+          zIndex: 1000,
+          bgcolor: accent,
+          "&:hover": { bgcolor: "#dc2626" },
+          boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+          display: { xs: "flex", lg: "none" },
+        }}
+      >
+        <ListAltIcon />
+      </Fab>
+
+      {/* Scroll to Top FAB */}
+      <Fab
+        size="small"
+        onClick={scrollToTop}
+        sx={{
+          position: "fixed",
+          bottom: 32,
+          right: 28,
+          zIndex: 1000,
+          bgcolor: alpha(accent, 0.15),
+          color: accent,
+          "&:hover": { bgcolor: alpha(accent, 0.25) },
+          display: { xs: "flex", lg: "none" },
+        }}
+      >
+        <KeyboardArrowUpIcon />
+      </Fab>
+
+      {/* Navigation Drawer for Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          {/* Progress */}
+          <Box sx={{ mb: 3 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.08),
+                  },
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? accent : "text.secondary" }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
               </ListItem>
             ))}
           </List>
-        </Paper>
-
-        <Typography variant="h6" gutterBottom>What Can Get You Arrested</Typography>
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          {[
-            { action: "Launching attacks", illegal: true, desc: "Even against 'deserving' targets" },
-            { action: "Using booter/stresser services", illegal: true, desc: "You are liable for attacks you pay for" },
-            { action: "Operating a botnet", illegal: true, desc: "Regardless of what you use it for" },
-            { action: "Selling DDoS services", illegal: true, desc: "Even if marketed as 'stress testing'" },
-            { action: "Testing your own systems", illegal: false, desc: "But document authorization" },
-            { action: "Authorized penetration testing", illegal: false, desc: "With written permission only" },
-          ].map((item) => (
-            <Grid item xs={12} sm={6} md={4} key={item.action}>
-              <Card sx={{ borderLeft: `4px solid ${item.illegal ? "red" : "green"}` }}>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                    {item.illegal ? <WarningIcon color="error" /> : <ShieldIcon color="success" />}
-                    <Typography variant="subtitle2" fontWeight="bold">{item.action}</Typography>
-                  </Box>
-                  <Chip 
-                    label={item.illegal ? "ILLEGAL" : "Legal"} 
-                    size="small" 
-                    color={item.illegal ? "error" : "success"} 
-                    sx={{ mb: 1 }}
-                  />
-                  <Typography variant="body2" color="text.secondary">{item.desc}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-
-        <Typography variant="h6" gutterBottom>Ethical Security Research</Typography>
-        <Alert severity="success" sx={{ mb: 2 }}>
-          <AlertTitle>How to Study DDoS Legally</AlertTitle>
-          <List dense>
-            <ListItem>
-              <ListItemIcon><ShieldIcon color="success" /></ListItemIcon>
-              <ListItemText primary="Set up your own lab environment (VMs, isolated network)" />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon><ShieldIcon color="success" /></ListItemIcon>
-              <ListItemText primary="Use cloud providers' legitimate stress testing services" />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon><ShieldIcon color="success" /></ListItemIcon>
-              <ListItemText primary="Study captured attack traffic (public datasets exist)" />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon><ShieldIcon color="success" /></ListItemIcon>
-              <ListItemText primary="Work in cybersecurity - get paid to defend against DDoS" />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon><ShieldIcon color="success" /></ListItemIcon>
-              <ListItemText primary="Participate in CTF competitions with DDoS defense challenges" />
-            </ListItem>
-          </List>
-        </Alert>
-
-        <Typography variant="h6" gutterBottom>If You're a Victim</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Immediate Response</Typography>
-                <List dense>
-                  <ListItem><ListItemText primary="1. Contact your ISP/hosting provider" /></ListItem>
-                  <ListItem><ListItemText primary="2. Enable any DDoS protection services" /></ListItem>
-                  <ListItem><ListItemText primary="3. Preserve logs for evidence" /></ListItem>
-                  <ListItem><ListItemText primary="4. Don't pay ransom demands" /></ListItem>
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Reporting</Typography>
-                <List dense>
-                  <ListItem><ListItemText primary="US: FBI IC3 (ic3.gov)" /></ListItem>
-                  <ListItem><ListItemText primary="UK: Action Fraud / NCSC" /></ListItem>
-                  <ListItem><ListItemText primary="EU: Local CERT/CSIRT" /></ListItem>
-                  <ListItem><ListItemText primary="Include: timestamps, IPs, logs, damage estimate" /></ListItem>
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </TabPanel>
-
-      {/* Bottom Navigation */}
-      <Box sx={{ mt: 4, textAlign: "center" }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
-        >
-          Back to Learning Hub
-        </Button>
-      </Box>
-    </Box>
+        </Box>
+      </Drawer>
     </LearnPageLayout>
   );
 };

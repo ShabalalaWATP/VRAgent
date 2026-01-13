@@ -122,6 +122,8 @@ const AgenticAIScanPage: React.FC = () => {
   const [activePhase, setActivePhase] = useState(0);
   const [expandedVuln, setExpandedVuln] = useState<string | false>(false);
   const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState<string>('');
+  const [savedReportId, setSavedReportId] = useState<number | null>(null);
   const stopPollingRef = useRef<(() => void) | null>(null);
 
   // Get project path on mount
@@ -133,6 +135,7 @@ const AgenticAIScanPage: React.FC = () => {
         // For demo purposes, we'll use a relative path based on project name
         const path = project.git_url || `/app/projects/${project.name}`;
         setProjectPath(path);
+        setProjectName(project.name);
       } catch (err) {
         console.error('Failed to fetch project:', err);
       }
@@ -157,11 +160,49 @@ const AgenticAIScanPage: React.FC = () => {
   }, []);
 
   // Handle scan completion
-  const handleComplete = useCallback((result: AgenticScanResult) => {
+  const handleComplete = useCallback(async (result: AgenticScanResult) => {
     setScanResult(result);
     setIsScanning(false);
     setActivePhase(ANALYSIS_PHASES.length);
-  }, []);
+    
+    // Auto-save the report to the project
+    try {
+      const saveResponse = await agenticScanClient.saveReport({
+        scan_id: result.scan_id,
+        project_id: Number(projectId),
+        title: `Agentic Scan - ${projectName || 'Project'} - ${new Date().toLocaleDateString()}`,
+        project_path: projectPath || undefined,
+        started_at: result.started_at,
+        completed_at: result.completed_at,
+        duration_seconds: result.scan_duration_seconds,
+        total_chunks: result.total_chunks,
+        analyzed_chunks: result.analyzed_chunks,
+        entry_points_found: result.entry_points_count || 0,
+        flows_traced: result.flows_traced || 0,
+        executive_summary: undefined,
+        vulnerabilities: result.vulnerabilities?.map(v => ({
+          id: v.id,
+          vulnerability_type: v.vulnerability_type,
+          severity: v.severity,
+          cwe_id: v.cwe_id,
+          title: v.title,
+          description: v.description,
+          llm_analysis: v.llm_analysis,
+          exploit_scenario: v.exploit_scenario,
+          remediation: v.remediation,
+          confidence: v.confidence,
+          flow: v.flow,
+        })),
+        entry_points: undefined,
+        traced_flows: undefined,
+        statistics: result.statistics,
+      });
+      setSavedReportId(saveResponse.report_id);
+      console.log('[AgenticAIScanPage] Report auto-saved with ID:', saveResponse.report_id);
+    } catch (err) {
+      console.error('[AgenticAIScanPage] Failed to auto-save report:', err);
+    }
+  }, [projectId, projectName, projectPath]);
 
   // Handle errors
   const handleError = useCallback((errorMsg: string) => {
@@ -181,6 +222,7 @@ const AgenticAIScanPage: React.FC = () => {
     setScanResult(null);
     setProgress(null);
     setActivePhase(0);
+    setSavedReportId(null); // Reset saved report ID for new scan
     
     try {
       // Start the scan
@@ -621,10 +663,18 @@ const AgenticAIScanPage: React.FC = () => {
           </Grid>
 
           {/* Actions */}
-          <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+          <Stack direction="row" spacing={2} sx={{ mb: 3, alignItems: 'center' }}>
             <Button startIcon={<Refresh />} onClick={startAgenticScan}>
               Re-scan
             </Button>
+            {savedReportId && (
+              <Chip
+                icon={<CheckCircle sx={{ fontSize: 18 }} />}
+                label={`Saved to Project Reports (ID: ${savedReportId})`}
+                color="success"
+                variant="outlined"
+              />
+            )}
           </Stack>
 
           {/* Vulnerabilities List */}

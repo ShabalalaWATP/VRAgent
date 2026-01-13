@@ -1,9 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
-  Container,
   Typography,
   Paper,
   Chip,
@@ -13,8 +12,15 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  Drawer,
+  Fab,
+  IconButton,
+  Tooltip,
+  Divider,
+  LinearProgress,
   alpha,
   useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SupportAgentIcon from "@mui/icons-material/SupportAgent";
@@ -28,6 +34,9 @@ import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import SourceIcon from "@mui/icons-material/Source";
 import TrackChangesIcon from "@mui/icons-material/TrackChanges";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { Link, useNavigate } from "react-router-dom";
 
 interface WorkflowStep {
@@ -86,6 +95,45 @@ const alertCategories = [
   { name: "Cloud Misconfig", color: "#6366f1" },
 ];
 
+const telemetrySources = [
+  {
+    source: "Endpoint telemetry",
+    signals: ["Process creation and command line", "File and registry writes", "Module loads and driver activity"],
+    questions: ["What is the parent process?", "Is the binary signed or known?", "Any persistence or privilege changes?"],
+    color: "#10b981",
+  },
+  {
+    source: "Identity and authentication",
+    signals: ["Login failures and successes", "MFA prompts and denials", "Privilege or group changes"],
+    questions: ["Is the location expected?", "Is the user high risk or privileged?", "Is there impossible travel?"],
+    color: "#3b82f6",
+  },
+  {
+    source: "Network and proxy",
+    signals: ["DNS queries and responses", "Proxy URLs and user agents", "Firewall flows and TLS SNI"],
+    questions: ["Is the destination newly seen?", "Is there beaconing or staging?", "Is the ASN suspicious?"],
+    color: "#f59e0b",
+  },
+  {
+    source: "Email and collaboration",
+    signals: ["Inbound attachments and URLs", "Mailbox rules and forwarding", "OAuth consent grants"],
+    questions: ["Is the sender spoofed?", "Did the user click or open?", "Are there rule changes?"],
+    color: "#8b5cf6",
+  },
+  {
+    source: "Cloud and SaaS",
+    signals: ["IAM role changes", "Key creation and token use", "Storage access patterns"],
+    questions: ["Is activity from trusted IPs?", "Are keys newly created?", "Are downloads unusual?"],
+    color: "#6366f1",
+  },
+  {
+    source: "Asset and vulnerability data",
+    signals: ["Asset criticality", "Exposure and internet facing status", "Known vulnerabilities"],
+    questions: ["Is this a crown jewel asset?", "Is there a matching CVE?", "Who owns this system?"],
+    color: "#ef4444",
+  },
+];
+
 const enrichmentSources = [
   "Asset inventory/CMDB (owner, criticality)",
   "EDR process tree and command line",
@@ -103,12 +151,47 @@ const investigationChecklist = [
   "Search for similar activity across the environment",
 ];
 
+const dispositionGuidance = [
+  {
+    label: "True Positive",
+    criteria: "Evidence confirms malicious intent or impact.",
+    action: "Contain, escalate to IR, and open an incident.",
+    color: "#ef4444",
+  },
+  {
+    label: "False Positive",
+    criteria: "Detection triggered by benign behavior or bad logic.",
+    action: "Document reasoning, tune detection, and close.",
+    color: "#10b981",
+  },
+  {
+    label: "Benign Positive",
+    criteria: "Suspicious action but approved or expected activity.",
+    action: "Validate approval, document, and consider allowlist.",
+    color: "#3b82f6",
+  },
+  {
+    label: "Needs More Data",
+    criteria: "Signals are incomplete or conflicting.",
+    action: "Collect additional logs and keep in progress.",
+    color: "#f59e0b",
+  },
+];
+
 const escalationCriteria = [
   "Confirmed credential compromise or data access",
   "Lateral movement beyond initial host",
   "Privileged or service accounts involved",
   "Malware with C2 or exfiltration indicators",
   "Critical or regulated assets impacted",
+];
+
+const escalationPacket = [
+  "Short summary and current severity rationale",
+  "Timeline with key evidence and timestamps",
+  "Affected users, hosts, and asset criticality",
+  "Containment already performed or approvals needed",
+  "Open questions and requested actions",
 ];
 
 const containmentActions = [
@@ -211,6 +294,129 @@ const shiftRoutine = [
   "Check new intel or blocked indicators",
   "Validate rule health and noisy detections",
   "Update tickets and communicate handoff",
+];
+
+// Example SIEM queries for common scenarios
+const exampleSiemQueries = [
+  {
+    scenario: "Failed Login Spike",
+    query: `index=auth event_type=failed_login | stats count by user, src_ip | where count > 5`,
+    purpose: "Identify brute force or credential stuffing attempts",
+  },
+  {
+    scenario: "Suspicious PowerShell",
+    query: `index=edr process_name=powershell.exe (command_line=*-enc* OR command_line=*bypass*)`,
+    purpose: "Detect encoded or execution policy bypass activity",
+  },
+  {
+    scenario: "Large Outbound Transfer",
+    query: `index=proxy bytes_out > 50000000 | stats sum(bytes_out) by src_ip, dest_domain`,
+    purpose: "Identify potential data exfiltration",
+  },
+  {
+    scenario: "Rare Parent-Child Process",
+    query: `index=edr | rare parent_process, process_name limit=20`,
+    purpose: "Find unusual process relationships",
+  },
+];
+
+// Real-world triage scenarios
+const triageScenarios = [
+  {
+    alert: "Mimikatz detected on workstation",
+    steps: ["Isolate host immediately", "Check for lateral movement", "Review auth logs for credential use", "Escalate to IR"],
+    outcome: "True Positive - Active compromise",
+  },
+  {
+    alert: "PowerShell encoded command execution",
+    steps: ["Decode the command", "Check parent process (email client?)", "Review user context", "Search for similar activity"],
+    outcome: "May be TP (attack) or FP (admin script)",
+  },
+  {
+    alert: "Multiple failed logins followed by success",
+    steps: ["Check source IP reputation", "Verify user traveled or VPN used", "Look for post-auth anomalies"],
+    outcome: "FP if legitimate travel, TP if stolen creds",
+  },
+];
+
+const alertTypePlaybooks = [
+  {
+    type: "Phishing",
+    focus: "Email and identity abuse",
+    checks: [
+      "Inspect headers, sender domain, and spoofing signals",
+      "Review URL reputation and redirect chain",
+      "Confirm user click or attachment open",
+      "Search for similar messages across the org",
+      "Check for mailbox rule or OAuth changes",
+    ],
+    color: "#f59e0b",
+  },
+  {
+    type: "Malware",
+    focus: "Endpoint execution and persistence",
+    checks: [
+      "Validate hash reputation and file origin",
+      "Build process tree and parent relationship",
+      "Check for persistence mechanisms",
+      "Review outbound connections and C2 indicators",
+      "Scope similar activity across hosts",
+    ],
+    color: "#ef4444",
+  },
+  {
+    type: "Credential Abuse",
+    focus: "Suspicious auth behavior",
+    checks: [
+      "Check source IP, ASN, and geo context",
+      "Look for failed logins followed by success",
+      "Review MFA prompts and token use",
+      "Identify privileged or service accounts",
+      "Hunt for post-auth anomalies",
+    ],
+    color: "#8b5cf6",
+  },
+  {
+    type: "Lateral Movement",
+    focus: "Movement between hosts",
+    checks: [
+      "Identify remote execution tools used",
+      "Review admin share and RDP activity",
+      "Check for new services or scheduled tasks",
+      "Confirm credential reuse or theft indicators",
+      "Contain spread and escalate quickly",
+    ],
+    color: "#3b82f6",
+  },
+  {
+    type: "Data Exfiltration",
+    focus: "Large or unusual data transfer",
+    checks: [
+      "Review data volume and destination",
+      "Check for new cloud storage or file share use",
+      "Correlate with user behavior and working hours",
+      "Look for compression or staging activity",
+      "Escalate if regulated data is involved",
+    ],
+    color: "#10b981",
+  },
+];
+
+// Detection tuning tips
+const tuningTips = [
+  "Whitelist known admin tools with specific hash and path conditions",
+  "Add user/group exceptions only after validation, not to silence alerts",
+  "Track FP rates per rule and tune the noisiest 10%",
+  "Document every tuning change with rationale",
+  "Re-enable suppressed rules periodically to check for changes",
+];
+
+const detectionFeedbackLoop = [
+  { step: "Observe", detail: "Capture alert outcomes, FP rates, and analyst notes." },
+  { step: "Tune", detail: "Adjust logic, thresholds, and exception criteria." },
+  { step: "Validate", detail: "Replay test data or run controlled scenarios." },
+  { step: "Deploy", detail: "Release updates with change notes and ownership." },
+  { step: "Measure", detail: "Track coverage, latency, and true positive rate." },
 ];
 
 const QUIZ_QUESTION_COUNT = 10;
@@ -876,55 +1082,453 @@ const quizQuestions: QuizQuestion[] = [
 export default function SOCWorkflowPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const accent = "#8b5cf6";
 
-  const pageContext = `SOC Analyst Workflow Guide - Covers the Security Operations Center analyst workflow including alert triage, initial analysis, enrichment, determination, response/escalation, and documentation. Includes triage questions, alert categories, enrichment sources, investigation checklists, escalation criteria, containment actions, documentation fields, shift handoff steps, SOC metrics, best practices, tier responsibilities (Tier 1-3), and common tools used in security operations.`;
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const pageContext = `SOC Analyst Workflow Guide - Covers the Security Operations Center analyst workflow including alert triage, initial analysis, enrichment, determination, response/escalation, and documentation. Includes triage questions, alert categories, core telemetry sources, enrichment sources, investigation checklists, disposition rubric, escalation criteria, escalation packet checklists, containment actions, documentation fields, shift handoff steps, SOC metrics, best practices, tier responsibilities (Tier 1-3), common tools, alert-type playbooks, and a detection feedback loop.`;
+
+  const sectionNavItems = [
+    { id: "intro", label: "Overview", icon: <SupportAgentIcon /> },
+    { id: "workflow", label: "Workflow", icon: <PlaylistAddCheckIcon /> },
+    { id: "telemetry", label: "Telemetry", icon: <SourceIcon /> },
+    { id: "disposition", label: "Disposition", icon: <AssignmentIcon /> },
+    { id: "escalation", label: "Escalation", icon: <PriorityHighIcon /> },
+    { id: "documentation", label: "Documentation", icon: <AssignmentIcon /> },
+    { id: "best-practices", label: "Best Practices", icon: <CheckCircleIcon /> },
+    { id: "metrics", label: "Metrics & Pitfalls", icon: <TrackChangesIcon /> },
+    { id: "lifecycle", label: "Alert Lifecycle", icon: <ArrowForwardIcon /> },
+    { id: "playbooks", label: "Playbooks", icon: <AssignmentIcon /> },
+    { id: "siem-queries", label: "SIEM Queries", icon: <SourceIcon /> },
+    { id: "triage-scenarios", label: "Scenarios", icon: <WarningIcon /> },
+    { id: "tuning", label: "Tuning", icon: <TrackChangesIcon /> },
+    { id: "feedback-loop", label: "Feedback Loop", icon: <SwapHorizIcon /> },
+    { id: "related", label: "Related", icon: <ListAltIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="SOC Analyst Workflow" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Header */}
-        <Box sx={{ mb: 4 }}>
-          <Chip
-            component={Link}
-            to="/learn"
-            icon={<ArrowBackIcon />}
-            label="Back to Learning Hub"
-            clickable
-            variant="outlined"
-            sx={{ borderRadius: 2, mb: 2 }}
-          />
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <Box
-              sx={{
-                width: 64,
-                height: 64,
-                borderRadius: 2,
-                bgcolor: alpha("#10b981", 0.1),
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <SupportAgentIcon sx={{ fontSize: 36, color: "#10b981" }} />
-            </Box>
-            <Box>
-              <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                SOC Analyst Workflow
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Security Operations Center processes
-              </Typography>
-            </Box>
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#7c3aed" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
           </Box>
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Chip label="Blue Team" color="primary" size="small" />
-            <Chip label="SOC" size="small" sx={{ bgcolor: alpha("#10b981", 0.1), color: "#10b981" }} />
-            <Chip label="Operations" size="small" sx={{ bgcolor: alpha("#3b82f6", 0.1), color: "#3b82f6" }} />
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
           </Box>
         </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Header */}
+          <Box sx={{ mb: 4 }}>
+            <Chip
+              component={Link}
+              to="/learn"
+              icon={<ArrowBackIcon />}
+              label="Back to Learning Hub"
+              clickable
+              variant="outlined"
+              sx={{ borderRadius: 2, mb: 2 }}
+            />
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 2,
+                  bgcolor: alpha("#10b981", 0.1),
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <SupportAgentIcon sx={{ fontSize: 36, color: "#10b981" }} />
+              </Box>
+              <Box>
+                <Typography variant="h4" sx={{ fontWeight: 800 }}>
+                  SOC Analyst Workflow
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  Security Operations Center processes
+                </Typography>
+              </Box>
+            </Box>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              <Chip label="Blue Team" color="primary" size="small" />
+              <Chip label="SOC" size="small" sx={{ bgcolor: alpha("#10b981", 0.1), color: "#10b981" }} />
+              <Chip label="Operations" size="small" sx={{ bgcolor: alpha("#3b82f6", 0.1), color: "#3b82f6" }} />
+            </Box>
+          </Box>
+
+          {/* Quick Navigation */}
+          <Paper
+            sx={{
+              p: 2,
+              mb: 4,
+              borderRadius: 3,
+              position: "sticky",
+              top: 70,
+              zIndex: 100,
+              backdropFilter: "blur(10px)",
+              bgcolor: alpha(theme.palette.background.paper, 0.9),
+              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              boxShadow: `0 4px 20px ${alpha("#000", 0.1)}`,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+              <Chip
+                label="Learning Hub"
+                size="small"
+                clickable
+                onClick={() => navigate("/learn")}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  bgcolor: alpha(accent, 0.1),
+                  color: accent,
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.2),
+                  },
+                }}
+              />
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                Quick Navigation
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {[
+                { label: "Overview", id: "intro" },
+                { label: "Workflow", id: "workflow" },
+                { label: "Telemetry", id: "telemetry" },
+                { label: "Disposition", id: "disposition" },
+                { label: "Escalation", id: "escalation" },
+                { label: "Playbooks", id: "playbooks" },
+                { label: "Queries", id: "siem-queries" },
+                { label: "Scenarios", id: "triage-scenarios" },
+                { label: "Quiz", id: "quiz" },
+              ].map((nav) => (
+                <Chip
+                  key={nav.id}
+                  label={nav.label}
+                  size="small"
+                  clickable
+                  onClick={() => scrollToSection(nav.id)}
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: "0.75rem",
+                    "&:hover": {
+                      bgcolor: alpha(accent, 0.15),
+                      color: accent,
+                    },
+                  }}
+                />
+              ))}
+            </Box>
+          </Paper>
 
         {/* Overview */}
-        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+        <Paper
+          id="intro"
+          sx={{
+            p: 3,
+            mb: 4,
+            borderRadius: 3,
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            scrollMarginTop: 180,
+          }}
+        >
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <SupportAgentIcon color="primary" /> Overview
           </Typography>
@@ -936,7 +1540,9 @@ export default function SOCWorkflowPage() {
         </Paper>
 
         {/* Workflow Steps */}
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>🔄 Investigation Workflow</Typography>
+        <Typography id="workflow" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Investigation Workflow
+        </Typography>
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {workflowSteps.map((ws, i) => (
             <Grid item xs={12} sm={6} md={4} key={ws.step}>
@@ -1012,6 +1618,48 @@ export default function SOCWorkflowPage() {
           </Box>
         </Paper>
 
+        {/* Core Telemetry Sources */}
+        <Typography id="telemetry" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Core Telemetry Sources
+        </Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {telemetrySources.map((source) => (
+            <Grid item xs={12} md={6} key={source.source}>
+              <Paper sx={{ p: 2.5, height: "100%", borderRadius: 2, border: `1px solid ${alpha(source.color, 0.2)}` }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: source.color, mb: 1 }}>
+                  {source.source}
+                </Typography>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: alpha(source.color, 0.9), letterSpacing: 0.6 }}>
+                  SIGNALS
+                </Typography>
+                <List dense sx={{ mb: 1 }}>
+                  {source.signals.map((signal) => (
+                    <ListItem key={signal} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 20 }}>
+                        <CheckCircleIcon sx={{ fontSize: 14, color: source.color }} />
+                      </ListItemIcon>
+                      <ListItemText primary={signal} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: alpha(source.color, 0.9), letterSpacing: 0.6 }}>
+                  QUESTIONS TO ASK
+                </Typography>
+                <List dense>
+                  {source.questions.map((question) => (
+                    <ListItem key={question} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 20 }}>
+                        <CheckCircleIcon sx={{ fontSize: 14, color: source.color }} />
+                      </ListItemIcon>
+                      <ListItemText primary={question} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
         {/* Tier Responsibilities */}
         <Paper
           sx={{
@@ -1071,7 +1719,32 @@ export default function SOCWorkflowPage() {
           </Grid>
         </Grid>
 
+        {/* Determination Guidance */}
+        <Typography id="disposition" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Alert Disposition Rubric
+        </Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {dispositionGuidance.map((item) => (
+            <Grid item xs={12} md={6} key={item.label}>
+              <Paper sx={{ p: 2.5, height: "100%", borderRadius: 2, bgcolor: alpha(item.color, 0.05) }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: item.color, mb: 0.5 }}>
+                  {item.label}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  {item.criteria}
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Action: {item.action}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
         {/* Escalation and Containment */}
+        <Typography id="escalation" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Escalation & Containment
+        </Typography>
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#ef4444", 0.03) }}>
@@ -1109,7 +1782,27 @@ export default function SOCWorkflowPage() {
           </Grid>
         </Grid>
 
+        {/* Escalation Packet */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#ef4444", 0.02) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <PriorityHighIcon sx={{ color: "#ef4444" }} /> Escalation Packet Checklist
+          </Typography>
+          <List dense>
+            {escalationPacket.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#ef4444" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
         {/* Documentation and Handoff */}
+        <Typography id="documentation" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Documentation & Handoff
+        </Typography>
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#6366f1", 0.04) }}>
@@ -1148,6 +1841,9 @@ export default function SOCWorkflowPage() {
         </Grid>
 
         {/* Best Practices & Tools side by side */}
+        <Typography id="best-practices" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Best Practices & Tools
+        </Typography>
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#10b981", 0.03) }}>
@@ -1186,6 +1882,9 @@ export default function SOCWorkflowPage() {
         </Grid>
 
         {/* Metrics and Pitfalls */}
+        <Typography id="metrics" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Metrics & Pitfalls
+        </Typography>
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03) }}>
@@ -1224,6 +1923,9 @@ export default function SOCWorkflowPage() {
         </Grid>
 
         {/* Alert Lifecycle */}
+        <Typography id="lifecycle" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Alert Lifecycle
+        </Typography>
         <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03) }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <ArrowForwardIcon sx={{ color: "#3b82f6" }} /> Alert Lifecycle
@@ -1245,6 +1947,9 @@ export default function SOCWorkflowPage() {
         </Paper>
 
         {/* Severity and SLA Guidance */}
+        <Typography id="severity-sla" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Severity & SLA Guidance
+        </Typography>
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#ef4444", 0.03) }}>
@@ -1288,6 +1993,9 @@ export default function SOCWorkflowPage() {
         </Grid>
 
         {/* Playbooks and Evidence */}
+        <Typography id="playbooks" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Playbooks & Evidence
+        </Typography>
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#6366f1", 0.04) }}>
@@ -1380,6 +2088,132 @@ export default function SOCWorkflowPage() {
           </List>
         </Paper>
 
+        {/* Example SIEM Queries */}
+        <Typography id="siem-queries" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Example SIEM Queries
+        </Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {exampleSiemQueries.map((q, i) => (
+            <Grid item xs={12} md={6} key={i}>
+              <Paper sx={{ p: 2.5, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 0.5 }}>{q.scenario}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{q.purpose}</Typography>
+                <Box sx={{ p: 1.5, bgcolor: alpha("#000", 0.03), borderRadius: 1, fontFamily: "monospace", fontSize: "0.75rem", overflowX: "auto" }}>
+                  {q.query}
+                </Box>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Alert Type Playbooks */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>Alert Type Quick Playbooks</Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {alertTypePlaybooks.map((playbook) => (
+            <Grid item xs={12} md={4} key={playbook.type}>
+              <Paper sx={{ p: 2.5, height: "100%", borderRadius: 2, border: `1px solid ${alpha(playbook.color, 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: playbook.color, mb: 0.5 }}>
+                  {playbook.type}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  {playbook.focus}
+                </Typography>
+                <List dense>
+                  {playbook.checks.map((check) => (
+                    <ListItem key={check} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 20 }}>
+                        <CheckCircleIcon sx={{ fontSize: 12, color: playbook.color }} />
+                      </ListItemIcon>
+                      <ListItemText primary={check} primaryTypographyProps={{ variant: "caption" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Triage Scenarios */}
+        <Typography id="triage-scenarios" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Real-World Triage Scenarios
+        </Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {triageScenarios.map((s, i) => (
+            <Grid item xs={12} md={4} key={i}>
+              <Paper sx={{ p: 2.5, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>{s.alert}</Typography>
+                <List dense disablePadding sx={{ mb: 1.5 }}>
+                  {s.steps.map((step, j) => (
+                    <ListItem key={j} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 20 }}>
+                        <CheckCircleIcon sx={{ fontSize: 12, color: "#8b5cf6" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={step} primaryTypographyProps={{ variant: "caption" }} />
+                    </ListItem>
+                  ))}
+                </List>
+                <Chip label={s.outcome} size="small" sx={{ bgcolor: alpha("#10b981", 0.1), color: "#10b981", fontSize: "0.7rem" }} />
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Detection Tuning Tips */}
+        <Paper
+          id="tuning"
+          sx={{
+            p: 3,
+            mb: 4,
+            borderRadius: 3,
+            bgcolor: alpha("#f59e0b", 0.03),
+            scrollMarginTop: 180,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <TrackChangesIcon sx={{ color: "#f59e0b" }} /> Detection Tuning Tips
+          </Typography>
+          <List dense>
+            {tuningTips.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#f59e0b" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* Detection Feedback Loop */}
+        <Paper
+          id="feedback-loop"
+          sx={{
+            p: 3,
+            mb: 4,
+            borderRadius: 3,
+            bgcolor: alpha("#3b82f6", 0.03),
+            scrollMarginTop: 180,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <TrackChangesIcon sx={{ color: "#3b82f6" }} /> Detection Engineering Feedback Loop
+          </Typography>
+          <Grid container spacing={2}>
+            {detectionFeedbackLoop.map((item, index) => (
+              <Grid item xs={12} sm={6} md={4} key={item.step}>
+                <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    {index + 1}. {item.step}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {item.detail}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
         {/* Warning */}
         <Paper
           sx={{
@@ -1400,7 +2234,15 @@ export default function SOCWorkflowPage() {
         </Paper>
 
         {/* Related */}
-        <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
+        <Paper
+          id="related"
+          sx={{
+            p: 3,
+            borderRadius: 3,
+            bgcolor: alpha(theme.palette.primary.main, 0.03),
+            scrollMarginTop: 180,
+          }}
+        >
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>📚 Related Learning</Typography>
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
             <Chip label="SIEM Fundamentals →" clickable onClick={() => navigate("/learn/siem")} sx={{ fontWeight: 600 }} />
@@ -1410,12 +2252,13 @@ export default function SOCWorkflowPage() {
         </Paper>
 
         <Paper
-          id="quiz-section"
+          id="quiz"
           sx={{
             mt: 4,
             p: 4,
             borderRadius: 3,
             border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+            scrollMarginTop: 180,
           }}
         >
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
@@ -1431,18 +2274,31 @@ export default function SOCWorkflowPage() {
           />
         </Paper>
 
-        {/* Bottom Navigation */}
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
-          >
-            Back to Learning Hub
-          </Button>
+          {/* Footer Navigation */}
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+            <Button
+              variant="outlined"
+              size="large"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{
+                borderRadius: 2,
+                px: 4,
+                py: 1.5,
+                fontWeight: 600,
+                borderColor: alpha(accent, 0.3),
+                color: accent,
+                "&:hover": {
+                  borderColor: accent,
+                  bgcolor: alpha(accent, 0.05),
+                },
+              }}
+            >
+              Return to Learning Hub
+            </Button>
+          </Box>
         </Box>
-      </Container>
+      </Box>
     </LearnPageLayout>
   );
 }

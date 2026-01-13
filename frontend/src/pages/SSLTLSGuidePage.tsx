@@ -56,6 +56,12 @@ import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import DownloadIcon from "@mui/icons-material/Download";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import DataObjectIcon from "@mui/icons-material/DataObject";
+import FingerprintIcon from "@mui/icons-material/Fingerprint";
+import MemoryIcon from "@mui/icons-material/Memory";
+import RadarIcon from "@mui/icons-material/Radar";
+import TroubleshootIcon from "@mui/icons-material/Troubleshoot";
+import SyncLockIcon from "@mui/icons-material/SyncLock";
+import PlaylistAddCheckIcon from "@mui/icons-material/PlaylistAddCheck";
 
 // Animations
 const float = keyframes`
@@ -90,7 +96,84 @@ export default function SSLTLSGuidePage() {
 - Certificate inspection: validity, chain verification, key strength
 - Security headers and HSTS configuration
 - Common misconfigurations and remediation steps
-- Best practices for secure TLS deployment`;
+- Best practices for secure TLS deployment
+- JARM fingerprinting for C2/malware infrastructure detection
+- Offensive analysis: MITM feasibility, domain fronting detection
+- TLS 1.3 0-RTT analysis and session ticket security`;
+
+  // JARM C2 Framework Detection
+  const jarmC2Signatures = [
+    { name: "Cobalt Strike", type: "c2_framework", severity: "critical", description: "Popular red team C2 framework, often abused by threat actors", color: "#dc2626" },
+    { name: "Sliver C2", type: "c2_framework", severity: "critical", description: "Open-source cross-platform C2 framework with mTLS", color: "#dc2626" },
+    { name: "Mythic C2", type: "c2_framework", severity: "critical", description: "Customizable multi-agent C2 platform", color: "#dc2626" },
+    { name: "Brute Ratel C4", type: "c2_framework", severity: "critical", description: "Advanced adversary simulation framework", color: "#dc2626" },
+    { name: "Havoc C2", type: "c2_framework", severity: "critical", description: "Modern post-exploitation C2 framework", color: "#ef4444" },
+    { name: "Metasploit", type: "c2_framework", severity: "critical", description: "Metasploit Framework HTTPS handlers", color: "#ef4444" },
+    { name: "Empire/PoshC2", type: "c2_framework", severity: "high", description: "PowerShell-based C2 frameworks", color: "#f59e0b" },
+    { name: "Covenant", type: "c2_framework", severity: "high", description: ".NET-based collaborative C2 platform", color: "#f59e0b" },
+  ];
+
+  // JARM Malware Detection
+  const jarmMalwareSignatures = [
+    { name: "Cobalt Strike Beacon", type: "malware", severity: "critical", description: "Cobalt Strike implant communication", color: "#dc2626" },
+    { name: "Emotet", type: "malware", severity: "critical", description: "Banking trojan and malware loader", color: "#dc2626" },
+    { name: "TrickBot", type: "malware", severity: "critical", description: "Modular banking trojan", color: "#dc2626" },
+    { name: "Qakbot/QBot", type: "malware", severity: "critical", description: "Banking trojan with worm capabilities", color: "#dc2626" },
+    { name: "IcedID/BokBot", type: "malware", severity: "critical", description: "Banking trojan used by ransomware gangs", color: "#ef4444" },
+    { name: "BazarLoader", type: "malware", severity: "critical", description: "Enterprise-targeting backdoor", color: "#ef4444" },
+    { name: "AsyncRAT", type: "malware", severity: "critical", description: "Open-source remote access trojan", color: "#ef4444" },
+    { name: "Agent Tesla", type: "malware", severity: "critical", description: "Info-stealing malware", color: "#f97316" },
+  ];
+
+  // Ransomware Infrastructure
+  const ransomwareSignatures = [
+    { name: "Conti", type: "ransomware", description: "Conti ransomware C2 infrastructure" },
+    { name: "LockBit", type: "ransomware", description: "LockBit ransomware-as-a-service" },
+    { name: "BlackCat/ALPHV", type: "ransomware", description: "Rust-based ransomware" },
+    { name: "Hive", type: "ransomware", description: "Hive ransomware group" },
+    { name: "Royal", type: "ransomware", description: "Royal ransomware operations" },
+  ];
+
+  // MITM Feasibility Analysis
+  const mitmAnalysisFeatures = [
+    { title: "Attack Difficulty", desc: "Classifies MITM difficulty as easy, medium, hard, or impossible", icon: <SpeedIcon />, color: "#ef4444" },
+    { title: "Weak Protocol Detection", desc: "Identifies SSLv3/TLS 1.0 enabling protocol downgrade", icon: <WarningIcon />, color: "#f59e0b" },
+    { title: "Self-Signed Certs", desc: "Detects self-signed certificates easy to impersonate", icon: <GppBadIcon />, color: "#ef4444" },
+    { title: "Certificate Pinning", desc: "Identifies HPKP or app-level certificate pinning", icon: <ShieldIcon />, color: "#10b981" },
+    { title: "SNI Requirements", desc: "Tests if server requires matching SNI for connections", icon: <DnsIcon />, color: "#3b82f6" },
+    { title: "Interception Tools", desc: "Recommends mitmproxy, Burp Suite, sslstrip", icon: <BuildIcon />, color: "#8b5cf6" },
+  ];
+
+  // Domain Fronting Detection
+  const domainFrontingCDNs = [
+    { name: "Cloudflare", detection: "Certificate contains cloudflare/cloudflaressl", risk: "high" },
+    { name: "AWS CloudFront", detection: "Certificate from Amazon CloudFront", risk: "high" },
+    { name: "Azure CDN", detection: "Microsoft Azure edge certificates", risk: "medium" },
+    { name: "Google Cloud", detection: "Google/gstatic certificates", risk: "high" },
+    { name: "Fastly", detection: "Fastly edge network certs", risk: "medium" },
+    { name: "Akamai", detection: "Akamai network certificates", risk: "medium" },
+  ];
+
+  // Advanced Analysis Features
+  const advancedAnalysisFeatures = [
+    { title: "TLS 1.3 0-RTT Analysis", desc: "Detects 0-RTT replay attack vulnerabilities", icon: <SyncLockIcon />, category: "Session Security" },
+    { title: "Session Ticket Security", desc: "Analyzes ticket lifetime and replay protection", icon: <MemoryIcon />, category: "Session Security" },
+    { title: "CT Log Verification", desc: "Validates Certificate Transparency SCTs", icon: <PlaylistAddCheckIcon />, category: "Certificate" },
+    { title: "Cipher Ordering", desc: "Tests server cipher preference enforcement", icon: <TroubleshootIcon />, category: "Configuration" },
+    { title: "SNI Mismatch Detection", desc: "Identifies virtual host confusion attacks", icon: <RadarIcon />, category: "Attack Detection" },
+    { title: "Downgrade Attack Tests", desc: "Active testing for POODLE, FREAK, Logjam, DROWN", icon: <GppBadIcon />, category: "Attack Detection" },
+  ];
+
+  // Certificate Suspicion Indicators
+  const certSuspicionIndicators = [
+    { indicator: "Very Short Validity (< 7 days)", score: 40, severity: "critical", description: "Extremely short certificate lifetime common in malware" },
+    { indicator: "Short Validity (< 30 days)", score: 25, severity: "high", description: "Short validity period often used by C2 infrastructure" },
+    { indicator: "IP Address CN", score: 25, severity: "high", description: "Common Name is an IP address - typical malware pattern" },
+    { indicator: "DGA-like Domain", score: 35, severity: "critical", description: "Domain appears randomly generated by algorithm" },
+    { indicator: "Self-Signed Certificate", score: 20, severity: "medium", description: "Cannot verify identity - common in quick C2 setups" },
+    { indicator: "Recently Issued (< 24h)", score: 10, severity: "low", description: "Very new certificate - may indicate fresh infrastructure" },
+    { indicator: "Suspicious Issuer", score: 15, severity: "medium", description: "Issuer contains test/localhost/unknown patterns" },
+  ];
 
   // SSL/TLS Protocol versions with security assessment
   const tlsVersions = [
@@ -384,8 +467,10 @@ export default function SSLTLSGuidePage() {
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
           <Chip label="Certificate Analysis" size="small" color="success" />
           <Chip label="12 CVE Checks" size="small" color="error" />
-          <Chip label="Chain Validation" size="small" color="primary" />
-          <Chip label="AI Exploitation" size="small" color="warning" />
+          <Chip label="JARM Fingerprinting" size="small" color="warning" />
+          <Chip label="C2/Malware Detection" size="small" sx={{ bgcolor: "#dc2626", color: "white" }} />
+          <Chip label="MITM Analysis" size="small" color="info" />
+          <Chip label="AI Exploitation" size="small" color="secondary" />
         </Box>
       </Box>
 
@@ -415,7 +500,10 @@ export default function SSLTLSGuidePage() {
             { title: "Cipher Suites", desc: "Evaluates all supported ciphers for weaknesses", icon: <KeyIcon /> },
             { title: "Certificate Chain", desc: "Validates trust chain to root CA", icon: <LinkIcon /> },
             { title: "Known Vulnerabilities", desc: "Tests for 12 documented CVEs", icon: <BugReportIcon /> },
-            { title: "Key Strength", desc: "Assesses RSA/ECDSA key sizes", icon: <ShieldIcon /> },
+            { title: "JARM Fingerprinting", desc: "Identifies C2 frameworks and malware infrastructure", icon: <FingerprintIcon /> },
+            { title: "MITM Analysis", desc: "Assesses traffic interception feasibility", icon: <RadarIcon /> },
+            { title: "Domain Fronting", desc: "Detects CDN abuse for covert channels", icon: <PublicIcon /> },
+            { title: "Certificate Intel", desc: "Extracts IoCs and detects DGA domains", icon: <TroubleshootIcon /> },
             { title: "AI Exploitation", desc: "Generates attack scenarios with tools", icon: <PsychologyIcon /> },
           ].map((item) => (
             <Grid item xs={12} sm={6} md={4} key={item.title}>
@@ -752,6 +840,313 @@ export default function SSLTLSGuidePage() {
             = ECDHE (PFS key exchange) + RSA (authentication) + AES-256-GCM (authenticated encryption) + SHA384 (hash)
           </Typography>
         </Paper>
+      </Paper>
+
+      {/* JARM Fingerprinting - C2 & Malware Detection */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          background: `linear-gradient(135deg, ${alpha("#dc2626", 0.08)}, ${alpha("#7f1d1d", 0.05)})`,
+          border: `1px solid ${alpha("#dc2626", 0.3)}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <FingerprintIcon sx={{ color: "#dc2626", fontSize: 28 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            JARM Fingerprinting
+          </Typography>
+          <Chip label="Threat Intelligence" size="small" sx={{ bgcolor: "#dc2626", color: "white" }} />
+        </Box>
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          JARM creates unique TLS fingerprints by sending 10 specially crafted handshake probes. VRAgent matches these 
+          against a database of <strong>50+ known signatures</strong> for C2 frameworks, malware families, and ransomware infrastructure:
+        </Typography>
+        
+        {/* C2 Frameworks */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#dc2626" }}>
+          🎯 C2 Framework Detection
+        </Typography>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
+          {jarmC2Signatures.map((sig) => (
+            <Chip
+              key={sig.name}
+              label={sig.name}
+              size="small"
+              icon={<GppBadIcon />}
+              sx={{
+                bgcolor: alpha(sig.color, 0.15),
+                color: sig.color,
+                border: `1px solid ${alpha(sig.color, 0.3)}`,
+                fontWeight: 600,
+                "& .MuiChip-icon": { color: sig.color },
+              }}
+            />
+          ))}
+        </Box>
+
+        {/* Malware Families */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+          🦠 Malware Infrastructure Detection
+        </Typography>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
+          {jarmMalwareSignatures.map((sig) => (
+            <Chip
+              key={sig.name}
+              label={sig.name}
+              size="small"
+              icon={<BugReportIcon />}
+              sx={{
+                bgcolor: alpha(sig.color, 0.15),
+                color: sig.color,
+                border: `1px solid ${alpha(sig.color, 0.3)}`,
+                fontWeight: 600,
+                "& .MuiChip-icon": { color: sig.color },
+              }}
+            />
+          ))}
+        </Box>
+
+        {/* Ransomware Infrastructure */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#7f1d1d" }}>
+          💀 Ransomware Infrastructure
+        </Typography>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
+          {ransomwareSignatures.map((sig) => (
+            <Chip
+              key={sig.name}
+              label={sig.name}
+              size="small"
+              sx={{
+                bgcolor: alpha("#7f1d1d", 0.2),
+                color: "#b91c1c",
+                border: `1px solid ${alpha("#7f1d1d", 0.4)}`,
+                fontWeight: 600,
+              }}
+            />
+          ))}
+        </Box>
+
+        <Paper
+          sx={{
+            p: 2,
+            borderRadius: 2,
+            bgcolor: alpha("#dc2626", 0.05),
+            border: `1px solid ${alpha("#dc2626", 0.2)}`,
+          }}
+        >
+          <Typography variant="body2">
+            <strong>🔍 Sandbox Analysis:</strong> JARM fingerprinting is invaluable for malware sandbox analysis. 
+            When analyzing unknown samples, scan their callback destinations to identify if they're connecting to known 
+            C2 infrastructure before dynamic analysis.
+          </Typography>
+        </Paper>
+      </Paper>
+
+      {/* Certificate Intelligence */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          background: `linear-gradient(135deg, ${alpha("#f59e0b", 0.05)}, ${alpha("#d97706", 0.03)})`,
+          border: `1px solid ${alpha("#f59e0b", 0.2)}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <TroubleshootIcon sx={{ color: "#f59e0b", fontSize: 28 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            Certificate Intelligence & IoC Extraction
+          </Typography>
+          <Chip label="Threat Hunting" size="small" color="warning" />
+        </Box>
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          VRAgent extracts indicators of compromise (IoCs) from certificates and scores them for suspicion. 
+          Suspicious patterns common in malware infrastructure are automatically flagged:
+        </Typography>
+        
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Indicator</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Score</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Severity</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Why It's Suspicious</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {certSuspicionIndicators.map((item) => (
+                <TableRow key={item.indicator}>
+                  <TableCell sx={{ fontWeight: 600 }}>{item.indicator}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={`+${item.score}`} 
+                      size="small" 
+                      sx={{ 
+                        bgcolor: alpha(item.severity === "critical" ? "#dc2626" : item.severity === "high" ? "#f97316" : "#f59e0b", 0.15),
+                        color: item.severity === "critical" ? "#dc2626" : item.severity === "high" ? "#f97316" : "#f59e0b",
+                        fontWeight: 700,
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={item.severity.toUpperCase()} 
+                      size="small" 
+                      sx={{
+                        bgcolor: alpha(item.severity === "critical" ? "#dc2626" : item.severity === "high" ? "#f97316" : item.severity === "medium" ? "#f59e0b" : "#22c55e", 0.1),
+                        color: item.severity === "critical" ? "#dc2626" : item.severity === "high" ? "#f97316" : item.severity === "medium" ? "#f59e0b" : "#22c55e",
+                        fontSize: "0.65rem",
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">{item.description}</Typography>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        
+        <Paper
+          sx={{
+            p: 2,
+            mt: 3,
+            borderRadius: 2,
+            bgcolor: alpha("#f59e0b", 0.05),
+            border: `1px solid ${alpha("#f59e0b", 0.2)}`,
+          }}
+        >
+          <Typography variant="body2">
+            <strong>📊 Suspicion Score:</strong> Certificates scoring 30+ are flagged as suspicious. 
+            Critical threats (score 70+) are marked as "likely malicious" with high confidence. 
+            This helps prioritize investigation during threat hunting.
+          </Typography>
+        </Paper>
+      </Paper>
+
+      {/* MITM Feasibility Analysis */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.05)}, ${alpha("#6d28d9", 0.03)})`,
+          border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <RadarIcon sx={{ color: "#8b5cf6", fontSize: 28 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            MITM Feasibility Analysis
+          </Typography>
+          <Chip label="Traffic Interception" size="small" color="secondary" />
+        </Box>
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          For sandbox and malware analysis, VRAgent assesses whether traffic can be intercepted for inspection. 
+          This determines if you can use mitmproxy/Burp to analyze malware communications:
+        </Typography>
+        
+        <Grid container spacing={2}>
+          {mitmAnalysisFeatures.map((feature) => (
+            <Grid item xs={12} sm={6} md={4} key={feature.title}>
+              <Paper
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  height: "100%",
+                  border: `1px solid ${alpha(feature.color, 0.2)}`,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
+                  <Box sx={{ color: feature.color }}>{feature.icon}</Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    {feature.title}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  {feature.desc}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+        
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
+            Domain Fronting Detection
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Domain fronting allows malware to hide C2 traffic behind legitimate CDNs. VRAgent detects potential fronting:
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {domainFrontingCDNs.map((cdn) => (
+              <Chip
+                key={cdn.name}
+                label={cdn.name}
+                size="small"
+                icon={<PublicIcon />}
+                sx={{
+                  bgcolor: alpha(cdn.risk === "high" ? "#ef4444" : "#f59e0b", 0.1),
+                  color: cdn.risk === "high" ? "#ef4444" : "#f59e0b",
+                  "& .MuiChip-icon": { color: cdn.risk === "high" ? "#ef4444" : "#f59e0b" },
+                }}
+              />
+            ))}
+          </Box>
+        </Box>
+      </Paper>
+
+      {/* Advanced TLS Analysis */}
+      <Paper sx={{ p: 4, mb: 4, borderRadius: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <MemoryIcon sx={{ color: "#3b82f6", fontSize: 28 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            Advanced TLS Analysis
+          </Typography>
+        </Box>
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          Beyond basic checks, VRAgent performs deep TLS configuration analysis:
+        </Typography>
+        
+        <Grid container spacing={2}>
+          {advancedAnalysisFeatures.map((feature) => (
+            <Grid item xs={12} sm={6} md={4} key={feature.title}>
+              <Paper
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  height: "100%",
+                  border: `1px solid ${alpha("#3b82f6", 0.2)}`,
+                  borderTop: `3px solid ${feature.category === "Attack Detection" ? "#ef4444" : feature.category === "Session Security" ? "#f59e0b" : "#3b82f6"}`,
+                }}
+              >
+                <Chip 
+                  label={feature.category} 
+                  size="small" 
+                  sx={{ 
+                    mb: 1, 
+                    fontSize: "0.65rem",
+                    bgcolor: alpha(feature.category === "Attack Detection" ? "#ef4444" : feature.category === "Session Security" ? "#f59e0b" : "#3b82f6", 0.1),
+                    color: feature.category === "Attack Detection" ? "#ef4444" : feature.category === "Session Security" ? "#f59e0b" : "#3b82f6",
+                  }} 
+                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+                  <Box sx={{ color: "#3b82f6" }}>{feature.icon}</Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    {feature.title}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  {feature.desc}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
       </Paper>
 
       {/* AI Exploitation Analysis */}

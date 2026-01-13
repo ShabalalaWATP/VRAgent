@@ -519,14 +519,13 @@ VULNERABLE DEPENDENCIES ({len(vuln_deps)} critical/high):
 - High-Risk Files Identified: {multi_pass_data.get('high_risk_files', 0)}
 """
                 
-                app_prompt = f"""You are a senior software architect analyzing a codebase. Provide a COMPREHENSIVE overview.
+                app_prompt = f"""You are an expert software architect and code analyst. Your task is to provide a COMPREHENSIVE analysis of what this application does based on DEEP code inspection.
 
+## PROJECT INFORMATION
 Project Name: {project.name if project else 'Unknown'}
-Total: {total_files} files, {total_lines:,} lines of code
+Total Code: {total_files} files, {total_lines:,} lines of code
+Languages: {', '.join(f'{lang}: {count} files' for lang, count in sorted(languages.items(), key=lambda x: -x[1])[:8])}
 Security Scan Results: {severity_counts['critical']} critical, {severity_counts['high']} high, {severity_counts['medium']} medium issues
-
-LANGUAGE BREAKDOWN:
-{chr(10).join(f"- {lang}: {count} files" for lang, count in sorted(languages.items(), key=lambda x: -x[1])[:8])}
 {dep_context}
 {scan_context}
 {synthesis_context}
@@ -534,42 +533,122 @@ LANGUAGE BREAKDOWN:
 ## DEEPLY ANALYZED SOURCE FILES ({len(priority_code_samples)} files with full context):
 {chr(10).join(code_sections)}
 
-Based on this comprehensive code review (the same files analyzed for security), write a detailed analysis:
+## YOUR TASK
+Perform a THOROUGH analysis of the codebase by:
+1. Reading ALL provided source code carefully
+2. Tracing data flows and feature implementations
+3. Identifying ALL major features and capabilities
+4. Understanding how different components work together
+5. Noting any hidden or non-obvious functionality
 
-**Purpose & Functionality**
-- What does this application do? (3-4 sentences)
-- What problem does it solve?
-- Who is the target user?
+Generate a DETAILED, COMPREHENSIVE report. Use HTML formatting.
 
-**Technology Stack**
-- Backend frameworks and languages
-- Frontend technologies (if any)
-- Databases and storage
-- External services/APIs used
-- Key libraries and their purposes
+FORMAT YOUR RESPONSE AS CLEAN HTML (no markdown, no code blocks):
+- Use <h3> for section headers
+- Use <h4> for sub-sections
+- Use <ul> and <li> for bullet points
+- Use <strong> for emphasis
+- Use <p> for paragraphs
+- Use <code> for class/method names
 
-**Architecture Overview**
-- Key architectural patterns identified (MVC, microservices, monolith, etc.)
-- How components interact
-- Entry points and data flow
-- API structure (REST, GraphQL, etc.)
+REQUIRED SECTIONS (BE THOROUGH):
 
-**Key Components** (8-10 components)
-For each: name, purpose, and security relevance
+<h3>📱 Application Overview</h3>
+<p>[2-3 sentences describing what this application is, its purpose, and target audience - base this on actual code analysis]</p>
 
-**Notable Implementation Details**
-- Authentication/authorization approach
-- Data validation patterns
-- Error handling approach
-- Logging and monitoring
-- Configuration management"""
+<h3>🎯 Core Features & Functionality</h3>
+<p>Based on deep code analysis, this application provides the following features:</p>
+
+<h4>Main Features</h4>
+<ul>
+<li><strong>[Feature Name]:</strong> [Detailed description of what it does, HOW it works based on the code you see, which classes/modules implement it]</li>
+[List ALL major features you can identify from the code]
+</ul>
+
+<h4>User Interface & Navigation</h4>
+<ul>
+<li>[Describe the app's UI patterns, components, pages/views, and navigation flow based on code analysis]</li>
+</ul>
+
+<h3>🔐 Authentication & User Management</h3>
+<ul>
+<li><strong>Authentication:</strong> [How authentication works - JWT? OAuth? Session-based? API keys?]</li>
+<li><strong>Authorization:</strong> [Role-based? Permission system? Access control patterns?]</li>
+<li><strong>Session Management:</strong> [How sessions/tokens are handled]</li>
+<li><strong>User Data:</strong> [What user data is collected/stored]</li>
+</ul>
+
+<h3>📡 API & Network Communication</h3>
+<h4>API Endpoints</h4>
+<ul>
+<li><strong>Endpoint Patterns:</strong> [REST? GraphQL? WebSocket?]</li>
+<li><strong>Key Routes:</strong> [List important API endpoints found in code]</li>
+<li><strong>Data Formats:</strong> [JSON? XML? How is data serialized?]</li>
+</ul>
+
+<h4>External Services</h4>
+<ul>
+<li>[Third-party APIs, cloud services, external dependencies]</li>
+</ul>
+
+<h3>💾 Data Storage & Persistence</h3>
+<ul>
+<li><strong>Database:</strong> [SQL? NoSQL? What ORM/driver? Schema patterns?]</li>
+<li><strong>Caching:</strong> [Redis? Memcached? In-memory?]</li>
+<li><strong>File Storage:</strong> [Local files? Cloud storage? How files are handled?]</li>
+<li><strong>Data Models:</strong> [Key entities and relationships]</li>
+</ul>
+
+<h3>⚙️ Technology Stack</h3>
+<ul>
+<li><strong>Languages:</strong> [Programming languages with specific versions if apparent]</li>
+<li><strong>Frameworks:</strong> [Web frameworks, libraries used]</li>
+<li><strong>Build Tools:</strong> [Package managers, build systems]</li>
+<li><strong>Runtime:</strong> [Node.js? Python? Docker?]</li>
+</ul>
+
+<h3>🏗️ Architecture & Design Patterns</h3>
+<ul>
+<li><strong>Architecture Style:</strong> [Monolith? Microservices? MVC? Clean Architecture?]</li>
+<li><strong>Design Patterns:</strong> [Repository? Factory? Observer? etc.]</li>
+<li><strong>Code Organization:</strong> [How is the codebase structured?]</li>
+<li><strong>Module Boundaries:</strong> [How do components interact?]</li>
+</ul>
+
+<h3>🔌 Background Processing & Jobs</h3>
+<ul>
+<li>[Scheduled tasks? Message queues? Worker processes? Cron jobs?]</li>
+</ul>
+
+<h3>🔗 Integrations & External Dependencies</h3>
+<ul>
+<li>[Email services? Payment processors? Analytics? Logging?]</li>
+</ul>
+
+<h3>🔍 Notable Implementation Details</h3>
+<ul>
+<li>[Interesting technical patterns you noticed in the code]</li>
+<li>[Unique approaches or clever solutions]</li>
+<li>[Technical debt or areas that could be improved]</li>
+</ul>
+
+<h3>📊 Application Complexity Assessment</h3>
+<p>[Simple utility / Medium complexity / Complex enterprise application - justify based on code analysis]</p>
+<ul>
+<li><strong>Lines of Code:</strong> {total_lines:,}</li>
+<li><strong>File Count:</strong> {total_files}</li>
+<li><strong>Technical Sophistication:</strong> [Basic / Intermediate / Advanced]</li>
+</ul>
+
+BE THOROUGH AND SPECIFIC. Reference actual classes, functions, and files you see in the code. Don't make assumptions - only report what you can verify from the code."""
 
                 # Generate app summary
                 logger.info(f"Generating comprehensive app summary for report {report_id}")
+                from google.genai import types
                 response = client.models.generate_content(
                     model=settings.gemini_model_id,
                     contents=app_prompt,
-                    generation_config={"max_output_tokens": 4000}
+                    config=types.GenerateContentConfig(max_output_tokens=4000)
                 )
                 if response and response.text:
                     app_summary = response.text
@@ -621,61 +700,210 @@ For each: name, purpose, and security relevance
                                 f"```{sample['language']}\n{sample['code'][:3000]}\n```"
                             )
                     
-                    security_prompt = f"""You are a senior penetration tester writing an executive security assessment.
+                    security_prompt = f"""You are an elite RED TEAM OPERATOR performing offensive security assessment of this codebase. Your goal is to find EXPLOITABLE vulnerabilities and demonstrate HOW to attack this application.
 
+Think like an ATTACKER, not a compliance auditor. Focus on:
+- What can I ACTUALLY exploit?
+- How do I chain vulnerabilities together?
+- What's the realistic attack path to compromise the system?
+- What would I do FIRST if I wanted to hack this app?
+
+## CODEBASE CONTEXT
 Project: {project.name if project else 'Unknown'}
 {scan_context}
 
-## SECURITY SCAN SUMMARY:
-- Total Findings: {len(findings)}
+## SECURITY FINDINGS IDENTIFIED
+
+### Severity Distribution
 - Critical: {severity_counts['critical']}
 - High: {severity_counts['high']}
 - Medium: {severity_counts['medium']}
 - Low: {severity_counts['low']}
 - Agentic AI Findings (deep analysis): {len(agentic_findings)}
 - SAST Scanner Findings: {len(sast_findings)}
+Total: {len(findings)} security weaknesses identified
 
-## FINDING TYPES:
+### Findings by Category
 {type_breakdown}
 {attack_chain_context}
 {synthesis_context if agentic_assessment else ""}
 
-## VULNERABLE CODE FILES WITH CONTEXT:
+### Vulnerable Code Files
 {chr(10).join(security_code_sections[:10])}
 
-## DETAILED FINDINGS (sorted by severity):
+### Detailed Findings
 {chr(10).join(f"- [{f['severity'].upper()}] {f['type']} @ {f['file']}:{f['line']} {f['corroborated']}{f['fp_note']}" + chr(10) + f"  {f['summary']}" for f in findings_details)}
 
-## VULNERABLE DEPENDENCIES:
+### Vulnerable Dependencies
 {chr(10).join(f"- {v.external_id} (CVSS: {v.cvss_score}, Severity: {v.severity}): {v.description[:150] if v.description else 'N/A'}" for v in vulnerabilities[:15])}
 
-Write a comprehensive security assessment:
+## YOUR MISSION
+Perform an OFFENSIVE security assessment:
+1. Identify the ATTACK SURFACE - where can an attacker get in?
+2. Find EXPLOITABLE vulnerabilities with working attack scenarios
+3. Build ATTACK CHAINS - how do multiple weaknesses combine?
+4. Prioritize by REAL-WORLD EXPLOITABILITY, not theoretical risk
+5. Provide PROOF-OF-CONCEPT ideas for each finding
+6. Consider both REMOTE attacks (network) and LOCAL attacks (insider, supply chain)
 
-**Executive Summary**
-- 2-3 sentence overview of security posture
-- Overall risk rating: CRITICAL/HIGH/MEDIUM/LOW with justification
+Generate an ATTACKER-FOCUSED security report. Use HTML formatting.
 
-**Critical & High Priority Issues**
-- List the most dangerous findings with brief exploitation scenarios
-- Focus on findings confirmed by AI analysis
+FORMAT YOUR RESPONSE AS CLEAN HTML (no markdown):
+- Use <h3> for section headers
+- Use <h4> for sub-sections
+- Use <ul> and <li> for bullet points
+- Use <strong> for emphasis
+- Use <code> ONLY for very short inline references like file paths
+- ALWAYS use <pre><code>...</code></pre> for ANY code snippet, even single lines
+- Severity badges: <span style="color: #dc2626; font-weight: bold;">CRITICAL</span>, <span style="color: #ea580c; font-weight: bold;">HIGH</span>, <span style="color: #ca8a04; font-weight: bold;">MEDIUM</span>, <span style="color: #16a34a; font-weight: bold;">LOW</span>
 
-**Attack Surface Analysis**
-- Primary entry points identified
-- Most likely attack vectors
-- Data flow risks
+CRITICAL: ALL CODE MUST USE THIS EXACT FORMAT (not inside <li> tags):
+<p><strong>Vulnerable Code:</strong></p>
+<pre><code>$substitutions = array('&amp;' => '', ';' => '');
+// This is vulnerable because...</code></pre>
 
-**Top 5 Remediation Priorities**
-For each: what to fix, why it matters, effort estimate (quick/medium/extensive)
+<p><strong>PoC Exploit:</strong></p>
+<pre><code>curl -X POST "https://target/api" -d "payload"</code></pre>
 
-**Positive Security Observations**
-- Any good security practices observed
-- Areas where the codebase is well-protected"""
+NEVER put code directly after a colon on the same line. ALWAYS use <pre><code> block on new line.
+
+REQUIRED SECTIONS:
+
+<h3>⚔️ Attack Summary</h3>
+<p><strong>Hackability Score:</strong> [X/10] - How easy is this application to compromise?</p>
+<p><strong>Most Dangerous Finding:</strong> [One-liner of the worst issue]</p>
+<p><strong>Recommended Attack Path:</strong> [The attack chain I would use]</p>
+<p><strong>Attacker Value:</strong> [What's worth stealing? User data? Credentials? Money? Business logic?]</p>
+
+<h3>🎯 Attack Surface Analysis</h3>
+<h4>Entry Points (How I Get In)</h4>
+<ul>
+<li><strong>API Endpoints:</strong> [Which endpoints are vulnerable? Authentication bypasses?]</li>
+<li><strong>User Input:</strong> [Form fields, file uploads, query parameters at risk]</li>
+<li><strong>Authentication:</strong> [Login weaknesses, session handling issues]</li>
+<li><strong>File Operations:</strong> [Path traversal, file upload, file inclusion risks]</li>
+<li><strong>Database Queries:</strong> [SQL injection, NoSQL injection points]</li>
+<li><strong>External Dependencies:</strong> [Vulnerable libraries, supply chain risks]</li>
+</ul>
+
+<h4>Sensitive Assets (What I Want)</h4>
+<ul>
+<li>[User credentials, tokens, personal data, financial info, business data]</li>
+<li>[Where is each asset stored? How is it protected?]</li>
+</ul>
+
+<h3>💀 Critical Exploits</h3>
+<p>Vulnerabilities I can exploit RIGHT NOW:</p>
+
+<h4>Exploit 1: [Catchy Attack Name]</h4>
+<p><span style="color: #dc2626; font-weight: bold;">CRITICAL</span> (or appropriate severity)</p>
+<ul>
+<li><strong>What:</strong> [Technical description]</li>
+<li><strong>Where:</strong> <code>[File:Line]</code></li>
+</ul>
+<p><strong>Vulnerable Code:</strong></p>
+<pre><code>[The actual vulnerable code snippet - multiple lines]</code></pre>
+<ul>
+<li><strong>Attack Scenario:</strong> [Step-by-step how I would exploit this]</li>
+</ul>
+<p><strong>PoC:</strong></p>
+<pre><code>[curl command / payload / exploit script]</code></pre>
+<ul>
+<li><strong>Impact:</strong> [What I gain - RCE? Data theft? Account takeover?]</li>
+<li><strong>Difficulty:</strong> [Easy/Medium/Hard] - [Why]</li>
+</ul>
+
+[Repeat for top 3-5 most critical exploits]
+
+<h3>🔗 Attack Chains</h3>
+<p>How I combine multiple weaknesses for maximum impact:</p>
+
+<h4>Chain 1: [Attack Chain Name]</h4>
+<ol>
+<li><strong>Step 1:</strong> [First exploit/technique - initial access]</li>
+<li><strong>Step 2:</strong> [Second exploit/technique - escalation]</li>
+<li><strong>Step 3:</strong> [Third technique - lateral movement or data access]</li>
+<li><strong>Result:</strong> [What attacker achieves - full compromise, data exfil, etc.]</li>
+</ol>
+
+<h3>🔓 Authentication & Session Attacks</h3>
+<ul>
+<li><strong>Token Weakness:</strong> [Can I forge/steal/reuse tokens?]</li>
+<li><strong>Session Hijacking:</strong> [How would I steal a session?]</li>
+<li><strong>Credential Extraction:</strong> [Where are creds stored? Can I get them?]</li>
+<li><strong>Privilege Escalation:</strong> [Can regular user become admin?]</li>
+</ul>
+
+<h3>💉 Injection Attack Vectors</h3>
+<ul>
+<li><strong>SQL Injection:</strong> [Where? PoC query?]</li>
+<li><strong>Command Injection:</strong> [Any exec/system calls?]</li>
+<li><strong>XSS (Cross-Site Scripting):</strong> [User input reflected unsanitized?]</li>
+<li><strong>Path Traversal:</strong> [File operations I can abuse?]</li>
+</ul>
+
+<h3>🔑 Secrets & Sensitive Data Exposure</h3>
+<ul>
+<li><strong>[Secret Type]:</strong> <code>[Location]</code> - Risk: [What access does this give me?]</li>
+</ul>
+
+<h3>📦 Vulnerable Dependencies</h3>
+<ul>
+<li><strong>[Library Name]:</strong> [Known CVEs] - Exploitability: [Can I actually exploit this?]</li>
+</ul>
+
+<h3>🏴‍☠️ Exploit Scripts & PoCs</h3>
+<p>Ready-to-use attack scripts and payloads:</p>
+<pre><code># Example SQL Injection PoC
+curl -X POST "https://target/api/endpoint" \\
+  -H "Content-Type: application/json" \\
+  -d '{{"id": "1' OR '1'='1"}}'
+</code></pre>
+
+<pre><code># Example Command Injection PoC
+curl "https://target/api/ping?host=127.0.0.1;cat+/etc/passwd"
+</code></pre>
+
+<p>[Include actual PoC scripts based on the vulnerabilities found]</p>
+
+<h3>📋 Attack Playbook</h3>
+<p>If I had 1 hour to hack this application, I would:</p>
+<ol>
+<li><strong>[First 15 min]:</strong> [Initial reconnaissance and access technique]</li>
+<li><strong>[Next 15 min]:</strong> [Privilege escalation / deeper access]</li>
+<li><strong>[Next 15 min]:</strong> [Data exfiltration / persistence]</li>
+<li><strong>[Final 15 min]:</strong> [Cover tracks / maximize impact]</li>
+</ol>
+
+<h3>🎯 Bug Bounty Priority List</h3>
+<p>If this app had a bug bounty, I'd focus on:</p>
+<ol>
+<li>[Highest-impact vulnerability class] - [Why it's exploitable here]</li>
+<li>[Second target] - [Specific weakness and approach]</li>
+<li>[Third target] - [Attack vector]</li>
+</ol>
+
+<h3>⚠️ Quick Wins for Defenders</h3>
+<p>Immediate fixes that would significantly reduce risk:</p>
+<ol>
+<li>[Critical fix #1 with specific code location]</li>
+<li>[Critical fix #2 with implementation guidance]</li>
+<li>[Critical fix #3 with detection/prevention tips]</li>
+</ol>
+
+## CRITICAL: REAL EXPLOITS ONLY
+- Only report vulnerabilities you could ACTUALLY EXPLOIT based on the findings
+- Provide SPECIFIC attack scenarios, not theoretical risks
+- Include PROOF-OF-CONCEPT ideas (payloads, curl commands, scripts)
+- Focus on REAL, EXPLOITABLE issues that would affect users
+
+BE EXHAUSTIVE but ACCURATE. Reference specific code locations and files."""
 
                     logger.info(f"Generating comprehensive security summary for report {report_id}")
                     response = client.models.generate_content(
                         model=settings.gemini_model_id,
                         contents=security_prompt,
-                        generation_config={"max_output_tokens": 4000}
+                        config=types.GenerateContentConfig(max_output_tokens=4000)
                     )
                     if response and response.text:
                         security_summary = response.text

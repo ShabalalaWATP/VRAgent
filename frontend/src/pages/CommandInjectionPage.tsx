@@ -95,6 +95,66 @@ const preventionMethods = [
   "Use sandboxing/containers for command execution",
 ];
 
+const attackFlow = [
+  "Identify where user input enters command construction.",
+  "Confirm whether a shell is invoked (system, exec, shell=True).",
+  "Test with harmless payloads to verify execution safely.",
+  "Check for option injection even when shell parsing is avoided.",
+  "Document evidence and propose a safe remediation plan.",
+];
+
+const safeTestPayloads = [
+  { label: "Echo marker", payload: "echo VRA_TEST", note: "Look for the marker in output or logs." },
+  { label: "Identity check", payload: "whoami", note: "Confirms the execution context." },
+  { label: "Timing probe", payload: "sleep 5", note: "Use for blind detection via delay." },
+  { label: "Hostname", payload: "hostname", note: "Safe indicator of command execution." },
+];
+
+const safeCommandExamples = [
+  { title: "Node.js (spawn)", snippet: "spawn(\"ping\", [\"-c\", \"1\", target], { shell: false });", detail: "Pass args as arrays and avoid shell parsing." },
+  { title: "Python (subprocess)", snippet: "subprocess.run([\"ping\", \"-c\", \"1\", target], check=True)", detail: "Use list args with shell=False." },
+  { title: "Go (exec.Command)", snippet: "exec.Command(\"ping\", \"-c\", \"1\", target).Run()", detail: "Use explicit arguments, no concatenation." },
+  { title: "Java (ProcessBuilder)", snippet: "new ProcessBuilder(\"ping\", \"-c\", \"1\", target).start();", detail: "Avoid command strings built from input." },
+];
+
+const optionInjectionTips = [
+  "Reject arguments that start with '-' unless explicitly allowed.",
+  "Use '--' before user input to stop option parsing when supported.",
+  "Allowlist flags and values separately instead of free-form strings.",
+  "Normalize whitespace and trim unexpected separators.",
+];
+
+const validationPatterns = [
+  { label: "IPv4 allowlist", example: "^[0-9.]+$ plus range check per octet" },
+  { label: "Hostname allowlist", example: "^[a-zA-Z0-9.-]+$ and length limits" },
+  { label: "Numeric only", example: "^[0-9]+$ for counts or sizes" },
+  { label: "Filename allowlist", example: "^[a-zA-Z0-9._-]+$ and block path separators" },
+];
+
+const loggingFields = [
+  "Raw input and normalized input",
+  "Resolved command array and working directory",
+  "Exit code, duration, and timeouts",
+  "User context and request source",
+  "Blocked attempts and validation failures",
+];
+
+const commonMistakes = [
+  "Relying on escaping alone instead of removing the shell",
+  "Allowing newlines or separators that break validation",
+  "Validating one field but concatenating a different one",
+  "Trusting client-side validation or hidden fields",
+  "Using allowlists for commands but not for arguments",
+];
+
+const defenseLayers = [
+  "Avoid shell invocation and use argument arrays",
+  "Strict allowlists and length limits on input",
+  "Least privilege service accounts",
+  "Sandboxing or container isolation",
+  "Timeouts, rate limits, and alerting",
+];
+
 const ACCENT_COLOR = "#ef4444";
 const QUIZ_QUESTION_COUNT = 10;
 
@@ -731,7 +791,7 @@ export default function CommandInjectionPage() {
   const navigate = useNavigate();
   const theme = useTheme();
 
-  const pageContext = `Command Injection & OS Command Execution Guide - Covers direct, blind, and out-of-band command injection techniques. Lists shell metacharacters, common entry points, detection signals, vulnerable code patterns, and prevention methods.`;
+  const pageContext = `Command Injection & OS Command Execution Guide - Covers direct, blind, and out-of-band command injection techniques. Lists shell metacharacters, entry points, detection signals, safe testing workflow, validation patterns, logging fields, vulnerable code patterns, and prevention methods.`;
 
   return (
     <LearnPageLayout pageTitle="Command Injection" pageContext={pageContext}>
@@ -867,6 +927,57 @@ export default function CommandInjectionPage() {
           </Grid>
         </Paper>
 
+        {/* Attack Flow */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha(theme.palette.primary.main, 0.03), border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon sx={{ color: theme.palette.primary.main }} /> Safe Testing Flow
+          </Typography>
+          <Box component="ol" sx={{ pl: 2, "& li": { mb: 1 } }}>
+            {attackFlow.map((step) => (
+              <li key={step}>
+                <Typography variant="body2" color="text.secondary">{step}</Typography>
+              </li>
+            ))}
+          </Box>
+        </Paper>
+
+        {/* Safe Test Payloads */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>Safe Test Payloads</Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {safeTestPayloads.map((payload) => (
+            <Grid item xs={12} md={6} key={payload.label}>
+              <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#10b981" }}>
+                  {payload.label}
+                </Typography>
+                <Box sx={{ p: 1, bgcolor: alpha("#10b981", 0.08), borderRadius: 1, fontFamily: "monospace", fontSize: "0.8rem", mb: 1 }}>
+                  {payload.payload}
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {payload.note}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Input Validation Patterns */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>Input Validation Patterns</Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {validationPatterns.map((pattern) => (
+            <Grid item xs={12} md={6} key={pattern.label}>
+              <Paper sx={{ p: 2.5, borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>
+                  {pattern.label}
+                </Typography>
+                <Box sx={{ p: 1.5, bgcolor: alpha("#000", 0.04), borderRadius: 1, fontFamily: "monospace", fontSize: "0.75rem" }}>
+                  {pattern.example}
+                </Box>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
         {/* Detection Signals */}
         <Paper
           sx={{
@@ -887,6 +998,56 @@ export default function CommandInjectionPage() {
                   <WarningIcon sx={{ fontSize: 16, color: "#f59e0b" }} />
                 </ListItemIcon>
                 <ListItemText primary={signal} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* Logging and Monitoring */}
+        <Paper
+          sx={{
+            p: 3,
+            mb: 4,
+            borderRadius: 3,
+            bgcolor: alpha("#0ea5e9", 0.05),
+            border: `1px solid ${alpha("#0ea5e9", 0.2)}`,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon sx={{ color: "#0ea5e9" }} /> Logging and Monitoring Fields
+          </Typography>
+          <List dense>
+            {loggingFields.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#0ea5e9" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* Option Injection */}
+        <Paper
+          sx={{
+            p: 3,
+            mb: 4,
+            borderRadius: 3,
+            bgcolor: alpha("#8b5cf6", 0.05),
+            border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon sx={{ color: "#8b5cf6" }} /> Option Injection and Parsing
+          </Typography>
+          <List dense>
+            {optionInjectionTips.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#8b5cf6" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
               </ListItem>
             ))}
           </List>
@@ -930,6 +1091,43 @@ export default function CommandInjectionPage() {
           </Grid>
         </Grid>
 
+        {/* Common Mistakes */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#ef4444", 0.04) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <WarningIcon sx={{ color: "#ef4444" }} /> Common Sanitization Mistakes
+          </Typography>
+          <List dense>
+            {commonMistakes.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <WarningIcon sx={{ fontSize: 16, color: "#ef4444" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* Safe Command Construction Examples */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>Safe Command Construction</Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {safeCommandExamples.map((example) => (
+            <Grid item xs={12} md={6} key={example.title}>
+              <Paper sx={{ p: 2.5, borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>
+                  {example.title}
+                </Typography>
+                <Box sx={{ p: 1.5, bgcolor: alpha("#000", 0.04), borderRadius: 1, fontFamily: "monospace", fontSize: "0.75rem", mb: 1 }}>
+                  {example.snippet}
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {example.detail}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
         {/* Hardening Checklist */}
         <Paper
           sx={{
@@ -948,6 +1146,31 @@ export default function CommandInjectionPage() {
               <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
                 <ListItemIcon sx={{ minWidth: 28 }}>
                   <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* Defense in Depth */}
+        <Paper
+          sx={{
+            p: 3,
+            mb: 4,
+            borderRadius: 3,
+            bgcolor: alpha("#3b82f6", 0.05),
+            border: `1px solid ${alpha("#3b82f6", 0.2)}`,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon sx={{ color: "#3b82f6" }} /> Defense in Depth Layers
+          </Typography>
+          <List dense>
+            {defenseLayers.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#3b82f6" }} />
                 </ListItemIcon>
                 <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
               </ListItem>

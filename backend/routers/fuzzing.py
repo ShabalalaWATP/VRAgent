@@ -4,7 +4,7 @@ Fuzzing Router
 Endpoints for web application fuzzing and security testing.
 """
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
@@ -35,6 +35,21 @@ from backend.services.smart_detection_service import (
     create_session_summary,
     SmartFinding,
     AnomalyResult,
+    detect_offensive_indicators,
+    generate_offensive_report,
+)
+
+from backend.services.fuzzing_advanced import (
+    perform_offensive_analysis,
+    analyze_c2_indicators,
+    analyze_malware_behaviors,
+    analyze_sandbox_evasion,
+    extract_iocs,
+    detect_security_products,
+    generate_c2_probe_payloads,
+    generate_evasion_test_payloads,
+    generate_malware_string_payloads,
+    generate_api_hooking_payloads,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +117,7 @@ async def run_fuzzer(request: FuzzRequest, current_user: User = Depends(get_curr
 
 
 @router.post("/stream")
-async def stream_fuzzer(request: FuzzRequest):
+async def stream_fuzzer(request: FuzzRequest, current_user: User = Depends(get_current_active_user)):
     """
     Stream fuzzing results as Server-Sent Events.
     
@@ -143,6 +158,98 @@ async def stream_fuzzer(request: FuzzRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+class SingleRequestModel(BaseModel):
+    """Request model for sending a single HTTP request (Repeater functionality)."""
+    url: str = Field(..., description="Target URL")
+    method: str = Field(default="GET", description="HTTP method")
+    headers: Dict[str, str] = Field(default_factory=dict, description="HTTP headers")
+    body: str = Field(default="", description="Request body")
+    timeout: int = Field(default=10000, ge=1000, le=60000, description="Request timeout in milliseconds")
+    follow_redirects: bool = Field(default=True, description="Follow HTTP redirects")
+    proxy_url: Optional[str] = Field(default=None, description="HTTP/SOCKS proxy URL (e.g., http://127.0.0.1:8080 for Burp)")
+
+
+@router.post("/send-single", response_model=Dict[str, Any])
+async def send_single_request(request: SingleRequestModel, current_user: User = Depends(get_current_active_user)):
+    """
+    Send a single HTTP request (Repeater functionality).
+    
+    This endpoint allows manually sending and modifying requests,
+    similar to Burp Suite's Repeater tool.
+    """
+    import aiohttp
+    import time
+    
+    try:
+        start_time = time.time()
+        
+        # Prepare headers
+        headers = dict(request.headers)
+        if "User-Agent" not in headers:
+            headers["User-Agent"] = "VRAgent-Repeater/1.0"
+        
+        timeout = aiohttp.ClientTimeout(total=request.timeout / 1000)
+        
+        # Configure proxy if provided
+        connector = None
+        if request.proxy_url:
+            from aiohttp_socks import ProxyConnector
+            try:
+                connector = ProxyConnector.from_url(request.proxy_url)
+            except Exception:
+                # Fallback for HTTP proxy
+                pass
+        
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+            async with session.request(
+                method=request.method,
+                url=request.url,
+                headers=headers,
+                data=request.body if request.body else None,
+                allow_redirects=request.follow_redirects,
+                ssl=False,  # Disable SSL verification for testing
+                proxy=request.proxy_url if not connector else None,
+            ) as response:
+                response_time = int((time.time() - start_time) * 1000)
+                body = await response.text()
+                
+                # Build response headers dict
+                response_headers = {}
+                for key, value in response.headers.items():
+                    response_headers[key] = value
+                
+                return {
+                    "status_code": response.status,
+                    "headers": response_headers,
+                    "body": body,
+                    "response_time": response_time,
+                    "content_length": len(body),
+                    "content_type": response.headers.get("Content-Type", ""),
+                }
+                
+    except asyncio.TimeoutError:
+        return {
+            "status_code": 0,
+            "headers": {},
+            "body": "Error: Request timed out",
+            "response_time": request.timeout,
+            "content_length": 0,
+            "content_type": "",
+            "error": "timeout",
+        }
+    except Exception as e:
+        logger.exception(f"Single request failed: {e}")
+        return {
+            "status_code": 0,
+            "headers": {},
+            "body": f"Error: {str(e)}",
+            "response_time": 0,
+            "content_length": 0,
+            "content_type": "",
+            "error": str(e),
+        }
 
 
 @router.websocket("/ws")
@@ -199,7 +306,7 @@ async def websocket_fuzzer(websocket: WebSocket):
 
 
 @router.post("/export")
-async def export_results(request: ExportRequest):
+async def export_results(request: ExportRequest, current_user: User = Depends(get_current_active_user)):
     """
     Export fuzzing results in various formats.
     """
@@ -322,6 +429,228 @@ BUILTIN_WORDLISTS = {
             "category", "status", "action", "format", "callback", "url",
         ],
     },
+    # =========================================================================
+    # OFFENSIVE SECURITY WORDLISTS
+    # For analyzing sandboxed software and malware behavior
+    # =========================================================================
+    "c2_domains": {
+        "name": "C2 Domains",
+        "description": "Command & Control domain patterns for sandbox analysis",
+        "payloads": [
+            # Dynamic DNS providers
+            "duckdns.org", "no-ip.org", "ddns.net", "hopto.org", "myftp.org",
+            "servegame.com", "zapto.org", "sytes.net", "myvnc.com", "redirectme.net",
+            # Cloudflare tunnels
+            "trycloudflare.com", "ngrok.io", "localhost.run", "serveo.net",
+            # Suspicious TLDs
+            ".xyz", ".top", ".tk", ".ml", ".ga", ".cf", ".gq",
+            # Cobalt Strike defaults
+            "cdn.cloudflare.com", "code.jquery.com", "ajax.googleapis.com",
+            # Empire defaults
+            "news.google.com", "mail.yahoo.com",
+            # Generic C2
+            "c2.local", "beacon.local", "callback.local", "exfil.local",
+            "update.microsoft.com.local", "download.windowsupdate.local",
+        ],
+    },
+    "malware_strings": {
+        "name": "Malware Strings",
+        "description": "Common malware strings for detection testing",
+        "payloads": [
+            # Credential theft
+            "mimikatz", "sekurlsa::logonpasswords", "lsass.dmp", "hashdump",
+            "wdigest", "kerberos::list", "dcsync", "golden ticket",
+            # Process injection
+            "CreateRemoteThread", "WriteProcessMemory", "VirtualAllocEx",
+            "NtMapViewOfSection", "QueueUserAPC", "SetWindowsHookEx",
+            "RtlCreateUserThread", "NtCreateThreadEx",
+            # Persistence
+            "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            "schtasks /create", "sc create", "New-Service",
+            # Evasion
+            "amsi.dll", "AmsiScanBuffer", "etw bypass", "unhook ntdll",
+            "sleep(600000)", "IsDebuggerPresent", "CheckRemoteDebuggerPresent",
+            # Exfiltration
+            "dns exfil", "telegram bot", "discord webhook", "pastebin",
+            # Ransomware
+            "vssadmin delete shadows", "bcdedit /set recoveryenabled no",
+            "wmic shadowcopy delete", ".encrypted", ".locked", "ransom note",
+        ],
+    },
+    "api_hooking": {
+        "name": "API Hooking",
+        "description": "Windows API hooking functions for EDR bypass detection",
+        "payloads": [
+            # NTDLL functions
+            "ntdll.dll", "NtCreateFile", "NtWriteFile", "NtReadFile",
+            "NtCreateProcess", "NtCreateThread", "NtAllocateVirtualMemory",
+            "NtProtectVirtualMemory", "NtMapViewOfSection", "NtUnmapViewOfSection",
+            "NtQueryInformationProcess", "NtSetInformationThread",
+            "LdrLoadDll", "LdrGetProcedureAddress",
+            # Kernel32 functions
+            "kernel32.dll", "CreateProcessW", "CreateProcessA",
+            "CreateRemoteThread", "WriteProcessMemory", "ReadProcessMemory",
+            "VirtualAllocEx", "VirtualProtectEx", "LoadLibraryA", "LoadLibraryW",
+            # Syscalls
+            "syscall", "sysenter", "int 2eh", "direct syscall",
+            # Hook detection
+            "inline hook", "iat hook", "eat hook", "trampoline",
+            "jmp [address]", "push ret", "hot patch",
+            # Bypass
+            "unhook", "fresh copy", "heaven's gate", "wow64",
+        ],
+    },
+    "sandbox_evasion": {
+        "name": "Sandbox Evasion",
+        "description": "Sandbox/VM detection strings for evasion testing",
+        "payloads": [
+            # VM detection
+            "VMware", "VirtualBox", "VBOX", "QEMU", "Hyper-V", "Xen", "KVM",
+            "Virtual Machine", "vmtoolsd", "vmwaretray", "vboxservice",
+            # Sandbox detection
+            "Sandbox", "Cuckoo", "ANY.RUN", "Hybrid-Analysis", "VirusTotal",
+            "Joe Sandbox", "CAPE", "Hatching Triage", "Intezer",
+            # Anti-debug
+            "IsDebuggerPresent", "CheckRemoteDebuggerPresent",
+            "NtQueryInformationProcess", "ProcessDebugPort", "ProcessDebugFlags",
+            "OutputDebugString", "CloseHandle trick", "int 2d",
+            # Timing
+            "GetTickCount", "QueryPerformanceCounter", "rdtsc",
+            "Sleep", "NtDelayExecution", "time acceleration",
+            # Environment checks
+            "GetSystemMetrics", "GetCursorPos", "GetLastInputInfo",
+            "mouse movement", "keyboard activity", "user interaction",
+            "MAC address", "CPU count", "memory size", "disk size",
+            "username", "computername", "domain name",
+        ],
+    },
+    "c2_frameworks": {
+        "name": "C2 Frameworks",
+        "description": "C2 framework signatures for detection",
+        "payloads": [
+            # Cobalt Strike
+            "Cobalt Strike", "beacon", "malleable c2", "watermark",
+            "spawn to", "process-inject", "jump psexec", "execute-assembly",
+            "inline-execute", "shinject", "dllinject",
+            # Metasploit
+            "Metasploit", "meterpreter", "reverse_tcp", "reverse_http",
+            "reverse_https", "bind_tcp", "staged payload", "stageless",
+            "multi/handler", "post/windows", "exploit/multi",
+            # Empire
+            "Empire", "stager", "launcher.bat", "Invoke-Empire",
+            "powershell empire", "agent", "listener",
+            # Sliver
+            "Sliver", "implant", "mtls listener", "wg listener", "dns canary",
+            "beacon mode", "session mode",
+            # Brute Ratel
+            "Brute Ratel", "BRc4", "badger", "commander",
+            # Covenant
+            "Covenant", "Grunt", "Elite listener",
+            # Havoc
+            "Havoc", "demon", "teamserver",
+        ],
+    },
+    "persistence_mechanisms": {
+        "name": "Persistence Mechanisms",
+        "description": "Windows persistence techniques",
+        "payloads": [
+            # Registry
+            "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce",
+            "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run",
+            "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run",
+            "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Shell",
+            "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Userinit",
+            # Scheduled tasks
+            "schtasks /create", "schtasks /run", "New-ScheduledTask",
+            "Register-ScheduledTask", "at command",
+            # Services
+            "sc create", "sc config", "New-Service", "Set-Service",
+            "CreateServiceW", "ChangeServiceConfig",
+            # Startup folder
+            "shell:startup", "shell:common startup",
+            "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+            # WMI
+            "wmic startup", "Win32_StartupCommand", "__EventFilter",
+            "__EventConsumer", "__FilterToConsumerBinding",
+            # COM hijacking
+            "InprocServer32", "CLSID", "TreatAs", "ScriptletURL",
+            # DLL hijacking
+            "DLL search order", "phantom DLL", "side loading",
+        ],
+    },
+    "lateral_movement": {
+        "name": "Lateral Movement",
+        "description": "Lateral movement techniques and tools",
+        "payloads": [
+            # Remote execution
+            "psexec", "PSEXESVC", "remcom", "paexec",
+            "wmic process call create", "Win32_Process Create",
+            "winrm", "Invoke-Command", "Enter-PSSession",
+            "smbexec", "dcomexec", "wmiexec", "atexec",
+            # Pass-the-hash
+            "pass the hash", "pth", "overpass the hash",
+            "sekurlsa::pth", "mimikatz pth",
+            # Pass-the-ticket
+            "pass the ticket", "ptt", "golden ticket", "silver ticket",
+            "kerberoast", "asreproast",
+            # SMB
+            "admin$", "c$", "ipc$", "smbclient", "net use",
+            "net view", "net share",
+            # RDP
+            "mstsc", "RDP", "Remote Desktop", "tsclient",
+            # SSH
+            "ssh", "plink", "putty",
+            # WinRM
+            "winrs", "WinRM", "WSMan",
+        ],
+    },
+    "exfiltration": {
+        "name": "Exfiltration Channels",
+        "description": "Data exfiltration methods and channels",
+        "payloads": [
+            # DNS
+            "dns tunnel", "dns exfil", "iodine", "dnscat", "dns2tcp",
+            "subdomain encode", "txt record",
+            # HTTP/HTTPS
+            "http post", "https upload", "multipart upload",
+            "base64 body", "chunked transfer",
+            # Cloud services
+            "telegram bot", "discord webhook", "slack webhook",
+            "pastebin", "transfer.sh", "file.io", "0x0.st",
+            "dropbox", "google drive", "onedrive",
+            # Other protocols
+            "icmp tunnel", "icmp exfil", "smtp exfil",
+            "ftp upload", "sftp", "scp",
+            # Steganography
+            "steganography", "image embed", "audio embed",
+            # Clipboard
+            "clipboard", "GetClipboardData",
+        ],
+    },
+    "cryptominer": {
+        "name": "Cryptominer Indicators",
+        "description": "Cryptocurrency mining indicators",
+        "payloads": [
+            # Protocols
+            "stratum+tcp://", "stratum+ssl://", "stratum://",
+            # Pools
+            "pool.minexmr.com", "xmr-eu1.nanopool.org", "xmrpool.eu",
+            "moneropool.com", "supportxmr.com", "hashvault.pro",
+            "f2pool.com", "antpool.com", "ethermine.org",
+            # Miners
+            "xmrig", "xmr-stak", "ccminer", "cgminer", "bfgminer",
+            "ethminer", "phoenixminer", "nbminer", "t-rex",
+            # Browser miners
+            "coinhive", "cryptoloot", "coin-hive", "webminer",
+            "miner.start()", "CoinImp",
+            # Wallets (patterns)
+            "4[0-9AB][0-9a-zA-Z]{93}", "1[a-km-zA-HJ-NP-Z1-9]{25,34}",
+            "bc1", "0x", "wallet", "address",
+        ],
+    },
 }
 
 
@@ -424,7 +753,7 @@ class AnalyzeRequest(BaseModel):
 
 
 @router.post("/encode")
-async def encode_payloads(request: EncodeRequest):
+async def encode_payloads(request: EncodeRequest, current_user: User = Depends(get_current_active_user)):
     """
     Encode payloads using various encoding schemes.
     
@@ -454,7 +783,7 @@ async def encode_payloads(request: EncodeRequest):
 
 
 @router.post("/generate")
-async def generate_payloads(request: GenerateRequest):
+async def generate_payloads(request: GenerateRequest, current_user: User = Depends(get_current_active_user)):
     """
     Generate payloads using various generators.
     
@@ -480,7 +809,7 @@ async def generate_payloads(request: GenerateRequest):
 
 
 @router.post("/mutate")
-async def mutate_payloads(request: MutateRequest):
+async def mutate_payloads(request: MutateRequest, current_user: User = Depends(get_current_active_user)):
     """
     Generate mutations of payloads.
     
@@ -507,7 +836,7 @@ async def mutate_payloads(request: MutateRequest):
 
 
 @router.post("/grep")
-async def grep_responses(request: GrepRequest):
+async def grep_responses(request: GrepRequest, current_user: User = Depends(get_current_active_user)):
     """
     Search content using grep rules and extract data.
     
@@ -545,7 +874,7 @@ async def grep_responses(request: GrepRequest):
 
 
 @router.post("/cluster")
-async def cluster_fuzz_responses(request: ClusterRequest):
+async def cluster_fuzz_responses(request: ClusterRequest, current_user: User = Depends(get_current_active_user)):
     """
     Cluster similar responses together.
     
@@ -567,7 +896,7 @@ async def cluster_fuzz_responses(request: ClusterRequest):
 
 
 @router.post("/analyze")
-async def analyze_responses(request: AnalyzeRequest):
+async def analyze_responses(request: AnalyzeRequest, current_user: User = Depends(get_current_active_user)):
     """
     Perform comprehensive analysis of fuzzing responses.
     
@@ -767,7 +1096,7 @@ class SessionListResponse(BaseModel):
 
 
 @router.post("/sessions", response_model=Dict[str, Any])
-async def create_session(request: SessionCreateRequest, db: Session = Depends(get_db)):
+async def create_session(request: SessionCreateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Create a new fuzzing session."""
     try:
         session = FuzzingSession(
@@ -806,6 +1135,7 @@ async def list_sessions(
     search: Optional[str] = None,
     project_id: Optional[int] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """List all fuzzing sessions with pagination and filtering."""
     try:
@@ -863,7 +1193,7 @@ async def list_sessions(
 
 
 @router.get("/sessions/{session_id}", response_model=Dict[str, Any])
-async def get_session(session_id: int, db: Session = Depends(get_db)):
+async def get_session(session_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Get a specific fuzzing session with all details."""
     try:
         session = db.query(FuzzingSession).filter(FuzzingSession.id == session_id).first()
@@ -904,6 +1234,7 @@ async def update_session(
     session_id: int,
     request: SessionUpdateRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Update a fuzzing session."""
     try:
@@ -959,7 +1290,7 @@ async def update_session(
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: int, db: Session = Depends(get_db)):
+async def delete_session(session_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Delete a fuzzing session."""
     try:
         session = db.query(FuzzingSession).filter(FuzzingSession.id == session_id).first()
@@ -979,7 +1310,7 @@ async def delete_session(session_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/sessions/{session_id}/duplicate", response_model=Dict[str, Any])
-async def duplicate_session(session_id: int, db: Session = Depends(get_db)):
+async def duplicate_session(session_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Duplicate a fuzzing session (config only, not results)."""
     try:
         original = db.query(FuzzingSession).filter(FuzzingSession.id == session_id).first()
@@ -1045,7 +1376,7 @@ class AutoAnalyzeRequest(BaseModel):
 
 
 @router.post("/smart-detect/vulnerabilities")
-async def smart_detect_vulnerabilities(request: SmartDetectRequest):
+async def smart_detect_vulnerabilities(request: SmartDetectRequest, current_user: User = Depends(get_current_active_user)):
     """
     Detect potential vulnerabilities in fuzzing responses using signature-based detection.
     
@@ -1102,7 +1433,7 @@ async def smart_detect_vulnerabilities(request: SmartDetectRequest):
 
 
 @router.post("/smart-detect/anomalies")
-async def smart_detect_anomalies(request: AnomalyDetectRequest):
+async def smart_detect_anomalies(request: AnomalyDetectRequest, current_user: User = Depends(get_current_active_user)):
     """
     Detect anomalous responses using statistical analysis.
     
@@ -1141,7 +1472,7 @@ async def smart_detect_anomalies(request: AnomalyDetectRequest):
 
 
 @router.post("/smart-detect/differential")
-async def smart_differential_analysis(request: DifferentialRequest):
+async def smart_differential_analysis(request: DifferentialRequest, current_user: User = Depends(get_current_active_user)):
     """
     Perform differential analysis comparing responses to a baseline.
     
@@ -1191,7 +1522,7 @@ async def smart_differential_analysis(request: DifferentialRequest):
 
 
 @router.post("/smart-detect/categorize")
-async def smart_categorize_responses(request: SmartDetectRequest):
+async def smart_categorize_responses(request: SmartDetectRequest, current_user: User = Depends(get_current_active_user)):
     """
     Automatically categorize responses into groups.
     
@@ -1256,7 +1587,7 @@ def _normalize_responses(responses: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
 
 @router.post("/smart-detect/auto-analyze")
-async def smart_auto_analyze(request: AutoAnalyzeRequest):
+async def smart_auto_analyze(request: AutoAnalyzeRequest, current_user: User = Depends(get_current_active_user)):
     """
     Perform comprehensive automatic analysis on fuzzing responses.
     
@@ -1347,7 +1678,7 @@ async def smart_auto_analyze(request: AutoAnalyzeRequest):
 
 
 @router.post("/sessions/{session_id}/auto-analyze")
-async def analyze_session(session_id: int, db: Session = Depends(get_db)):
+async def analyze_session(session_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """
     Run automatic analysis on a saved session's results and update the session.
     """
@@ -1432,3 +1763,776 @@ def _count_by_field(items, field_getter):
         value = field_getter(item)
         counts[value] = counts.get(value, 0) + 1
     return counts
+
+
+# =============================================================================
+# OFFENSIVE SECURITY ANALYSIS ENDPOINTS
+# For analyzing sandboxed software, malware behavior, and C2 communication
+# =============================================================================
+
+class OffensiveAnalysisRequest(BaseModel):
+    """Request model for offensive security analysis."""
+    responses: List[Dict[str, Any]] = Field(..., description="Responses to analyze")
+    include_c2: bool = Field(default=True, description="Detect C2 communication patterns")
+    include_malware: bool = Field(default=True, description="Detect malware behaviors")
+    include_evasion: bool = Field(default=True, description="Detect sandbox evasion techniques")
+    include_iocs: bool = Field(default=True, description="Extract IOCs (IPs, domains, hashes)")
+
+
+class OffensivePayloadsRequest(BaseModel):
+    """Request model for generating offensive payloads."""
+    payload_types: List[str] = Field(
+        default=["c2", "evasion", "malware", "api_hooking"],
+        description="Types of payloads to generate"
+    )
+
+
+@router.post("/offensive/analyze", response_model=Dict[str, Any])
+async def offensive_analysis(
+    request: OffensiveAnalysisRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Perform offensive security analysis on fuzzing responses.
+    
+    Analyzes responses for:
+    - C2 (Command & Control) communication patterns
+    - Malware behavior indicators (persistence, injection, credential theft)
+    - Sandbox evasion techniques
+    - IOC extraction (IPs, domains, hashes, file paths)
+    
+    This endpoint is designed for analyzing sandboxed software responses
+    to detect malicious behavior and C2 infrastructure.
+    """
+    try:
+        normalized = _normalize_responses(request.responses)
+        
+        # Use fuzzing_advanced offensive analysis
+        result = perform_offensive_analysis(
+            normalized,
+            include_c2=request.include_c2,
+            include_malware=request.include_malware,
+            include_evasion=request.include_evasion,
+            include_iocs=request.include_iocs,
+        )
+        
+        return result.to_dict()
+        
+    except Exception as e:
+        logger.exception(f"Offensive analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/offensive/detect-indicators", response_model=Dict[str, Any])
+async def detect_offensive_indicators_endpoint(
+    request: OffensiveAnalysisRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Detect offensive security indicators using smart detection signatures.
+    
+    Uses pattern-based detection to identify:
+    - C2 framework signatures (Cobalt Strike, Metasploit, Empire, etc.)
+    - Process injection techniques
+    - Credential theft indicators
+    - Persistence mechanisms
+    - Lateral movement techniques
+    - Exfiltration patterns
+    - Cryptominer and ransomware indicators
+    
+    Returns MITRE ATT&CK mappings for detected techniques.
+    """
+    try:
+        normalized = _normalize_responses(request.responses)
+        
+        indicators = detect_offensive_indicators(
+            normalized,
+            include_c2=request.include_c2,
+            include_malware=request.include_malware,
+            include_evasion=request.include_evasion,
+        )
+        
+        # Group by type
+        by_type = {}
+        for ind in indicators:
+            ind_type = ind.get("type", "unknown")
+            if ind_type not in by_type:
+                by_type[ind_type] = []
+            by_type[ind_type].append(ind)
+        
+        return {
+            "total_indicators": len(indicators),
+            "indicators": indicators,
+            "by_type": by_type,
+            "mitre_techniques": list(set(i.get("mitre_id") for i in indicators if i.get("mitre_id"))),
+        }
+        
+    except Exception as e:
+        logger.exception(f"Offensive indicator detection failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/offensive/full-report", response_model=Dict[str, Any])
+async def generate_offensive_report_endpoint(
+    request: OffensiveAnalysisRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Generate comprehensive offensive security analysis report.
+    
+    Combines all offensive analysis capabilities into a single report:
+    - Threat score and level assessment
+    - MITRE ATT&CK technique mapping
+    - Categorized indicators by threat type
+    - Actionable recommendations
+    
+    Ideal for security analysts investigating suspicious software behavior.
+    """
+    try:
+        normalized = _normalize_responses(request.responses)
+        
+        report = generate_offensive_report(normalized)
+        
+        return report
+        
+    except Exception as e:
+        logger.exception(f"Offensive report generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/offensive/extract-iocs", response_model=Dict[str, Any])
+async def extract_iocs_endpoint(
+    request: OffensiveAnalysisRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Extract Indicators of Compromise (IOCs) from responses.
+    
+    Extracts:
+    - IP addresses
+    - Domains
+    - URLs
+    - File hashes (MD5, SHA1, SHA256)
+    - Email addresses
+    - Cryptocurrency addresses (Bitcoin, Monero)
+    - File paths (Windows/Unix)
+    - Registry keys
+    - Mutex names
+    
+    Useful for threat intelligence and IOC sharing.
+    """
+    try:
+        # Combine all response content
+        all_content = ""
+        for resp in request.responses:
+            body = resp.get("body") or resp.get("response_body", "")
+            all_content += body + "\n"
+        
+        iocs = extract_iocs(all_content)
+        
+        # Count totals
+        total_iocs = sum(len(v) for v in iocs.values())
+        
+        return {
+            "total_iocs": total_iocs,
+            "iocs": iocs,
+            "types_found": list(iocs.keys()),
+        }
+        
+    except Exception as e:
+        logger.exception(f"IOC extraction failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/offensive/detect-security-products", response_model=Dict[str, Any])
+async def detect_security_products_endpoint(
+    request: OffensiveAnalysisRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Detect security products mentioned in responses.
+    
+    Identifies EDR/AV products:
+    - CrowdStrike Falcon
+    - Carbon Black
+    - SentinelOne
+    - Microsoft Defender
+    - Symantec/Norton
+    - McAfee
+    - Kaspersky
+    - Sophos
+    
+    Useful for understanding the defensive posture of analyzed systems.
+    """
+    try:
+        all_content = ""
+        for resp in request.responses:
+            body = resp.get("body") or resp.get("response_body", "")
+            all_content += body + "\n"
+        
+        products = detect_security_products(all_content)
+        
+        return {
+            "products_detected": len(products),
+            "products": products,
+        }
+        
+    except Exception as e:
+        logger.exception(f"Security product detection failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/offensive/payloads", response_model=Dict[str, Any])
+async def get_offensive_payloads(
+    payload_type: str = "all",
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get offensive security testing payloads.
+    
+    Available payload types:
+    - c2: C2 infrastructure probe payloads
+    - evasion: Sandbox evasion test payloads
+    - malware: Common malware string payloads
+    - api_hooking: API hooking detection payloads
+    - all: All payload types
+    
+    These payloads are designed for testing detection capabilities
+    and analyzing sandboxed software responses.
+    """
+    try:
+        payloads = {}
+        
+        if payload_type in ["all", "c2"]:
+            payloads["c2_probes"] = generate_c2_probe_payloads()
+        
+        if payload_type in ["all", "evasion"]:
+            payloads["evasion_tests"] = generate_evasion_test_payloads()
+        
+        if payload_type in ["all", "malware"]:
+            payloads["malware_strings"] = generate_malware_string_payloads()
+        
+        if payload_type in ["all", "api_hooking"]:
+            payloads["api_hooking"] = generate_api_hooking_payloads()
+        
+        total_payloads = sum(len(v) for v in payloads.values())
+        
+        return {
+            "total_payloads": total_payloads,
+            "payload_types": list(payloads.keys()),
+            "payloads": payloads,
+        }
+        
+    except Exception as e:
+        logger.exception(f"Payload generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/offensive/combined-analysis", response_model=Dict[str, Any])
+async def combined_offensive_analysis(
+    request: OffensiveAnalysisRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Perform combined web vulnerability and offensive security analysis.
+    
+    This endpoint combines:
+    - Traditional web vulnerability detection (SQLi, XSS, etc.)
+    - Offensive security analysis (C2, malware, evasion)
+    - IOC extraction
+    - MITRE ATT&CK mapping
+    
+    Provides comprehensive analysis for both web application security
+    and malware/C2 detection use cases.
+    """
+    try:
+        normalized = _normalize_responses(request.responses)
+        
+        result = {
+            "responses_analyzed": len(normalized),
+        }
+        
+        # Web vulnerability detection
+        web_findings = detect_vulnerabilities(normalized)
+        result["web_vulnerabilities"] = {
+            "findings": [f.to_dict() for f in web_findings],
+            "total": len(web_findings),
+            "by_severity": {
+                "critical": sum(1 for f in web_findings if f.severity.value == "critical"),
+                "high": sum(1 for f in web_findings if f.severity.value == "high"),
+                "medium": sum(1 for f in web_findings if f.severity.value == "medium"),
+                "low": sum(1 for f in web_findings if f.severity.value == "low"),
+            },
+        }
+        
+        # Offensive analysis
+        offensive_result = perform_offensive_analysis(
+            normalized,
+            include_c2=request.include_c2,
+            include_malware=request.include_malware,
+            include_evasion=request.include_evasion,
+            include_iocs=request.include_iocs,
+        )
+        result["offensive_analysis"] = offensive_result.to_dict()
+        
+        # Smart detection indicators
+        smart_indicators = detect_offensive_indicators(
+            normalized,
+            include_c2=request.include_c2,
+            include_malware=request.include_malware,
+            include_evasion=request.include_evasion,
+        )
+        result["offensive_indicators"] = {
+            "total": len(smart_indicators),
+            "indicators": smart_indicators,
+            "mitre_techniques": list(set(
+                i.get("mitre_id") for i in smart_indicators if i.get("mitre_id")
+            )),
+        }
+        
+        # Combined risk assessment
+        web_risk = sum(
+            {"critical": 40, "high": 25, "medium": 10, "low": 3}.get(f.severity.value, 0)
+            for f in web_findings
+        )
+        offensive_risk = offensive_result.risk_score
+        
+        combined_risk = min(100, (web_risk + offensive_risk) / 2 + max(web_risk, offensive_risk) / 2)
+        
+        if combined_risk >= 70:
+            combined_level = "critical"
+        elif combined_risk >= 50:
+            combined_level = "high"
+        elif combined_risk >= 25:
+            combined_level = "medium"
+        elif combined_risk > 0:
+            combined_level = "low"
+        else:
+            combined_level = "clean"
+        
+        result["combined_assessment"] = {
+            "web_risk_score": min(100, web_risk),
+            "offensive_risk_score": offensive_risk,
+            "combined_risk_score": round(combined_risk, 1),
+            "threat_level": combined_level,
+            "total_findings": len(web_findings) + len(smart_indicators),
+        }
+        
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Combined analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# WEBSOCKET DEEP FUZZING ENDPOINTS
+# ============================================================================
+
+class WSFuzzRequest(BaseModel):
+    """Request model for WebSocket fuzzing."""
+    target_url: str  # ws:// or wss:// URL
+    initial_messages: List[str] = []
+    auth_token: Optional[str] = None
+    auth_header: str = "Authorization"
+    origin: Optional[str] = None
+    subprotocols: List[str] = []
+    attack_categories: List[str] = ["all"]
+    custom_payloads: List[str] = []
+    message_template: str = ""
+    timeout: int = 10000
+    delay_between_tests: int = 100
+    max_messages_per_test: int = 10
+
+
+@router.post("/websocket/run", tags=["WebSocket Fuzzing"])
+async def run_websocket_fuzzing(
+    request: WSFuzzRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Run WebSocket deep fuzzing session.
+    
+    Tests for various WebSocket vulnerabilities including:
+    - Authentication bypass
+    - State manipulation
+    - Frame injection
+    - Message tampering (injection attacks)
+    - Race conditions
+    - Cross-Site WebSocket Hijacking (CSWSH)
+    - Protocol violations
+    - Denial of service
+    """
+    from services.fuzzing_service import WSFuzzConfig, run_websocket_fuzzing
+    
+    try:
+        config = WSFuzzConfig(
+            target_url=request.target_url,
+            initial_messages=request.initial_messages,
+            auth_token=request.auth_token,
+            auth_header=request.auth_header,
+            origin=request.origin,
+            subprotocols=request.subprotocols,
+            attack_categories=request.attack_categories,
+            custom_payloads=request.custom_payloads,
+            message_template=request.message_template,
+            timeout=request.timeout,
+            delay_between_tests=request.delay_between_tests,
+            max_messages_per_test=request.max_messages_per_test,
+        )
+        
+        session = await run_websocket_fuzzing(config)
+        return session.to_dict()
+        
+    except Exception as e:
+        logger.exception(f"WebSocket fuzzing failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/websocket/stream", tags=["WebSocket Fuzzing"])
+async def stream_websocket_fuzzing_endpoint(
+    request: WSFuzzRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Stream WebSocket fuzzing results in real-time.
+    
+    Returns Server-Sent Events with:
+    - start: Initial info with total tests
+    - progress: Individual test results
+    - complete: Final stats and findings
+    """
+    from services.fuzzing_service import WSFuzzConfig, stream_websocket_fuzzing
+    
+    config = WSFuzzConfig(
+        target_url=request.target_url,
+        initial_messages=request.initial_messages,
+        auth_token=request.auth_token,
+        auth_header=request.auth_header,
+        origin=request.origin,
+        subprotocols=request.subprotocols,
+        attack_categories=request.attack_categories,
+        custom_payloads=request.custom_payloads,
+        message_template=request.message_template,
+        timeout=request.timeout,
+        delay_between_tests=request.delay_between_tests,
+        max_messages_per_test=request.max_messages_per_test,
+    )
+    
+    async def event_generator():
+        async for event in stream_websocket_fuzzing(config):
+            yield f"data: {json.dumps(event)}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.get("/websocket/payloads", tags=["WebSocket Fuzzing"])
+async def get_websocket_payloads(
+    category: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get available WebSocket attack payloads.
+    
+    Categories:
+    - auth_bypass: Authentication bypass tests
+    - state_manipulation: State machine attacks
+    - frame_injection: Frame-level attacks
+    - message_tampering: Injection attacks
+    - race_condition: Race condition tests
+    - cswsh: Cross-Site WebSocket Hijacking
+    - protocol_violation: Protocol compliance tests
+    - dos: Denial of service
+    """
+    from services.fuzzing_service import WS_ATTACK_PAYLOADS, WSAttackCategory
+    
+    if category:
+        try:
+            cat = WSAttackCategory(category)
+            if cat in WS_ATTACK_PAYLOADS:
+                return {category: WS_ATTACK_PAYLOADS[cat]}
+            raise HTTPException(status_code=404, detail=f"Category not found: {category}")
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
+    
+    return {
+        "categories": [c.value for c in WSAttackCategory],
+        "payloads": {c.value: {
+            "name": info["name"],
+            "description": info["description"],
+            "severity": info["severity"],
+            "payload_count": len(info["payloads"]),
+        } for c, info in WS_ATTACK_PAYLOADS.items()},
+    }
+
+
+@router.get("/websocket/categories", tags=["WebSocket Fuzzing"])
+async def get_websocket_categories(
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get list of WebSocket attack categories with descriptions."""
+    from services.fuzzing_service import WS_ATTACK_PAYLOADS, WSAttackCategory
+    
+    return {
+        "categories": [
+            {
+                "id": c.value,
+                "name": WS_ATTACK_PAYLOADS[c]["name"],
+                "description": WS_ATTACK_PAYLOADS[c]["description"],
+                "severity": WS_ATTACK_PAYLOADS[c]["severity"],
+                "payload_count": len(WS_ATTACK_PAYLOADS[c]["payloads"]),
+            }
+            for c in WSAttackCategory
+            if c in WS_ATTACK_PAYLOADS
+        ]
+    }
+
+
+# ============================================================================
+# COVERAGE TRACKING ENDPOINTS
+# ============================================================================
+
+# In-memory coverage sessions (in production, use Redis or database)
+_coverage_sessions: Dict[str, Any] = {}
+
+
+class CreateCoverageSessionRequest(BaseModel):
+    """Request to create a coverage tracking session."""
+    target_base_url: str
+
+
+class UpdateCoverageRequest(BaseModel):
+    """Request to update coverage from fuzzing results."""
+    session_id: str
+    endpoint: str
+    method: str
+    techniques_tested: List[str]
+    fuzz_result: Dict[str, Any]
+
+
+@router.post("/coverage/sessions", tags=["Coverage Tracking"])
+async def create_coverage_session_endpoint(
+    request: CreateCoverageSessionRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Create a new coverage tracking session."""
+    from services.fuzzing_service import create_coverage_session
+    
+    session = create_coverage_session(request.target_base_url)
+    _coverage_sessions[session.session_id] = session
+    
+    return session.to_dict()
+
+
+@router.get("/coverage/sessions/{session_id}", tags=["Coverage Tracking"])
+async def get_coverage_session(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get coverage session by ID."""
+    if session_id not in _coverage_sessions:
+        raise HTTPException(status_code=404, detail="Coverage session not found")
+    
+    return _coverage_sessions[session_id].to_dict()
+
+
+@router.get("/coverage/sessions", tags=["Coverage Tracking"])
+async def list_coverage_sessions(
+    current_user: User = Depends(get_current_active_user),
+):
+    """List all coverage sessions."""
+    return {
+        "sessions": [
+            {
+                "session_id": s.session_id,
+                "target_base_url": s.target_base_url,
+                "coverage_percent": s.overall_stats["coverage_percent"],
+                "total_findings": s.overall_stats["total_findings"],
+                "started_at": s.started_at,
+                "updated_at": s.updated_at,
+            }
+            for s in _coverage_sessions.values()
+        ]
+    }
+
+
+@router.post("/coverage/update", tags=["Coverage Tracking"])
+async def update_coverage(
+    request: UpdateCoverageRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Update coverage session with fuzzing results."""
+    from services.fuzzing_service import update_coverage_from_fuzz_results, FuzzResult
+    
+    if request.session_id not in _coverage_sessions:
+        raise HTTPException(status_code=404, detail="Coverage session not found")
+    
+    session = _coverage_sessions[request.session_id]
+    
+    # Convert dict to FuzzResult
+    fuzz_result = FuzzResult(**request.fuzz_result)
+    
+    updated_session = update_coverage_from_fuzz_results(
+        session,
+        fuzz_result,
+        request.endpoint,
+        request.method,
+        request.techniques_tested,
+    )
+    
+    _coverage_sessions[request.session_id] = updated_session
+    
+    return updated_session.to_dict()
+
+
+@router.get("/coverage/sessions/{session_id}/gaps", tags=["Coverage Tracking"])
+async def get_coverage_gaps_endpoint(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get coverage gaps and recommendations.
+    
+    Returns untested techniques prioritized by severity,
+    partially tested techniques, and OWASP category gaps.
+    """
+    from services.fuzzing_service import get_coverage_gaps
+    
+    if session_id not in _coverage_sessions:
+        raise HTTPException(status_code=404, detail="Coverage session not found")
+    
+    session = _coverage_sessions[session_id]
+    return get_coverage_gaps(session)
+
+
+@router.get("/coverage/sessions/{session_id}/heatmap", tags=["Coverage Tracking"])
+async def get_coverage_heatmap_endpoint(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get heatmap data for coverage visualization.
+    
+    Returns a matrix of endpoints x techniques with status values:
+    - 0: Not tested
+    - 1: Tested (no findings)
+    - 2: Secure (explicitly verified)
+    - 3: Inconclusive
+    - 4: Vulnerable
+    """
+    from services.fuzzing_service import generate_coverage_heatmap_data
+    
+    if session_id not in _coverage_sessions:
+        raise HTTPException(status_code=404, detail="Coverage session not found")
+    
+    session = _coverage_sessions[session_id]
+    return generate_coverage_heatmap_data(session)
+
+
+@router.get("/coverage/sessions/{session_id}/report", tags=["Coverage Tracking"])
+async def export_coverage_report_endpoint(
+    session_id: str,
+    format: str = "markdown",
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Export coverage report.
+    
+    Formats:
+    - markdown: Detailed markdown report
+    - json: Complete session data
+    """
+    from services.fuzzing_service import export_coverage_report
+    
+    if session_id not in _coverage_sessions:
+        raise HTTPException(status_code=404, detail="Coverage session not found")
+    
+    session = _coverage_sessions[session_id]
+    report = export_coverage_report(session, format)
+    
+    if format == "markdown":
+        return Response(
+            content=report,
+            media_type="text/markdown",
+            headers={"Content-Disposition": f"attachment; filename=coverage-{session_id}.md"},
+        )
+    elif format == "json":
+        return Response(
+            content=report,
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename=coverage-{session_id}.json"},
+        )
+    
+    return {"report": report}
+
+
+@router.get("/coverage/techniques", tags=["Coverage Tracking"])
+async def get_technique_registry(
+    category: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get security testing technique registry.
+    
+    Returns all available techniques with metadata including
+    OWASP mapping, severity, and estimated testing time.
+    """
+    from services.fuzzing_service import TECHNIQUE_REGISTRY, TechniqueCategory
+    
+    techniques = TECHNIQUE_REGISTRY.values()
+    
+    if category:
+        try:
+            cat = TechniqueCategory(category)
+            techniques = [t for t in techniques if t.category == cat.value]
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
+    
+    return {
+        "categories": [c.value for c in TechniqueCategory],
+        "techniques": [t.to_dict() for t in techniques],
+    }
+
+
+@router.get("/coverage/owasp", tags=["Coverage Tracking"])
+async def get_owasp_categories(
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get OWASP Top 10 2021 categories with related techniques.
+    """
+    from services.fuzzing_service import OWASP_CATEGORIES, TECHNIQUE_REGISTRY
+    
+    result = {}
+    for owasp_id, info in OWASP_CATEGORIES.items():
+        related_techniques = [
+            {"id": t_id, "name": t.name, "severity": t.severity}
+            for t_id, t in TECHNIQUE_REGISTRY.items()
+            if t.owasp_category == owasp_id
+        ]
+        result[owasp_id] = {
+            **info,
+            "techniques": related_techniques,
+        }
+    
+    return result
+
+
+@router.delete("/coverage/sessions/{session_id}", tags=["Coverage Tracking"])
+async def delete_coverage_session(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Delete a coverage session."""
+    if session_id not in _coverage_sessions:
+        raise HTTPException(status_code=404, detail="Coverage session not found")
+    
+    del _coverage_sessions[session_id]
+    return {"deleted": session_id}

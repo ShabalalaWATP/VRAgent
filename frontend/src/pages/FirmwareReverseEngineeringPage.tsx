@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import { Link } from "react-router-dom";
 import {
@@ -20,8 +20,7 @@ import {
   AlertTitle,
   Tooltip,
   Fab,
-  Zoom,
-  useScrollTrigger,
+  Drawer,
   Table,
   TableBody,
   TableCell,
@@ -33,6 +32,7 @@ import {
   AccordionDetails,
   IconButton,
   LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MemoryIcon from "@mui/icons-material/Memory";
@@ -74,6 +74,8 @@ import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import ArchitectureIcon from "@mui/icons-material/Architecture";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
 import { useNavigate } from "react-router-dom";
 
 // CodeBlock component for displaying code with syntax highlighting
@@ -1339,19 +1341,177 @@ function QuizSection() {
 export default function FirmwareReverseEngineeringPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const accent = "#06b6d4";
 
-  // Scroll trigger for back-to-top button
-  const showBackToTop = useScrollTrigger({
-    target: typeof window !== 'undefined' ? window : undefined,
-    disableHysteresis: true,
-    threshold: 400,
-  });
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "introduction", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "firmware-basics-content", label: "Firmware Basics", icon: <StorageIcon /> },
+    { id: "hardware-targets-content", label: "Hardware Targets", icon: <DeveloperBoardIcon /> },
+    { id: "acquisition-methods-content", label: "Acquisition", icon: <DownloadIcon /> },
+    { id: "hardware-interfaces-content", label: "Debug Interfaces", icon: <CableIcon /> },
+    { id: "flash-memory-content", label: "Flash Memory", icon: <MemoryIcon /> },
+    { id: "filesystem-extraction-content", label: "Filesystem", icon: <FolderOpenIcon /> },
+    { id: "binary-analysis-content", label: "Binary Analysis", icon: <CodeIcon /> },
+    { id: "emulation-techniques-content", label: "Emulation", icon: <SpeedIcon /> },
+    { id: "vulnerability-research-content", label: "Vuln Research", icon: <BugReportIcon /> },
+    { id: "bootloader-analysis-content", label: "Bootloader", icon: <SettingsIcon /> },
+    { id: "crypto-analysis-content", label: "Crypto Analysis", icon: <LockOpenIcon /> },
+    { id: "wireless-protocols-content", label: "Wireless", icon: <WifiIcon /> },
+    { id: "modification-patching-content", label: "Modification", icon: <BuildIcon /> },
+    { id: "reporting-disclosure-content", label: "Reporting", icon: <DescriptionIcon /> },
+    { id: "quiz-section", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   const pageContext = `Firmware Reverse Engineering Learning Guide - Comprehensive course covering firmware basics, hardware targets, acquisition methods, debug interfaces (UART, JTAG, SWD), flash memory extraction, filesystem analysis, binary disassembly, emulation, vulnerability research, bootloader analysis, cryptographic analysis, wireless protocols, firmware modification, and responsible disclosure.`;
 
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": { width: 6 },
+        "&::-webkit-scrollbar-thumb": { bgcolor: alpha(accent, 0.3), borderRadius: 3 },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}>
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Progress</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>{Math.round(progressPercent)}%</Typography>
+          </Box>
+          <LinearProgress variant="determinate" value={progressPercent} sx={{ height: 6, borderRadius: 3, bgcolor: alpha(accent, 0.1), "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 } }} />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5, mb: 0.25, py: 0.5, cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": { bgcolor: alpha(accent, 0.08) },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText primary={<Typography variant="caption" sx={{ fontWeight: activeSection === item.id ? 700 : 500, color: activeSection === item.id ? accent : "text.secondary", fontSize: "0.75rem" }}>{item.label}</Typography>} />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Firmware Reverse Engineering" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab color="primary" onClick={() => setNavDrawerOpen(true)} sx={{ position: "fixed", bottom: 90, right: 24, zIndex: 1000, bgcolor: accent, "&:hover": { bgcolor: "#0891b2" }, boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`, display: { xs: "flex", lg: "none" } }}>
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab size="small" onClick={scrollToTop} sx={{ position: "fixed", bottom: 32, right: 28, zIndex: 1000, bgcolor: alpha(accent, 0.15), color: accent, "&:hover": { bgcolor: alpha(accent, 0.25) }, display: { xs: "flex", lg: "none" } }}>
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer anchor="right" open={navDrawerOpen} onClose={() => setNavDrawerOpen(false)} PaperProps={{ sx: { width: isMobile ? "85%" : 320, bgcolor: theme.palette.background.paper, backgroundImage: "none" } }}>
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small"><CloseIcon /></IconButton>
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>{Math.round(progressPercent)}%</Typography>
+            </Box>
+            <LinearProgress variant="determinate" value={progressPercent} sx={{ height: 6, borderRadius: 3, bgcolor: alpha(accent, 0.1), "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 } }} />
+          </Box>
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem key={item.id} onClick={() => scrollToSection(item.id)} sx={{ borderRadius: 2, mb: 0.5, cursor: "pointer", bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent", borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent", "&:hover": { bgcolor: alpha(accent, 0.1) }, transition: "all 0.2s ease" }}>
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText primary={<Typography variant="body2" sx={{ fontWeight: activeSection === item.id ? 700 : 500, color: activeSection === item.id ? accent : "text.primary" }}>{item.label}</Typography>} />
+                {activeSection === item.id && <Chip label="Current" size="small" sx={{ height: 20, fontSize: "0.65rem", bgcolor: alpha(accent, 0.2), color: accent }} />}
+              </ListItem>
+            ))}
+          </List>
+          <Divider sx={{ my: 2 }} />
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button size="small" variant="outlined" onClick={scrollToTop} startIcon={<KeyboardArrowUpIcon />} sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}>Top</Button>
+            <Button size="small" variant="outlined" onClick={() => scrollToSection("quiz-section")} startIcon={<QuizIcon />} sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}>Quiz</Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
         {/* Back Button */}
         <Chip
           component={Link}
@@ -4729,36 +4889,19 @@ echo "=== SCAN COMPLETE ==="`}
 
         <QuizSection />
 
-        {/* Back to Top Button */}
-        <Zoom in={showBackToTop}>
-          <Fab
-            color="primary"
-            size="medium"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            sx={{
-              position: "fixed",
-              bottom: 24,
-              right: 24,
-              bgcolor: "#06b6d4",
-              "&:hover": { bgcolor: "#0891b2" },
-            }}
+        {/* Bottom Navigation */}
+        <Box sx={{ mt: 4, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate("/learn")}
+            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
           >
-            <KeyboardArrowUpIcon />
-          </Fab>
-        </Zoom>
-
-      {/* Bottom Navigation */}
-      <Box sx={{ mt: 4, textAlign: "center" }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
-        >
-          Back to Learning Hub
-        </Button>
+            Back to Learning Hub
+          </Button>
+        </Box>
+        </Box>
       </Box>
-      </Container>
     </LearnPageLayout>
   );
 }

@@ -26,6 +26,7 @@ import {
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, FindingNote, FindingNoteCreate, NoteType } from "../api/client";
+import ReactMarkdown from "react-markdown";
 
 // Icons
 import AddCommentIcon from "@mui/icons-material/AddComment";
@@ -393,9 +394,101 @@ const NotesList: React.FC<NotesListProps> = ({ notes, onEdit, onDelete, formatDa
                 {formatDate(note.created_at)}
               </Typography>
             </Box>
-            <Typography variant="body2" sx={{ mt: 1, whiteSpace: "pre-wrap" }}>
-              {note.content}
-            </Typography>
+            <Box
+              className="markdown-content"
+              sx={{
+                mt: 1,
+                fontSize: "0.875rem",
+                lineHeight: 1.6,
+                "& p": { margin: "0.4em 0" },
+                "& p:first-of-type": { mt: 0 },
+                "& p:last-of-type": { mb: 0 },
+                // Bold text
+                "& strong, & b": { 
+                  fontWeight: 700,
+                  color: "text.primary",
+                },
+                // Italic text
+                "& em, & i": { 
+                  fontStyle: "italic",
+                },
+                // Underline
+                "& u": {
+                  textDecoration: "underline",
+                  textDecorationColor: config.color,
+                  textUnderlineOffset: "2px",
+                },
+                // Strikethrough
+                "& del, & s": {
+                  textDecoration: "line-through",
+                  opacity: 0.7,
+                },
+                // Blockquotes
+                "& blockquote": {
+                  borderLeft: `3px solid ${config.color}`,
+                  pl: 1.5,
+                  ml: 0,
+                  my: 0.5,
+                  color: "text.secondary",
+                  fontStyle: "italic",
+                },
+                // Lists
+                "& ul, & ol": { 
+                  pl: 2.5, 
+                  my: 0.5,
+                  "& li": {
+                    mb: 0.25,
+                    "&::marker": {
+                      color: config.color,
+                    },
+                  },
+                },
+                // Task list checkboxes
+                "& li input[type='checkbox']": {
+                  mr: 0.75,
+                  accentColor: config.color,
+                },
+                // Inline code
+                "& code": { 
+                  bgcolor: alpha(config.color, 0.1), 
+                  color: "#e91e63",
+                  px: 0.5, 
+                  py: 0.125,
+                  borderRadius: 0.5,
+                  fontFamily: "'Fira Code', monospace",
+                  fontSize: "0.8em",
+                },
+                // Code blocks
+                "& pre": {
+                  bgcolor: alpha("#000", 0.06),
+                  p: 1,
+                  borderRadius: 0.5,
+                  overflow: "auto",
+                  "& code": { 
+                    bgcolor: "transparent", 
+                    px: 0,
+                    color: "inherit",
+                  },
+                },
+                // Links
+                "& a": { 
+                  color: config.color,
+                  textDecoration: "none",
+                  "&:hover": {
+                    textDecoration: "underline",
+                  },
+                },
+                // Headings
+                "& h1, & h2, & h3, & h4": { 
+                  fontSize: "1.1em",
+                  fontWeight: 600, 
+                  mt: 0.75, 
+                  mb: 0.25,
+                },
+              }}
+            >
+              <ReactMarkdown>{note.content}</ReactMarkdown>
+            </Box>
             <Box sx={{ display: "flex", gap: 0.5, mt: 1 }}>
               <IconButton size="small" onClick={() => onEdit(note)}>
                 <EditIcon sx={{ fontSize: 16 }} />

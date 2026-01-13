@@ -47,6 +47,8 @@ import ProjectReverseTab from "../components/ProjectReverseTab";
 import ProjectCollaboratorsTab from "../components/ProjectCollaboratorsTab";
 import ProjectTeamChatTab from "../components/ProjectTeamChatTab";
 import ProjectFilesTab from "../components/ProjectFilesTab";
+import ProjectWhiteboardTab from "../components/ProjectWhiteboardTab";
+import ProjectCombinedAnalysisTab from "../components/ProjectCombinedAnalysisTab";
 import ShareToConversationDialog from "../components/social/ShareToConversationDialog";
 import { KanbanBoard } from "../components/kanban";
 import { api } from "../api/client";
@@ -61,6 +63,8 @@ import ChatIcon from "@mui/icons-material/Chat";
 import FolderIcon from "@mui/icons-material/Folder";
 import ShareIcon from "@mui/icons-material/Share";
 import ViewKanbanIcon from "@mui/icons-material/ViewKanban";
+import DrawIcon from "@mui/icons-material/Draw";
+import SummarizeIcon from "@mui/icons-material/Summarize";
 
 // Animations
 const float = keyframes`
@@ -271,7 +275,7 @@ export default function ProjectDetailPage() {
   const [scanCompleteSnackbar, setScanCompleteSnackbar] = useState(false);
   const [enhancedScan, setEnhancedScan] = useState(false);  // Enhanced mode for deeper analysis
   // Agentic AI scan is now always enabled as part of unified pipeline
-  const [mainTab, setMainTab] = useState<"security" | "network" | "reverse" | "notes" | "kanban" | "collaborators" | "team-chat" | "files">("security");
+  const [mainTab, setMainTab] = useState<"security" | "network" | "reverse" | "notes" | "kanban" | "collaborators" | "team-chat" | "files" | "whiteboard" | "combined-analysis">("security");
   
   // Share report state
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -558,6 +562,12 @@ export default function ProjectDetailPage() {
             value="reverse" 
           />
           <Tab 
+            icon={<SummarizeIcon />} 
+            iconPosition="start" 
+            label="Combined Analysis" 
+            value="combined-analysis" 
+          />
+          <Tab 
             icon={<CommentIcon />} 
             iconPosition="start" 
             label="Notes & Tracking" 
@@ -574,6 +584,12 @@ export default function ProjectDetailPage() {
             iconPosition="start" 
             label="Kanban Board" 
             value="kanban" 
+          />
+          <Tab 
+            icon={<DrawIcon />} 
+            iconPosition="start" 
+            label="Whiteboard" 
+            value="whiteboard" 
           />
           {projectQuery.data?.is_shared === true && (
             <Tab 
@@ -1242,6 +1258,19 @@ export default function ProjectDetailPage() {
             }}
           />
         </Paper>
+      )}
+
+      {/* Whiteboard Tab Content */}
+      {mainTab === "whiteboard" && (
+        <ProjectWhiteboardTab projectId={id} />
+      )}
+
+      {/* Combined Analysis Tab Content */}
+      {mainTab === "combined-analysis" && projectQuery.data && projectId && (
+        <ProjectCombinedAnalysisTab 
+          projectId={projectId}
+          projectName={projectQuery.data.name}
+        />
       )}
 
       {/* Team Chat Tab Content */}

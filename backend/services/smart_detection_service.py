@@ -473,6 +473,673 @@ LDAP_INJECTION_SIGNATURES = [
     ),
 ]
 
+
+# =============================================================================
+# OFFENSIVE SECURITY SIGNATURES
+# For analyzing sandboxed software, malware, and C2 communication
+# =============================================================================
+
+class OffensiveType(str, Enum):
+    """Types of offensive security indicators that can be detected."""
+    C2_COMMUNICATION = "c2_communication"
+    MALWARE_BEHAVIOR = "malware_behavior"
+    SANDBOX_EVASION = "sandbox_evasion"
+    PROCESS_INJECTION = "process_injection"
+    CREDENTIAL_THEFT = "credential_theft"
+    PERSISTENCE = "persistence"
+    LATERAL_MOVEMENT = "lateral_movement"
+    EXFILTRATION = "exfiltration"
+    CRYPTOMINER = "cryptominer"
+    RANSOMWARE = "ransomware"
+    RAT_TROJAN = "rat_trojan"
+    BOTNET = "botnet"
+
+
+@dataclass
+class OffensiveSignature:
+    """A signature for detecting offensive security indicators."""
+    name: str
+    offensive_type: OffensiveType
+    severity: Severity
+    patterns: List[str]
+    description: str
+    mitre_id: Optional[str] = None  # MITRE ATT&CK ID
+    mitre_tactic: Optional[str] = None
+    false_positive_indicators: List[str] = field(default_factory=list)
+    min_confidence: float = 0.7
+
+
+# C2 Communication Signatures
+C2_SIGNATURES = [
+    OffensiveSignature(
+        name="Cobalt Strike Beacon",
+        offensive_type=OffensiveType.C2_COMMUNICATION,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"beacon\s*payload",
+            r"malleable\s*c2",
+            r"watermark\s*=\s*\d+",
+            r"spawn\s*to",
+            r"process[-_]inject",
+            r"jump\s*psexec",
+            r"mimikatz",
+            r"logonpasswords",
+            r"hashdump",
+        ],
+        description="Cobalt Strike beacon indicators detected",
+        mitre_id="S0154",
+        mitre_tactic="Command and Control",
+    ),
+    OffensiveSignature(
+        name="Metasploit Framework",
+        offensive_type=OffensiveType.C2_COMMUNICATION,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"meterpreter",
+            r"reverse_tcp",
+            r"reverse_http",
+            r"bind_tcp",
+            r"multi/handler",
+            r"exploit/multi",
+            r"post/windows",
+            r"payload/windows",
+            r"staged\s*payload",
+        ],
+        description="Metasploit framework indicators detected",
+        mitre_id="S0081",
+        mitre_tactic="Command and Control",
+    ),
+    OffensiveSignature(
+        name="Empire Framework",
+        offensive_type=OffensiveType.C2_COMMUNICATION,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"empire\s*agent",
+            r"invoke-empire",
+            r"powershell\s*empire",
+            r"launcher\.bat",
+            r"stager",
+        ],
+        description="Empire framework indicators detected",
+        mitre_id="S0363",
+        mitre_tactic="Command and Control",
+    ),
+    OffensiveSignature(
+        name="Sliver C2",
+        offensive_type=OffensiveType.C2_COMMUNICATION,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"sliver\s*implant",
+            r"mtls\s*listener",
+            r"wg\s*listener",
+            r"dns\s*canary",
+        ],
+        description="Sliver C2 framework indicators detected",
+        mitre_tactic="Command and Control",
+    ),
+    OffensiveSignature(
+        name="DNS Tunneling C2",
+        offensive_type=OffensiveType.C2_COMMUNICATION,
+        severity=Severity.HIGH,
+        patterns=[
+            r"dns\s*tunnel",
+            r"iodine",
+            r"dnscat",
+            r"dns2tcp",
+            r"\.duckdns\.org",
+            r"\.no-ip\.",
+            r"\.ddns\.net",
+        ],
+        description="DNS tunneling for C2 communication detected",
+        mitre_id="T1071.004",
+        mitre_tactic="Command and Control",
+    ),
+    OffensiveSignature(
+        name="Beacon Sleep/Jitter",
+        offensive_type=OffensiveType.C2_COMMUNICATION,
+        severity=Severity.HIGH,
+        patterns=[
+            r"sleep\s*[=:]\s*\d+",
+            r"jitter\s*[=:]\s*\d+",
+            r"callback\s*interval",
+            r"checkin",
+            r"heartbeat",
+        ],
+        description="C2 beacon timing configuration detected",
+        mitre_id="T1573",
+        mitre_tactic="Command and Control",
+    ),
+]
+
+# Malware Behavior Signatures
+MALWARE_SIGNATURES = [
+    OffensiveSignature(
+        name="Process Injection - CreateRemoteThread",
+        offensive_type=OffensiveType.PROCESS_INJECTION,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"CreateRemoteThread",
+            r"NtCreateThreadEx",
+            r"RtlCreateUserThread",
+            r"WriteProcessMemory",
+            r"VirtualAllocEx",
+        ],
+        description="Process injection via CreateRemoteThread detected",
+        mitre_id="T1055",
+        mitre_tactic="Defense Evasion",
+    ),
+    OffensiveSignature(
+        name="DLL Injection",
+        offensive_type=OffensiveType.PROCESS_INJECTION,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"LoadLibrary.*inject",
+            r"reflective\s*dll",
+            r"manual\s*map",
+            r"SetWindowsHookEx",
+            r"QueueUserAPC",
+        ],
+        description="DLL injection technique detected",
+        mitre_id="T1055.001",
+        mitre_tactic="Defense Evasion",
+    ),
+    OffensiveSignature(
+        name="Process Hollowing",
+        offensive_type=OffensiveType.PROCESS_INJECTION,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"NtUnmapViewOfSection",
+            r"process\s*hollow",
+            r"doppelgang",
+            r"transacted\s*hollow",
+        ],
+        description="Process hollowing technique detected",
+        mitre_id="T1055.012",
+        mitre_tactic="Defense Evasion",
+    ),
+    OffensiveSignature(
+        name="Credential Dumping - Mimikatz",
+        offensive_type=OffensiveType.CREDENTIAL_THEFT,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"mimikatz",
+            r"sekurlsa",
+            r"logonpasswords",
+            r"wdigest",
+            r"kerberos.*ticket",
+            r"dcsync",
+            r"golden\s*ticket",
+            r"silver\s*ticket",
+        ],
+        description="Mimikatz credential dumping detected",
+        mitre_id="T1003",
+        mitre_tactic="Credential Access",
+    ),
+    OffensiveSignature(
+        name="LSASS Memory Dump",
+        offensive_type=OffensiveType.CREDENTIAL_THEFT,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"lsass.*dump",
+            r"procdump.*lsass",
+            r"comsvcs.*MiniDump",
+            r"MiniDumpWriteDump",
+            r"nanodump",
+        ],
+        description="LSASS memory dumping detected",
+        mitre_id="T1003.001",
+        mitre_tactic="Credential Access",
+    ),
+    OffensiveSignature(
+        name="Registry Persistence",
+        offensive_type=OffensiveType.PERSISTENCE,
+        severity=Severity.HIGH,
+        patterns=[
+            r"HKLM\\.*\\Run",
+            r"HKCU\\.*\\Run",
+            r"CurrentVersion\\Run",
+            r"Winlogon\\Shell",
+            r"Userinit",
+        ],
+        description="Registry-based persistence mechanism detected",
+        mitre_id="T1547.001",
+        mitre_tactic="Persistence",
+    ),
+    OffensiveSignature(
+        name="Scheduled Task Persistence",
+        offensive_type=OffensiveType.PERSISTENCE,
+        severity=Severity.HIGH,
+        patterns=[
+            r"schtasks\s*/create",
+            r"New-ScheduledTask",
+            r"Register-ScheduledTask",
+            r"at\s+\d+:\d+",
+        ],
+        description="Scheduled task persistence detected",
+        mitre_id="T1053.005",
+        mitre_tactic="Persistence",
+    ),
+    OffensiveSignature(
+        name="Service Persistence",
+        offensive_type=OffensiveType.PERSISTENCE,
+        severity=Severity.HIGH,
+        patterns=[
+            r"sc\s+create",
+            r"New-Service",
+            r"CreateService",
+            r"ServiceInstall",
+        ],
+        description="Service-based persistence detected",
+        mitre_id="T1543.003",
+        mitre_tactic="Persistence",
+    ),
+]
+
+# Sandbox Evasion Signatures
+SANDBOX_EVASION_SIGNATURES = [
+    OffensiveSignature(
+        name="VM Detection",
+        offensive_type=OffensiveType.SANDBOX_EVASION,
+        severity=Severity.MEDIUM,
+        patterns=[
+            r"vmware",
+            r"virtualbox",
+            r"vbox",
+            r"qemu",
+            r"hyperv",
+            r"xen",
+            r"kvm",
+            r"virtual\s*machine",
+        ],
+        description="Virtual machine detection technique",
+        mitre_id="T1497.001",
+        mitre_tactic="Defense Evasion",
+    ),
+    OffensiveSignature(
+        name="Sandbox Detection",
+        offensive_type=OffensiveType.SANDBOX_EVASION,
+        severity=Severity.MEDIUM,
+        patterns=[
+            r"sandbox",
+            r"cuckoo",
+            r"any\.run",
+            r"hybrid-analysis",
+            r"virustotal",
+            r"joe\s*sandbox",
+        ],
+        description="Sandbox environment detection",
+        mitre_id="T1497.001",
+        mitre_tactic="Defense Evasion",
+    ),
+    OffensiveSignature(
+        name="Debugger Detection",
+        offensive_type=OffensiveType.SANDBOX_EVASION,
+        severity=Severity.MEDIUM,
+        patterns=[
+            r"IsDebuggerPresent",
+            r"CheckRemoteDebugger",
+            r"NtQueryInformationProcess",
+            r"OutputDebugString",
+            r"int\s*2dh",
+        ],
+        description="Debugger detection anti-analysis technique",
+        mitre_id="T1622",
+        mitre_tactic="Defense Evasion",
+    ),
+    OffensiveSignature(
+        name="Timing-based Evasion",
+        offensive_type=OffensiveType.SANDBOX_EVASION,
+        severity=Severity.MEDIUM,
+        patterns=[
+            r"rdtsc",
+            r"GetTickCount",
+            r"QueryPerformanceCounter",
+            r"sleep\s*\(\s*\d{5,}",
+            r"NtDelayExecution",
+        ],
+        description="Timing-based sandbox evasion",
+        mitre_id="T1497.003",
+        mitre_tactic="Defense Evasion",
+    ),
+    OffensiveSignature(
+        name="AMSI Bypass",
+        offensive_type=OffensiveType.SANDBOX_EVASION,
+        severity=Severity.HIGH,
+        patterns=[
+            r"amsi.*bypass",
+            r"AmsiScanBuffer",
+            r"amsi\.dll",
+            r"AmsiInitialize",
+            r"amsiContext",
+        ],
+        description="AMSI bypass technique detected",
+        mitre_id="T1562.001",
+        mitre_tactic="Defense Evasion",
+    ),
+    OffensiveSignature(
+        name="ETW Bypass",
+        offensive_type=OffensiveType.SANDBOX_EVASION,
+        severity=Severity.HIGH,
+        patterns=[
+            r"etw.*bypass",
+            r"EtwEventWrite",
+            r"NtTraceEvent",
+            r"etw.*patch",
+        ],
+        description="ETW bypass technique detected",
+        mitre_id="T1562.006",
+        mitre_tactic="Defense Evasion",
+    ),
+]
+
+# Lateral Movement Signatures
+LATERAL_MOVEMENT_SIGNATURES = [
+    OffensiveSignature(
+        name="PsExec",
+        offensive_type=OffensiveType.LATERAL_MOVEMENT,
+        severity=Severity.HIGH,
+        patterns=[
+            r"psexec",
+            r"PSEXESVC",
+            r"remcom",
+            r"remote\s*execution",
+        ],
+        description="PsExec-style remote execution detected",
+        mitre_id="T1570",
+        mitre_tactic="Lateral Movement",
+    ),
+    OffensiveSignature(
+        name="WMI Execution",
+        offensive_type=OffensiveType.LATERAL_MOVEMENT,
+        severity=Severity.HIGH,
+        patterns=[
+            r"wmic.*process.*call.*create",
+            r"Win32_Process.*Create",
+            r"Invoke-WmiMethod",
+            r"WMI.*remote",
+        ],
+        description="WMI-based remote execution detected",
+        mitre_id="T1047",
+        mitre_tactic="Execution",
+    ),
+    OffensiveSignature(
+        name="Pass-the-Hash",
+        offensive_type=OffensiveType.LATERAL_MOVEMENT,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"pass.*the.*hash",
+            r"pth",
+            r"ntlm.*relay",
+            r"sekurlsa.*pth",
+        ],
+        description="Pass-the-Hash attack technique detected",
+        mitre_id="T1550.002",
+        mitre_tactic="Lateral Movement",
+    ),
+    OffensiveSignature(
+        name="SMB Lateral Movement",
+        offensive_type=OffensiveType.LATERAL_MOVEMENT,
+        severity=Severity.HIGH,
+        patterns=[
+            r"smb.*exec",
+            r"smbclient",
+            r"admin\$",
+            r"c\$",
+            r"ipc\$",
+        ],
+        description="SMB-based lateral movement detected",
+        mitre_id="T1021.002",
+        mitre_tactic="Lateral Movement",
+    ),
+]
+
+# Exfiltration Signatures
+EXFILTRATION_SIGNATURES = [
+    OffensiveSignature(
+        name="DNS Exfiltration",
+        offensive_type=OffensiveType.EXFILTRATION,
+        severity=Severity.HIGH,
+        patterns=[
+            r"dns.*exfil",
+            r"dns.*tunnel.*data",
+            r"base64.*subdomain",
+            r"hex.*encode.*domain",
+        ],
+        description="DNS-based data exfiltration detected",
+        mitre_id="T1048.003",
+        mitre_tactic="Exfiltration",
+    ),
+    OffensiveSignature(
+        name="Cloud Service Exfiltration",
+        offensive_type=OffensiveType.EXFILTRATION,
+        severity=Severity.HIGH,
+        patterns=[
+            r"telegram.*bot",
+            r"discord.*webhook",
+            r"slack.*webhook",
+            r"pastebin",
+            r"transfer\.sh",
+            r"file\.io",
+        ],
+        description="Cloud service-based data exfiltration detected",
+        mitre_id="T1567",
+        mitre_tactic="Exfiltration",
+    ),
+    OffensiveSignature(
+        name="HTTP POST Exfiltration",
+        offensive_type=OffensiveType.EXFILTRATION,
+        severity=Severity.MEDIUM,
+        patterns=[
+            r"http.*post.*exfil",
+            r"upload.*loot",
+            r"send.*stolen",
+            r"exfil.*data",
+        ],
+        description="HTTP-based data exfiltration detected",
+        mitre_id="T1048.002",
+        mitre_tactic="Exfiltration",
+    ),
+]
+
+# Cryptominer Signatures
+CRYPTOMINER_SIGNATURES = [
+    OffensiveSignature(
+        name="Mining Pool Connection",
+        offensive_type=OffensiveType.CRYPTOMINER,
+        severity=Severity.HIGH,
+        patterns=[
+            r"stratum\+tcp",
+            r"stratum\+ssl",
+            r"mining.*pool",
+            r"pool\.minexmr",
+            r"xmr-eu",
+            r"moneropool",
+        ],
+        description="Cryptocurrency mining pool connection detected",
+        mitre_id="T1496",
+        mitre_tactic="Impact",
+    ),
+    OffensiveSignature(
+        name="XMRig Miner",
+        offensive_type=OffensiveType.CRYPTOMINER,
+        severity=Severity.HIGH,
+        patterns=[
+            r"xmrig",
+            r"xmr-stak",
+            r"ccminer",
+            r"cgminer",
+            r"bfgminer",
+        ],
+        description="Known cryptocurrency miner detected",
+        mitre_id="T1496",
+        mitre_tactic="Impact",
+    ),
+    OffensiveSignature(
+        name="Browser-based Miner",
+        offensive_type=OffensiveType.CRYPTOMINER,
+        severity=Severity.MEDIUM,
+        patterns=[
+            r"coinhive",
+            r"cryptoloot",
+            r"coin-hive",
+            r"miner\.start",
+            r"webminer",
+        ],
+        description="Browser-based cryptocurrency miner detected",
+        mitre_id="T1496",
+        mitre_tactic="Impact",
+    ),
+]
+
+# Ransomware Signatures
+RANSOMWARE_SIGNATURES = [
+    OffensiveSignature(
+        name="Ransomware Encryption",
+        offensive_type=OffensiveType.RANSOMWARE,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"ransomware",
+            r"encrypt.*files",
+            r"\.encrypted",
+            r"\.locked",
+            r"\.crypto",
+            r"ransom.*note",
+            r"decrypt.*payment",
+            r"bitcoin.*wallet",
+        ],
+        description="Ransomware indicators detected",
+        mitre_id="T1486",
+        mitre_tactic="Impact",
+    ),
+    OffensiveSignature(
+        name="Shadow Copy Deletion",
+        offensive_type=OffensiveType.RANSOMWARE,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"vssadmin.*delete",
+            r"wmic.*shadowcopy.*delete",
+            r"bcdedit.*recoveryenabled.*no",
+            r"wbadmin.*delete",
+        ],
+        description="Shadow copy deletion (ransomware behavior) detected",
+        mitre_id="T1490",
+        mitre_tactic="Impact",
+    ),
+]
+
+# RAT/Trojan Signatures
+RAT_SIGNATURES = [
+    OffensiveSignature(
+        name="Remote Access Trojan",
+        offensive_type=OffensiveType.RAT_TROJAN,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"rat\s*server",
+            r"remote.*admin.*tool",
+            r"njrat",
+            r"darkcomet",
+            r"asyncrat",
+            r"quasar.*rat",
+            r"nanocore",
+            r"remcos",
+        ],
+        description="Remote Access Trojan indicators detected",
+        mitre_tactic="Command and Control",
+    ),
+    OffensiveSignature(
+        name="Keylogger",
+        offensive_type=OffensiveType.RAT_TROJAN,
+        severity=Severity.HIGH,
+        patterns=[
+            r"keylog",
+            r"GetAsyncKeyState",
+            r"SetWindowsHookEx.*WH_KEYBOARD",
+            r"keyboard.*hook",
+            r"keystroke.*capture",
+        ],
+        description="Keylogger functionality detected",
+        mitre_id="T1056.001",
+        mitre_tactic="Collection",
+    ),
+    OffensiveSignature(
+        name="Screen Capture",
+        offensive_type=OffensiveType.RAT_TROJAN,
+        severity=Severity.MEDIUM,
+        patterns=[
+            r"screenshot",
+            r"screen.*capture",
+            r"BitBlt",
+            r"GetWindowDC",
+            r"desktop.*capture",
+        ],
+        description="Screen capture functionality detected",
+        mitre_id="T1113",
+        mitre_tactic="Collection",
+    ),
+]
+
+# Botnet Signatures
+BOTNET_SIGNATURES = [
+    OffensiveSignature(
+        name="DDoS Bot Commands",
+        offensive_type=OffensiveType.BOTNET,
+        severity=Severity.HIGH,
+        patterns=[
+            r"ddos",
+            r"syn\s*flood",
+            r"udp\s*flood",
+            r"http\s*flood",
+            r"slowloris",
+            r"layer\s*7\s*attack",
+        ],
+        description="DDoS botnet command indicators detected",
+        mitre_id="T1498",
+        mitre_tactic="Impact",
+    ),
+    OffensiveSignature(
+        name="IRC Bot",
+        offensive_type=OffensiveType.BOTNET,
+        severity=Severity.HIGH,
+        patterns=[
+            r"irc.*bot",
+            r"join\s*#",
+            r"privmsg",
+            r"irc\..*:\d+",
+            r"pong\s*:",
+        ],
+        description="IRC-based botnet communication detected",
+        mitre_id="T1071.001",
+        mitre_tactic="Command and Control",
+    ),
+    OffensiveSignature(
+        name="Mirai-style Bot",
+        offensive_type=OffensiveType.BOTNET,
+        severity=Severity.CRITICAL,
+        patterns=[
+            r"mirai",
+            r"telnet.*brute",
+            r"busybox",
+            r"echo.*'.*'.*>.*\/dev\/",
+            r"\/bin\/sh.*-c",
+        ],
+        description="Mirai-style IoT botnet indicators detected",
+        mitre_tactic="Initial Access",
+    ),
+]
+
+# Combine all offensive signatures
+ALL_OFFENSIVE_SIGNATURES: List[OffensiveSignature] = (
+    C2_SIGNATURES +
+    MALWARE_SIGNATURES +
+    SANDBOX_EVASION_SIGNATURES +
+    LATERAL_MOVEMENT_SIGNATURES +
+    EXFILTRATION_SIGNATURES +
+    CRYPTOMINER_SIGNATURES +
+    RANSOMWARE_SIGNATURES +
+    RAT_SIGNATURES +
+    BOTNET_SIGNATURES
+)
+
 # Combine all signatures
 ALL_SIGNATURES: List[DetectionSignature] = (
     SQL_INJECTION_SIGNATURES +
@@ -498,13 +1165,24 @@ class SmartDetectionEngine:
     
     def __init__(self):
         self.signatures = ALL_SIGNATURES
+        self.offensive_signatures = ALL_OFFENSIVE_SIGNATURES
         self.compiled_patterns: Dict[str, List[re.Pattern]] = {}
+        self.compiled_offensive_patterns: Dict[str, List[re.Pattern]] = {}
         self._compile_patterns()
+        self._compile_offensive_patterns()
         
     def _compile_patterns(self):
         """Pre-compile all regex patterns for performance."""
         for sig in self.signatures:
             self.compiled_patterns[sig.name] = [
+                re.compile(p, re.IGNORECASE | re.MULTILINE)
+                for p in sig.patterns
+            ]
+    
+    def _compile_offensive_patterns(self):
+        """Pre-compile all offensive regex patterns for performance."""
+        for sig in self.offensive_signatures:
+            self.compiled_offensive_patterns[sig.name] = [
                 re.compile(p, re.IGNORECASE | re.MULTILINE)
                 for p in sig.patterns
             ]
@@ -872,6 +1550,249 @@ class SmartDetectionEngine:
         
         return results
     
+    def detect_offensive_indicators(
+        self,
+        responses: List[Dict[str, Any]],
+        include_c2: bool = True,
+        include_malware: bool = True,
+        include_evasion: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """
+        Analyze responses for offensive security indicators.
+        
+        Args:
+            responses: List of fuzzing response dicts
+            include_c2: Include C2 communication detection
+            include_malware: Include malware behavior detection  
+            include_evasion: Include sandbox evasion detection
+            
+        Returns:
+            List of detected offensive indicators
+        """
+        findings: List[Dict[str, Any]] = []
+        finding_hashes: Set[str] = set()
+        
+        # Filter signatures based on options
+        signatures_to_check = []
+        for sig in self.offensive_signatures:
+            if include_c2 and sig.offensive_type == OffensiveType.C2_COMMUNICATION:
+                signatures_to_check.append(sig)
+            elif include_malware and sig.offensive_type in [
+                OffensiveType.MALWARE_BEHAVIOR, OffensiveType.PROCESS_INJECTION,
+                OffensiveType.CREDENTIAL_THEFT, OffensiveType.PERSISTENCE,
+                OffensiveType.LATERAL_MOVEMENT, OffensiveType.CRYPTOMINER,
+                OffensiveType.RANSOMWARE, OffensiveType.RAT_TROJAN, OffensiveType.BOTNET
+            ]:
+                signatures_to_check.append(sig)
+            elif include_evasion and sig.offensive_type == OffensiveType.SANDBOX_EVASION:
+                signatures_to_check.append(sig)
+            elif sig.offensive_type == OffensiveType.EXFILTRATION:
+                signatures_to_check.append(sig)  # Always check exfil
+        
+        for response in responses:
+            body = response.get("body", "")
+            headers = response.get("headers", {})
+            payload = response.get("payload", "")
+            response_id = response.get("id", "unknown")
+            
+            full_response = body + "\n" + "\n".join(f"{k}: {v}" for k, v in headers.items())
+            
+            for sig in signatures_to_check:
+                matches = self._check_offensive_signature(sig, full_response)
+                if matches:
+                    finding_hash = hashlib.md5(
+                        f"{sig.name}:{response_id}:{matches[0]}".encode()
+                    ).hexdigest()
+                    
+                    if finding_hash not in finding_hashes:
+                        finding_hashes.add(finding_hash)
+                        
+                        findings.append({
+                            "id": finding_hash[:12],
+                            "name": sig.name,
+                            "type": sig.offensive_type.value,
+                            "severity": sig.severity.value,
+                            "description": sig.description,
+                            "mitre_id": sig.mitre_id,
+                            "mitre_tactic": sig.mitre_tactic,
+                            "evidence": matches[:5],
+                            "payload": payload,
+                            "response_id": response_id,
+                            "confidence": sig.min_confidence + min(len(matches) * 0.05, 0.2),
+                        })
+        
+        # Sort by severity
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        findings.sort(key=lambda f: (severity_order.get(f["severity"], 5), -f["confidence"]))
+        
+        return findings
+    
+    def _check_offensive_signature(self, sig: OffensiveSignature, content: str) -> List[str]:
+        """Check if offensive signature matches content."""
+        matches = []
+        for pattern in self.compiled_offensive_patterns.get(sig.name, []):
+            for match in pattern.finditer(content):
+                matches.append(match.group(0))
+        return matches
+    
+    def generate_offensive_report(
+        self,
+        responses: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Generate comprehensive offensive security analysis report.
+        
+        Args:
+            responses: List of fuzzing response dicts
+            
+        Returns:
+            Comprehensive offensive analysis report
+        """
+        # Detect all offensive indicators
+        indicators = self.detect_offensive_indicators(responses)
+        
+        # Group by type
+        by_type = defaultdict(list)
+        for indicator in indicators:
+            by_type[indicator["type"]].append(indicator)
+        
+        # Count by severity
+        severity_counts = defaultdict(int)
+        for indicator in indicators:
+            severity_counts[indicator["severity"]] += 1
+        
+        # Extract unique MITRE ATT&CK IDs
+        mitre_ids = set()
+        mitre_tactics = set()
+        for indicator in indicators:
+            if indicator.get("mitre_id"):
+                mitre_ids.add(indicator["mitre_id"])
+            if indicator.get("mitre_tactic"):
+                mitre_tactics.add(indicator["mitre_tactic"])
+        
+        # Calculate threat score
+        threat_score = 0
+        threat_score += severity_counts.get("critical", 0) * 25
+        threat_score += severity_counts.get("high", 0) * 15
+        threat_score += severity_counts.get("medium", 0) * 5
+        threat_score += severity_counts.get("low", 0) * 2
+        threat_score = min(100, threat_score)
+        
+        # Determine threat level
+        if threat_score >= 70:
+            threat_level = "critical"
+        elif threat_score >= 50:
+            threat_level = "high"
+        elif threat_score >= 25:
+            threat_level = "medium"
+        elif threat_score > 0:
+            threat_level = "low"
+        else:
+            threat_level = "none"
+        
+        return {
+            "summary": {
+                "total_indicators": len(indicators),
+                "threat_score": threat_score,
+                "threat_level": threat_level,
+                "severity_breakdown": dict(severity_counts),
+            },
+            "mitre_attack": {
+                "techniques": list(mitre_ids),
+                "tactics": list(mitre_tactics),
+                "technique_count": len(mitre_ids),
+            },
+            "indicators_by_type": {
+                "c2_communication": by_type.get("c2_communication", []),
+                "process_injection": by_type.get("process_injection", []),
+                "credential_theft": by_type.get("credential_theft", []),
+                "persistence": by_type.get("persistence", []),
+                "sandbox_evasion": by_type.get("sandbox_evasion", []),
+                "lateral_movement": by_type.get("lateral_movement", []),
+                "exfiltration": by_type.get("exfiltration", []),
+                "cryptominer": by_type.get("cryptominer", []),
+                "ransomware": by_type.get("ransomware", []),
+                "rat_trojan": by_type.get("rat_trojan", []),
+                "botnet": by_type.get("botnet", []),
+            },
+            "all_indicators": indicators,
+            "recommendations": self._generate_offensive_recommendations(indicators),
+        }
+    
+    def _generate_offensive_recommendations(self, indicators: List[Dict[str, Any]]) -> List[str]:
+        """Generate recommendations based on offensive indicators."""
+        recommendations = []
+        
+        types_found = set(i["type"] for i in indicators)
+        
+        if "c2_communication" in types_found:
+            recommendations.append(
+                "C2 communication detected - Isolate affected systems and investigate "
+                "network traffic. Block identified C2 domains/IPs at the firewall."
+            )
+        
+        if "process_injection" in types_found:
+            recommendations.append(
+                "Process injection techniques detected - Enable memory protection policies "
+                "and review process creation monitoring. Consider EDR solutions."
+            )
+        
+        if "credential_theft" in types_found:
+            recommendations.append(
+                "Credential theft indicators detected - Reset potentially compromised "
+                "credentials. Enable MFA and review privileged access."
+            )
+        
+        if "persistence" in types_found:
+            recommendations.append(
+                "Persistence mechanisms detected - Review scheduled tasks, services, "
+                "and registry run keys. Implement application whitelisting."
+            )
+        
+        if "sandbox_evasion" in types_found:
+            recommendations.append(
+                "Sandbox evasion techniques detected - Use advanced behavioral analysis "
+                "and consider extended detonation times in sandbox environments."
+            )
+        
+        if "lateral_movement" in types_found:
+            recommendations.append(
+                "Lateral movement indicators detected - Implement network segmentation "
+                "and review remote execution policies. Enable SMB signing."
+            )
+        
+        if "exfiltration" in types_found:
+            recommendations.append(
+                "Data exfiltration indicators detected - Review DLP policies and "
+                "monitor unusual outbound traffic patterns."
+            )
+        
+        if "cryptominer" in types_found:
+            recommendations.append(
+                "Cryptominer detected - Block mining pool domains and investigate "
+                "unauthorized resource usage."
+            )
+        
+        if "ransomware" in types_found:
+            recommendations.append(
+                "Ransomware indicators detected - Isolate systems immediately, "
+                "preserve evidence, and initiate incident response procedures."
+            )
+        
+        if "rat_trojan" in types_found:
+            recommendations.append(
+                "Remote Access Trojan indicators detected - Investigate initial "
+                "infection vector and check for additional persistence mechanisms."
+            )
+        
+        if "botnet" in types_found:
+            recommendations.append(
+                "Botnet indicators detected - Block C2 channels, clean affected "
+                "systems, and review network for other compromised hosts."
+            )
+        
+        return recommendations
+    
     def categorize_responses(
         self,
         responses: List[Dict[str, Any]]
@@ -1017,3 +1938,20 @@ def differential_analysis(
 def categorize_responses(responses: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     """Categorize responses into groups."""
     return detection_engine.categorize_responses(responses)
+
+
+def detect_offensive_indicators(
+    responses: List[Dict[str, Any]],
+    include_c2: bool = True,
+    include_malware: bool = True,
+    include_evasion: bool = True,
+) -> List[Dict[str, Any]]:
+    """Detect offensive security indicators in responses."""
+    return detection_engine.detect_offensive_indicators(
+        responses, include_c2, include_malware, include_evasion
+    )
+
+
+def generate_offensive_report(responses: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Generate comprehensive offensive security analysis report."""
+    return detection_engine.generate_offensive_report(responses)

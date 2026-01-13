@@ -1,11 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
   Container,
   Paper,
-  Tabs,
-  Tab,
   Alert,
   AlertTitle,
   Accordion,
@@ -31,6 +29,10 @@ import {
   alpha,
   useTheme,
   Button,
+  Drawer,
+  Fab,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -57,6 +59,9 @@ import BuildIcon from "@mui/icons-material/Build";
 import QuizIcon from "@mui/icons-material/Quiz";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 // Question bank for Windows Internals quiz (75 questions)
@@ -896,20 +901,18 @@ function QuizSection() {
   );
 }
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+// Section navigation items
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <InfoIcon fontSize="small" /> },
+  { id: "pe-format", label: "PE File Format", icon: <StorageIcon fontSize="small" /> },
+  { id: "teb-peb", label: "TEB/PEB", icon: <AccountTreeIcon fontSize="small" /> },
+  { id: "api-patterns", label: "API Patterns", icon: <AppsIcon fontSize="small" /> },
+  { id: "hooking", label: "Hooking", icon: <LayersIcon fontSize="small" /> },
+  { id: "injection", label: "Code Injection", icon: <BugReportIcon fontSize="small" /> },
+  { id: "anti-debug", label: "Anti-Debug", icon: <LockIcon fontSize="small" /> },
+  { id: "tools", label: "RE Tools", icon: <TerminalIcon fontSize="small" /> },
+  { id: "quiz", label: "Quiz", icon: <QuizIcon fontSize="small" /> },
+];
 
 interface CodeBlockProps {
   title?: string;
@@ -1099,15 +1102,132 @@ const injectionMethods = [
 ];
 
 const WindowsInternalsREPage: React.FC = () => {
-  const [tabValue, setTabValue] = useState(0);
+  const [activeSection, setActiveSection] = useState("intro");
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const theme = useTheme();
   const navigate = useNavigate();
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
+  // Scroll tracking for active section
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      if (currentSection) {
+        setActiveSection(currentSection);
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveSection(sectionId);
+      setNavDrawerOpen(false);
+    }
   };
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const currentSectionIndex = sectionNavItems.findIndex(
+    (item) => item.id === activeSection
+  );
+  const progress = ((currentSectionIndex + 1) / sectionNavItems.length) * 100;
+
   const pageContext = `Windows Internals for Reverse Engineering - Comprehensive guide covering PE file format (DOS header, NT headers, sections, directories, IAT/EAT), Windows process architecture (TEB, PEB, loaded modules), memory management (virtual memory, heaps, stacks), Windows API patterns for malware analysis, DLL injection techniques (CreateRemoteThread, process hollowing, APC injection), hooking methods (IAT, inline, SSDT), anti-debugging techniques and bypasses, kernel structures, and essential RE tools (WinDbg, x64dbg, Process Monitor, API Monitor). Critical knowledge for malware analysis, exploit development, and Windows security research.`;
+
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 2,
+        borderRadius: 3,
+        bgcolor: alpha(theme.palette.background.paper, 0.8),
+        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        position: "sticky",
+        top: 20,
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+        <ListAltIcon sx={{ color: "#3b82f6" }} />
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          Contents
+        </Typography>
+      </Box>
+      <LinearProgress
+        variant="determinate"
+        value={progress}
+        sx={{
+          mb: 2,
+          height: 6,
+          borderRadius: 3,
+          bgcolor: alpha("#3b82f6", 0.1),
+          "& .MuiLinearProgress-bar": {
+            bgcolor: "#3b82f6",
+            borderRadius: 3,
+          },
+        }}
+      />
+      <List dense sx={{ p: 0 }}>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            component="div"
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              borderRadius: 2,
+              mb: 0.5,
+              cursor: "pointer",
+              bgcolor:
+                activeSection === item.id
+                  ? alpha("#3b82f6", 0.15)
+                  : "transparent",
+              borderLeft:
+                activeSection === item.id
+                  ? `3px solid #3b82f6`
+                  : "3px solid transparent",
+              "&:hover": {
+                bgcolor: alpha("#3b82f6", 0.08),
+              },
+            }}
+          >
+            <ListItemIcon
+              sx={{
+                minWidth: 32,
+                color: activeSection === item.id ? "#3b82f6" : "text.secondary",
+              }}
+            >
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                fontSize: "0.85rem",
+                fontWeight: activeSection === item.id ? 700 : 500,
+                color: activeSection === item.id ? "#3b82f6" : "text.primary",
+              }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="Windows Internals for RE" pageContext={pageContext}>
@@ -1162,7 +1282,7 @@ const WindowsInternalsREPage: React.FC = () => {
         </Paper>
 
         {/* Comprehensive Introduction Section */}
-        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
+        <Paper id="intro" sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}`, scrollMarginTop: "20px" }}>
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
             🔬 What is Windows Internals for Reverse Engineering?
           </Typography>
@@ -1255,26 +1375,20 @@ const WindowsInternalsREPage: React.FC = () => {
           </Box>
         </Paper>
 
-        {/* Tabs */}
-        <Paper sx={{ borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={handleTabChange}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}
-          >
-            <Tab icon={<StorageIcon />} label="PE Format" />
-            <Tab icon={<AccountTreeIcon />} label="TEB/PEB" />
-            <Tab icon={<AppsIcon />} label="API Patterns" />
-            <Tab icon={<LayersIcon />} label="Hooking" />
-            <Tab icon={<BugReportIcon />} label="Injection" />
-            <Tab icon={<LockIcon />} label="Anti-Debug" />
-            <Tab icon={<TerminalIcon />} label="Tools" />
-          </Tabs>
+        {/* Main Content with Sidebar */}
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation - Desktop */}
+          {!isMobile && (
+            <Grid item lg={3}>
+              {sidebarNav}
+            </Grid>
+          )}
 
-          {/* Tab 0: PE Format */}
-          <TabPanel value={tabValue} index={0}>
+          {/* Main Content */}
+          <Grid item xs={12} lg={isMobile ? 12 : 9}>
+            {/* Section: PE Format */}
+            <Box id="pe-format" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+              <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">PE File Format</Typography>
             <Typography paragraph>
               The Portable Executable (PE) format is the standard for executables (.exe), DLLs (.dll), and drivers (.sys) on Windows.
@@ -1493,10 +1607,12 @@ Export Resolution (GetProcAddress):
                 </Grid>
               </AccordionDetails>
             </Accordion>
-          </TabPanel>
+              </Paper>
+            </Box>
 
-          {/* Tab 1: TEB/PEB */}
-          <TabPanel value={tabValue} index={1}>
+            {/* Section: TEB/PEB */}
+            <Box id="teb-peb" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+              <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Process & Thread Environment</Typography>
             <Typography paragraph>
               Every Windows process has a PEB (Process Environment Block) and each thread has a TEB (Thread Environment Block).
@@ -1768,10 +1884,12 @@ mov eax, [eax+0x10]          ; ProcessParameters
 mov eax, [eax+0x40]          ; CommandLine.Buffer`}</CodeBlock>
               </AccordionDetails>
             </Accordion>
-          </TabPanel>
+              </Paper>
+            </Box>
 
-          {/* Tab 2: API Patterns */}
-          <TabPanel value={tabValue} index={2}>
+            {/* Section: API Patterns */}
+            <Box id="api-patterns" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+              <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Windows API Patterns</Typography>
             <Typography paragraph>
               Identifying suspicious API calls and their combinations is crucial for malware analysis. 
@@ -1943,10 +2061,12 @@ syscall
 ret`}</CodeBlock>
               </AccordionDetails>
             </Accordion>
-          </TabPanel>
+              </Paper>
+            </Box>
 
-          {/* Tab 3: Hooking */}
-          <TabPanel value={tabValue} index={3}>
+            {/* Section: Hooking */}
+            <Box id="hooking" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+              <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Hooking Techniques</Typography>
             <Typography paragraph>
               Hooking allows intercepting function calls to monitor, modify, or redirect execution.
@@ -2178,10 +2298,12 @@ LONG CALLBACK VehHandler(PEXCEPTION_POINTERS pExInfo) {
 // Setup: AddVectoredExceptionHandler(1, VehHandler);`}</CodeBlock>
               </AccordionDetails>
             </Accordion>
-          </TabPanel>
+              </Paper>
+            </Box>
 
-          {/* Tab 4: Injection */}
-          <TabPanel value={tabValue} index={4}>
+            {/* Section: Injection */}
+            <Box id="injection" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+              <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Code Injection Techniques</Typography>
             <Typography paragraph>
               Code injection allows executing code in another process's address space. Essential knowledge 
@@ -2462,10 +2584,12 @@ LONG CALLBACK VehHandler(PEXCEPTION_POINTERS pExInfo) {
 // Executes before EDR hooks are applied!`}</CodeBlock>
               </AccordionDetails>
             </Accordion>
-          </TabPanel>
+              </Paper>
+            </Box>
 
-          {/* Tab 5: Anti-Debug */}
-          <TabPanel value={tabValue} index={5}>
+            {/* Section: Anti-Debug */}
+            <Box id="anti-debug" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+              <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Anti-Debugging Techniques</Typography>
             <Typography paragraph>
               Malware and protected software use various techniques to detect debuggers, VMs, and analysis environments.
@@ -2685,10 +2809,12 @@ if (ctx.Dr0 || ctx.Dr1 || ctx.Dr2 || ctx.Dr3) {
                 </Grid>
               </AccordionDetails>
             </Accordion>
-          </TabPanel>
+              </Paper>
+            </Box>
 
-          {/* Tab 6: Tools */}
-          <TabPanel value={tabValue} index={6}>
+            {/* Section: Tools */}
+            <Box id="tools" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+              <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Essential RE Tools for Windows</Typography>
             <Typography paragraph>
               A well-equipped reverse engineering environment requires debuggers, disassemblers, monitoring tools,
@@ -2924,11 +3050,16 @@ dt ntdll!_TEB       # Dump TEB structure
 !analyze -v          # Verbose crash analysis`}</CodeBlock>
               </AccordionDetails>
             </Accordion>
-          </TabPanel>
-        </Paper>
+              </Paper>
+            </Box>
 
-        {/* Quiz Section */}
-        <QuizSection />
+            {/* Section: Quiz */}
+            <Box id="quiz" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+              <QuizSection />
+            </Box>
+
+          </Grid>
+        </Grid>
 
         {/* Bottom Navigation */}
         <Box sx={{ mt: 4, textAlign: "center" }}>
@@ -2936,12 +3067,75 @@ dt ntdll!_TEB       # Dump TEB structure
             variant="outlined"
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+            sx={{ borderColor: "#3b82f6", color: "#3b82f6" }}
           >
             Back to Learning Hub
           </Button>
         </Box>
       </Container>
+
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        sx={{
+          "& .MuiDrawer-paper": {
+            width: 280,
+            p: 2,
+            bgcolor: theme.palette.background.default,
+          },
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 2,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Navigation
+          </Typography>
+          <IconButton onClick={() => setNavDrawerOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        {sidebarNav}
+      </Drawer>
+
+      {/* FAB Buttons */}
+      {isMobile && (
+        <Fab
+          color="primary"
+          size="medium"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 80,
+            right: 16,
+            bgcolor: "#3b82f6",
+            "&:hover": { bgcolor: "#2563eb" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      )}
+      <Fab
+        size="small"
+        onClick={scrollToTop}
+        sx={{
+          position: "fixed",
+          bottom: 24,
+          right: 16,
+          bgcolor: alpha("#3b82f6", 0.9),
+          color: "white",
+          "&:hover": { bgcolor: "#3b82f6" },
+        }}
+      >
+        <KeyboardArrowUpIcon />
+      </Fab>
     </LearnPageLayout>
   );
 };

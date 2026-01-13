@@ -476,6 +476,7 @@ export default function PythonFundamentalsPage() {
   // Module navigation items
   const moduleNavItems = [
     { id: "introduction", label: "Introduction", icon: "📖" },
+    { id: "beginner-basics", label: "Beginner Kickstart", icon: "🧭" },
     { id: "module-1", label: "1. Getting Started", icon: "🚀" },
     { id: "module-2", label: "2. Python Syntax", icon: "📝" },
     { id: "module-3", label: "3. Variables & Types", icon: "📦" },
@@ -490,6 +491,7 @@ export default function PythonFundamentalsPage() {
     { id: "module-12", label: "12. Error Handling", icon: "🛡️" },
     { id: "module-13", label: "13. Classes & OOP", icon: "🏗️" },
     { id: "module-14", label: "14. Modules & Packages", icon: "📚" },
+    { id: "libraries", label: "Libraries & Ecosystem", icon: "🧰" },
     { id: "module-15", label: "15. Advanced Topics", icon: "✨" },
     { id: "quiz-section", label: "Knowledge Quiz", icon: "❓" },
   ];
@@ -925,6 +927,84 @@ export default function PythonFundamentalsPage() {
               </Paper>
             </Grid>
           </Grid>
+        </Paper>
+
+        {/* ==================== BEGINNER KICKSTART ==================== */}
+        <Paper
+          id="beginner-basics"
+          sx={{
+            p: 4,
+            mb: 5,
+            borderRadius: 4,
+            bgcolor: alpha(theme.palette.background.paper, 0.7),
+            border: `1px solid ${alpha("#3776ab", 0.12)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2, flexWrap: "wrap" }}>
+            <PlayArrowIcon sx={{ color: "#3776ab" }} />
+            <Typography variant="h5" sx={{ fontWeight: 800 }}>
+              Beginner Kickstart: Run Your First Python Code
+            </Typography>
+            <DifficultyBadge level="beginner" />
+          </Box>
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            If you are brand new to coding, focus on two things first: being able to run Python reliably, and building
+            a habit of making tiny changes and seeing the result. That feedback loop is how you learn fastest.
+          </Typography>
+
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3776ab" }}>
+                Setup checklist (do this once)
+              </Typography>
+              <List dense>
+                {environmentChecklist.map((item, idx) => (
+                  <ListItem key={idx} sx={{ px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <CheckCircleIcon sx={{ color: "#22c55e", fontSize: 18 }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3776ab" }}>
+                First steps that work every time
+              </Typography>
+              <List dense>
+                {firstSteps.map((item, idx) => (
+                  <ListItem key={idx} sx={{ px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <CheckCircleIcon sx={{ color: "#3776ab", fontSize: 18 }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mt: 3 }}>
+            <CodeBlock
+              title="Your First Script (save as hello.py)"
+              code={`name = input("What is your name? ")
+print(f"Hello, {name}! You just ran Python.")`}
+            />
+          </Box>
+
+          <Box sx={{ mt: 2 }}>
+            <ProTip>
+              The REPL (type <code>python</code>) is great for quick experiments. Scripts (files ending in .py) are for
+              repeatable work you can run again.
+            </ProTip>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <WarningBox title="Common beginner pitfall">
+              Python uses indentation to group code. If a block looks indented, it must be indented consistently
+              (4 spaces is the norm).
+            </WarningBox>
+          </Box>
         </Paper>
 
         {/* ==================== MODULE 1: GETTING STARTED ==================== */}
@@ -4849,6 +4929,90 @@ print(args.name)`}
             <ProTip>
               Always use virtual environments for your projects! They isolate dependencies and prevent
               version conflicts. Tools like <code>poetry</code> or <code>pipenv</code> make management even easier.
+            </ProTip>
+          </Box>
+        </Paper>
+
+        {/* ==================== LIBRARIES & ECOSYSTEM ==================== */}
+        <Paper id="libraries" sx={{ p: 4, mb: 5, borderRadius: 4, border: "1px solid", borderColor: "divider" }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3, flexWrap: "wrap", gap: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 2 }}>
+              <ExtensionIcon sx={{ color: "#3776ab", fontSize: 32 }} />
+              Libraries & Ecosystem
+            </Typography>
+            <DifficultyBadge level="beginner" />
+          </Box>
+
+          <Typography variant="body1" sx={{ mb: 3, fontSize: "1.1rem", lineHeight: 1.8 }}>
+            A library is reusable code that solves a specific problem so you do not have to build everything from
+            scratch. Python ships with a <strong>standard library</strong> (built-in), and you can add
+            <strong> third-party libraries</strong> from PyPI using <code>pip</code>.
+          </Typography>
+
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3776ab" }}>
+                Standard library essentials
+              </Typography>
+              <List dense>
+                {[
+                  "pathlib: cross-platform file paths",
+                  "json: read/write JSON data",
+                  "datetime: dates and times",
+                  "random: generate random numbers",
+                  "csv: work with CSV files",
+                  "math/statistics: math helpers and stats",
+                ].map((item, idx) => (
+                  <ListItem key={idx} sx={{ px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <CheckCircleIcon sx={{ color: "#22c55e", fontSize: 18 }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3776ab" }}>
+                Popular third-party libraries
+              </Typography>
+              <List dense>
+                {[
+                  "requests: make HTTP requests",
+                  "numpy/pandas: data and analysis",
+                  "matplotlib: charts and plots",
+                  "flask/fastapi/django: web apps and APIs",
+                  "pytest: testing your code",
+                  "beautifulsoup4: parse HTML",
+                ].map((item, idx) => (
+                  <ListItem key={idx} sx={{ px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      <CheckCircleIcon sx={{ color: "#3776ab", fontSize: 18 }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mt: 3 }}>
+            <CodeBlock
+              title="Install and use a library"
+              code={`# Install a third-party library
+python -m pip install requests
+
+# Use it in your code
+import requests
+response = requests.get("https://api.github.com")
+print(response.status_code)`}
+            />
+          </Box>
+
+          <Box sx={{ mt: 2 }}>
+            <ProTip>
+              Keep a <code>requirements.txt</code> (or <code>pyproject.toml</code>) so others can install the same
+              libraries. This makes your projects repeatable.
             </ProTip>
           </Box>
         </Paper>

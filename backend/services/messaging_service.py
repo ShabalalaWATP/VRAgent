@@ -403,7 +403,7 @@ def get_user_conversations(
     # Get conversation IDs where user is a participant
     participant_subquery = db.query(ConversationParticipant.conversation_id).filter(
         ConversationParticipant.user_id == user_id
-    ).subquery()
+    ).scalar_subquery()
     
     conversations = db.query(Conversation).filter(
         Conversation.id.in_(participant_subquery)
@@ -412,8 +412,13 @@ def get_user_conversations(
         Conversation.created_at.desc()
     ).offset(skip).limit(limit).all()
     
+    # Re-create the subquery for the count (scalar_subquery can only be used once)
+    participant_subquery_count = db.query(ConversationParticipant.conversation_id).filter(
+        ConversationParticipant.user_id == user_id
+    ).scalar_subquery()
+    
     total = db.query(func.count(Conversation.id)).filter(
-        Conversation.id.in_(participant_subquery)
+        Conversation.id.in_(participant_subquery_count)
     ).scalar()
     
     result = []
@@ -581,8 +586,8 @@ def get_conversation_participant_ids(db: Session, conversation_id: int) -> List[
     return [p.user_id for p in participants]
 
 
-def _get_reactions_for_message(db: Session, message_id: int, user_id: int) -> Dict[str, Dict]:
-    """Internal helper to get reactions for a message, keyed by emoji."""
+def _get_reactions_for_message(db: Session, message_id: int, user_id: int) -> List[Dict]:
+    """Internal helper to get reactions for a message as a list."""
     reactions = db.query(MessageReaction).filter(
         MessageReaction.message_id == message_id
     ).all()
@@ -606,7 +611,8 @@ def _get_reactions_for_message(db: Session, message_id: int, user_id: int) -> Di
         if r.user_id == user_id:
             emoji_groups[r.emoji]["has_reacted"] = True
     
-    return emoji_groups
+    # Return as list instead of dict
+    return list(emoji_groups.values())
 
 
 def _get_reply_info(db: Session, message_id: int) -> Optional[Dict]:

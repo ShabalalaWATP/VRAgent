@@ -53,6 +53,10 @@ services:
     volumes:
       - upload_data:/app/uploads
       - /var/run/docker.sock:/var/run/docker.sock
+      # Optional: Mount external wordlists directory (e.g., rockyou.txt, SecLists)
+      # Uncomment and modify path to use external wordlists:
+      # - /path/to/wordlists:/wordlists:ro
+      # - /usr/share/seclists:/usr/share/seclists:ro
     # Required for nmap to perform network scans
     cap_add:
       - NET_RAW

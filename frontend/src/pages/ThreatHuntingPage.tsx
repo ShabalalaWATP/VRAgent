@@ -1,9 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
   Box,
-  Container,
   Typography,
   Paper,
   Chip,
@@ -15,6 +14,13 @@ import {
   ListItemText,
   alpha,
   useTheme,
+  Divider,
+  Drawer,
+  LinearProgress,
+  Fab,
+  Tooltip,
+  IconButton,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import TravelExploreIcon from "@mui/icons-material/TravelExplore";
@@ -26,6 +32,15 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import WarningIcon from "@mui/icons-material/Warning";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import StorageIcon from "@mui/icons-material/Storage";
+import BuildIcon from "@mui/icons-material/Build";
+import TimelineIcon from "@mui/icons-material/Timeline";
+import GroupIcon from "@mui/icons-material/Group";
+import AssessmentIcon from "@mui/icons-material/Assessment";
+import SchoolIcon from "@mui/icons-material/School";
 import { Link, useNavigate } from "react-router-dom";
 
 interface HuntingPhase {
@@ -115,6 +130,22 @@ const baselineChecklist = [
   "Record known-good automation and scheduled jobs",
 ];
 
+const readinessChecklist = [
+  "Confirm access to endpoint, identity, and network telemetry",
+  "Verify time sync (NTP) across data sources",
+  "Define query windows and retention limits",
+  "Document data owners and escalation contacts",
+  "Set up a safe lab or sandbox for validation",
+];
+
+const dataQualityChecks = [
+  "Normalize user and host naming conventions",
+  "Check for missing command_line or parent fields",
+  "Identify sampled or dropped logs during peaks",
+  "Validate time zone alignment and clock drift",
+  "Record noisy sources to filter consistently",
+];
+
 const huntOutputs = [
   "New detections (rules, queries, playbooks)",
   "Validated IOCs or TTPs with context",
@@ -129,6 +160,64 @@ const huntMetrics = [
   "Telemetry coverage vs. ATT&CK techniques",
   "False positive rate of new detections",
   "Time from hunt finding to remediation",
+];
+
+const prioritizationFactors = [
+  "Asset criticality and business impact",
+  "External exposure and attack surface",
+  "Active campaigns targeting your sector",
+  "Telemetry coverage and known gaps",
+  "Recent changes, new deployments, or acquisitions",
+];
+
+const detectionHandoff = [
+  "Query logic, thresholds, and tuning notes",
+  "Required data sources and fields",
+  "Example events that represent true positives",
+  "False-positive patterns to suppress",
+  "Owner and maintenance cadence",
+];
+
+const hypothesisExample = {
+  hypothesis: "Adversaries may be using LOLBins to download payloads on privileged endpoints.",
+  dataSources: [
+    "EDR process creation with command line",
+    "Web proxy or egress logs",
+    "DNS query logs for new domains",
+  ],
+  signals: [
+    "certutil/mshta/rundll32 with URL parameters",
+    "Unusual parent processes for LOLBins",
+    "Off-hours execution on admin workstations",
+  ],
+};
+
+const collaborationRoles = [
+  "Hunt lead: scopes the hypothesis and success criteria",
+  "Detection engineer: converts findings to production rules",
+  "IR lead: validates and handles confirmed incidents",
+  "IT ops: patches, config changes, and enforcement",
+  "Threat intel: provides campaign context and IOCs",
+];
+
+const huntCadence = [
+  "Weekly tactical hunts for current campaigns",
+  "Monthly technique coverage hunts",
+  "Quarterly program reviews and gap analysis",
+];
+
+const reportingArtifacts = [
+  "Hunt report with timeline and evidence",
+  "IOC/TTP package for cross-team sharing",
+  "Detection rule proposal with test cases",
+  "Telemetry gaps and logging requests",
+];
+
+const postHuntQuestions = [
+  "Did we confirm or refute the hypothesis?",
+  "What data sources were missing or noisy?",
+  "Which detections should be created or tuned?",
+  "What follow-up hunts are required?",
 ];
 
 const huntCardTemplate = [
@@ -146,6 +235,70 @@ const commonPitfalls = [
   "Not validating findings with additional sources",
   "Failing to convert findings into detections",
   "Skipping documentation because no threat was found",
+];
+
+// Example hunt queries
+const exampleHuntQueries = [
+  {
+    name: "Suspicious PowerShell Execution",
+    description: "Find encoded PowerShell commands often used by attackers",
+    query: `process_name:"powershell.exe" AND (command_line:*-enc* OR command_line:*-e * OR command_line:*frombase64*)`,
+    lookFor: "Encoded commands, unusual parent processes, network connections after execution",
+  },
+  {
+    name: "LOLBIN Abuse Detection",
+    description: "Identify living-off-the-land binary misuse",
+    query: `process_name:(certutil.exe OR mshta.exe OR regsvr32.exe OR rundll32.exe) AND (command_line:*http* OR command_line:*\\\\*)`,
+    lookFor: "Download attempts, script execution, unusual command-line arguments",
+  },
+  {
+    name: "Credential Dumping Indicators",
+    description: "Detect tools targeting LSASS or SAM",
+    query: `(process_name:*mimikatz* OR command_line:*sekurlsa* OR target_process:lsass.exe) OR (file_path:*\\\\SAM AND access_type:read)`,
+    lookFor: "LSASS access, registry SAM hive reads, known tool signatures",
+  },
+  {
+    name: "Beaconing Detection",
+    description: "Find periodic outbound connections suggesting C2",
+    query: `destination_port:(443 OR 80) | stats count, avg(bytes_out), stdev(time_delta) by src_ip, dest_ip | where stdev < 5`,
+    lookFor: "Regular intervals, consistent packet sizes, unusual destinations",
+  },
+];
+
+// Hunting tools
+const huntingTools = [
+  { name: "Splunk", category: "SIEM", use: "Log search, correlation, dashboards" },
+  { name: "Elastic/Kibana", category: "SIEM", use: "Full-text search, visualizations" },
+  { name: "Microsoft Sentinel", category: "SIEM", use: "Cloud-native hunting, KQL queries" },
+  { name: "Velociraptor", category: "DFIR", use: "Endpoint collection and hunting" },
+  { name: "OSQuery", category: "Endpoint", use: "SQL-based endpoint queries" },
+  { name: "YARA", category: "Signatures", use: "Pattern matching for malware" },
+  { name: "Sigma", category: "Detection", use: "Vendor-agnostic detection rules" },
+  { name: "Jupyter Notebooks", category: "Analysis", use: "Data analysis and visualization" },
+];
+
+// Maturity levels
+const maturityLevels = [
+  {
+    level: "Level 1 - Initial",
+    description: "Ad-hoc hunting, reliant on IOC searches, minimal documentation",
+    characteristics: ["Reactive IOC lookups", "No formal process", "Limited tooling"],
+  },
+  {
+    level: "Level 2 - Defined",
+    description: "Documented hypotheses, regular hunting cadence, basic metrics",
+    characteristics: ["Hunt card templates", "Scheduled hunts", "Some automation"],
+  },
+  {
+    level: "Level 3 - Repeatable",
+    description: "Mature program with coverage mapping, detection engineering integration",
+    characteristics: ["ATT&CK coverage tracking", "Hunt-to-detection pipeline", "Threat intel integration"],
+  },
+  {
+    level: "Level 4 - Optimized",
+    description: "Continuous improvement, ML-assisted hunting, proactive threat modeling",
+    characteristics: ["Automated hypothesis generation", "Purple team collaboration", "Advanced analytics"],
+  },
 ];
 
 const QUIZ_ACCENT_COLOR = "#8b5cf6";
@@ -763,12 +916,174 @@ const quizQuestions: QuizQuestion[] = [
 export default function ThreatHuntingPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const accent = "#8b5cf6";
 
-  const pageContext = `Threat Hunting Fundamentals Guide - Covers proactive threat hunting methodology including hypothesis formation, data collection, investigation, findings documentation, and response. Includes hunt types, hypothesis sources, analysis techniques, baselining, hunt card templates, outputs, metrics, data sources, hunt ideas mapped to MITRE ATT&CK techniques, and frameworks (ATT&CK, Pyramid of Pain, PEAK, Cyber Kill Chain).`;
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "overview", label: "Overview", icon: <TravelExploreIcon /> },
+    { id: "hypothesis", label: "Hypothesis", icon: <LightbulbIcon /> },
+    { id: "hunting-process", label: "Hunting Process", icon: <TimelineIcon /> },
+    { id: "hunt-types", label: "Hunt Types", icon: <TrackChangesIcon /> },
+    { id: "readiness", label: "Readiness", icon: <CheckCircleIcon /> },
+    { id: "data-sources", label: "Data Sources", icon: <StorageIcon /> },
+    { id: "analysis", label: "Analysis", icon: <PsychologyIcon /> },
+    { id: "frameworks", label: "Frameworks", icon: <SchoolIcon /> },
+    { id: "collaboration", label: "Collaboration", icon: <GroupIcon /> },
+    { id: "outputs", label: "Outputs & Metrics", icon: <AssessmentIcon /> },
+    { id: "tools", label: "Tools", icon: <BuildIcon /> },
+    { id: "maturity", label: "Maturity", icon: <TimelineIcon /> },
+    { id: "quiz-section", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  const pageContext = `Threat Hunting Fundamentals Guide - Covers proactive threat hunting methodology including hypothesis formation, data collection, investigation, findings documentation, and response. Includes readiness checks, data quality validation, hunt cadence, collaboration roles, reporting artifacts, hunt types, hypothesis sources, analysis techniques, baselining, hunt card templates, outputs, metrics, data sources, hunt ideas mapped to MITRE ATT&CK techniques, and frameworks (ATT&CK, Pyramid of Pain, PEAK, Cyber Kill Chain).`;
+
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": { width: 6 },
+        "&::-webkit-scrollbar-thumb": { bgcolor: alpha(accent, 0.3), borderRadius: 3 },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}>
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Progress</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>{Math.round(progressPercent)}%</Typography>
+          </Box>
+          <LinearProgress variant="determinate" value={progressPercent} sx={{ height: 6, borderRadius: 3, bgcolor: alpha(accent, 0.1), "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 } }} />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5, mb: 0.25, py: 0.5, cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": { bgcolor: alpha(accent, 0.08) },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText primary={<Typography variant="caption" sx={{ fontWeight: activeSection === item.id ? 700 : 500, color: activeSection === item.id ? accent : "text.secondary", fontSize: "0.75rem" }}>{item.label}</Typography>} />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="Threat Hunting Fundamentals" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab color="primary" onClick={() => setNavDrawerOpen(true)} sx={{ position: "fixed", bottom: 90, right: 24, zIndex: 1000, bgcolor: accent, "&:hover": { bgcolor: "#7c3aed" }, boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`, display: { xs: "flex", lg: "none" } }}>
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab size="small" onClick={scrollToTop} sx={{ position: "fixed", bottom: 32, right: 28, zIndex: 1000, bgcolor: alpha(accent, 0.15), color: accent, "&:hover": { bgcolor: alpha(accent, 0.25) }, display: { xs: "flex", lg: "none" } }}>
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer anchor="right" open={navDrawerOpen} onClose={() => setNavDrawerOpen(false)} PaperProps={{ sx: { width: isMobile ? "85%" : 320, bgcolor: theme.palette.background.paper, backgroundImage: "none" } }}>
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small"><CloseIcon /></IconButton>
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>{Math.round(progressPercent)}%</Typography>
+            </Box>
+            <LinearProgress variant="determinate" value={progressPercent} sx={{ height: 6, borderRadius: 3, bgcolor: alpha(accent, 0.1), "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 } }} />
+          </Box>
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem key={item.id} onClick={() => scrollToSection(item.id)} sx={{ borderRadius: 2, mb: 0.5, cursor: "pointer", bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent", borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent", "&:hover": { bgcolor: alpha(accent, 0.1) }, transition: "all 0.2s ease" }}>
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText primary={<Typography variant="body2" sx={{ fontWeight: activeSection === item.id ? 700 : 500, color: activeSection === item.id ? accent : "text.primary" }}>{item.label}</Typography>} />
+                {activeSection === item.id && <Chip label="Current" size="small" sx={{ height: 20, fontSize: "0.65rem", bgcolor: alpha(accent, 0.2), color: accent }} />}
+              </ListItem>
+            ))}
+          </List>
+          <Divider sx={{ my: 2 }} />
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button size="small" variant="outlined" onClick={scrollToTop} startIcon={<KeyboardArrowUpIcon />} sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}>Top</Button>
+            <Button size="small" variant="outlined" onClick={() => scrollToSection("quiz-section")} startIcon={<QuizIcon />} sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}>Quiz</Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
           <Chip
@@ -811,7 +1126,7 @@ export default function ThreatHuntingPage() {
         </Box>
 
         {/* Overview */}
-        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+        <Paper id="overview" sx={{ p: 3, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, scrollMarginTop: 100 }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <TravelExploreIcon color="primary" /> What is Threat Hunting?
           </Typography>
@@ -823,7 +1138,7 @@ export default function ThreatHuntingPage() {
         </Paper>
 
         {/* Hypothesis Sources */}
-        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.04) }}>
+        <Paper id="hypothesis" sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.04), scrollMarginTop: 100 }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <LightbulbIcon sx={{ color: "#8b5cf6" }} /> Hypothesis Sources
           </Typography>
@@ -839,8 +1154,46 @@ export default function ThreatHuntingPage() {
           </List>
         </Paper>
 
+        {/* Example Hypothesis */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#6366f1", 0.04) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <LightbulbIcon sx={{ color: "#6366f1" }} /> Example Hypothesis
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {hypothesisExample.hypothesis}
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Data Sources</Typography>
+              <List dense>
+                {hypothesisExample.dataSources.map((item) => (
+                  <ListItem key={item} sx={{ py: 0.25, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#6366f1" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Signals to Look For</Typography>
+              <List dense>
+                {hypothesisExample.signals.map((item) => (
+                  <ListItem key={item} sx={{ py: 0.25, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#6366f1" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
+
         {/* Hunting Process */}
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>🔄 Hunting Process</Typography>
+        <Typography id="hunting-process" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 100 }}>🔄 Hunting Process</Typography>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 4 }}>
           {huntingPhases.map((phase, i) => (
             <React.Fragment key={phase.title}>
@@ -882,7 +1235,7 @@ export default function ThreatHuntingPage() {
         </Box>
 
         {/* Hunt Types */}
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>?? Hunt Types</Typography>
+        <Typography id="hunt-types" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 100 }}>Hunt Types</Typography>
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {huntTypes.map((hunt) => (
             <Grid item xs={12} sm={6} md={3} key={hunt.title}>
@@ -906,8 +1259,63 @@ export default function ThreatHuntingPage() {
           ))}
         </Grid>
 
+        {/* Readiness and Data Quality */}
+        <Grid id="readiness" container spacing={3} sx={{ mb: 4, scrollMarginTop: 100 }}>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03) }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <SourceIcon sx={{ color: "#3b82f6" }} /> Hunt Readiness Checklist
+              </Typography>
+              <List dense>
+                {readinessChecklist.map((item, i) => (
+                  <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#f59e0b", 0.04) }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <PsychologyIcon sx={{ color: "#f59e0b" }} /> Data Quality Checks
+              </Typography>
+              <List dense>
+                {dataQualityChecks.map((item, i) => (
+                  <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#f59e0b" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        {/* Hunt Cadence */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.04) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <TrackChangesIcon sx={{ color: "#8b5cf6" }} /> Hunt Cadence
+          </Typography>
+          <List dense>
+            {huntCadence.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#8b5cf6" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
         {/* Data Sources & Hunt Ideas */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid id="data-sources" container spacing={3} sx={{ mb: 4, scrollMarginTop: 100 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03) }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
@@ -950,7 +1358,7 @@ export default function ThreatHuntingPage() {
         </Grid>
 
         {/* Baseline and Analysis */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid id="analysis" container spacing={3} sx={{ mb: 4, scrollMarginTop: 100 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#10b981", 0.03) }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
@@ -1006,12 +1414,14 @@ export default function ThreatHuntingPage() {
 
         {/* Frameworks */}
         <Paper
+          id="frameworks"
           sx={{
             p: 3,
             mb: 4,
             borderRadius: 3,
             background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.05)}, ${alpha("#6366f1", 0.05)})`,
             border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+            scrollMarginTop: 100,
           }}
         >
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
@@ -1032,8 +1442,42 @@ export default function ThreatHuntingPage() {
           </Grid>
         </Paper>
 
+        {/* Collaboration Roles */}
+        <Paper id="collaboration" sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#06b6d4", 0.04), scrollMarginTop: 100 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <PsychologyIcon sx={{ color: "#06b6d4" }} /> Collaboration Roles
+          </Typography>
+          <List dense>
+            {collaborationRoles.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#06b6d4" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* Prioritization Factors */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#6366f1", 0.04) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <LightbulbIcon sx={{ color: "#6366f1" }} /> Hunt Prioritization Factors
+          </Typography>
+          <List dense>
+            {prioritizationFactors.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#6366f1" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
         {/* Outputs and Metrics */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid id="outputs" container spacing={3} sx={{ mb: 4, scrollMarginTop: 100 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#6366f1", 0.04) }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
@@ -1068,6 +1512,119 @@ export default function ThreatHuntingPage() {
               </List>
             </Paper>
           </Grid>
+        </Grid>
+
+        {/* Detection Engineering Handoff */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#10b981", 0.05) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <TrackChangesIcon sx={{ color: "#10b981" }} /> Detection Engineering Handoff
+          </Typography>
+          <List dense>
+            {detectionHandoff.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* Reporting Artifacts */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.04) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <TrackChangesIcon sx={{ color: "#f59e0b" }} /> Reporting Artifacts
+          </Typography>
+          <List dense>
+            {reportingArtifacts.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#f59e0b" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* Post-Hunt Review */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#6366f1", 0.04) }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <TrackChangesIcon sx={{ color: "#6366f1" }} /> Post-Hunt Review Questions
+          </Typography>
+          <List dense>
+            {postHuntQuestions.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#6366f1" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* Example Hunt Queries */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>Example Hunt Queries</Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {exampleHuntQueries.map((q, i) => (
+            <Grid item xs={12} md={6} key={i}>
+              <Paper sx={{ p: 2.5, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 0.5 }}>{q.name}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{q.description}</Typography>
+                <Box sx={{ p: 1.5, bgcolor: alpha("#000", 0.03), borderRadius: 1, fontFamily: "monospace", fontSize: "0.75rem", mb: 1.5, overflowX: "auto" }}>
+                  {q.query}
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  <strong>Look for:</strong> {q.lookFor}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Hunting Tools */}
+        <Paper id="tools" sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), scrollMarginTop: 100 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <SourceIcon sx={{ color: "#3b82f6" }} /> Hunting Tools
+          </Typography>
+          <Grid container spacing={1}>
+            {huntingTools.map((tool, i) => (
+              <Grid item xs={12} sm={6} md={3} key={i}>
+                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#3b82f6", mt: 0.3 }} />
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{tool.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">{tool.category} - {tool.use}</Typography>
+                  </Box>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Maturity Levels */}
+        <Typography id="maturity" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 100 }}>Hunt Program Maturity</Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {maturityLevels.map((level, i) => (
+            <Grid item xs={12} sm={6} md={3} key={i}>
+              <Paper sx={{ p: 2, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#10b981", 0.2)}`, bgcolor: alpha("#10b981", 0.02) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>{level.level}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{level.description}</Typography>
+                <List dense disablePadding>
+                  {level.characteristics.map((c, j) => (
+                    <ListItem key={j} sx={{ py: 0, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 20 }}>
+                        <CheckCircleIcon sx={{ fontSize: 12, color: "#10b981" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={c} primaryTypographyProps={{ variant: "caption" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          ))}
         </Grid>
 
         {/* Common Pitfalls */}
@@ -1149,7 +1706,8 @@ export default function ThreatHuntingPage() {
             Back to Learning Hub
           </Button>
         </Box>
-      </Container>
+      </Box>
+      </Box>
     </LearnPageLayout>
   );
 }

@@ -3,7 +3,10 @@ Man-in-the-Middle Workbench Router
 API endpoints for MITM proxy management.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Path, Depends
+import json
+
+import asyncio
+from fastapi import APIRouter, HTTPException, Query, Path, Depends, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, Dict, List, Any
@@ -16,9 +19,25 @@ from ..services.mitm_service import (
     generate_mitm_markdown_report,
     generate_mitm_pdf_report,
     generate_mitm_docx_report,
+    generate_mitm_pcap,
     create_rule_from_natural_language,
-    get_ai_traffic_suggestions
+    get_ai_traffic_suggestions,
+    network_throttler,
+    macro_recorder,
+    har_exporter,
+    protocol_decoder_manager,
+    session_sharing_manager,
+    ThrottleProfile,
+    Macro,
+    MacroStep,
+    # AI-powered analysis
+    analyze_traffic_sensitive_data,
+    analyze_traffic_injection_points,
+    query_traffic_natural_language,
+    generate_security_test_cases,
+    generate_vulnerability_finding
 )
+from ..core.mitm_ws_manager import mitm_stream_manager
 
 router = APIRouter(prefix="/mitm", tags=["MITM Workbench"])
 
@@ -36,6 +55,8 @@ class ProxyConfig(BaseModel):
 class RuleConfig(BaseModel):
     name: str
     enabled: bool = True
+    priority: int = 100
+    group: Optional[str] = None
     match_host: Optional[str] = None
     match_path: Optional[str] = None
     match_method: Optional[str] = None
@@ -44,13 +65,40 @@ class RuleConfig(BaseModel):
     match_header: Optional[Dict[str, str]] = None
     match_status_code: Optional[int] = None
     match_direction: str = "both"  # request, response, both
+    match_query: Optional[Dict[str, str]] = None
     action: str = "modify"  # modify, drop, delay
     modify_headers: Optional[Dict[str, str]] = None
     remove_headers: Optional[List[str]] = None
     modify_body: Optional[str] = None
     body_find_replace: Optional[Dict[str, str]] = None
+    body_find_replace_regex: bool = False
+    json_path_edits: Optional[List[Dict[str, Any]]] = None
     modify_status_code: Optional[int] = None
+    modify_path: Optional[str] = None
     delay_ms: int = 0
+
+
+class TrafficUpdate(BaseModel):
+    """Update notes or tags for a traffic entry."""
+    notes: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class SessionCreateRequest(BaseModel):
+    """Create a named traffic session snapshot."""
+    name: Optional[str] = None
+
+
+class ReplayRequest(BaseModel):
+    """Replay request overrides."""
+    method: Optional[str] = None
+    path: Optional[str] = None
+    body: Optional[Any] = None
+    add_headers: Optional[Dict[str, str]] = None
+    remove_headers: Optional[List[str]] = None
+    base_url: Optional[str] = None
+    timeout: Optional[int] = 20
+    verify_tls: Optional[bool] = False
 
 
 @router.post("/proxies")
@@ -130,10 +178,14 @@ async def set_proxy_mode(proxy_id: str, mode: str = Query(...)):
 async def get_traffic(
     proxy_id: str,
     limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
+    start: Optional[int] = Query(None, ge=0),
+    end: Optional[int] = Query(None, ge=0)
 ):
     """Get intercepted traffic for a proxy"""
     try:
+        if start is not None:
+            return mitm_service.get_traffic_range(proxy_id, start, end)
         return mitm_service.get_traffic(proxy_id, limit, offset)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -146,6 +198,122 @@ async def clear_traffic(proxy_id: str):
         return mitm_service.clear_traffic(proxy_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/traffic/export")
+async def export_traffic(
+    proxy_id: str,
+    format: str = Query("json", regex="^(json|pcap)$"),
+    limit: int = Query(1000, ge=1, le=10000),
+    offset: int = Query(0, ge=0),
+    start: Optional[int] = Query(None, ge=0),
+    end: Optional[int] = Query(None, ge=0)
+):
+    """Export traffic in JSON or PCAP format."""
+    try:
+        if start is not None:
+            result = mitm_service.get_traffic_range(proxy_id, start, end)
+        else:
+            result = mitm_service.get_traffic(proxy_id, limit, offset)
+        entries = result.get("entries", [])
+
+        if format == "json":
+            content = json.dumps(entries, ensure_ascii=True, indent=2)
+            return Response(
+                content=content,
+                media_type="application/json",
+                headers={"Content-Disposition": f"attachment; filename=mitm-traffic-{proxy_id}.json"}
+            )
+
+        pcap_content = generate_mitm_pcap(entries)
+        return Response(
+            content=pcap_content,
+            media_type="application/vnd.tcpdump.pcap",
+            headers={"Content-Disposition": f"attachment; filename=mitm-traffic-{proxy_id}.pcap"}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.websocket("/ws/{proxy_id}")
+async def mitm_stream(websocket: WebSocket, proxy_id: str):
+    """WebSocket stream for real-time MITM traffic updates."""
+    mitm_stream_manager.set_loop(asyncio.get_running_loop())
+    await mitm_stream_manager.connect(websocket, proxy_id)
+    try:
+        status = mitm_service.get_proxy_status(proxy_id)
+        traffic = mitm_service.get_traffic(proxy_id, limit=200, offset=0)
+        rules = mitm_service.get_rules(proxy_id)
+        await websocket.send_json({
+            "type": "init",
+            "status": status,
+            "traffic": traffic,
+            "rules": rules
+        })
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await mitm_stream_manager.disconnect(websocket, proxy_id)
+
+
+@router.put("/proxies/{proxy_id}/traffic/{entry_id}")
+async def update_traffic_entry(proxy_id: str, entry_id: str, update: TrafficUpdate):
+    """Update notes or tags for a traffic entry"""
+    try:
+        return mitm_service.update_traffic_entry(
+            proxy_id,
+            entry_id,
+            notes=update.notes,
+            tags=update.tags
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/sessions")
+async def list_sessions(proxy_id: str):
+    """List saved traffic sessions."""
+    try:
+        return mitm_service.list_sessions(proxy_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/sessions")
+async def create_session(proxy_id: str, payload: SessionCreateRequest):
+    """Save current traffic log as a session."""
+    try:
+        return mitm_service.save_session(proxy_id, payload.name)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/sessions/{session_id}")
+async def get_session(proxy_id: str, session_id: str, limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)):
+    """Get a saved session's traffic entries."""
+    try:
+        return mitm_service.load_session(proxy_id, session_id, limit, offset)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/replay/{entry_id}")
+async def replay_traffic_entry(proxy_id: str, entry_id: str, payload: ReplayRequest):
+    """Replay a captured request with optional overrides."""
+    try:
+        return await mitm_service.replay_entry(proxy_id, entry_id, payload.dict(exclude_none=True))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/proxies/{proxy_id}/rules")
@@ -180,6 +348,15 @@ async def toggle_rule(proxy_id: str, rule_id: str, enabled: bool = Query(...)):
     """Enable/disable a rule"""
     try:
         return mitm_service.toggle_rule(proxy_id, rule_id, enabled)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/proxies/{proxy_id}/rules/group/{group}/toggle")
+async def toggle_rule_group(proxy_id: str, group: str, enabled: bool = Query(...)):
+    """Enable/disable all rules in a group"""
+    try:
+        return mitm_service.toggle_rule_group(proxy_id, group, enabled)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -292,7 +469,7 @@ async def analyze_proxy_traffic(proxy_id: str):
         proxy = mitm_service._get_proxy(proxy_id)
         
         # Get traffic log
-        traffic_log = proxy.get_traffic_log(limit=200)
+        traffic_log = mitm_service.get_traffic(proxy_id, limit=200, offset=0).get("entries", [])
         
         # Get rules
         rules = mitm_service.get_rules(proxy_id)
@@ -339,7 +516,7 @@ async def export_proxy_analysis(
         proxy = mitm_service._get_proxy(proxy_id)
         
         # Get traffic log
-        traffic_log = proxy.get_traffic_log(limit=200)
+        traffic_log = mitm_service.get_traffic(proxy_id, limit=200, offset=0).get("entries", [])
         
         # Get rules
         rules = mitm_service.get_rules(proxy_id)
@@ -1126,30 +1303,11 @@ async def get_ai_suggestions_endpoint(proxy_id: str):
     try:
         # Get traffic data using mitm_service
         traffic_result = mitm_service.get_traffic(proxy_id, limit=50, offset=0)
-        traffic_data = []
-        for entry in traffic_result.get("traffic", []):
-            traffic_data.append({
-                "method": entry.get("method", "UNKNOWN"),
-                "url": entry.get("url", ""),
-                "path": entry.get("path", ""),
-                "host": entry.get("host", ""),
-                "status": entry.get("status_code"),
-                "request_headers": list(entry.get("request_headers", {}).keys()) if entry.get("request_headers") else [],
-                "response_headers": list(entry.get("response_headers", {}).keys()) if entry.get("response_headers") else [],
-                "content_type": entry.get("response_headers", {}).get("content-type", "") if entry.get("response_headers") else "",
-                "timestamp": entry.get("timestamp", "")
-            })
-        
+        traffic_log = traffic_result.get("entries", [])
+
         # Get existing rules using mitm_service
-        rules_result = mitm_service.get_rules(proxy_id)
-        existing_rules = []
-        for rule in rules_result.get("rules", []):
-            existing_rules.append({
-                "pattern": rule.get("match_host") or rule.get("match_path") or ".*",
-                "action": rule.get("action", "modify"),
-                "description": rule.get("name", "")
-            })
-        
+        existing_rules = mitm_service.get_rules(proxy_id)
+
         # Get proxy config using mitm_service
         status = mitm_service.get_proxy_status(proxy_id)
         proxy_config = {
@@ -1158,10 +1316,10 @@ async def get_ai_suggestions_endpoint(proxy_id: str):
             "mode": status.get("mode", "passthrough"),
             "ssl_enabled": status.get("tls_enabled", False)
         }
-        
+
         # Call AI suggestion service
-        result = await get_ai_traffic_suggestions(traffic_data, existing_rules, proxy_config)
-        
+        result = await get_ai_traffic_suggestions(traffic_log, existing_rules, proxy_config)
+
         # Convert to response model
         suggestions = []
         for sug in result.get("suggestions", []):
@@ -1174,7 +1332,7 @@ async def get_ai_suggestions_endpoint(proxy_id: str):
                 rule=sug.get("rule"),
                 natural_language=sug.get("natural_language", "")
             ))
-        
+
         return AISuggestionsResponse(
             proxy_id=proxy_id,
             suggestions=suggestions,
@@ -1186,3 +1344,1380 @@ async def get_ai_suggestions_endpoint(proxy_id: str):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# WebSocket Deep Inspection Endpoints
+# ============================================================================
+
+class WebSocketRuleConfig(BaseModel):
+    """WebSocket rule configuration"""
+    name: str
+    enabled: bool = True
+    priority: int = 100
+    match_direction: str = "both"  # client_to_server, server_to_client, both
+    match_opcode: Optional[int] = None  # 1=TEXT, 2=BINARY
+    match_payload_pattern: Optional[str] = None
+    match_json_path: Optional[str] = None
+    action: str = "modify"  # modify, drop, delay
+    payload_find_replace: Optional[Dict[str, str]] = None
+    json_path_edits: Optional[List[Dict[str, Any]]] = None
+    delay_ms: int = 0
+
+
+@router.get("/proxies/{proxy_id}/websocket/connections")
+async def get_websocket_connections(proxy_id: str):
+    """
+    Get all WebSocket connections for a proxy.
+    
+    Returns active and closed WebSocket connections with stats.
+    """
+    try:
+        return mitm_service.get_websocket_connections(proxy_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/websocket/connections/{connection_id}/frames")
+async def get_websocket_frames(
+    proxy_id: str,
+    connection_id: str,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0)
+):
+    """
+    Get WebSocket frames for a specific connection.
+    
+    Returns parsed frame data including:
+    - Frame opcode (TEXT, BINARY, PING, PONG, CLOSE)
+    - Direction (client_to_server, server_to_client)
+    - Payload (text/JSON parsed when possible)
+    - Modification status
+    """
+    try:
+        return mitm_service.get_websocket_frames(proxy_id, connection_id, limit, offset)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/websocket/stats")
+async def get_websocket_stats(proxy_id: str):
+    """
+    Get WebSocket inspection statistics.
+    
+    Returns frame counts, byte totals, and connection stats.
+    """
+    try:
+        return mitm_service.get_websocket_stats(proxy_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/websocket/rules")
+async def add_websocket_rule(proxy_id: str, rule: WebSocketRuleConfig):
+    """
+    Add a WebSocket interception rule.
+    
+    Rules can match on:
+    - Direction (client_to_server, server_to_client, both)
+    - Frame opcode (TEXT=1, BINARY=2)
+    - Payload pattern (regex)
+    - JSON path values
+    
+    Actions:
+    - modify: Apply find/replace or JSON path edits
+    - drop: Silently drop the frame
+    - delay: Add latency before forwarding
+    """
+    try:
+        return mitm_service.add_websocket_rule(proxy_id, rule.dict())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/websocket/rules")
+async def get_websocket_rules(proxy_id: str):
+    """Get all WebSocket rules"""
+    try:
+        return mitm_service.get_websocket_rules(proxy_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/proxies/{proxy_id}/websocket/rules/{rule_id}")
+async def remove_websocket_rule(proxy_id: str, rule_id: str):
+    """Remove a WebSocket rule"""
+    try:
+        return mitm_service.remove_websocket_rule(proxy_id, rule_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ============================================================================
+# Certificate Management Endpoints
+# ============================================================================
+
+class CACertificateConfig(BaseModel):
+    """CA certificate generation configuration"""
+    common_name: str = "VRAgent MITM CA"
+    organization: str = "VRAgent Security"
+    country: str = "US"
+    validity_days: int = 3650  # 10 years
+
+
+@router.get("/certificates/ca")
+async def get_ca_certificate():
+    """
+    Get the current CA certificate information.
+    
+    Returns certificate details including fingerprint for verification.
+    """
+    try:
+        ca = mitm_service.get_ca_certificate()
+        if not ca:
+            return {
+                "status": "not_generated",
+                "message": "No CA certificate has been generated yet. Generate one to enable HTTPS interception."
+            }
+        return ca
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/certificates/ca/generate")
+async def generate_ca_certificate(config: CACertificateConfig):
+    """
+    Generate a new CA certificate for HTTPS MITM interception.
+    
+    ⚠️ Warning: This will invalidate all previously generated host certificates.
+    
+    The CA certificate must be installed on clients to trust HTTPS interception.
+    """
+    try:
+        return mitm_service.generate_ca_certificate(
+            common_name=config.common_name,
+            organization=config.organization,
+            country=config.country,
+            validity_days=config.validity_days
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/certificates/ca/download")
+async def download_ca_certificate(format: str = Query("pem", regex="^(pem|crt|der)$")):
+    """
+    Download the CA certificate for installation.
+    
+    Formats:
+    - pem: PEM format (default, works everywhere)
+    - crt: Same as PEM but with .crt extension (Windows-friendly)
+    - der: Binary DER format
+    """
+    try:
+        content, media_type, filename = mitm_service.download_ca_certificate(format)
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/certificates/ca/installation")
+async def get_certificate_installation_instructions():
+    """
+    Get instructions for installing the CA certificate on various platforms.
+    
+    Returns step-by-step guides for:
+    - Windows
+    - macOS
+    - Linux
+    - Firefox
+    - Android
+    - iOS
+    """
+    try:
+        return mitm_service.get_certificate_installation_instructions()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/certificates/hosts")
+async def list_host_certificates():
+    """
+    List all generated host certificates.
+    
+    Returns certificates that have been generated for specific hosts
+    during HTTPS interception.
+    """
+    try:
+        return mitm_service.list_host_certificates()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/certificates/hosts/{hostname}")
+async def get_host_certificate(hostname: str):
+    """
+    Get or generate a certificate for a specific hostname.
+    
+    If a valid certificate exists, returns it.
+    Otherwise, generates a new certificate signed by the CA.
+    """
+    try:
+        cert = mitm_service.get_host_certificate(hostname)
+        if not cert:
+            raise HTTPException(
+                status_code=404,
+                detail="No CA certificate. Generate a CA certificate first."
+            )
+        return cert
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/certificates/hosts/{hostname}")
+async def delete_host_certificate(hostname: str):
+    """Delete a host certificate"""
+    try:
+        return mitm_service.delete_host_certificate(hostname)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Request/Response Diff Viewer Endpoints
+# ============================================================================
+
+@router.get("/proxies/{proxy_id}/traffic/{entry_id}/diff")
+async def get_traffic_diff(
+    proxy_id: str = Path(..., description="Proxy ID"),
+    entry_id: str = Path(..., description="Traffic entry ID")
+):
+    """
+    Get diff between original and modified traffic entry.
+    
+    Returns a detailed comparison showing:
+    - Header changes (added, removed, modified)
+    - Body changes (line-by-line or JSON diff)
+    - Change summary
+    """
+    try:
+        return mitm_service.get_traffic_diff(proxy_id, entry_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class DiffCompareRequest(BaseModel):
+    original_request: Dict[str, Any]
+    modified_request: Optional[Dict[str, Any]] = None
+    original_response: Optional[Dict[str, Any]] = None
+    modified_response: Optional[Dict[str, Any]] = None
+
+
+@router.post("/diff/compare")
+async def compare_traffic(request: DiffCompareRequest):
+    """
+    Compare two traffic entries directly.
+    
+    Useful for comparing traffic from different sources
+    or testing modifications before applying.
+    """
+    try:
+        from ..services.mitm_service import TrafficDiffViewer
+        results = TrafficDiffViewer.compare_traffic(
+            request.original_request,
+            request.modified_request,
+            request.original_response,
+            request.modified_response
+        )
+        # Convert DiffResult dataclasses to dicts
+        return {
+            key: {
+                "has_changes": result.has_changes,
+                "change_type": result.change_type,
+                "header_changes": result.header_changes,
+                "body_changes": result.body_changes,
+                "summary": result.summary,
+                "original_size": result.original_size,
+                "modified_size": result.modified_size
+            }
+            for key, result in results.items()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# HTTP/2 & gRPC Endpoints
+# ============================================================================
+
+@router.get("/proxies/{proxy_id}/http2/frames")
+async def get_http2_frames(
+    proxy_id: str = Path(..., description="Proxy ID"),
+    stream_id: Optional[int] = Query(None, description="Filter by stream ID"),
+    frame_type: Optional[str] = Query(None, description="Filter by frame type"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0)
+):
+    """
+    Get HTTP/2 frames captured for a proxy.
+    
+    Returns parsed HTTP/2 frames including:
+    - Frame type (DATA, HEADERS, etc.)
+    - Stream ID
+    - Flags and payload
+    """
+    try:
+        return mitm_service.get_http2_frames(
+            proxy_id,
+            stream_id=stream_id,
+            frame_type=frame_type,
+            limit=limit,
+            offset=offset
+        )
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/http2/streams")
+async def get_http2_streams(
+    proxy_id: str = Path(..., description="Proxy ID")
+):
+    """
+    Get active HTTP/2 streams for a proxy.
+    
+    Returns a list of active streams with their status,
+    method, path, and frame counts.
+    """
+    try:
+        return mitm_service.get_http2_streams(proxy_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/grpc/messages")
+async def get_grpc_messages(
+    proxy_id: str = Path(..., description="Proxy ID"),
+    service: Optional[str] = Query(None, description="Filter by gRPC service"),
+    method: Optional[str] = Query(None, description="Filter by gRPC method"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0)
+):
+    """
+    Get gRPC messages captured for a proxy.
+    
+    Returns decoded gRPC messages with:
+    - Service and method names
+    - Message payloads (if decodable)
+    - Stream information
+    """
+    try:
+        return mitm_service.get_grpc_messages(
+            proxy_id,
+            service=service,
+            method=method,
+            limit=limit,
+            offset=offset
+        )
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class HTTP2ParseRequest(BaseModel):
+    data: str  # Base64 encoded raw data
+
+
+@router.post("/http2/parse")
+async def parse_http2_data(request: HTTP2ParseRequest):
+    """
+    Parse raw HTTP/2 frame data.
+    
+    Useful for analyzing captured HTTP/2 traffic
+    or debugging HTTP/2 issues.
+    """
+    try:
+        import base64
+        from ..services.mitm_service import HTTP2Parser
+        
+        raw_data = base64.b64decode(request.data)
+        
+        frames = []
+        offset = 0
+        while offset < len(raw_data):
+            result = HTTP2Parser.parse_frame(raw_data, offset)
+            if not result:
+                break
+            frame, new_offset = result
+            frames.append({
+                "id": frame.id,
+                "stream_id": frame.stream_id,
+                "frame_type": frame.frame_type,
+                "frame_type_name": frame.frame_type_name,
+                "flags": frame.flags,
+                "length": frame.length,
+                "is_grpc": frame.is_grpc
+            })
+            offset = new_offset
+        
+        return {
+            "frames": frames,
+            "total_bytes": len(raw_data),
+            "frames_parsed": len(frames),
+            "is_http2": HTTP2Parser.detect_http2(raw_data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Match & Replace Templates Endpoints
+# ============================================================================
+
+@router.get("/templates")
+async def list_templates(
+    category: Optional[str] = Query(None, description="Filter by category"),
+    tag: Optional[str] = Query(None, description="Filter by tag")
+):
+    """
+    List available match/replace templates.
+    
+    Returns pre-built and custom templates for common
+    MITM modifications like security testing, debugging, etc.
+    """
+    try:
+        return mitm_service.get_match_replace_templates(
+            category=category,
+            tag=tag
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/templates/categories")
+async def list_template_categories():
+    """Get available template categories"""
+    try:
+        return {"categories": mitm_service.get_template_categories()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/templates/{template_id}")
+async def get_template(template_id: str = Path(..., description="Template ID")):
+    """Get a specific template by ID"""
+    try:
+        template = mitm_service.get_template(template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+        return template
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class CustomTemplateConfig(BaseModel):
+    name: str
+    category: str = "Custom"
+    description: str
+    match_type: str  # "header", "body", "path", "query"
+    match_pattern: str
+    replace_pattern: str
+    is_regex: bool = False
+    case_sensitive: bool = True
+    direction: str = "both"
+    match_host: Optional[str] = None
+    match_content_type: Optional[str] = None
+    tags: List[str] = []
+
+
+@router.post("/templates")
+async def create_custom_template(config: CustomTemplateConfig):
+    """
+    Create a custom match/replace template.
+    
+    Custom templates are saved and can be used alongside
+    built-in templates.
+    """
+    try:
+        return mitm_service.create_custom_template(config.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/templates/{template_id}")
+async def delete_template(template_id: str = Path(..., description="Template ID")):
+    """Delete a custom template"""
+    try:
+        success = mitm_service.delete_custom_template(template_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Template not found or is built-in")
+        return {"status": "deleted", "template_id": template_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/apply-template/{template_id}")
+async def apply_template_to_proxy(
+    proxy_id: str = Path(..., description="Proxy ID"),
+    template_id: str = Path(..., description="Template ID")
+):
+    """
+    Apply a template to a proxy as an interception rule.
+    
+    Converts the template into a rule that will be
+    applied to matching traffic.
+    """
+    try:
+        return mitm_service.apply_template_to_proxy(proxy_id, template_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class TestTemplateRequest(BaseModel):
+    template_id: str
+    request_data: Dict[str, Any]
+    response_data: Optional[Dict[str, Any]] = None
+
+
+@router.post("/templates/test")
+async def test_template(request: TestTemplateRequest):
+    """
+    Test a template against sample data.
+    
+    Returns the modified data showing what changes
+    the template would make.
+    """
+    try:
+        return mitm_service.test_template(
+            request.template_id,
+            request.request_data,
+            request.response_data
+        )
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Network Throttling Endpoints
+# ============================================================================
+
+@router.get("/throttle/profiles")
+async def list_throttle_profiles():
+    """
+    List all available network throttling profiles.
+    """
+    return [p.to_dict() for p in network_throttler.get_all_profiles()]
+
+
+@router.get("/throttle/profiles/{profile_id}")
+async def get_throttle_profile(profile_id: str):
+    """Get a specific throttle profile."""
+    profile = network_throttler.get_profile(profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return profile.to_dict()
+
+
+@router.get("/throttle/active")
+async def get_active_throttle():
+    """Get the currently active throttle profile."""
+    profile = network_throttler.get_active_profile()
+    return {"active_profile": profile.to_dict() if profile else None}
+
+
+@router.post("/throttle/activate/{profile_id}")
+async def activate_throttle(profile_id: str):
+    """Activate a throttle profile."""
+    if not network_throttler.set_active_profile(profile_id):
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return {"status": "activated", "profile_id": profile_id}
+
+
+@router.post("/throttle/deactivate")
+async def deactivate_throttle():
+    """Deactivate throttling."""
+    network_throttler.set_active_profile(None)
+    return {"status": "deactivated"}
+
+
+class ThrottleProfileCreate(BaseModel):
+    name: str
+    description: str
+    bandwidth_kbps: int = 0
+    latency_ms: int = 0
+    packet_loss_percent: float = 0.0
+    jitter_ms: int = 0
+
+
+@router.post("/throttle/profiles")
+async def create_throttle_profile(config: ThrottleProfileCreate):
+    """Create a custom throttle profile."""
+    import uuid
+    profile = ThrottleProfile(
+        id=f"custom_{uuid.uuid4().hex[:8]}",
+        name=config.name,
+        description=config.description,
+        bandwidth_kbps=config.bandwidth_kbps,
+        latency_ms=config.latency_ms,
+        packet_loss_percent=config.packet_loss_percent,
+        jitter_ms=config.jitter_ms,
+        is_builtin=False
+    )
+    network_throttler.add_custom_profile(profile)
+    return profile.to_dict()
+
+
+@router.delete("/throttle/profiles/{profile_id}")
+async def delete_throttle_profile(profile_id: str):
+    """Delete a custom throttle profile."""
+    profile = network_throttler.get_profile(profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if profile.is_builtin:
+        raise HTTPException(status_code=400, detail="Cannot delete built-in profiles")
+    network_throttler.remove_custom_profile(profile_id)
+    return {"status": "deleted"}
+
+
+# ============================================================================
+# Macro Recorder Endpoints
+# ============================================================================
+
+@router.get("/macros")
+async def list_macros():
+    """List all recorded macros."""
+    return [m.to_dict() for m in macro_recorder.list_macros()]
+
+
+@router.get("/macros/{macro_id}")
+async def get_macro(macro_id: str):
+    """Get a specific macro."""
+    macro = macro_recorder.get_macro(macro_id)
+    if not macro:
+        raise HTTPException(status_code=404, detail="Macro not found")
+    return macro.to_dict()
+
+
+class MacroCreateRequest(BaseModel):
+    name: str
+    description: str = ""
+
+
+@router.post("/macros/start-recording")
+async def start_macro_recording(request: MacroCreateRequest):
+    """Start recording a new macro."""
+    if macro_recorder.recording:
+        raise HTTPException(status_code=400, detail="Already recording a macro")
+    macro = macro_recorder.start_recording(request.name, request.description)
+    return {"status": "recording", "macro_id": macro.id, "macro": macro.to_dict()}
+
+
+@router.post("/macros/stop-recording")
+async def stop_macro_recording():
+    """Stop recording and save the macro."""
+    macro = macro_recorder.stop_recording()
+    if not macro:
+        raise HTTPException(status_code=400, detail="Not currently recording")
+    return {"status": "stopped", "macro": macro.to_dict()}
+
+
+@router.get("/macros/recording-status")
+async def get_recording_status():
+    """Get current recording status."""
+    return {
+        "recording": macro_recorder.recording,
+        "macro_id": macro_recorder.recording_macro_id
+    }
+
+
+class MacroFromTrafficRequest(BaseModel):
+    traffic_ids: List[str]
+    name: str
+    description: str = ""
+    proxy_id: str
+
+
+@router.post("/macros/from-traffic")
+async def create_macro_from_traffic(request: MacroFromTrafficRequest):
+    """Create a macro from captured traffic entries."""
+    # Get traffic entries from the proxy
+    proxy = mitm_service.proxies.get(request.proxy_id)
+    if not proxy:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    
+    entries = []
+    for entry_id in request.traffic_ids:
+        for entry in proxy.traffic_log:
+            if entry.get("id") == entry_id:
+                entries.append(entry)
+                break
+    
+    if not entries:
+        raise HTTPException(status_code=404, detail="No traffic entries found")
+    
+    macro = macro_recorder.create_macro_from_traffic(
+        entries,
+        request.name,
+        request.description
+    )
+    return macro.to_dict()
+
+
+class MacroUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    variables: Optional[Dict[str, str]] = None
+    tags: Optional[List[str]] = None
+
+
+@router.patch("/macros/{macro_id}")
+async def update_macro(macro_id: str, request: MacroUpdateRequest):
+    """Update macro metadata."""
+    macro = macro_recorder.update_macro(
+        macro_id,
+        name=request.name,
+        description=request.description,
+        variables=request.variables,
+        tags=request.tags
+    )
+    if not macro:
+        raise HTTPException(status_code=404, detail="Macro not found")
+    return macro.to_dict()
+
+
+@router.delete("/macros/{macro_id}")
+async def delete_macro(macro_id: str):
+    """Delete a macro."""
+    if not macro_recorder.delete_macro(macro_id):
+        raise HTTPException(status_code=404, detail="Macro not found")
+    return {"status": "deleted"}
+
+
+class MacroRunRequest(BaseModel):
+    base_url: str
+    variables: Optional[Dict[str, str]] = None
+    timeout_per_step: float = 30.0
+
+
+@router.post("/macros/{macro_id}/run")
+async def run_macro(macro_id: str, request: MacroRunRequest):
+    """Run a macro."""
+    result = await macro_recorder.run_macro(
+        macro_id,
+        request.base_url,
+        initial_variables=request.variables,
+        timeout_per_step=request.timeout_per_step
+    )
+    return result.to_dict()
+
+
+@router.get("/macros/{macro_id}/last-result")
+async def get_macro_last_result(macro_id: str):
+    """Get the last run result for a macro."""
+    result = macro_recorder.get_run_result(macro_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="No run result found")
+    return result.to_dict()
+
+
+# ============================================================================
+# HAR Export Endpoints
+# ============================================================================
+
+@router.get("/proxies/{proxy_id}/export/har")
+async def export_traffic_as_har(
+    proxy_id: str,
+    limit: Optional[int] = Query(None, description="Maximum entries to export"),
+    offset: Optional[int] = Query(0, description="Skip entries")
+):
+    """
+    Export proxy traffic to HAR format.
+    
+    HAR (HTTP Archive) files can be imported into browser developer tools
+    for analysis and debugging.
+    """
+    proxy = mitm_service.proxies.get(proxy_id)
+    if not proxy:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    
+    traffic = proxy.traffic_log[offset:]
+    if limit:
+        traffic = traffic[:limit]
+    
+    har_data = har_exporter.traffic_to_har(traffic)
+    
+    return Response(
+        content=json.dumps(har_data, indent=2),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{proxy_id}_traffic.har"'
+        }
+    )
+
+
+# ============================================================================
+# Protocol Decoder Endpoints
+# ============================================================================
+
+@router.get("/decoders")
+async def list_protocol_decoders():
+    """List all available protocol decoders."""
+    return [d.to_dict() for d in protocol_decoder_manager.get_all_decoders()]
+
+
+@router.get("/decoders/{decoder_id}")
+async def get_protocol_decoder(decoder_id: str):
+    """Get a specific decoder."""
+    decoder = protocol_decoder_manager.get_decoder(decoder_id)
+    if not decoder:
+        raise HTTPException(status_code=404, detail="Decoder not found")
+    return decoder.to_dict()
+
+
+class DecodeRequest(BaseModel):
+    content_type: str
+    data: str  # Base64 encoded
+
+
+@router.post("/decoders/decode")
+async def decode_data(request: DecodeRequest):
+    """
+    Decode binary data using available decoders.
+    
+    The system will automatically detect and use the appropriate decoder
+    based on content type or magic bytes.
+    """
+    import base64
+    try:
+        data = base64.b64decode(request.data)
+        result = protocol_decoder_manager.decode(request.content_type, data)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============================================================================
+# Collaborative Session Sharing Endpoints
+# ============================================================================
+
+@router.get("/sessions/shared")
+async def list_shared_sessions(
+    current_user: User = Depends(get_current_active_user)
+):
+    """List shared sessions for the current user."""
+    sessions = session_sharing_manager.list_sessions_for_user(str(current_user.id))
+    return [s.to_dict() for s in sessions]
+
+
+@router.get("/sessions/shared/{session_id}")
+async def get_shared_session(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get a specific shared session."""
+    session = session_sharing_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not session_sharing_manager.check_access(session_id, str(current_user.id)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    return session.to_dict()
+
+
+class CreateSharedSessionRequest(BaseModel):
+    proxy_id: str
+    name: str
+    description: str = ""
+    access_level: str = "view"  # view, interact, full
+    expires_hours: Optional[int] = None
+    enable_link_sharing: bool = False
+
+
+@router.post("/sessions/shared")
+async def create_shared_session(
+    request: CreateSharedSessionRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Create a new shared session."""
+    proxy = mitm_service.proxies.get(request.proxy_id)
+    if not proxy:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    
+    session = session_sharing_manager.create_shared_session(
+        proxy_id=request.proxy_id,
+        name=request.name,
+        owner_id=str(current_user.id),
+        owner_name=current_user.username,
+        description=request.description,
+        access_level=request.access_level,
+        expires_hours=request.expires_hours,
+        enable_link_sharing=request.enable_link_sharing
+    )
+    
+    return session.to_dict()
+
+
+class ShareWithUserRequest(BaseModel):
+    user_id: str
+
+
+@router.post("/sessions/shared/{session_id}/share")
+async def share_session_with_user(
+    session_id: str,
+    request: ShareWithUserRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Share a session with another user."""
+    if not session_sharing_manager.share_with_user(
+        session_id,
+        request.user_id,
+        str(current_user.id)
+    ):
+        raise HTTPException(status_code=403, detail="Cannot share session")
+    
+    return {"status": "shared"}
+
+
+@router.delete("/sessions/shared/{session_id}/share/{user_id}")
+async def revoke_session_access(
+    session_id: str,
+    user_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Revoke a user's access to a session."""
+    if not session_sharing_manager.revoke_user_access(
+        session_id,
+        user_id,
+        str(current_user.id)
+    ):
+        raise HTTPException(status_code=403, detail="Cannot revoke access")
+    
+    return {"status": "revoked"}
+
+
+@router.post("/sessions/shared/{session_id}/join")
+async def join_shared_session(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Join a shared session as a viewer."""
+    if not session_sharing_manager.join_session(session_id, str(current_user.id)):
+        raise HTTPException(status_code=403, detail="Cannot join session")
+    
+    return {"status": "joined"}
+
+
+@router.post("/sessions/shared/{session_id}/leave")
+async def leave_shared_session(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Leave a shared session."""
+    session_sharing_manager.leave_session(session_id, str(current_user.id))
+    return {"status": "left"}
+
+
+@router.get("/sessions/shared/token/{token}")
+async def get_session_by_token(token: str):
+    """Get a shared session by share token (for link sharing)."""
+    session = session_sharing_manager.get_session_by_token(token)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    return session.to_dict()
+
+
+class UpdateSharedSessionRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    access_level: Optional[str] = None
+    settings: Optional[Dict[str, Any]] = None
+
+
+@router.patch("/sessions/shared/{session_id}")
+async def update_shared_session(
+    session_id: str,
+    request: UpdateSharedSessionRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update shared session settings."""
+    session = session_sharing_manager.update_session(
+        session_id,
+        str(current_user.id),
+        name=request.name,
+        description=request.description,
+        access_level=request.access_level,
+        settings=request.settings
+    )
+    if not session:
+        raise HTTPException(status_code=403, detail="Cannot update session")
+    
+    return session.to_dict()
+
+
+@router.delete("/sessions/shared/{session_id}")
+async def delete_shared_session(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Delete a shared session."""
+    if not session_sharing_manager.delete_session(session_id, str(current_user.id)):
+        raise HTTPException(status_code=403, detail="Cannot delete session")
+    
+    return {"status": "deleted"}
+
+
+# ============================================================================
+# AI-Powered MITM Analysis Endpoints
+# ============================================================================
+
+class NaturalLanguageQueryRequest(BaseModel):
+    query: str
+
+
+class FindingGenerationRequest(BaseModel):
+    vulnerability_type: str
+    affected_endpoint: str
+    parameter: str
+    evidence: str
+    severity: str = "medium"
+
+
+@router.post("/ai/sensitive-data")
+async def analyze_sensitive_data(
+    proxy_id: str = Query(..., description="Proxy ID to analyze"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    AI-powered sensitive data detection.
+    
+    Scans traffic for:
+    - Credentials (passwords, API keys, tokens)
+    - PII (emails, SSNs, phone numbers)
+    - Financial data (credit cards)
+    - Health information
+    
+    Returns detected items with risk levels and recommendations.
+    """
+    if proxy_id not in mitm_service.proxies:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    
+    proxy_data = mitm_service.proxies[proxy_id]
+    traffic_entries = list(proxy_data.get("traffic", {}).values())
+    
+    if not traffic_entries:
+        return {
+            "matches": [],
+            "total": 0,
+            "summary": {
+                "critical": 0,
+                "high": 0,
+                "medium": 0,
+                "low": 0
+            }
+        }
+    
+    matches = await analyze_traffic_sensitive_data(traffic_entries)
+    
+    # Build summary
+    summary = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for match in matches:
+        risk = match.get("risk_level", "medium")
+        if risk in summary:
+            summary[risk] += 1
+    
+    return {
+        "matches": matches,
+        "total": len(matches),
+        "summary": summary
+    }
+
+
+@router.post("/ai/injection-points")
+async def analyze_injection_points(
+    proxy_id: str = Query(..., description="Proxy ID to analyze"),
+    entry_id: Optional[str] = Query(None, description="Specific entry to analyze"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    AI-powered injection point detection.
+    
+    Identifies parameters vulnerable to:
+    - SQL Injection
+    - Cross-Site Scripting (XSS)
+    - Command Injection
+    - XXE
+    - Server-Side Template Injection
+    - Path Traversal
+    - IDOR
+    
+    Returns injection points with confidence scores and suggested payloads.
+    """
+    if proxy_id not in mitm_service.proxies:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    
+    proxy_data = mitm_service.proxies[proxy_id]
+    traffic_entries = list(proxy_data.get("traffic", {}).values())
+    
+    if entry_id:
+        traffic_entries = [e for e in traffic_entries if e.get("id") == entry_id]
+        if not traffic_entries:
+            raise HTTPException(status_code=404, detail="Entry not found")
+    
+    if not traffic_entries:
+        return {
+            "injection_points": [],
+            "total": 0,
+            "by_type": {}
+        }
+    
+    points = await analyze_traffic_injection_points(traffic_entries)
+    
+    # Build type summary
+    by_type = {}
+    for point in points:
+        for inj_type in point.get("injection_types", []):
+            by_type[inj_type] = by_type.get(inj_type, 0) + 1
+    
+    return {
+        "injection_points": points,
+        "total": len(points),
+        "by_type": by_type
+    }
+
+
+@router.post("/ai/query")
+async def natural_language_traffic_query(
+    proxy_id: str = Query(..., description="Proxy ID to query"),
+    request: NaturalLanguageQueryRequest = ...,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Natural language traffic query.
+    
+    Query traffic using plain English:
+    - "Find all authentication requests"
+    - "Show error responses"
+    - "Find requests with user IDs"
+    - "Show admin endpoints"
+    - "Find POST requests with JSON body"
+    
+    Returns matching traffic entries.
+    """
+    if proxy_id not in mitm_service.proxies:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    
+    proxy_data = mitm_service.proxies[proxy_id]
+    traffic_entries = list(proxy_data.get("traffic", {}).values())
+    
+    if not traffic_entries:
+        return {
+            "query": request.query,
+            "interpretation": "No traffic to query",
+            "matches": [],
+            "total_matches": 0
+        }
+    
+    result = await query_traffic_natural_language(traffic_entries, request.query)
+    return result
+
+
+@router.post("/ai/test-cases")
+async def generate_test_cases(
+    proxy_id: str = Query(..., description="Proxy ID to analyze"),
+    entry_id: Optional[str] = Query(None, description="Specific entry to target"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Auto-generate security test cases.
+    
+    Analyzes traffic and generates test cases for:
+    - SQL Injection testing
+    - XSS testing
+    - Command injection testing
+    - Authentication bypass
+    - IDOR testing
+    
+    Each test case includes payloads and expected indicators.
+    """
+    if proxy_id not in mitm_service.proxies:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    
+    proxy_data = mitm_service.proxies[proxy_id]
+    traffic_entries = list(proxy_data.get("traffic", {}).values())
+    
+    if not traffic_entries:
+        return {
+            "test_cases": [],
+            "total": 0,
+            "by_attack_type": {}
+        }
+    
+    test_cases = await generate_security_test_cases(traffic_entries, entry_id)
+    
+    # Build attack type summary
+    by_attack_type = {}
+    for tc in test_cases:
+        attack = tc.get("attack_type", "unknown")
+        by_attack_type[attack] = by_attack_type.get(attack, 0) + 1
+    
+    return {
+        "test_cases": test_cases,
+        "total": len(test_cases),
+        "by_attack_type": by_attack_type
+    }
+
+
+@router.post("/ai/generate-finding")
+async def generate_finding_description(
+    request: FindingGenerationRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Generate a professional vulnerability finding description.
+    
+    Creates structured findings with:
+    - Title
+    - Description
+    - Impact assessment
+    - Remediation steps
+    - References
+    
+    Useful for report generation.
+    """
+    finding = await generate_vulnerability_finding(
+        vulnerability_type=request.vulnerability_type,
+        affected_endpoint=request.affected_endpoint,
+        parameter=request.parameter,
+        evidence=request.evidence,
+        severity=request.severity
+    )
+    return finding
+
+
+@router.post("/ai/full-analysis")
+async def full_ai_analysis(
+    proxy_id: str = Query(..., description="Proxy ID to analyze"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Run comprehensive AI analysis on traffic.
+    
+    Combines all AI analysis features:
+    - Sensitive data detection
+    - Injection point identification
+    - Test case generation
+    
+    Returns a complete security assessment.
+    """
+    if proxy_id not in mitm_service.proxies:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    
+    proxy_data = mitm_service.proxies[proxy_id]
+    traffic_entries = list(proxy_data.get("traffic", {}).values())
+    
+    if not traffic_entries:
+        return {
+            "sensitive_data": {"matches": [], "total": 0, "summary": {"critical": 0, "high": 0, "medium": 0, "low": 0}},
+            "injection_points": {"points": [], "total": 0, "by_type": {}},
+            "test_cases": {"cases": [], "total": 0, "by_attack_type": {}},
+            "traffic_analyzed": 0,
+            "risk_score": 0,
+            "risk_level": "low"
+        }
+    
+    # Run all analyses in parallel with error handling
+    try:
+        sensitive_data, injection_points, test_cases = await asyncio.gather(
+            analyze_traffic_sensitive_data(traffic_entries),
+            analyze_traffic_injection_points(traffic_entries),
+            generate_security_test_cases(traffic_entries),
+            return_exceptions=True  # Don't fail if one analysis fails
+        )
+        
+        # Handle any exceptions from individual tasks
+        if isinstance(sensitive_data, Exception):
+            sensitive_data = []
+        if isinstance(injection_points, Exception):
+            injection_points = []
+        if isinstance(test_cases, Exception):
+            test_cases = []
+    except Exception:
+        sensitive_data = []
+        injection_points = []
+        test_cases = []
+    
+    # Calculate risk score with defensive null checks
+    risk_score = 0
+    sensitive_summary = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for sd in (sensitive_data or []):
+        risk = sd.get("risk_level", "medium") if isinstance(sd, dict) else "medium"
+        if risk in sensitive_summary:
+            sensitive_summary[risk] += 1
+        risk_score += {"critical": 25, "high": 15, "medium": 5, "low": 1}.get(risk, 5)
+    
+    injection_by_type = {}
+    for ip in (injection_points or []):
+        if isinstance(ip, dict):
+            for inj_type in ip.get("injection_types", []):
+                injection_by_type[inj_type] = injection_by_type.get(inj_type, 0) + 1
+                risk_score += {"sqli": 20, "cmdi": 20, "xxe": 15, "xss": 10, "ssti": 15, "idor": 10}.get(inj_type, 5)
+    
+    tc_by_attack = {}
+    for tc in (test_cases or []):
+        if isinstance(tc, dict):
+            attack = tc.get("attack_type", "unknown")
+            tc_by_attack[attack] = tc_by_attack.get(attack, 0) + 1
+    
+    # Normalize risk score (0-100)
+    risk_score = min(100, risk_score)
+    
+    return {
+        "sensitive_data": {
+            "matches": sensitive_data or [],
+            "total": len(sensitive_data) if sensitive_data else 0,
+            "summary": sensitive_summary
+        },
+        "injection_points": {
+            "points": injection_points or [],
+            "total": len(injection_points) if injection_points else 0,
+            "by_type": injection_by_type
+        },
+        "test_cases": {
+            "cases": test_cases or [],
+            "total": len(test_cases) if test_cases else 0,
+            "by_attack_type": tc_by_attack
+        },
+        "traffic_analyzed": len(traffic_entries),
+        "risk_score": risk_score,
+        "risk_level": "critical" if risk_score >= 75 else "high" if risk_score >= 50 else "medium" if risk_score >= 25 else "low"
+    }
+

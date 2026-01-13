@@ -7,7 +7,7 @@ from backend.core.config import settings
 from backend.core.database import Base, engine
 from backend.core.exceptions import VRAgentError
 from backend.core.logging import get_logger
-from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering, learn_chat, social, chat_websocket, project_files, kanban
+from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering, learn_chat, social, chat_websocket, project_files, kanban, compliance, ai_analysis, fuzzer_reports, interactive_replay, agentic_fuzzer, whiteboard, whiteboard_ws, notes_websocket, kanban_ws, combined_analysis, api_collections
 from backend import models  # noqa: F401  # ensure models are registered
 
 logger = get_logger(__name__)
@@ -101,6 +101,17 @@ app.include_router(social.router, tags=["social"])
 app.include_router(chat_websocket.router, tags=["chat-websocket"])
 app.include_router(project_files.router, tags=["project-files"])
 app.include_router(kanban.router, tags=["kanban"])
+app.include_router(agentic_fuzzer.router, tags=["agentic-fuzzer"])
+app.include_router(compliance.router, tags=["compliance-cve"])
+app.include_router(ai_analysis.router, tags=["ai-security-analysis"])
+app.include_router(fuzzer_reports.router, tags=["fuzzer-reports"])
+app.include_router(interactive_replay.router, tags=["interactive-fuzzing"])
+app.include_router(whiteboard.router, tags=["whiteboard"])
+app.include_router(whiteboard_ws.router, tags=["whiteboard-websocket"])
+app.include_router(notes_websocket.router, tags=["notes-websocket"])
+app.include_router(kanban_ws.router, tags=["kanban-websocket"])
+app.include_router(combined_analysis.router, prefix="/combined-analysis", tags=["combined-analysis"])
+app.include_router(api_collections.router, tags=["api-collections"])
 
 # Serve uploaded chat files
 from starlette.staticfiles import StaticFiles

@@ -98,38 +98,176 @@ class NmapAnalysisResult:
         }
 
 
-# High-risk ports that should be flagged
+# High-risk ports that should be flagged (expanded list)
 HIGH_RISK_PORTS = {
+    # Remote Access - Critical
     21: ("FTP", "high", "FTP often transmits credentials in cleartext"),
     22: ("SSH", "info", "SSH - verify strong authentication is required"),
     23: ("Telnet", "critical", "Telnet transmits all data including credentials in cleartext"),
+    512: ("rexec", "critical", "Remote execution without encryption"),
+    513: ("rlogin", "critical", "Remote login without encryption"),
+    514: ("rsh", "critical", "Remote shell without encryption"),
+    3389: ("RDP", "high", "Remote Desktop - common brute force target"),
+    5900: ("VNC", "high", "VNC often has weak authentication"),
+    5901: ("VNC-1", "high", "VNC display :1 - often weak authentication"),
+    5902: ("VNC-2", "high", "VNC display :2 - often weak authentication"),
+    5985: ("WinRM-HTTP", "high", "Windows Remote Management over HTTP"),
+    5986: ("WinRM-HTTPS", "medium", "Windows Remote Management over HTTPS"),
+    
+    # Mail Services
     25: ("SMTP", "medium", "SMTP may allow mail relay if misconfigured"),
-    53: ("DNS", "medium", "DNS may be vulnerable to cache poisoning or zone transfers"),
     110: ("POP3", "high", "POP3 transmits credentials in cleartext"),
-    111: ("RPC", "high", "RPC services can expose internal network information"),
+    143: ("IMAP", "high", "IMAP may transmit credentials in cleartext"),
+    465: ("SMTPS", "info", "SMTP over SSL - verify configuration"),
+    587: ("Submission", "medium", "Mail submission - verify authentication"),
+    993: ("IMAPS", "info", "IMAP over SSL"),
+    995: ("POP3S", "info", "POP3 over SSL"),
+    
+    # DNS/Directory
+    53: ("DNS", "medium", "DNS may be vulnerable to cache poisoning or zone transfers"),
+    389: ("LDAP", "medium", "LDAP may expose directory information"),
+    636: ("LDAPS", "medium", "LDAP over SSL - still may expose directory info"),
+    
+    # Windows/NetBIOS/SMB
     135: ("MSRPC", "high", "Windows RPC - often targeted for exploits"),
     137: ("NetBIOS-NS", "high", "NetBIOS can leak system information"),
     138: ("NetBIOS-DGM", "high", "NetBIOS datagram service"),
     139: ("NetBIOS-SSN", "high", "NetBIOS session service - SMB over NetBIOS"),
-    143: ("IMAP", "high", "IMAP may transmit credentials in cleartext"),
-    161: ("SNMP", "high", "SNMP often uses weak community strings"),
-    389: ("LDAP", "medium", "LDAP may expose directory information"),
-    443: ("HTTPS", "info", "HTTPS - verify TLS configuration"),
-    445: ("SMB", "high", "SMB - common target for ransomware and exploits"),
-    512: ("rexec", "critical", "Remote execution without encryption"),
-    513: ("rlogin", "critical", "Remote login without encryption"),
-    514: ("rsh", "critical", "Remote shell without encryption"),
+    445: ("SMB", "high", "SMB - common target for ransomware and exploits (EternalBlue, WannaCry)"),
+    
+    # SNMP
+    161: ("SNMP", "high", "SNMP often uses weak community strings (public/private)"),
+    162: ("SNMP-Trap", "medium", "SNMP trap receiver - may leak information"),
+    
+    # Databases - Critical exposure
     1433: ("MSSQL", "high", "Microsoft SQL Server - verify authentication"),
+    1434: ("MSSQL-Browser", "high", "MSSQL Browser service - can enumerate instances"),
     1521: ("Oracle", "high", "Oracle database - verify authentication"),
-    2049: ("NFS", "high", "NFS can expose file systems if misconfigured"),
+    1830: ("Oracle-XDB", "high", "Oracle XML DB - often misconfigured"),
     3306: ("MySQL", "high", "MySQL database - verify authentication"),
-    3389: ("RDP", "high", "Remote Desktop - common brute force target"),
     5432: ("PostgreSQL", "medium", "PostgreSQL database"),
-    5900: ("VNC", "high", "VNC often has weak authentication"),
-    5985: ("WinRM", "high", "Windows Remote Management"),
     6379: ("Redis", "critical", "Redis often has no authentication by default"),
-    8080: ("HTTP-Proxy", "medium", "HTTP proxy or alternative web server"),
+    9042: ("Cassandra", "high", "Cassandra database - verify authentication"),
+    9200: ("Elasticsearch", "critical", "Elasticsearch often has no authentication"),
+    9300: ("Elasticsearch-Transport", "critical", "Elasticsearch transport - internal"),
+    11211: ("Memcached", "critical", "Memcached - often no authentication, DDoS amplification"),
     27017: ("MongoDB", "critical", "MongoDB often has no authentication by default"),
+    27018: ("MongoDB-Shard", "critical", "MongoDB shard server"),
+    28017: ("MongoDB-Web", "critical", "MongoDB web interface - often exposed"),
+    5984: ("CouchDB", "high", "CouchDB - verify authentication"),
+    
+    # RPC/NFS
+    111: ("RPC", "high", "RPC services can expose internal network information"),
+    2049: ("NFS", "high", "NFS can expose file systems if misconfigured"),
+    
+    # Web/Proxy
+    80: ("HTTP", "info", "HTTP - check for sensitive data exposure"),
+    443: ("HTTPS", "info", "HTTPS - verify TLS configuration"),
+    8080: ("HTTP-Proxy", "medium", "HTTP proxy or alternative web server"),
+    8443: ("HTTPS-Alt", "info", "Alternative HTTPS port"),
+    8000: ("HTTP-Alt", "medium", "Alternative HTTP - often development servers"),
+    8888: ("HTTP-Alt", "medium", "Alternative HTTP - often Jupyter/dev servers"),
+    3000: ("Node/Dev", "medium", "Common Node.js/development server port"),
+    
+    # Container/Orchestration - Critical if exposed
+    2375: ("Docker-API", "critical", "Docker API unencrypted - full container control"),
+    2376: ("Docker-TLS", "high", "Docker API with TLS - verify certificates"),
+    2377: ("Docker-Swarm", "critical", "Docker Swarm manager - cluster control"),
+    4243: ("Docker-Alt", "critical", "Alternative Docker API port"),
+    6443: ("K8s-API", "critical", "Kubernetes API server - cluster control"),
+    10250: ("Kubelet", "critical", "Kubernetes Kubelet API - node control"),
+    10255: ("Kubelet-RO", "high", "Kubernetes Kubelet read-only"),
+    
+    # Message Queues
+    5672: ("AMQP", "high", "RabbitMQ/AMQP - verify authentication"),
+    15672: ("RabbitMQ-Mgmt", "high", "RabbitMQ management interface"),
+    61616: ("ActiveMQ", "high", "Apache ActiveMQ - verify authentication"),
+    9092: ("Kafka", "high", "Apache Kafka broker"),
+    
+    # Build/CI/CD
+    8081: ("Nexus/Artifactory", "medium", "Repository manager - may expose artifacts"),
+    8082: ("Nexus-Docker", "medium", "Nexus Docker registry"),
+    50000: ("Jenkins-Agent", "high", "Jenkins agent port - may allow code execution"),
+    
+    # Other Services
+    79: ("Finger", "high", "Finger protocol - user enumeration"),
+    69: ("TFTP", "high", "TFTP - no authentication, file exposure"),
+    514: ("Syslog", "medium", "Syslog - may leak sensitive logs"),
+    1099: ("Java-RMI", "critical", "Java RMI - often vulnerable to deserialization"),
+    1100: ("Java-RMI-Alt", "critical", "Java RMI alternate port"),
+    8009: ("AJP", "critical", "Apache JServ Protocol - Ghostcat vulnerability"),
+    9001: ("Supervisor", "high", "Supervisord - process control"),
+    9090: ("Prometheus", "medium", "Prometheus metrics - information disclosure"),
+    9100: ("JetDirect", "medium", "HP JetDirect printer - often misconfigured"),
+    11211: ("Memcached", "critical", "Memcached - DDoS amplification vector"),
+    
+    # VoIP/Media
+    5060: ("SIP", "medium", "SIP signaling - VoIP"),
+    5061: ("SIP-TLS", "info", "SIP over TLS"),
+    554: ("RTSP", "medium", "RTSP streaming - verify authentication"),
+}
+
+
+# Known vulnerable service versions (product -> version pattern -> CVE/description)
+VULNERABLE_VERSIONS = {
+    "openssh": [
+        (r"OpenSSH[_ ]([0-6]\.|7\.[0-3])", "high", "OpenSSH < 7.4 - Multiple vulnerabilities including user enumeration (CVE-2016-6210)"),
+        (r"OpenSSH[_ ]7\.[4-6]", "medium", "OpenSSH 7.4-7.6 - Check for CVE-2017-15906 (readonly bypass)"),
+    ],
+    "apache": [
+        (r"Apache[/ ]2\.4\.([0-9]|[1-3][0-9]|4[0-9])(?![0-9])", "high", "Apache < 2.4.50 - Multiple vulnerabilities including path traversal (CVE-2021-41773, CVE-2021-42013)"),
+        (r"Apache[/ ]2\.2\.", "high", "Apache 2.2.x - End of life, multiple known vulnerabilities"),
+    ],
+    "nginx": [
+        (r"nginx/1\.([0-9]|1[0-7])\.", "medium", "nginx < 1.18 - Multiple vulnerabilities"),
+        (r"nginx/0\.", "high", "nginx 0.x - Very old, multiple vulnerabilities"),
+    ],
+    "mysql": [
+        (r"MySQL[/ ]5\.[0-5]\.", "high", "MySQL 5.0-5.5 - End of life, multiple vulnerabilities"),
+        (r"MySQL[/ ]5\.6\.", "medium", "MySQL 5.6 - Consider upgrading, EOL"),
+        (r"MariaDB[/ ]5\.", "high", "MariaDB 5.x - Very old, multiple vulnerabilities"),
+    ],
+    "microsoft-ds": [
+        (r"Windows Server 200[38]", "critical", "Windows Server 2003/2008 - End of life, EternalBlue vulnerable"),
+        (r"Windows XP", "critical", "Windows XP - End of life, critical vulnerabilities"),
+        (r"Windows 7", "high", "Windows 7 - End of life since Jan 2020"),
+    ],
+    "proftpd": [
+        (r"ProFTPD[/ ]1\.[23]\.", "critical", "ProFTPD < 1.3.6 - Multiple critical vulnerabilities including backdoor"),
+    ],
+    "vsftpd": [
+        (r"vsftpd[/ ]2\.3\.4", "critical", "vsftpd 2.3.4 - Backdoor vulnerability (CVE-2011-2523)"),
+    ],
+    "exim": [
+        (r"Exim[/ ]4\.([0-8][0-9]|9[0-1])", "critical", "Exim < 4.92 - Multiple RCE vulnerabilities"),
+    ],
+    "postfix": [
+        (r"Postfix[/ ]2\.", "medium", "Postfix 2.x - Consider upgrading"),
+    ],
+    "iis": [
+        (r"IIS[/ ]([5-7])\.", "high", "IIS 5-7 - Multiple known vulnerabilities"),
+    ],
+    "tomcat": [
+        (r"Tomcat[/ ]([5-7])\.", "high", "Tomcat 5-7 - End of life, multiple vulnerabilities"),
+        (r"Tomcat[/ ]8\.[0-4]\.", "medium", "Tomcat 8.0-8.4 - Consider upgrading"),
+    ],
+    "php": [
+        (r"PHP[/ ]5\.", "high", "PHP 5.x - End of life, multiple vulnerabilities"),
+        (r"PHP[/ ]7\.[0-3]\.", "medium", "PHP 7.0-7.3 - End of life"),
+    ],
+    "openssl": [
+        (r"OpenSSL[/ ]0\.", "critical", "OpenSSL 0.x - Heartbleed and many other vulnerabilities"),
+        (r"OpenSSL[/ ]1\.0\.[01]", "high", "OpenSSL 1.0.0-1.0.1 - Multiple vulnerabilities including Heartbleed"),
+    ],
+    "redis": [
+        (r"Redis[/ ]([0-5])\.", "high", "Redis < 6 - Consider upgrading, check for auth"),
+    ],
+    "elasticsearch": [
+        (r"Elasticsearch[/ ]([0-6])\.", "high", "Elasticsearch < 7 - Multiple vulnerabilities, check authentication"),
+    ],
+    "jenkins": [
+        (r"Jenkins[/ ]([01]\.|2\.[0-9]{1,2}(?![0-9]))", "high", "Jenkins < 2.100 - Multiple vulnerabilities"),
+    ],
 }
 
 
@@ -251,6 +389,13 @@ def parse_nmap_xml(file_path: Path) -> NmapAnalysisResult:
                 
                 port_info["scripts"] = port_scripts
                 host_ports.append(port_info)
+                
+                # Check service version/banner for known vulnerabilities
+                if state == "open" and (service_product or service_version):
+                    banner_findings = _check_banner_for_vulns(
+                        service_product, service_version, ip, port_num, service_name
+                    )
+                    findings.extend(banner_findings)
                 
                 # Check for high-risk ports
                 if state == "open" and port_num in HIGH_RISK_PORTS:
@@ -447,12 +592,44 @@ def parse_nmap_text(file_path: Path) -> NmapAnalysisResult:
     )
 
 
+def _check_banner_for_vulns(product: str, version: str, host: str, port: int, service: str) -> List[NmapFinding]:
+    """Check service banner/version for known vulnerabilities."""
+    findings = []
+    
+    if not product and not version:
+        return findings
+    
+    banner = f"{product or ''} {version or ''}".strip().lower()
+    
+    # Check against known vulnerable versions
+    for service_name, patterns in VULNERABLE_VERSIONS.items():
+        if service_name.lower() in banner or service_name.lower() in (service or '').lower():
+            for pattern, severity, description in patterns:
+                if re.search(pattern, banner, re.IGNORECASE) or re.search(pattern, f"{product} {version}", re.IGNORECASE):
+                    findings.append(NmapFinding(
+                        category="vulnerable_version",
+                        severity=severity,
+                        title=f"Vulnerable Software Version: {product or service} {version or ''}".strip(),
+                        description=description,
+                        host=host,
+                        port=port,
+                        service=service,
+                        evidence=f"Detected: {product} {version}",
+                    ))
+                    break  # Only report first match per service
+    
+    return findings
+
+
 def _check_script_for_vulns(script_id: str, output: str, host: str, port: Optional[int], service: Optional[str]) -> List[NmapFinding]:
-    """Check Nmap script output for vulnerabilities."""
+    """Check Nmap NSE script output for vulnerabilities - comprehensive detection."""
     findings = []
     output_lower = output.lower()
+    script_id_lower = script_id.lower()
     
-    # CVE detection
+    # =========================================================================
+    # CVE Detection
+    # =========================================================================
     cve_pattern = r'CVE-\d{4}-\d{4,}'
     cves = re.findall(cve_pattern, output, re.IGNORECASE)
     if cves:
@@ -468,68 +645,629 @@ def _check_script_for_vulns(script_id: str, output: str, host: str, port: Option
             cve_ids=cves,
         ))
     
-    # SMB vulnerabilities
-    if "smb-vuln" in script_id:
+    # =========================================================================
+    # SMB Vulnerabilities (EternalBlue, SMBGhost, etc.)
+    # =========================================================================
+    if "smb-vuln" in script_id_lower or "smb2-vuln" in script_id_lower:
         if "vulnerable" in output_lower or "state: vulnerable" in output_lower:
+            # Try to identify specific vulnerability
+            vuln_name = script_id.replace("smb-vuln-", "").replace("smb2-vuln-", "").upper()
             findings.append(NmapFinding(
                 category="vulnerable_service",
                 severity="critical",
-                title=f"SMB Vulnerability Detected ({script_id})",
-                description="SMB service is vulnerable to known exploits.",
+                title=f"SMB Vulnerability: {vuln_name}",
+                description=f"SMB service is vulnerable to {vuln_name}. This may allow remote code execution.",
                 host=host,
                 port=port or 445,
                 service="smb",
                 evidence=output[:500],
             ))
     
-    # SSL/TLS issues
-    if "ssl-" in script_id or "tls-" in script_id:
-        if "sslv2" in output_lower or "sslv3" in output_lower:
+    # SMB Signing
+    if "smb-security-mode" in script_id_lower or "smb2-security-mode" in script_id_lower:
+        if "message_signing: disabled" in output_lower or "signing_required: false" in output_lower:
             findings.append(NmapFinding(
                 category="weak_config",
-                severity="high",
-                title="Deprecated SSL/TLS Version Supported",
-                description="Server supports deprecated SSLv2 or SSLv3 which are vulnerable.",
+                severity="medium",
+                title="SMB Signing Not Required",
+                description="SMB signing is not required, making the connection vulnerable to relay attacks.",
+                host=host,
+                port=port or 445,
+                service="smb",
+                evidence=output[:300],
+            ))
+    
+    # SMB Enumeration
+    if "smb-enum" in script_id_lower:
+        if "shares" in script_id_lower and output.strip():
+            findings.append(NmapFinding(
+                category="information_disclosure",
+                severity="medium",
+                title="SMB Shares Enumerable",
+                description="SMB shares can be enumerated, potentially exposing sensitive data.",
+                host=host,
+                port=port or 445,
+                service="smb",
+                evidence=output[:400],
+            ))
+        if "users" in script_id_lower and output.strip():
+            findings.append(NmapFinding(
+                category="information_disclosure",
+                severity="medium",
+                title="SMB Users Enumerable",
+                description="User accounts can be enumerated via SMB.",
+                host=host,
+                port=port or 445,
+                service="smb",
+                evidence=output[:400],
+            ))
+    
+    # =========================================================================
+    # SSL/TLS Issues
+    # =========================================================================
+    if "ssl-" in script_id_lower or "tls-" in script_id_lower:
+        # Deprecated protocols
+        if "sslv2" in output_lower:
+            findings.append(NmapFinding(
+                category="weak_config",
+                severity="critical",
+                title="SSLv2 Enabled - Critically Vulnerable",
+                description="Server supports SSLv2 which has critical vulnerabilities and is completely broken.",
                 host=host,
                 port=port,
                 service=service,
                 evidence=output[:300],
             ))
-        if "weak" in output_lower or "export" in output_lower:
+        if "sslv3" in output_lower:
+            findings.append(NmapFinding(
+                category="weak_config",
+                severity="high",
+                title="SSLv3 Enabled - POODLE Vulnerable",
+                description="Server supports SSLv3 which is vulnerable to POODLE attack (CVE-2014-3566).",
+                host=host,
+                port=port,
+                service=service,
+                evidence=output[:300],
+                cve_ids=["CVE-2014-3566"],
+            ))
+        if "tlsv1.0" in output_lower and "only" not in output_lower:
+            findings.append(NmapFinding(
+                category="weak_config",
+                severity="medium",
+                title="TLS 1.0 Enabled - Deprecated",
+                description="Server supports TLS 1.0 which is deprecated and has known weaknesses.",
+                host=host,
+                port=port,
+                service=service,
+            ))
+        
+        # Weak ciphers
+        if any(w in output_lower for w in ["export", "des-cbc", "rc4", "rc2", "null", "anon"]):
             findings.append(NmapFinding(
                 category="weak_config",
                 severity="high",
                 title="Weak SSL/TLS Ciphers Supported",
-                description="Server supports weak or export-grade ciphers.",
+                description="Server supports weak, export-grade, or null ciphers.",
+                host=host,
+                port=port,
+                service=service,
+                evidence=output[:400],
+            ))
+        
+        # Heartbleed
+        if "heartbleed" in script_id_lower:
+            if "vulnerable" in output_lower:
+                findings.append(NmapFinding(
+                    category="vulnerable_service",
+                    severity="critical",
+                    title="Heartbleed Vulnerability (CVE-2014-0160)",
+                    description="Server is vulnerable to Heartbleed, allowing memory disclosure.",
+                    host=host,
+                    port=port,
+                    service=service,
+                    cve_ids=["CVE-2014-0160"],
+                ))
+        
+        # POODLE
+        if "ssl-poodle" in script_id_lower:
+            if "vulnerable" in output_lower:
+                findings.append(NmapFinding(
+                    category="vulnerable_service",
+                    severity="high",
+                    title="POODLE Vulnerability",
+                    description="Server is vulnerable to POODLE attack on SSL/TLS.",
+                    host=host,
+                    port=port,
+                    service=service,
+                    cve_ids=["CVE-2014-3566"],
+                ))
+        
+        # Certificate issues
+        if "ssl-cert" in script_id_lower:
+            if "expired" in output_lower:
+                findings.append(NmapFinding(
+                    category="weak_config",
+                    severity="high",
+                    title="SSL Certificate Expired",
+                    description="The SSL/TLS certificate has expired.",
+                    host=host,
+                    port=port,
+                    service=service,
+                ))
+            if "self-signed" in output_lower:
+                findings.append(NmapFinding(
+                    category="weak_config",
+                    severity="medium",
+                    title="Self-Signed SSL Certificate",
+                    description="The SSL/TLS certificate is self-signed and not trusted.",
+                    host=host,
+                    port=port,
+                    service=service,
+                ))
+    
+    # =========================================================================
+    # HTTP Vulnerabilities
+    # =========================================================================
+    if "http-" in script_id_lower:
+        # HTTP Methods
+        if "http-methods" in script_id_lower:
+            dangerous_methods = ["PUT", "DELETE", "TRACE", "CONNECT"]
+            for method in dangerous_methods:
+                if method.lower() in output_lower:
+                    findings.append(NmapFinding(
+                        category="weak_config",
+                        severity="medium" if method == "TRACE" else "high",
+                        title=f"Dangerous HTTP Method Enabled: {method}",
+                        description=f"HTTP {method} method is enabled, which may allow unauthorized actions.",
+                        host=host,
+                        port=port,
+                        service=service,
+                    ))
+        
+        # Shellshock
+        if "http-shellshock" in script_id_lower:
+            if "vulnerable" in output_lower:
+                findings.append(NmapFinding(
+                    category="vulnerable_service",
+                    severity="critical",
+                    title="Shellshock Vulnerability (CVE-2014-6271)",
+                    description="Web server is vulnerable to Shellshock, allowing remote code execution.",
+                    host=host,
+                    port=port,
+                    service=service,
+                    cve_ids=["CVE-2014-6271", "CVE-2014-7169"],
+                ))
+        
+        # SQL Injection
+        if "http-sql-injection" in script_id_lower:
+            if output.strip() and "error" not in output_lower[:50]:
+                findings.append(NmapFinding(
+                    category="vulnerable_service",
+                    severity="critical",
+                    title="Potential SQL Injection Detected",
+                    description="Web application may be vulnerable to SQL injection.",
+                    host=host,
+                    port=port,
+                    service=service,
+                    evidence=output[:400],
+                ))
+        
+        # XSS
+        if "http-stored-xss" in script_id_lower or "http-dombased-xss" in script_id_lower:
+            if output.strip() and "error" not in output_lower[:50]:
+                findings.append(NmapFinding(
+                    category="vulnerable_service",
+                    severity="high",
+                    title="Potential XSS Vulnerability",
+                    description="Web application may be vulnerable to Cross-Site Scripting.",
+                    host=host,
+                    port=port,
+                    service=service,
+                    evidence=output[:300],
+                ))
+        
+        # Directory listing
+        if "http-ls" in script_id_lower or "directory listing" in output_lower:
+            findings.append(NmapFinding(
+                category="information_disclosure",
+                severity="medium",
+                title="Directory Listing Enabled",
+                description="Web server allows directory listing, potentially exposing files.",
                 host=host,
                 port=port,
                 service=service,
             ))
+        
+        # Robots.txt
+        if "http-robots" in script_id_lower and output.strip():
+            if any(s in output_lower for s in ["admin", "backup", "config", "secret", "private", "internal"]):
+                findings.append(NmapFinding(
+                    category="information_disclosure",
+                    severity="low",
+                    title="Sensitive Paths in robots.txt",
+                    description="robots.txt reveals potentially sensitive paths.",
+                    host=host,
+                    port=port,
+                    service=service,
+                    evidence=output[:400],
+                ))
+        
+        # Default pages/files
+        if "http-enum" in script_id_lower and output.strip():
+            findings.append(NmapFinding(
+                category="information_disclosure",
+                severity="medium",
+                title="Interesting HTTP Paths Found",
+                description="HTTP enumeration found potentially interesting files/directories.",
+                host=host,
+                port=port,
+                service=service,
+                evidence=output[:500],
+            ))
+        
+        # PHPInfo
+        if "http-phpself-xss" in script_id_lower or "phpinfo" in output_lower:
+            findings.append(NmapFinding(
+                category="information_disclosure",
+                severity="medium",
+                title="PHPInfo Exposed",
+                description="phpinfo() is accessible, exposing system configuration.",
+                host=host,
+                port=port,
+                service=service,
+            ))
+        
+        # WebDAV
+        if "http-webdav" in script_id_lower:
+            if "webdav" in output_lower and "enabled" in output_lower:
+                findings.append(NmapFinding(
+                    category="weak_config",
+                    severity="high",
+                    title="WebDAV Enabled",
+                    description="WebDAV is enabled, which may allow file upload/manipulation.",
+                    host=host,
+                    port=port,
+                    service=service,
+                ))
     
-    # Default/weak credentials
-    if "brute" in script_id or "login" in script_id:
-        if "valid credentials" in output_lower or "success" in output_lower:
+    # =========================================================================
+    # FTP Issues
+    # =========================================================================
+    if "ftp-" in script_id_lower:
+        # Anonymous FTP
+        if "ftp-anon" in script_id_lower:
+            if "anonymous" in output_lower and "allowed" in output_lower:
+                findings.append(NmapFinding(
+                    category="weak_config",
+                    severity="high",
+                    title="Anonymous FTP Access Allowed",
+                    description="FTP server allows anonymous login, potentially exposing files.",
+                    host=host,
+                    port=port or 21,
+                    service="ftp",
+                    evidence=output[:300],
+                ))
+        
+        # FTP Bounce
+        if "ftp-bounce" in script_id_lower:
+            if "vulnerable" in output_lower or "allows" in output_lower:
+                findings.append(NmapFinding(
+                    category="vulnerable_service",
+                    severity="high",
+                    title="FTP Bounce Attack Possible",
+                    description="FTP server may be vulnerable to bounce attacks.",
+                    host=host,
+                    port=port or 21,
+                    service="ftp",
+                ))
+        
+        # vsftpd backdoor
+        if "ftp-vsftpd-backdoor" in script_id_lower:
+            if "vulnerable" in output_lower or "backdoor" in output_lower:
+                findings.append(NmapFinding(
+                    category="vulnerable_service",
+                    severity="critical",
+                    title="vsftpd 2.3.4 Backdoor",
+                    description="FTP server has the vsftpd 2.3.4 backdoor (CVE-2011-2523).",
+                    host=host,
+                    port=port or 21,
+                    service="ftp",
+                    cve_ids=["CVE-2011-2523"],
+                ))
+    
+    # =========================================================================
+    # SSH Issues
+    # =========================================================================
+    if "ssh-" in script_id_lower:
+        # Weak algorithms
+        if "ssh2-enum-algos" in script_id_lower:
+            weak_algos = ["arcfour", "3des-cbc", "blowfish-cbc", "cast128-cbc", "diffie-hellman-group1"]
+            for algo in weak_algos:
+                if algo in output_lower:
+                    findings.append(NmapFinding(
+                        category="weak_config",
+                        severity="medium",
+                        title="Weak SSH Algorithm Supported",
+                        description=f"SSH server supports weak algorithm: {algo}",
+                        host=host,
+                        port=port or 22,
+                        service="ssh",
+                    ))
+                    break
+        
+        # SSH auth methods
+        if "ssh-auth-methods" in script_id_lower:
+            if "password" in output_lower:
+                findings.append(NmapFinding(
+                    category="weak_config",
+                    severity="low",
+                    title="SSH Password Authentication Enabled",
+                    description="SSH allows password authentication (consider key-only).",
+                    host=host,
+                    port=port or 22,
+                    service="ssh",
+                ))
+    
+    # =========================================================================
+    # DNS Issues
+    # =========================================================================
+    if "dns-" in script_id_lower:
+        # Zone transfer
+        if "dns-zone-transfer" in script_id_lower:
+            if output.strip() and "failed" not in output_lower:
+                findings.append(NmapFinding(
+                    category="information_disclosure",
+                    severity="high",
+                    title="DNS Zone Transfer Allowed",
+                    description="DNS server allows zone transfers, exposing all DNS records.",
+                    host=host,
+                    port=port or 53,
+                    service="dns",
+                    evidence=output[:500],
+                ))
+        
+        # DNS recursion
+        if "dns-recursion" in script_id_lower:
+            if "recursion" in output_lower and "enabled" in output_lower:
+                findings.append(NmapFinding(
+                    category="weak_config",
+                    severity="medium",
+                    title="DNS Recursion Enabled",
+                    description="DNS server allows recursive queries (potential amplification).",
+                    host=host,
+                    port=port or 53,
+                    service="dns",
+                ))
+    
+    # =========================================================================
+    # SNMP Issues
+    # =========================================================================
+    if "snmp-" in script_id_lower:
+        if "snmp-brute" in script_id_lower or "public" in output_lower or "private" in output_lower:
+            findings.append(NmapFinding(
+                category="weak_config",
+                severity="high",
+                title="SNMP Default/Weak Community String",
+                description="SNMP uses default or easily guessable community strings.",
+                host=host,
+                port=port or 161,
+                service="snmp",
+                evidence=output[:200],
+            ))
+    
+    # =========================================================================
+    # Database Issues
+    # =========================================================================
+    # MySQL
+    if "mysql-" in script_id_lower:
+        if "mysql-empty-password" in script_id_lower:
+            if "root" in output_lower or "empty" in output_lower:
+                findings.append(NmapFinding(
+                    category="weak_config",
+                    severity="critical",
+                    title="MySQL Empty Root Password",
+                    description="MySQL server has accounts with no password.",
+                    host=host,
+                    port=port or 3306,
+                    service="mysql",
+                ))
+        if "mysql-brute" in script_id_lower and "valid" in output_lower:
             findings.append(NmapFinding(
                 category="weak_config",
                 severity="critical",
-                title="Weak/Default Credentials Detected",
-                description="Service may be using default or easily guessable credentials.",
+                title="MySQL Weak Credentials",
+                description="MySQL server has accounts with weak passwords.",
+                host=host,
+                port=port or 3306,
+                service="mysql",
+            ))
+    
+    # PostgreSQL
+    if "pgsql-brute" in script_id_lower and "valid" in output_lower:
+        findings.append(NmapFinding(
+            category="weak_config",
+            severity="critical",
+            title="PostgreSQL Weak Credentials",
+            description="PostgreSQL server has accounts with weak passwords.",
+            host=host,
+            port=port or 5432,
+            service="postgresql",
+        ))
+    
+    # MongoDB
+    if "mongodb-" in script_id_lower:
+        if "mongodb-brute" in script_id_lower and "valid" in output_lower:
+            findings.append(NmapFinding(
+                category="weak_config",
+                severity="critical",
+                title="MongoDB Weak Credentials",
+                description="MongoDB has accounts with weak passwords.",
+                host=host,
+                port=port or 27017,
+                service="mongodb",
+            ))
+        if "mongodb-info" in script_id_lower or "mongodb-databases" in script_id_lower:
+            if output.strip():
+                findings.append(NmapFinding(
+                    category="information_disclosure",
+                    severity="high",
+                    title="MongoDB Information Disclosure",
+                    description="MongoDB server exposes database/server information.",
+                    host=host,
+                    port=port or 27017,
+                    service="mongodb",
+                    evidence=output[:400],
+                ))
+    
+    # Redis
+    if "redis-" in script_id_lower:
+        if "redis-info" in script_id_lower and output.strip():
+            findings.append(NmapFinding(
+                category="weak_config",
+                severity="critical",
+                title="Redis No Authentication",
+                description="Redis server accessible without authentication.",
+                host=host,
+                port=port or 6379,
+                service="redis",
+                evidence=output[:300],
+            ))
+    
+    # =========================================================================
+    # RPC/NFS Issues
+    # =========================================================================
+    if "rpcinfo" in script_id_lower or "nfs-" in script_id_lower:
+        if "nfs-showmount" in script_id_lower and output.strip():
+            findings.append(NmapFinding(
+                category="information_disclosure",
+                severity="high",
+                title="NFS Exports Visible",
+                description="NFS exports are enumerable, may expose file systems.",
+                host=host,
+                port=port or 2049,
+                service="nfs",
+                evidence=output[:400],
+            ))
+        if "nfs-ls" in script_id_lower and output.strip():
+            findings.append(NmapFinding(
+                category="information_disclosure",
+                severity="high",
+                title="NFS Share Contents Accessible",
+                description="NFS share contents are accessible, data may be exposed.",
+                host=host,
+                port=port or 2049,
+                service="nfs",
+            ))
+    
+    # =========================================================================
+    # Java/RMI Issues
+    # =========================================================================
+    if "rmi-" in script_id_lower:
+        if "rmi-vuln-classloader" in script_id_lower and "vulnerable" in output_lower:
+            findings.append(NmapFinding(
+                category="vulnerable_service",
+                severity="critical",
+                title="Java RMI Remote Code Execution",
+                description="Java RMI is vulnerable to remote code execution.",
+                host=host,
+                port=port or 1099,
+                service="rmi",
+            ))
+    
+    # =========================================================================
+    # LDAP Issues
+    # =========================================================================
+    if "ldap-" in script_id_lower:
+        if "ldap-rootdse" in script_id_lower and output.strip():
+            findings.append(NmapFinding(
+                category="information_disclosure",
+                severity="medium",
+                title="LDAP Root DSE Accessible",
+                description="LDAP root DSE is accessible, exposing directory information.",
+                host=host,
+                port=port or 389,
+                service="ldap",
+            ))
+        if "ldap-brute" in script_id_lower and "valid" in output_lower:
+            findings.append(NmapFinding(
+                category="weak_config",
+                severity="high",
+                title="LDAP Weak Credentials",
+                description="LDAP has accounts with weak passwords.",
+                host=host,
+                port=port or 389,
+                service="ldap",
+            ))
+    
+    # =========================================================================
+    # VNC Issues
+    # =========================================================================
+    if "vnc-" in script_id_lower:
+        if "vnc-brute" in script_id_lower and "valid" in output_lower:
+            findings.append(NmapFinding(
+                category="weak_config",
+                severity="critical",
+                title="VNC Weak Password",
+                description="VNC server has a weak or no password.",
+                host=host,
+                port=port or 5900,
+                service="vnc",
+            ))
+        if "realvnc-auth-bypass" in script_id_lower and "vulnerable" in output_lower:
+            findings.append(NmapFinding(
+                category="vulnerable_service",
+                severity="critical",
+                title="RealVNC Authentication Bypass",
+                description="RealVNC is vulnerable to authentication bypass.",
+                host=host,
+                port=port or 5900,
+                service="vnc",
+            ))
+    
+    # =========================================================================
+    # Generic Patterns
+    # =========================================================================
+    # Anonymous access (generic)
+    if "anonymous" in output_lower and ("allowed" in output_lower or "enabled" in output_lower or "access" in output_lower):
+        # Avoid duplicate if already caught by specific checks
+        if not any(f.title.startswith("Anonymous") for f in findings):
+            findings.append(NmapFinding(
+                category="weak_config",
+                severity="high",
+                title="Anonymous Access Allowed",
+                description="Service allows anonymous/unauthenticated access.",
                 host=host,
                 port=port,
                 service=service,
             ))
     
-    # Anonymous access
-    if "anonymous" in output_lower and ("allowed" in output_lower or "enabled" in output_lower):
-        findings.append(NmapFinding(
-            category="weak_config",
-            severity="high",
-            title="Anonymous Access Allowed",
-            description="Service allows anonymous/unauthenticated access.",
-            host=host,
-            port=port,
-            service=service,
-        ))
+    # Default credentials (generic)
+    if any(cred in output_lower for cred in ["default", "credentials found", "valid credentials", "login successful"]):
+        if "brute" in script_id_lower or "login" in script_id_lower:
+            if not any(f.title.startswith("Weak") or f.title.startswith("MySQL") or f.title.startswith("PostgreSQL") for f in findings):
+                findings.append(NmapFinding(
+                    category="weak_config",
+                    severity="critical",
+                    title="Default/Weak Credentials Detected",
+                    description="Service may be using default or easily guessable credentials.",
+                    host=host,
+                    port=port,
+                    service=service,
+                ))
+    
+    # Vulnerability scripts (generic)
+    if "vuln" in script_id_lower and "vulnerable" in output_lower:
+        if not any("ulnerable" in f.title for f in findings):
+            findings.append(NmapFinding(
+                category="vulnerable_service",
+                severity="high",
+                title=f"Vulnerability Detected: {script_id}",
+                description=f"Service is vulnerable according to {script_id}.",
+                host=host,
+                port=port,
+                service=service,
+                evidence=output[:500],
+            ))
     
     return findings
 

@@ -1889,12 +1889,30 @@ async def batch_test_targets(
                     "error": str(e),
                 }
     
-    # Run all tests
+    # Run all tests (with return_exceptions for robustness)
     tasks = [test_target(t) for t in targets]
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     
     # Aggregate results
     for r in results:
+        # Skip exceptions from gather
+        if isinstance(r, Exception):
+            result.failed += 1
+            result.results.append({
+                "target": "Unknown",
+                "name": "Unknown",
+                "success": False,
+                "security_score": 0,
+                "total_findings": 0,
+                "critical_count": 0,
+                "high_count": 0,
+                "medium_count": 0,
+                "low_count": 0,
+                "findings": [],
+                "error": str(r),
+            })
+            continue
+        
         result.results.append(r)
         if r["success"]:
             result.successful += 1

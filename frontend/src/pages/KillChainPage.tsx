@@ -47,6 +47,10 @@ interface KillChainPhase {
   defenderActions: string[];
   tools: string[];
   indicators: string[];
+  telemetry: string[];
+  responsePlaybook: string[];
+  beginnerFocus: string;
+  defenderMindset: string;
   realWorldExample: string;
 }
 
@@ -77,6 +81,23 @@ const killChainPhases: KillChainPhase[] = [
     ],
     tools: ["Maltego", "Shodan", "theHarvester", "Recon-ng", "SpiderFoot", "OSINT Framework", "hunter.io"],
     indicators: ["Unusual DNS queries", "Port scanning from single source", "Social engineering attempts", "Job posting scraping"],
+    telemetry: [
+      "DNS query spikes for subdomain enumeration",
+      "Web analytics showing automated crawling",
+      "Certificate transparency monitoring alerts",
+      "Threat intel or brand monitoring hits",
+      "Repeated port scans against exposed services",
+    ],
+    responsePlaybook: [
+      "Rate limit or block abusive scanners at the edge",
+      "Reduce exposed metadata in public docs and job posts",
+      "Deploy honeypots to confirm intent and collect IOCs",
+      "Notify SOC to watch for targeted phishing attempts",
+    ],
+    beginnerFocus:
+      "Reconnaissance is about learning, not breaking in. For beginners, the key idea is that attackers can learn a lot without ever touching your internal systems. Public websites, job posts, DNS records, and social media can reveal technology stacks, vendor names, and employee roles. These clues are often enough to plan a targeted phishing or exploit campaign.",
+    defenderMindset:
+      "Treat recon signals as early warnings. You cannot stop all recon, but you can reduce what is exposed and watch for patterns that suggest targeted interest. Build the habit of asking what information you would want as an attacker, then minimize or monitor it. The earlier you spot recon, the more options you have for containment later.",
     realWorldExample: "In the 2020 SolarWinds attack, threat actors spent months researching targets and understanding the supply chain before proceeding.",
   },
   {
@@ -106,6 +127,23 @@ const killChainPhases: KillChainPhase[] = [
     ],
     tools: ["Metasploit", "Cobalt Strike", "Veil", "msfvenom", "Empire", "Custom malware frameworks"],
     indicators: ["This phase occurs outside your network - limited visibility"],
+    telemetry: [
+      "Threat intel reports on new tooling targeting your sector",
+      "Malware sandbox detonations from incoming attachments",
+      "Partner or ISAC advisories about emerging payloads",
+      "Dark web monitoring for stolen creds or brand abuse",
+      "Supplier security notifications about compromised builds",
+    ],
+    responsePlaybook: [
+      "Validate reported IOCs against environment telemetry",
+      "Update detection rules and blocklists proactively",
+      "Patch or mitigate the likely target vulnerabilities",
+      "Brief responders on expected payload behavior",
+    ],
+    beginnerFocus:
+      "Weaponization happens mostly off your network. That means you often will not see it directly. Beginners should understand this phase as the attacker building or modifying tools so they work against your environment. This can include custom malware, phishing kits, or exploiting a new vulnerability. If you only focus on what happens inside the network, you can miss the preparation step entirely.",
+    defenderMindset:
+      "Rely on threat intelligence, vendor advisories, and community sharing to compensate for limited visibility. Use these signals to get ahead of likely payloads by patching, hardening, and tuning detections. The mindset here is proactive defense: prepare for what is being built before it ever reaches you.",
     realWorldExample: "APT groups often spend months developing custom implants. Lazarus Group developed ELECTRICFISH tunneling tool specifically for financial institutions.",
   },
   {
@@ -136,6 +174,23 @@ const killChainPhases: KillChainPhase[] = [
     ],
     tools: ["GoPhish", "King Phisher", "SET (Social Engineering Toolkit)", "Evilginx2", "BeEF"],
     indicators: ["Phishing emails detected", "Malicious attachments blocked", "Suspicious downloads", "Drive-by compromise attempts"],
+    telemetry: [
+      "Email gateway logs and attachment detonations",
+      "Secure web gateway and proxy download events",
+      "DNS requests to newly registered or lookalike domains",
+      "Endpoint download and file write telemetry",
+      "Cloud app consent or OAuth grant logs",
+    ],
+    responsePlaybook: [
+      "Quarantine messages and block malicious senders",
+      "Isolate affected endpoints and reset compromised accounts",
+      "Block known bad URLs, domains, and hashes",
+      "Notify users and run targeted awareness reminders",
+    ],
+    beginnerFocus:
+      "Delivery is the moment the payload meets the target. Beginners often think delivery equals compromise, but it does not. A malicious email can be delivered and still be blocked. A malicious website can be visited and still be contained by the browser. This phase is about the transmission channel, not the success of the exploit.",
+    defenderMindset:
+      "Focus on reducing how often payloads reach users and systems. Email filtering, web gateways, and user training are defensive wins here. When a delivery attempt is detected, assume the attacker will try again with variations. Rapid blocking and communication can prevent a cascade of follow on attempts.",
     realWorldExample: "The 2017 NotPetya attack used a compromised Ukrainian accounting software update as the delivery mechanism, affecting companies globally.",
   },
   {
@@ -166,6 +221,23 @@ const killChainPhases: KillChainPhase[] = [
     ],
     tools: ["Metasploit", "Burp Suite", "sqlmap", "CrackMapExec", "Impacket", "BloodHound"],
     indicators: ["Exploit attempts in logs", "Unexpected process execution", "Failed authentication spikes", "Vulnerability scanner activity"],
+    telemetry: [
+      "WAF or IDS alerts for exploit patterns",
+      "EDR process trees showing unusual child processes",
+      "Application error logs and crash reports",
+      "Authentication logs with anomalous failures",
+      "Cloud audit logs showing privilege abuse",
+    ],
+    responsePlaybook: [
+      "Patch or mitigate the exploited service immediately",
+      "Contain affected hosts and capture memory where possible",
+      "Rotate secrets and credentials tied to the service",
+      "Hunt for similar exposure across the fleet",
+    ],
+    beginnerFocus:
+      "Exploitation is when a vulnerability or misconfiguration is actually triggered to run code or bypass a control. This is different from delivery. If a user opens a file and nothing happens, exploitation may not have occurred. If a public facing service crashes and spawns a shell, it likely has. Understanding this difference helps you prioritize alerts and response.",
+    defenderMindset:
+      "Think in terms of exposure and patch cadence. Exploitation succeeds when a known weakness is reachable and unprotected. Focus on reducing the attack surface and patching quickly. When exploitation is detected, time is critical because attackers can quickly move to persistence and credential access.",
     realWorldExample: "The Equifax breach (2017) exploited CVE-2017-5638, an Apache Struts vulnerability that was 2 months old with a patch available.",
   },
   {
@@ -198,6 +270,23 @@ const killChainPhases: KillChainPhase[] = [
     ],
     tools: ["Mimikatz", "PowerSploit", "SharPersist", "PoshC2", "DVTA", "Web shells (China Chopper, WSO)"],
     indicators: ["New admin accounts", "Unexpected scheduled tasks", "Modified registry keys", "New services installed", "Web shells detected"],
+    telemetry: [
+      "New services, scheduled tasks, or startup items",
+      "Registry run key modifications",
+      "New local or domain admin accounts",
+      "File integrity alerts on system binaries",
+      "Persistence artifacts in startup folders",
+    ],
+    responsePlaybook: [
+      "Remove persistence and quarantine the implant",
+      "Reset compromised credentials and review access",
+      "Reimage hosts when integrity is uncertain",
+      "Hunt for the same persistence across endpoints",
+    ],
+    beginnerFocus:
+      "Installation is about staying power. After initial access, attackers want their foothold to survive restarts, logouts, and routine maintenance. Beginners should recognize common persistence patterns like startup items, scheduled tasks, new services, or web shells. These are often the artifacts that incident responders search for first.",
+    defenderMindset:
+      "Focus on baselines and visibility. If you know what normal startup items and services look like, you can spot the outliers faster. When persistence is found, remove it completely and assume it was placed alongside other access paths. This is why responders hunt for multiple persistence mechanisms.",
     realWorldExample: "APT29 (Cozy Bear) uses multiple persistence mechanisms including scheduled tasks, WMI subscriptions, and startup folder shortcuts.",
   },
   {
@@ -228,6 +317,23 @@ const killChainPhases: KillChainPhase[] = [
     ],
     tools: ["Cobalt Strike", "Covenant", "PoshC2", "Mythic", "Sliver", "DNS over HTTPS tunneling"],
     indicators: ["Beaconing traffic patterns", "Unusual DNS queries", "Traffic to newly registered domains", "Long-duration connections", "Encrypted traffic to unusual destinations"],
+    telemetry: [
+      "DNS logs showing beaconing or DGAs",
+      "Netflow and proxy logs with periodic connections",
+      "TLS fingerprints or unusual SNI values",
+      "Traffic to newly registered or rare domains",
+      "Long lived outbound connections to unknown hosts",
+    ],
+    responsePlaybook: [
+      "Block C2 domains, IPs, and certificates at egress",
+      "Isolate infected endpoints and capture network traffic",
+      "Sinkhole domains when possible for visibility",
+      "Expand hunts for the same beacon pattern",
+    ],
+    beginnerFocus:
+      "Command and Control (C2) is how the attacker talks to compromised systems. The simplest mental model is a remote control channel. This can be obvious, like a suspicious IP, or subtle, like short periodic HTTPS beacons to a cloud service. C2 often blends in with normal traffic to avoid detection.",
+    defenderMindset:
+      "Look for patterns over time rather than single events. Beaconing is a behavior, not a one time alert. Use egress filtering, DNS monitoring, and TLS inspection where appropriate. If you can interrupt the C2 channel, you can slow or stop the attack even if the host is still infected.",
     realWorldExample: "Sunburst malware used multiple legitimate domains and cloud services for C2, making detection extremely difficult.",
   },
   {
@@ -260,6 +366,23 @@ const killChainPhases: KillChainPhase[] = [
     ],
     tools: ["Rclone", "MEGAsync", "7-Zip for compression", "Custom exfil tools", "Ransomware variants (LockBit, BlackCat)"],
     indicators: ["Large data transfers", "Unusual database queries", "Access to sensitive file shares", "Encryption activity", "Ransom notes"],
+    telemetry: [
+      "DLP alerts and large outbound data transfers",
+      "Database audit logs with bulk queries",
+      "File share access spikes or unusual archives",
+      "Backup deletion or encryption events",
+      "Cloud storage egress anomalies",
+    ],
+    responsePlaybook: [
+      "Contain exfiltration channels and throttle egress",
+      "Activate incident response and legal workflows",
+      "Preserve evidence and validate data integrity",
+      "Restore from known good backups if needed",
+    ],
+    beginnerFocus:
+      "Actions on Objectives is the goal stage. This is when attackers steal data, encrypt systems, or manipulate operations. Beginners should understand that the same earlier steps can lead to very different outcomes depending on the attacker. The objective could be espionage, sabotage, extortion, or just access resale.",
+    defenderMindset:
+      "At this point the priority is containment and impact reduction. Focus on stopping data loss, protecting critical services, and communicating with stakeholders. This is also where incident response planning pays off. Having backups, legal guidance, and executive decision paths ready makes recovery faster.",
     realWorldExample: "Colonial Pipeline (2021) - DarkSide ransomware encrypted systems after exfiltrating 100GB of data, leading to fuel shortages.",
   },
 ];
@@ -930,6 +1053,12 @@ export default function KillChainPage() {
             <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
               <strong>Key Insight:</strong> Breaking ANY single link in the chain stops the attack. Early detection (phases 1-3) is ideal, but defenses should exist at every phase for defense in depth.
             </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+              For beginners, treat the Kill Chain as a story arc. Most incidents start with quiet preparation, move through a delivery moment, and end with a goal like data theft or ransomware. This framing helps you recognize that a small early warning, such as a sudden spike in DNS lookups or a new phishing email, can be the first chapter of a much larger incident.
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+              Each phase has a detection opportunity. The attacker only needs one phase to succeed; the defender has multiple chances to interrupt the chain. That is why defenders focus on layering controls, building telemetry, and preparing quick response steps. This page makes those relationships visible so you can connect symptoms to causes.
+            </Typography>
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
               <Chip label="7 Phases" sx={{ bgcolor: alpha("#6366f1", 0.1), color: "#6366f1", fontWeight: 600 }} />
               <Chip label="Defense in Depth" variant="outlined" />
@@ -971,9 +1100,54 @@ export default function KillChainPage() {
         </Grid>
       </Paper>
 
+      {/* Beginner Walkthrough */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Beginner Walkthrough
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Read the phase names in order and imagine them as steps in a checklist. Reconnaissance is about learning, Weaponization is about building, Delivery is about sending, Exploitation is about triggering, Installation is about staying, Command and Control is about talking back, and Actions on Objectives is about achieving the goal. This simple mental model helps you organize what can otherwise feel like a messy incident.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          When you expand a phase, pay attention to the attacker actions and defender actions. The attacker list shows common behaviors, while the defender list shows the standard practices used to reduce risk. The telemetry section tells you what logs or signals you should collect, and the response moves show practical next steps when you see those signals.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          If you are studying for the first time, pick one phase and try to map it to a real system you know. For example, if you have a web app, ask what Delivery might look like, what Exploitation could mean, and what telemetry would prove it. This exercise makes the framework concrete and turns theory into intuition.
+        </Typography>
+      </Paper>
+
+      {/* Common Misconceptions */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#6366f1", 0.04), border: `1px solid ${alpha("#6366f1", 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Common Misconceptions
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          A common mistake is to assume the Kill Chain is rigid and always linear. In reality, attackers can skip phases, loop back, or execute multiple phases in parallel. The framework still helps because it is a simple mental model, but you should not treat it as a rulebook. It is a way to structure thinking, not a strict timeline.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          Another misconception is that stopping the final phase is the only thing that matters. In practice, stopping an attack late is often expensive and disruptive. The Kill Chain highlights how valuable early detection is. Blocking a phishing email or spotting reconnaissance saves far more effort than cleaning up ransomware after the fact.
+        </Typography>
+      </Paper>
+
+      {/* Practice Scenarios */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#a855f7", 0.04), border: `1px solid ${alpha("#a855f7", 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Practice Scenarios
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Imagine you receive a report of a suspicious email with a link to a login page that looks like your company portal. That is Delivery. If a user clicks and enters credentials, the attacker may move to Exploitation and then Installation by creating persistence with valid accounts. Mapping the steps helps you decide which logs to check and which accounts to reset first.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          Another example is a public facing application with an unpatched vulnerability. The attacker may scan your environment (Reconnaissance), send a crafted request (Delivery), exploit the bug (Exploitation), then install a web shell (Installation). If you can detect the exploit attempt in logs and patch quickly, you may stop the attack before Command and Control even begins.
+        </Typography>
+      </Paper>
+
       {/* Visual Chain */}
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
         🔗 The 7 Phases
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+        This visual chain shows the sequence in a compact format. Click any phase to jump directly to its detailed breakdown. If you are learning, start at the left and move right, then try again in reverse. The reverse pass helps you think about how defenders often discover incidents late and need to work backward to find the original entry point.
       </Typography>
       <Box
         sx={{
@@ -1029,6 +1203,12 @@ export default function KillChainPage() {
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
         📋 Detailed Phase Breakdown
       </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+        The sections below are designed for study. Each phase includes a plain language summary, a list of typical attacker actions, and the defender actions that help prevent or detect those behaviors. If you are new, read the description first, then scan the lists. Over time you will recognize that the same behaviors show up in many incidents, even if the tools change.
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+        Use the telemetry and response panels as a practical checklist. Telemetry tells you what data to collect to prove something happened. Response moves are the first tactical steps to contain damage while you investigate. In real incident response, speed matters, so having these mental shortcuts can make a big difference.
+      </Typography>
       {killChainPhases.map((phase) => (
         <Accordion
           key={phase.id}
@@ -1067,6 +1247,12 @@ export default function KillChainPage() {
           <AccordionDetails sx={{ p: 4 }}>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               {phase.description}
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+              {phase.beginnerFocus}
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, lineHeight: 1.8 }}>
+              {phase.defenderMindset}
             </Typography>
 
             <Grid container spacing={4}>
@@ -1131,6 +1317,46 @@ export default function KillChainPage() {
               </Grid>
             </Grid>
 
+            <Divider sx={{ my: 3 }} />
+
+            {/* Telemetry & Response */}
+            <Grid container spacing={4}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.15)}`, borderRadius: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0ea5e9", mb: 2 }}>
+                    Telemetry Sources
+                  </Typography>
+                  <List dense>
+                    {phase.telemetry.map((signal, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#0ea5e9" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={signal} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.15)}`, borderRadius: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 2 }}>
+                    First Response Moves
+                  </Typography>
+                  <List dense>
+                    {phase.responsePlaybook.map((step, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#8b5cf6" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={step} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+            </Grid>
+
             {/* Real World Example */}
             <Alert severity="info" sx={{ mt: 3, borderRadius: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Real-World Example</Typography>
@@ -1139,6 +1365,19 @@ export default function KillChainPage() {
           </AccordionDetails>
         </Accordion>
       ))}
+
+      {/* Connecting the Dots */}
+      <Paper sx={{ p: 4, mt: 4, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Connecting the Dots with Other Frameworks
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          The Kill Chain is most powerful when you pair it with a more detailed framework like MITRE ATT&CK. The Kill Chain gives you the high level flow, while ATT&CK lists the specific behaviors inside each phase. For example, the "Delivery" phase can map to techniques like phishing, drive by compromise, or supply chain compromise. This pairing helps you move from a story to a concrete detection plan.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          For beginners, this combination is also a learning shortcut. Use the Kill Chain to keep the big picture in mind, and use ATT&CK to explore the details when you need them. Over time, you will start to recognize which techniques are most common in your environment and which phases tend to break down first.
+        </Typography>
+      </Paper>
 
       {/* Footer */}
       <Paper sx={{ p: 4, mt: 4, borderRadius: 3, bgcolor: alpha(theme.palette.info.main, 0.05), border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>

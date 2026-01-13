@@ -52,6 +52,15 @@ import {
   BugReport as BugIcon,
   Speed as SpeedIcon,
   School as LearnIcon,
+  Cable as WebSocketIcon,
+  VpnKey as CertIcon,
+  Shield as ShieldIcon,
+  Terminal as TerminalIcon,
+  Apple as AppleIcon,
+  Android as AndroidIcon,
+  Devices as DevicesIcon,
+  Storage as StorageIcon,
+  VerifiedUser as VerifiedIcon,
 } from "@mui/icons-material";
 
 // ============================================================================
@@ -241,7 +250,7 @@ const MITMGuidePage: React.FC = () => {
     </Box>
   );
 
-  const pageContext = `MITM (Man-in-the-Middle) attack guide page. This page teaches users about intercepting and analyzing network traffic, setting up MITM proxies, SSL/TLS interception techniques, and traffic manipulation methods for security testing.`;
+  const pageContext = `MITM (Man-in-the-Middle) Workbench Guide page. This page teaches users about intercepting and analyzing network traffic including: TCP/HTTP/HTTPS proxy with traffic interception, WebSocket deep inspection with frame-level analysis and opcode parsing (TEXT, BINARY, CLOSE, PING, PONG), Certificate Authority generation and management for HTTPS MITM interception with installation instructions for Windows, macOS, Linux, Firefox, Android, and iOS, rule-based traffic modification with 6 preset rules, AI-powered natural language rule creation, real-time AI traffic suggestions detecting auth headers, JSON APIs, CORS, cookies, session management with disk-backed storage, and traffic export to PCAP format.`;
 
   return (
     <LearnPageLayout pageTitle="MITM Attacks Guide" pageContext={pageContext}>
@@ -301,9 +310,11 @@ const MITMGuidePage: React.FC = () => {
       </Box>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3 }}>
+      <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto" sx={{ mb: 3 }}>
         <Tab label="Overview" />
         <Tab label="AI Features" />
+        <Tab label="WebSocket Inspection" />
+        <Tab label="Certificate Management" />
         <Tab label="Proxy Modes" />
         <Tab label="Use Cases" />
         <Tab label="Quick Start" />
@@ -563,8 +574,325 @@ const MITMGuidePage: React.FC = () => {
         </Box>
       )}
 
-      {/* Tab 2: Proxy Modes */}
+      {/* Tab 2: WebSocket Inspection - NEW */}
       {activeTab === 2 && (
+        <Box>
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom>WebSocket Deep Inspection</Typography>
+            Inspect, analyze, and modify WebSocket frames in real-time. Perfect for testing live chat, real-time APIs, and gaming protocols.
+          </Alert>
+
+          <Grid container spacing={3}>
+            {/* WebSocket Overview */}
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", border: `2px solid ${alpha("#10b981", 0.3)}` }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                  <WebSocketIcon sx={{ color: "#10b981" }} />
+                  <Typography variant="h6" fontWeight={600}>Frame-Level Analysis</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Decode and inspect individual WebSocket frames with full protocol visibility.
+                </Typography>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom>Supported Opcodes:</Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
+                  <Chip icon={<HttpIcon />} label="TEXT (0x1)" size="small" color="primary" />
+                  <Chip icon={<StorageIcon />} label="BINARY (0x2)" size="small" color="secondary" />
+                  <Chip label="CONTINUATION (0x0)" size="small" />
+                  <Chip label="CLOSE (0x8)" size="small" color="error" />
+                  <Chip label="PING (0x9)" size="small" color="warning" />
+                  <Chip label="PONG (0xA)" size="small" color="success" />
+                </Box>
+                <List dense>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Payload decoding (text & JSON)" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Mask/unmask frame detection" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Direction tracking (client↔server)" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Connection state & statistics" />
+                  </ListItem>
+                </List>
+              </Paper>
+            </Grid>
+
+            {/* WebSocket Rules */}
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", border: `2px solid ${alpha("#8b5cf6", 0.3)}` }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                  <RuleIcon sx={{ color: "#8b5cf6" }} />
+                  <Typography variant="h6" fontWeight={600}>WebSocket Rules</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Create rules to automatically modify or drop WebSocket frames.
+                </Typography>
+                <List dense>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Match by direction (client→server, server→client, both)" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Match by opcode (TEXT, BINARY, etc.)" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Regex payload pattern matching" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="JSON path matching for structured data" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Actions: modify, drop, delay" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Payload find/replace with JSON path edits" />
+                  </ListItem>
+                </List>
+              </Paper>
+            </Grid>
+
+            {/* WebSocket Connection Stats */}
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3 }}>
+                <Typography variant="h6" fontWeight={600} gutterBottom>
+                  Connection Tracking
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Monitor active WebSocket connections with detailed statistics.
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell><strong>Metric</strong></TableCell>
+                        <TableCell><strong>Description</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {[
+                        ["Connection ID", "Unique identifier for each WebSocket session"],
+                        ["Client IP/Port", "Source address of the WebSocket client"],
+                        ["Target Host/Port", "Destination server being proxied"],
+                        ["Status", "Active or Closed connection state"],
+                        ["Total Frames", "Count of all frames sent/received"],
+                        ["Bytes Sent/Received", "Data transfer statistics"],
+                        ["Close Code/Reason", "WebSocket close handshake details"],
+                      ].map(([metric, desc], i) => (
+                        <TableRow key={i}>
+                          <TableCell sx={{ fontWeight: 600 }}>{metric}</TableCell>
+                          <TableCell>{desc}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Box>
+      )}
+
+      {/* Tab 3: Certificate Management - NEW */}
+      {activeTab === 3 && (
+        <Box>
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom>HTTPS Interception Requires CA Certificate</Typography>
+            To intercept HTTPS traffic, you must install the VRAgent CA certificate on your target device or browser.
+          </Alert>
+
+          <Grid container spacing={3}>
+            {/* CA Generation */}
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", border: `2px solid ${alpha("#eab308", 0.3)}` }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                  <CertIcon sx={{ color: "#eab308" }} />
+                  <Typography variant="h6" fontWeight={600}>CA Certificate Generation</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Generate a 4096-bit RSA Root CA certificate for HTTPS interception.
+                </Typography>
+                <List dense>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><VerifiedIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="4096-bit RSA key pair" secondary="Industry-standard security" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><VerifiedIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="10-year validity (configurable)" secondary="Valid for long-term testing" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><VerifiedIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="SHA-256 signature" secondary="Modern hashing algorithm" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><VerifiedIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Automatic host cert generation" secondary="On-the-fly for any hostname" />
+                  </ListItem>
+                </List>
+              </Paper>
+            </Grid>
+
+            {/* Host Certificates */}
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", border: `2px solid ${alpha("#10b981", 0.3)}` }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                  <ShieldIcon sx={{ color: "#10b981" }} />
+                  <Typography variant="h6" fontWeight={600}>Host Certificate Management</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Dynamically generate certificates for intercepted hosts.
+                </Typography>
+                <List dense>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Auto-generated per hostname" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Wildcard SAN support (*.example.com)" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="IP address support in SAN" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Certificate caching & persistence" />
+                  </ListItem>
+                  <ListItem sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 32 }}><CheckIcon color="success" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="List, view, and delete host certs" />
+                  </ListItem>
+                </List>
+              </Paper>
+            </Grid>
+
+            {/* Installation Instructions */}
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3 }}>
+                <Typography variant="h6" fontWeight={600} gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <DevicesIcon /> Platform Installation Instructions
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  Install the CA certificate on your target device to intercept HTTPS traffic.
+                </Typography>
+                
+                <Grid container spacing={2}>
+                  {/* Windows */}
+                  <Grid item xs={12} md={6} lg={4}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <TerminalIcon sx={{ color: "#0078d4" }} />
+                          <Typography variant="subtitle2" fontWeight={600}>Windows</Typography>
+                        </Box>
+                        <Typography variant="caption" component="div" sx={{ mb: 1 }}>
+                          1. Download CA cert → 2. Rename to .crt → 3. Double-click → Install Certificate
+                        </Typography>
+                        <CodeBlock code="certutil -addstore Root ca_cert.crt" title="Command:" />
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* macOS */}
+                  <Grid item xs={12} md={6} lg={4}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <AppleIcon sx={{ color: "#555" }} />
+                          <Typography variant="subtitle2" fontWeight={600}>macOS</Typography>
+                        </Box>
+                        <Typography variant="caption" component="div" sx={{ mb: 1 }}>
+                          Open in Keychain Access → Add to System → Trust Settings → Always Trust
+                        </Typography>
+                        <CodeBlock code="sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca_cert.pem" title="Command:" />
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* Linux */}
+                  <Grid item xs={12} md={6} lg={4}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <TerminalIcon sx={{ color: "#f97316" }} />
+                          <Typography variant="subtitle2" fontWeight={600}>Linux (Ubuntu/Debian)</Typography>
+                        </Box>
+                        <Typography variant="caption" component="div" sx={{ mb: 1 }}>
+                          Copy to ca-certificates folder and update
+                        </Typography>
+                        <CodeBlock code="sudo cp ca_cert.pem /usr/local/share/ca-certificates/vragent.crt && sudo update-ca-certificates" title="Command:" />
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* Firefox */}
+                  <Grid item xs={12} md={6} lg={4}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <SecurityIcon sx={{ color: "#ff7139" }} />
+                          <Typography variant="subtitle2" fontWeight={600}>Firefox</Typography>
+                        </Box>
+                        <Typography variant="caption" component="div">
+                          Settings → Privacy & Security → View Certificates → Authorities → Import → Check "Trust this CA to identify websites"
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* Android */}
+                  <Grid item xs={12} md={6} lg={4}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <AndroidIcon sx={{ color: "#3ddc84" }} />
+                          <Typography variant="subtitle2" fontWeight={600}>Android</Typography>
+                        </Box>
+                        <Typography variant="caption" component="div">
+                          Settings → Security → Encryption → Install CA certificate → Select file
+                        </Typography>
+                        <Alert severity="warning" sx={{ mt: 1, py: 0 }}>
+                          <Typography variant="caption">Android 7+ may require additional steps for apps targeting SDK 24+</Typography>
+                        </Alert>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* iOS */}
+                  <Grid item xs={12} md={6} lg={4}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <AppleIcon sx={{ color: "#555" }} />
+                          <Typography variant="subtitle2" fontWeight={600}>iOS</Typography>
+                        </Box>
+                        <Typography variant="caption" component="div">
+                          AirDrop/Email cert → Settings → General → Profile → Install → Settings → About → Certificate Trust Settings → Enable
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Box>
+      )}
+
+      {/* Tab 4: Proxy Modes (was Tab 2) */}
+      {activeTab === 4 && (
         <Box>
           <Typography variant="h6" fontWeight={600} gutterBottom>
             Understanding Proxy Modes
@@ -657,8 +985,8 @@ const MITMGuidePage: React.FC = () => {
         </Box>
       )}
 
-      {/* Tab 3: Use Cases */}
-      {activeTab === 3 && (
+      {/* Tab 5: Use Cases (was Tab 3) */}
+      {activeTab === 5 && (
         <Box>
           <Typography variant="h6" fontWeight={600} gutterBottom>
             Common Use Cases
@@ -710,8 +1038,8 @@ const MITMGuidePage: React.FC = () => {
         </Box>
       )}
 
-      {/* Tab 4: Quick Start */}
-      {activeTab === 4 && (
+      {/* Tab 6: Quick Start (was Tab 4) */}
+      {activeTab === 6 && (
         <Box>
           <Alert severity="success" sx={{ mb: 3 }}>
             <Typography variant="subtitle2">Ready to start?</Typography>

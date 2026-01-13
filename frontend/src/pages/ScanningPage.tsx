@@ -240,9 +240,10 @@ const scanPhases: ScanPhase[] = [
       "AI-guided multi-pass deep analysis that uses CVE and SAST context to intelligently prioritize and analyze code for vulnerabilities.",
     details: [
       "Receives external intelligence from CVE/SAST phases before analyzing code",
-      "Pass 1: Triage (120 files × 5K chars; Enhanced: 150 × 6K) - quick security scoring",
-      "Pass 2: Focused (40 files × 12K chars; Enhanced: 60 × 16K) - deeper file inspection",
-      "Pass 3: Deep (15 files × 50K chars; Enhanced: 20 × 100K) - full file analysis",
+      "Pass 1: Quick - Standard: 180 files × 5K chars | Enhanced: 240 × 6K",
+      "Pass 2: Focused - Standard: 60 files × 12K chars | Enhanced: 80 × 16K",
+      "Pass 3: Deep - Standard: 22 files × 50K chars | Enhanced: 30 × 65K",
+      "Pass 4: Ultra - Standard: 7 files × 100K chars | Enhanced: 10 × 120K (files >50K only)",
       "Progressive depth: AI sees more content per file as passes narrow down",
       "AI-guided data flow tracing across function calls and file boundaries",
       "Synthesis phase: Correlates findings across all passes, deduplicates, scores confidence",
@@ -551,7 +552,7 @@ export default function ScanningPage() {
   const pageContext = `VRAgent scanning methodology page. This page explains the comprehensive security scanning process including static analysis (SAST), dependency scanning (SCA), secret detection, infrastructure scanning, and AI-enhanced analysis. Users can learn about each scan phase and the tools used.`;
 
   return (
-    <LearnPageLayout pageTitle="VRAgent Scanning" pageContext={pageContext}>
+    <LearnPageLayout pageTitle="How the Security Scan Works" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Button */}
       <Chip
@@ -577,7 +578,7 @@ export default function ScanningPage() {
             WebkitTextFillColor: "transparent",
           }}
         >
-          🔍 How Scanning Works
+          🔍 How the Security Scan Works
         </Typography>
         <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 800 }}>
           A complete technical walkthrough of VRAgent's security scanning pipeline - from code acquisition to AI-enhanced vulnerability analysis.
@@ -783,7 +784,7 @@ export default function ScanningPage() {
           </Typography>
         </Box>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-          VRAgent employs <strong>12 specialized security scanners</strong> covering SAST, secrets, Docker, and IaC. All applicable scanners run in parallel using ThreadPoolExecutor with configurable MAX_PARALLEL_SCANNERS (default: 2× CPU cores).
+          VRAgent employs <strong>14 specialized security scanners</strong> covering SAST, secrets, Docker, and IaC. All applicable scanners run in parallel using ThreadPoolExecutor with configurable MAX_PARALLEL_SCANNERS (default: 2× CPU cores).
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 4, p: 2, borderRadius: 2, bgcolor: alpha(theme.palette.info.main, 0.05), border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
           💡 <strong>Smart Scanner Selection:</strong> Language detection via file extensions determines which scanners run. No Python files? Bandit is skipped. No Go files? gosec is skipped. This optimizes scan time while ensuring coverage for detected languages.

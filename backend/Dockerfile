@@ -16,6 +16,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Install system dependencies including git for cloning repos,
 # Node.js for ESLint, Go for Gosec, clang-tidy for C/C++, nmap for network scanning, 
 # tshark for packet capture, traceroute for network path analysis, dnsutils for DNS queries, and build tools
+# Also includes weasyprint dependencies for PDF generation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -40,6 +41,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     libfreetype6 \
     libharfbuzz0b \
+    # WeasyPrint dependencies for PDF report generation
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libcairo2 \
+    libgdk-pixbuf-2.0-0 \
+    libffi-dev \
+    shared-mime-info \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/* \
@@ -124,6 +132,37 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && ln -sf /root/.cargo/bin/cargo-audit /usr/local/bin/cargo-audit
 
 ENV PATH="/root/.cargo/bin:$PATH"
+
+# Install AFL++ (American Fuzzy Lop Plus Plus) for binary fuzzing
+# Use available LLVM/Clang packages for Debian Trixie
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    llvm \
+    clang \
+    llvm-dev \
+    lld \
+    libstdc++-13-dev \
+    make \
+    cmake \
+    automake \
+    autoconf \
+    libtool \
+    libglib2.0-dev \
+    libpixman-1-dev \
+    python3-setuptools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build AFL++ from source
+ENV AFL_VERSION=4.10c
+RUN git clone --depth 1 --branch v${AFL_VERSION} https://github.com/AFLplusplus/AFLplusplus.git /opt/AFLplusplus \
+    && cd /opt/AFLplusplus \
+    && make distrib \
+    && make install \
+    && cd / \
+    && rm -rf /opt/AFLplusplus/.git
+
+# Create directories for fuzzing workspaces
+RUN mkdir -p /fuzzing/binaries /fuzzing/seeds /fuzzing/output /fuzzing/crashes \
+    && chmod -R 777 /fuzzing
 
 # Copy requirements first for better caching
 COPY requirements.txt .

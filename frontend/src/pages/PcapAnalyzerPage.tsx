@@ -38,10 +38,14 @@ import {
   Tab,
   Menu,
   MenuItem,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import { Link, useSearchParams } from "react-router-dom";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
+import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
 import SecurityIcon from "@mui/icons-material/Security";
 import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import DnsIcon from "@mui/icons-material/Dns";
@@ -78,8 +82,10 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import ArticleIcon from "@mui/icons-material/Article";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import LanIcon from "@mui/icons-material/Lan";
 import { useDropzone } from "react-dropzone";
 import ReactMarkdown from "react-markdown";
+import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import NetworkTopologyGraph, { TopologyNode, TopologyLink } from "../components/NetworkTopologyGraph";
 import { 
   analyzePcaps, 
@@ -123,8 +129,11 @@ const riskLevelConfig: Record<string, { color: string; icon: React.ReactNode; bg
   low: { color: "#22c55e", icon: <GppGoodIcon />, bgcolor: "rgba(34, 197, 94, 0.1)" },
 };
 
+// Helper to safely get lowercase string
+const safeLower = (str: string | undefined | null): string => (str || '').toLowerCase();
+
 function StructuredReportSection({ report, theme }: { report: AISecurityReport; theme: any }) {
-  const riskConfig = riskLevelConfig[report.risk_level.toLowerCase()] || riskLevelConfig.medium;
+  const riskConfig = riskLevelConfig[safeLower(report.risk_level)] || riskLevelConfig.medium;
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -141,7 +150,7 @@ function StructuredReportSection({ report, theme }: { report: AISecurityReport; 
           <Box sx={{ color: riskConfig.color, fontSize: 48 }}>{riskConfig.icon}</Box>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 800, color: riskConfig.color }}>
-              {report.risk_level.toUpperCase()} RISK
+              {(report.risk_level || 'UNKNOWN').toUpperCase()} RISK
             </Typography>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <Typography variant="h6" color="text.secondary">
@@ -239,15 +248,15 @@ function StructuredReportSection({ report, theme }: { report: AISecurityReport; 
           </Typography>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {report.key_findings.map((finding, i) => (
-              <Card key={i} variant="outlined" sx={{ borderLeft: `4px solid ${severityColors[finding.severity.toLowerCase()] || "#888"}` }}>
+              <Card key={i} variant="outlined" sx={{ borderLeft: `4px solid ${severityColors[safeLower(finding.severity)] || "#888"}` }}>
                 <CardContent>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                     <Chip
-                      label={finding.severity.toUpperCase()}
+                      label={(finding.severity || 'unknown').toUpperCase()}
                       size="small"
                       sx={{
-                        bgcolor: alpha(severityColors[finding.severity.toLowerCase()] || "#888", 0.15),
-                        color: severityColors[finding.severity.toLowerCase()] || "#888",
+                        bgcolor: alpha(severityColors[safeLower(finding.severity)] || "#888", 0.15),
+                        color: severityColors[safeLower(finding.severity)] || "#888",
                         fontWeight: 700,
                       }}
                     />
@@ -311,15 +320,15 @@ function StructuredReportSection({ report, theme }: { report: AISecurityReport; 
       )}
 
       {/* Credential Exposure */}
-      {report.credential_exposure && report.credential_exposure.severity !== "None" && (
-        <Paper sx={{ p: 3, bgcolor: alpha(severityColors[report.credential_exposure.severity.toLowerCase()] || "#888", 0.05) }}>
+      {report.credential_exposure && report.credential_exposure.severity && report.credential_exposure.severity !== "None" && (
+        <Paper sx={{ p: 3, bgcolor: alpha(severityColors[safeLower(report.credential_exposure.severity)] || "#888", 0.05) }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-            <VpnKeyIcon sx={{ color: severityColors[report.credential_exposure.severity.toLowerCase()] }} />
+            <VpnKeyIcon sx={{ color: severityColors[safeLower(report.credential_exposure.severity)] || "#888" }} />
             Credential Exposure Analysis
             <Chip
               label={report.credential_exposure.severity}
               size="small"
-              sx={{ ml: 1, bgcolor: severityColors[report.credential_exposure.severity.toLowerCase()], color: "white" }}
+              sx={{ ml: 1, bgcolor: severityColors[safeLower(report.credential_exposure.severity)] || "#888", color: "white" }}
             />
           </Typography>
           <Typography variant="body1" sx={{ mb: 2 }}>
@@ -450,11 +459,11 @@ function StructuredReportSection({ report, theme }: { report: AISecurityReport; 
                     <TableCell sx={{ fontFamily: "monospace", fontWeight: 500 }}>{ioc.value}</TableCell>
                     <TableCell>
                       <Chip
-                        label={ioc.threat_level}
+                        label={ioc.threat_level || 'unknown'}
                         size="small"
                         sx={{
-                          bgcolor: alpha(severityColors[ioc.threat_level.toLowerCase()] || "#888", 0.15),
-                          color: severityColors[ioc.threat_level.toLowerCase()] || "#888",
+                          bgcolor: alpha(severityColors[safeLower(ioc.threat_level)] || "#888", 0.15),
+                          color: severityColors[safeLower(ioc.threat_level)] || "#888",
                         }}
                       />
                     </TableCell>
@@ -657,7 +666,7 @@ function StructuredReportSection({ report, theme }: { report: AISecurityReport; 
           </Typography>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {report.hosts_analysis.map((host, i) => (
-              <Card key={i} variant="outlined" sx={{ borderLeft: `4px solid ${severityColors[host.risk_assessment?.toLowerCase().includes('high') ? 'high' : host.risk_assessment?.toLowerCase().includes('critical') ? 'critical' : 'low'] || "#3b82f6"}` }}>
+              <Card key={i} variant="outlined" sx={{ borderLeft: `4px solid ${severityColors[safeLower(host.risk_assessment).includes('high') ? 'high' : safeLower(host.risk_assessment).includes('critical') ? 'critical' : 'low'] || "#3b82f6"}` }}>
                 <CardContent>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, flexWrap: "wrap" }}>
                     <Typography variant="subtitle1" sx={{ fontFamily: "monospace", fontWeight: 600 }}>
@@ -742,11 +751,11 @@ function StructuredReportSection({ report, theme }: { report: AISecurityReport; 
                     <TableCell><Chip label={asset.role} size="small" variant="outlined" /></TableCell>
                     <TableCell>
                       <Chip
-                        label={asset.risk_level}
+                        label={asset.risk_level || 'unknown'}
                         size="small"
                         sx={{
-                          bgcolor: alpha(severityColors[asset.risk_level.toLowerCase()] || "#888", 0.15),
-                          color: severityColors[asset.risk_level.toLowerCase()] || "#888",
+                          bgcolor: alpha(severityColors[safeLower(asset.risk_level)] || "#888", 0.15),
+                          color: severityColors[safeLower(asset.risk_level)] || "#888",
                         }}
                       />
                     </TableCell>
@@ -782,14 +791,14 @@ function StructuredReportSection({ report, theme }: { report: AISecurityReport; 
           </Typography>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {report.recommendations.map((rec, i) => (
-              <Card key={i} variant="outlined" sx={{ borderLeft: `4px solid ${priorityColors[rec.priority.toLowerCase()] || "#888"}` }}>
+              <Card key={i} variant="outlined" sx={{ borderLeft: `4px solid ${priorityColors[safeLower(rec.priority)] || "#888"}` }}>
                 <CardContent>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
                     <Chip
-                      label={rec.priority.toUpperCase()}
+                      label={(rec.priority || 'medium').toUpperCase()}
                       size="small"
                       sx={{
-                        bgcolor: priorityColors[rec.priority.toLowerCase()] || "#888",
+                        bgcolor: priorityColors[safeLower(rec.priority)] || "#888",
                         color: "white",
                         fontWeight: 700,
                       }}
@@ -869,9 +878,16 @@ export default function PcapAnalyzerPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusChecked, setStatusChecked] = useState(false);
   const [pcapAvailable, setPcapAvailable] = useState(true);
+  
+  // Analysis options
+  const [includeDocumentAnalysis, setIncludeDocumentAnalysis] = useState(false);
+  const [includeNotes, setIncludeNotes] = useState(false);
+  const [userContext, setUserContext] = useState("");
+  const [showContextField, setShowContextField] = useState(false);
 
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatMaximized, setChatMaximized] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -1095,7 +1111,7 @@ export default function PcapAnalyzerPage() {
 
     try {
       setProgress(30);
-      const result = await analyzePcaps(files, true, 100000, true, projectId);
+      const result = await analyzePcaps(files, true, 100000, true, projectId, includeDocumentAnalysis, includeNotes, userContext);
       setProgress(100);
       setResults(result);
     } catch (err) {
@@ -1303,6 +1319,131 @@ export default function PcapAnalyzerPage() {
               />
             ))}
           </Box>
+          
+          {/* User Context for AI Analysis - Always available */}
+          <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.warning.main, 0.05), borderRadius: 1, border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}` }}>
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+              }}
+              onClick={() => setShowContextField(!showContextField)}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LanIcon fontSize="small" color="warning" />
+                Network Environment Context (Optional)
+              </Typography>
+              <IconButton size="small">
+                {showContextField ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              </IconButton>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: showContextField ? 2 : 0 }}>
+              Provide context about your network environment to help AI give more relevant analysis
+            </Typography>
+            
+            {showContextField && (
+              <Box sx={{ mt: 1 }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={4}
+                  value={userContext}
+                  onChange={(e) => setUserContext(e.target.value)}
+                  placeholder="Examples:
+• I'm analyzing traffic from VM at 192.168.1.100 targeting a web server at 192.168.1.50
+• This is internal network traffic from our development environment
+• Looking for traffic between our app server (10.0.0.5) and database (10.0.0.10)
+• This capture is from a pentest engagement - focus on attack patterns"
+                  variant="outlined"
+                  size="small"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      bgcolor: 'background.paper',
+                    }
+                  }}
+                />
+                <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Typography variant="caption" color="text.secondary">Quick add:</Typography>
+                  <Chip 
+                    label="VM Environment" 
+                    size="small" 
+                    variant="outlined"
+                    onClick={() => setUserContext(prev => prev + (prev ? '\n' : '') + "This traffic is from a VM-based test environment.")}
+                    sx={{ cursor: 'pointer' }}
+                  />
+                  <Chip 
+                    label="Pentest Traffic" 
+                    size="small" 
+                    variant="outlined"
+                    onClick={() => setUserContext(prev => prev + (prev ? '\n' : '') + "This is traffic from a penetration testing engagement - focus on attack patterns and vulnerabilities.")}
+                    sx={{ cursor: 'pointer' }}
+                  />
+                  <Chip 
+                    label="Internal Network" 
+                    size="small" 
+                    variant="outlined"
+                    onClick={() => setUserContext(prev => prev + (prev ? '\n' : '') + "This is internal corporate network traffic.")}
+                    sx={{ cursor: 'pointer' }}
+                  />
+                  <Chip 
+                    label="App Traffic" 
+                    size="small" 
+                    variant="outlined"
+                    onClick={() => setUserContext(prev => prev + (prev ? '\n' : '') + "Focus on application-layer traffic and API calls.")}
+                    sx={{ cursor: 'pointer' }}
+                  />
+                </Box>
+              </Box>
+            )}
+          </Box>
+          
+          {/* Analysis Options - Only show when project context exists */}
+          {projectId && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.main, 0.05), borderRadius: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <InsightsIcon fontSize="small" />
+                AI Analysis Context Options
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                Include additional project context to enhance AI analysis
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={includeDocumentAnalysis}
+                      onChange={(e) => setIncludeDocumentAnalysis(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <DescriptionIcon fontSize="small" color="action" />
+                      <Typography variant="body2">Include Document Analysis</Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={includeNotes}
+                      onChange={(e) => setIncludeNotes(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <ArticleIcon fontSize="small" color="action" />
+                      <Typography variant="body2">Include Project Notes</Typography>
+                    </Box>
+                  }
+                />
+              </Box>
+            </Box>
+          )}
+          
           <Box sx={{ mt: 2, display: "flex", gap: 2, alignItems: "center" }}>
             <Button
               variant="contained"
@@ -2077,42 +2218,67 @@ export default function PcapAnalyzerPage() {
       {/* Chat Window - Visible when results OR viewing a saved report */}
       {(results || viewingReport) && (
         <Paper
+          elevation={6}
           sx={{
             position: "fixed",
-            bottom: 0,
-            right: 24,
-            width: chatOpen ? 450 : 200,
-            maxHeight: chatOpen ? "60vh" : "auto",
+            bottom: 16,
+            right: 16,
+            left: chatMaximized ? { xs: 16, md: 256 } : "auto",
+            width: chatMaximized ? "auto" : { xs: "calc(100% - 32px)", sm: 400 },
+            maxWidth: chatMaximized ? "none" : 400,
             zIndex: 1200,
-            borderRadius: "12px 12px 0 0",
-            boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
+            borderRadius: 3,
             overflow: "hidden",
-            transition: "all 0.3s ease",
+            boxShadow: "0 4px 30px rgba(0,0,0,0.3)",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
           {/* Chat Header */}
           <Box
-            onClick={() => setChatOpen(!chatOpen)}
+            onClick={() => !chatMaximized && setChatOpen(!chatOpen)}
             sx={{
-              p: 2,
+              p: 1.5,
               bgcolor: theme.palette.primary.main,
               color: "white",
-              cursor: "pointer",
+              cursor: chatMaximized ? "default" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              "&:hover": { bgcolor: theme.palette.primary.dark },
+              "&:hover": { bgcolor: chatMaximized ? theme.palette.primary.main : theme.palette.primary.dark },
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <ChatIcon />
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                Ask About This Report
+            <Box
+              onClick={() => chatMaximized && setChatOpen(!chatOpen)}
+              sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer", flex: 1 }}
+            >
+              <ChatIcon fontSize="small" />
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                AI Chat
               </Typography>
             </Box>
-            <IconButton size="small" sx={{ color: "white" }}>
-              {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-            </IconButton>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <IconButton
+                size="small"
+                sx={{ color: "white", p: 0.5 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!chatOpen) setChatOpen(true);
+                  setChatMaximized(!chatMaximized);
+                }}
+              >
+                {chatMaximized ? <CloseFullscreenIcon fontSize="small" /> : <OpenInFullIcon fontSize="small" />}
+              </IconButton>
+              <IconButton
+                size="small"
+                sx={{ color: "white", p: 0.5 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setChatOpen(!chatOpen);
+                }}
+              >
+                {chatOpen ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
+              </IconButton>
+            </Box>
           </Box>
 
           {/* Chat Content */}
@@ -2120,16 +2286,16 @@ export default function PcapAnalyzerPage() {
             {/* Messages Area */}
             <Box
               sx={{
-                height: "calc(60vh - 140px)",
-                maxHeight: 400,
+                height: chatMaximized ? "calc(66vh - 120px)" : 280,
                 overflowY: "auto",
                 p: 2,
-                bgcolor: alpha(theme.palette.background.default, 0.5),
+                bgcolor: alpha(theme.palette.background.default, 0.98),
+                transition: "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
               {/* Welcome message */}
               {chatMessages.length === 0 && (
-                <Box sx={{ textAlign: "center", py: 4 }}>
+                <Box sx={{ textAlign: "center", py: chatMaximized ? 6 : 2 }}>
                   <SmartToyIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Ask me anything about this PCAP analysis!
@@ -2200,18 +2366,22 @@ export default function PcapAnalyzerPage() {
                         borderRadius: 2,
                         "& p": { m: 0 },
                         "& p:not(:last-child)": { mb: 1 },
-                        "& code": {
-                          bgcolor: alpha(msg.role === "user" ? "#fff" : theme.palette.primary.main, 0.2),
-                          px: 0.5,
-                          borderRadius: 0.5,
-                          fontFamily: "monospace",
-                          fontSize: "0.85em",
-                        },
                         "& ul, & ol": { pl: 2, m: 0 },
                         "& li": { mb: 0.5 },
+                        "& strong": { fontWeight: 600 },
                       }}
                     >
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown
+                        components={{
+                          code: ({ className, children }) => (
+                            <ChatCodeBlock className={className} theme={theme}>
+                              {children}
+                            </ChatCodeBlock>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </Paper>
                   </Box>
                 </Box>

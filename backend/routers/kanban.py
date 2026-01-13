@@ -1,12 +1,14 @@
 """Kanban board API routes for project task management."""
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import asyncio
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.auth import get_current_active_user
-from backend.models.models import User
+from backend.core.kanban_manager import kanban_manager
+from backend.models.models import User, KanbanColumn, KanbanCard
 from backend.schemas.kanban import (
     BoardCreate,
     BoardUpdate,
@@ -119,7 +121,23 @@ async def create_column_endpoint(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
+
+    # Broadcast to WebSocket clients
+    if kanban_manager.is_connected(board_id):
+        asyncio.create_task(kanban_manager.broadcast_column_create(
+            board_id=board_id,
+            user_id=current_user.id,
+            column={
+                "id": column.id,
+                "board_id": column.board_id,
+                "name": column.name,
+                "position": column.position,
+                "color": column.color,
+                "wip_limit": column.wip_limit,
+                "cards": []
+            }
+        ))
+
     return ColumnResponse(
         id=column.id,
         board_id=column.board_id,
@@ -147,7 +165,24 @@ async def update_column_endpoint(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
+
+    # Broadcast to WebSocket clients
+    board_id = column.board_id
+    if kanban_manager.is_connected(board_id):
+        updates = {}
+        if request.name is not None:
+            updates["name"] = request.name
+        if request.color is not None:
+            updates["color"] = request.color
+        if request.wip_limit is not None:
+            updates["wip_limit"] = request.wip_limit
+        asyncio.create_task(kanban_manager.broadcast_column_update(
+            board_id=board_id,
+            user_id=current_user.id,
+            column_id=column_id,
+            updates=updates
+        ))
+
     return ColumnResponse(
         id=column.id,
         board_id=column.board_id,
@@ -165,10 +200,22 @@ async def delete_column_endpoint(
     db: Session = Depends(get_db),
 ):
     """Delete a column and all its cards."""
+    # Get board_id before deletion
+    column = db.query(KanbanColumn).filter(KanbanColumn.id == column_id).first()
+    board_id = column.board_id if column else None
+
     success, error = delete_column(db, column_id, current_user.id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
+
+    # Broadcast to WebSocket clients
+    if board_id and kanban_manager.is_connected(board_id):
+        asyncio.create_task(kanban_manager.broadcast_column_delete(
+            board_id=board_id,
+            user_id=current_user.id,
+            column_id=column_id
+        ))
+
     return {"message": "Column deleted"}
 
 
@@ -183,7 +230,15 @@ async def reorder_columns_endpoint(
     success, error = reorder_columns(db, board_id, current_user.id, request.column_ids)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
+
+    # Broadcast to WebSocket clients
+    if kanban_manager.is_connected(board_id):
+        asyncio.create_task(kanban_manager.broadcast_columns_reorder(
+            board_id=board_id,
+            user_id=current_user.id,
+            column_ids=request.column_ids
+        ))
+
     return {"message": "Columns reordered"}
 
 
@@ -209,11 +264,21 @@ async def create_card_endpoint(
         estimated_hours=request.estimated_hours,
         assignee_ids=request.assignee_ids,
         finding_id=request.finding_id,
-        checklist=[c.model_dump() for c in request.checklist] if request.checklist else None
+        checklist=[c.model_dump() for c in request.checklist] if request.checklist else None,
+        color=request.color
     )
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
+
+    # Broadcast to WebSocket clients
+    column = db.query(KanbanColumn).filter(KanbanColumn.id == column_id).first()
+    if column and kanban_manager.is_connected(column.board_id):
+        asyncio.create_task(kanban_manager.broadcast_card_create(
+            board_id=column.board_id,
+            user_id=current_user.id,
+            card=card_data
+        ))
+
     return CardResponse(**card_data)
 
 
@@ -250,11 +315,47 @@ async def update_card_endpoint(
         estimated_hours=request.estimated_hours,
         assignee_ids=request.assignee_ids,
         checklist=[c.model_dump() for c in request.checklist] if request.checklist else None,
-        completed_at=request.completed_at
+        completed_at=request.completed_at,
+        color=request.color
     )
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
+
+    # Broadcast to WebSocket clients
+    card = db.query(KanbanCard).filter(KanbanCard.id == card_id).first()
+    if card:
+        column = db.query(KanbanColumn).filter(KanbanColumn.id == card.column_id).first()
+        if column and kanban_manager.is_connected(column.board_id):
+            # Build updates dict from request
+            updates = {}
+            if request.title is not None:
+                updates["title"] = request.title
+            if request.description is not None:
+                updates["description"] = request.description
+            if request.priority is not None:
+                updates["priority"] = request.priority.value
+            if request.labels is not None:
+                updates["labels"] = [l.model_dump() for l in request.labels]
+            if request.due_date is not None:
+                updates["due_date"] = request.due_date.isoformat() if request.due_date else None
+            if request.estimated_hours is not None:
+                updates["estimated_hours"] = request.estimated_hours
+            if request.assignee_ids is not None:
+                updates["assignee_ids"] = request.assignee_ids
+            if request.checklist is not None:
+                updates["checklist"] = [c.model_dump() for c in request.checklist]
+            if request.completed_at is not None:
+                updates["completed_at"] = request.completed_at.isoformat() if request.completed_at else None
+            if request.color is not None:
+                updates["color"] = request.color
+
+            asyncio.create_task(kanban_manager.broadcast_card_update(
+                board_id=column.board_id,
+                user_id=current_user.id,
+                card_id=card_id,
+                updates=updates
+            ))
+
     return CardResponse(**card_data)
 
 
@@ -266,6 +367,10 @@ async def move_card_endpoint(
     db: Session = Depends(get_db),
 ):
     """Move a card to a different column/position."""
+    # Get source column before move
+    card = db.query(KanbanCard).filter(KanbanCard.id == card_id).first()
+    source_column_id = card.column_id if card else None
+
     card_data, error = move_card(
         db, card_id, current_user.id,
         target_column_id=request.column_id,
@@ -273,7 +378,19 @@ async def move_card_endpoint(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
+
+    # Broadcast to WebSocket clients
+    target_column = db.query(KanbanColumn).filter(KanbanColumn.id == request.column_id).first()
+    if target_column and kanban_manager.is_connected(target_column.board_id):
+        asyncio.create_task(kanban_manager.broadcast_card_move(
+            board_id=target_column.board_id,
+            user_id=current_user.id,
+            card_id=card_id,
+            source_column_id=source_column_id,
+            target_column_id=request.column_id,
+            position=request.position
+        ))
+
     return CardResponse(**card_data)
 
 
@@ -284,10 +401,25 @@ async def delete_card_endpoint(
     db: Session = Depends(get_db),
 ):
     """Delete a card."""
+    # Get board_id before deletion
+    card = db.query(KanbanCard).filter(KanbanCard.id == card_id).first()
+    board_id = None
+    if card:
+        column = db.query(KanbanColumn).filter(KanbanColumn.id == card.column_id).first()
+        board_id = column.board_id if column else None
+
     success, error = delete_card(db, card_id, current_user.id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
+
+    # Broadcast to WebSocket clients
+    if board_id and kanban_manager.is_connected(board_id):
+        asyncio.create_task(kanban_manager.broadcast_card_delete(
+            board_id=board_id,
+            user_id=current_user.id,
+            card_id=card_id
+        ))
+
     return {"message": "Card deleted"}
 
 

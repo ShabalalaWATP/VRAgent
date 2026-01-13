@@ -242,6 +242,8 @@ def delete_column(db: Session, column_id: int, user_id: int) -> Tuple[bool, Opti
         return False, "Column not found"
     
     board = db.query(KanbanBoard).filter(KanbanBoard.id == column.board_id).first()
+    if not board:
+        return False, "Board not found"
     if not has_project_access(db, board.project_id, user_id):
         return False, "Access denied"
     
@@ -317,7 +319,8 @@ def _format_card(db: Session, card: KanbanCard) -> dict:
         "finding_id": card.finding_id,
         "checklist": card.checklist,
         "attachment_count": card.attachment_count,
-        "comment_count": card.comment_count
+        "comment_count": card.comment_count,
+        "color": card.color
     }
 
 
@@ -328,7 +331,11 @@ def get_card(db: Session, card_id: int, user_id: int) -> Tuple[Optional[dict], O
         return None, "Card not found"
     
     column = db.query(KanbanColumn).filter(KanbanColumn.id == card.column_id).first()
+    if not column:
+        return None, "Column not found"
     board = db.query(KanbanBoard).filter(KanbanBoard.id == column.board_id).first()
+    if not board:
+        return None, "Board not found"
     
     if not has_project_access(db, board.project_id, user_id):
         return None, "Access denied"
@@ -348,7 +355,8 @@ def create_card(
     estimated_hours: Optional[float] = None,
     assignee_ids: Optional[List[int]] = None,
     finding_id: Optional[int] = None,
-    checklist: Optional[List[dict]] = None
+    checklist: Optional[List[dict]] = None,
+    color: Optional[str] = None
 ) -> Tuple[Optional[dict], Optional[str]]:
     """Create a new card."""
     column = db.query(KanbanColumn).filter(KanbanColumn.id == column_id).first()
@@ -356,6 +364,8 @@ def create_card(
         return None, "Column not found"
     
     board = db.query(KanbanBoard).filter(KanbanBoard.id == column.board_id).first()
+    if not board:
+        return None, "Board not found"
     if not has_project_access(db, board.project_id, user_id):
         return None, "Access denied"
     
@@ -384,7 +394,8 @@ def create_card(
         assignee_ids=assignee_ids,
         finding_id=finding_id,
         checklist=checklist,
-        created_by=user_id
+        created_by=user_id,
+        color=color
     )
     db.add(card)
     db.commit()
@@ -405,7 +416,8 @@ def update_card(
     estimated_hours: Optional[float] = None,
     assignee_ids: Optional[List[int]] = None,
     checklist: Optional[List[dict]] = None,
-    completed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None,
+    color: Optional[str] = None
 ) -> Tuple[Optional[dict], Optional[str]]:
     """Update a card."""
     card = db.query(KanbanCard).filter(KanbanCard.id == card_id).first()
@@ -413,7 +425,11 @@ def update_card(
         return None, "Card not found"
     
     column = db.query(KanbanColumn).filter(KanbanColumn.id == card.column_id).first()
+    if not column:
+        return None, "Column not found"
     board = db.query(KanbanBoard).filter(KanbanBoard.id == column.board_id).first()
+    if not board:
+        return None, "Board not found"
     if not has_project_access(db, board.project_id, user_id):
         return None, "Access denied"
     
@@ -435,6 +451,8 @@ def update_card(
         card.checklist = checklist
     if completed_at is not None:
         card.completed_at = completed_at
+    if color is not None:
+        card.color = color if color else None  # Allow clearing color with empty string
     
     db.commit()
     db.refresh(card)
@@ -459,6 +477,8 @@ def move_card(
         return None, "Target column not found"
     
     board = db.query(KanbanBoard).filter(KanbanBoard.id == target_column.board_id).first()
+    if not board:
+        return None, "Board not found"
     if not has_project_access(db, board.project_id, user_id):
         return None, "Access denied"
     
@@ -503,7 +523,11 @@ def delete_card(db: Session, card_id: int, user_id: int) -> Tuple[bool, Optional
         return False, "Card not found"
     
     column = db.query(KanbanColumn).filter(KanbanColumn.id == card.column_id).first()
+    if not column:
+        return False, "Column not found"
     board = db.query(KanbanBoard).filter(KanbanBoard.id == column.board_id).first()
+    if not board:
+        return False, "Board not found"
     if not has_project_access(db, board.project_id, user_id):
         return False, "Access denied"
     
@@ -539,7 +563,11 @@ def add_comment(
         return None, "Card not found"
     
     column = db.query(KanbanColumn).filter(KanbanColumn.id == card.column_id).first()
+    if not column:
+        return None, "Column not found"
     board = db.query(KanbanBoard).filter(KanbanBoard.id == column.board_id).first()
+    if not board:
+        return None, "Board not found"
     if not has_project_access(db, board.project_id, user_id):
         return None, "Access denied"
     
@@ -581,7 +609,11 @@ def get_card_comments(
         return [], "Card not found"
     
     column = db.query(KanbanColumn).filter(KanbanColumn.id == card.column_id).first()
+    if not column:
+        return [], "Column not found"
     board = db.query(KanbanBoard).filter(KanbanBoard.id == column.board_id).first()
+    if not board:
+        return [], "Board not found"
     if not has_project_access(db, board.project_id, user_id):
         return [], "Access denied"
     

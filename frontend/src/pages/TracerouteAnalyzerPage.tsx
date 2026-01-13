@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import {
   Box,
   Typography,
@@ -37,6 +39,8 @@ import {
   Grid,
   Divider,
   LinearProgress,
+  alpha,
+  useTheme,
 } from "@mui/material";
 import {
   Route as RouteIcon,
@@ -67,6 +71,10 @@ import {
   MenuBook as LearnIcon,
   Public as PublicIcon,
   Hub as HubIcon,
+  OpenInFull as OpenInFullIcon,
+  CloseFullscreen as CloseFullscreenIcon,
+  SmartToy as SmartToyIcon,
+  Person as PersonIcon,
 } from "@mui/icons-material";
 import { Link } from "react-router-dom";
 import {
@@ -78,6 +86,11 @@ import {
   TracerouteAIAnalysis,
   TracerouteSavedReport,
   TracerouteReportDetail,
+  BatchTracerouteRequest,
+  BatchTracerouteResponse,
+  BatchTracerouteResult,
+  BatchTracerouteCombinedTopology,
+  BatchTracerouteComparativeAnalysis,
 } from "../api/client";
 import NetworkTopologyGraph, { TopologyNode, TopologyLink } from "../components/NetworkTopologyGraph";
 
@@ -385,6 +398,21 @@ interface AIAnalysisPanelProps {
   analysis: TracerouteAIAnalysis;
 }
 
+// Helper to safely render any value as string (handles objects that would crash React)
+const safeText = (value: any): string => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "[Object]";
+    }
+  }
+  return String(value);
+};
+
 const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     summary: true,
@@ -397,6 +425,15 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
+
+  // Handle null/undefined analysis
+  if (!analysis) {
+    return (
+      <Alert severity="info" sx={{ mb: 2 }}>
+        AI analysis is not available for this traceroute. Try running a new traceroute to generate AI analysis.
+      </Alert>
+    );
+  }
 
   if (analysis.error) {
     return (
@@ -436,7 +473,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
           </CardContent>
           <Collapse in={expandedSections.summary}>
             <CardContent sx={{ pt: 0 }}>
-              <Typography variant="body2">{analysis.summary}</Typography>
+              <Typography variant="body2">{safeText(analysis.summary)}</Typography>
               {analysis.risk_score !== undefined && (
                 <Box sx={{ mt: 2, display: "flex", alignItems: "center", gap: 2 }}>
                   <Typography variant="body2" fontWeight="bold">Risk Score:</Typography>
@@ -472,8 +509,8 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
                       <RouteIcon color="primary" />
                     </ListItemIcon>
                     <ListItemText
-                      primary={`${segment.segment} (Hops ${segment.hops})`}
-                      secondary={segment.description}
+                      primary={`${safeText(segment.segment)} (Hops ${safeText(segment.hops)})`}
+                      secondary={safeText(segment.description)}
                     />
                   </ListItem>
                 ))}
@@ -498,7 +535,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
           <Collapse in={expandedSections.performance}>
             <CardContent sx={{ pt: 0 }}>
               <Typography variant="body2" paragraph>
-                <strong>Overall Latency:</strong> {analysis.performance_analysis.overall_latency}
+                <strong>Overall Latency:</strong> {safeText(analysis.performance_analysis.overall_latency)}
               </Typography>
               
               {analysis.performance_analysis.bottlenecks && analysis.performance_analysis.bottlenecks.length > 0 && (
@@ -512,7 +549,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
                         <ListItemIcon>
                           <WarningIcon color="error" fontSize="small" />
                         </ListItemIcon>
-                        <ListItemText primary={bottleneck} />
+                        <ListItemText primary={safeText(bottleneck)} />
                       </ListItem>
                     ))}
                   </List>
@@ -530,7 +567,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
                         <ListItemIcon>
                           <ErrorIcon color="warning" fontSize="small" />
                         </ListItemIcon>
-                        <ListItemText primary={concern} />
+                        <ListItemText primary={safeText(concern)} />
                       </ListItem>
                     ))}
                   </List>
@@ -566,15 +603,15 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
                 <Paper key={index} sx={{ p: 2, mb: 1, bgcolor: "rgba(0,0,0,0.02)" }} elevation={0}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                     <SecurityIcon fontSize="small" color="action" />
-                    <Typography variant="subtitle2">{obs.observation}</Typography>
+                    <Typography variant="subtitle2">{safeText(obs.observation)}</Typography>
                     <Chip
-                      label={obs.severity}
+                      label={safeText(obs.severity)}
                       size="small"
-                      color={getSeverityColor(obs.severity) as any}
+                      color={getSeverityColor(safeText(obs.severity)) as any}
                     />
                   </Box>
                   <Typography variant="body2" color="text.secondary">
-                    {obs.details}
+                    {safeText(obs.details)}
                   </Typography>
                 </Paper>
               ))}
@@ -603,7 +640,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
                     <ListItemIcon>
                       <CheckIcon color="success" />
                     </ListItemIcon>
-                    <ListItemText primary={rec} />
+                    <ListItemText primary={safeText(rec)} />
                   </ListItem>
                 ))}
               </List>
@@ -618,7 +655,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
           <CardContent>
             <Typography variant="h6" gutterBottom>Analysis</Typography>
             <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-              {analysis.raw_analysis}
+              {safeText(analysis.raw_analysis)}
             </Typography>
           </CardContent>
         </Card>
@@ -669,11 +706,27 @@ const TracerouteAnalyzerPage: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatMaximized, setChatMaximized] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const theme = useTheme();
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages]);
 
   // Saved reports
   const [savedReports, setSavedReports] = useState<TracerouteSavedReport[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
   const [selectedReport, setSelectedReport] = useState<TracerouteReportDetail | null>(null);
+
+  // Batch traceroute state
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchTargets, setBatchTargets] = useState("");
+  const [batchResult, setBatchResult] = useState<BatchTracerouteResponse | null>(null);
+  const [batchScanning, setBatchScanning] = useState(false);
 
   // Initialize
   useEffect(() => {
@@ -735,7 +788,10 @@ const TracerouteAnalyzerPage: React.FC = () => {
       (response) => {
         setResult(response);
         setScanning(false);
-        setSnackbar({ open: true, message: "Traceroute complete!", severity: "success" });
+        const savedMessage = response.report_id 
+          ? "Traceroute complete! Report saved automatically." 
+          : "Traceroute complete!";
+        setSnackbar({ open: true, message: savedMessage, severity: "success" });
         if (response.report_id) {
           loadSavedReports();
         }
@@ -754,6 +810,59 @@ const TracerouteAnalyzerPage: React.FC = () => {
       abortControllerRef.current = null;
     }
     setScanning(false);
+  };
+
+  // Batch traceroute handler
+  const handleRunBatchTraceroute = async () => {
+    const targets = batchTargets
+      .split('\n')
+      .map(t => t.trim())
+      .filter(t => t.length > 0);
+    
+    if (targets.length === 0) {
+      setSnackbar({ open: true, message: "Please enter at least one target", severity: "error" });
+      return;
+    }
+    
+    if (targets.length > 10) {
+      setSnackbar({ open: true, message: "Maximum 10 targets allowed per batch", severity: "error" });
+      return;
+    }
+    
+    setBatchScanning(true);
+    setBatchResult(null);
+    setError(null);
+    
+    try {
+      const request: BatchTracerouteRequest = {
+        targets,
+        max_hops: maxHops,
+        timeout: Math.min(timeout, 10), // Shorter timeout for batch
+        queries: Math.min(queries, 3),
+        use_icmp: useIcmp,
+        resolve_hostnames: resolveHostnames,
+        save_reports: saveReport,
+      };
+      
+      const result = await apiClient.runBatchTraceroute(request);
+      setBatchResult(result);
+      
+      // Reload saved reports if we saved them
+      if (saveReport && result.saved_reports && result.saved_reports.length > 0) {
+        loadSavedReports();
+      }
+      
+      setSnackbar({ 
+        open: true, 
+        message: `Batch complete: ${result.successful}/${result.targets_traced} targets traced successfully`, 
+        severity: result.failed > 0 ? "info" : "success" 
+      });
+    } catch (err: any) {
+      setError(err.message || "Batch traceroute failed");
+      setSnackbar({ open: true, message: err.message || "Batch traceroute failed", severity: "error" });
+    } finally {
+      setBatchScanning(false);
+    }
   };
 
   const handleSendChat = async () => {
@@ -794,8 +903,8 @@ const TracerouteAnalyzerPage: React.FC = () => {
       const report = await apiClient.getTracerouteReport(reportId);
       setSelectedReport(report);
       setResult({
-        result: report.report_data.result,
-        ai_analysis: report.ai_report || report.report_data.ai_analysis,
+        result: report.report_data?.result || null,
+        ai_analysis: report.ai_report || report.report_data?.ai_analysis || null,
         report_id: report.id,
       });
       setActiveTab(0);
@@ -804,7 +913,7 @@ const TracerouteAnalyzerPage: React.FC = () => {
     }
   };
 
-  const copyCommand = () => {
+  const copyCommand = async () => {
     const system = status?.platform || "windows";
     let cmd = "";
     
@@ -814,8 +923,25 @@ const TracerouteAnalyzerPage: React.FC = () => {
       cmd = `traceroute -m ${maxHops} -w ${timeout} -q ${queries}${!resolveHostnames ? " -n" : ""}${useIcmp ? " -I" : ""} ${target}`;
     }
     
-    navigator.clipboard.writeText(cmd);
-    setSnackbar({ open: true, message: "Command copied to clipboard", severity: "success" });
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(cmd);
+      } else {
+        // Fallback for older browsers or non-HTTPS
+        const textArea = document.createElement("textarea");
+        textArea.value = cmd;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setSnackbar({ open: true, message: "Command copied to clipboard", severity: "success" });
+    } catch (err) {
+      console.error("Failed to copy command:", err);
+      setSnackbar({ open: true, message: "Failed to copy to clipboard", severity: "error" });
+    }
   };
 
   // Quick targets for testing
@@ -852,8 +978,8 @@ const TracerouteAnalyzerPage: React.FC = () => {
       riskLevel: "none",
     });
 
-    // Add hop nodes
-    result.result.hops.forEach((hop, index) => {
+    // Add hop nodes (null-safe iteration)
+    (result.result.hops || []).forEach((hop, index) => {
       const nodeId = `hop-${hop.hop_number}`;
       const isTimeout = hop.is_timeout;
       const isDestination = hop.is_destination;
@@ -874,8 +1000,9 @@ const TracerouteAnalyzerPage: React.FC = () => {
         services: hop.avg_rtt_ms ? [`${hop.avg_rtt_ms.toFixed(1)}ms`] : undefined,
       });
 
-      // Add link from previous node
-      const sourceId = index === 0 ? "source" : `hop-${result.result.hops[index - 1].hop_number}`;
+      // Add link from previous node (null-safe access to hops array)
+      const hopsArray = result.result.hops || [];
+      const sourceId = index === 0 ? "source" : `hop-${hopsArray[index - 1]?.hop_number || index}`;
       links.push({
         source: sourceId,
         target: nodeId,
@@ -889,7 +1016,7 @@ const TracerouteAnalyzerPage: React.FC = () => {
   }, [result]);
 
   // Export results as text
-  const exportResults = () => {
+  const exportResults = async () => {
     if (!result) return;
     
     let text = `Traceroute to ${result.result.target}\n`;
@@ -902,7 +1029,7 @@ const TracerouteAnalyzerPage: React.FC = () => {
     text += `${'Hop'.padEnd(5)}${'IP Address'.padEnd(20)}${'Hostname'.padEnd(30)}${'Avg RTT'.padEnd(12)}${'Loss'.padEnd(8)}\n`;
     text += '-'.repeat(75) + '\n';
     
-    result.result.hops.forEach(hop => {
+    (result.result.hops || []).forEach(hop => {
       const hopNum = String(hop.hop_number).padEnd(5);
       const ip = (hop.is_timeout ? '*' : hop.ip_address || '-').padEnd(20);
       const hostname = (hop.hostname || '-').substring(0, 28).padEnd(30);
@@ -915,8 +1042,25 @@ const TracerouteAnalyzerPage: React.FC = () => {
       text += `\n\nAI Analysis Summary:\n${result.ai_analysis.summary}\n`;
     }
     
-    navigator.clipboard.writeText(text);
-    setSnackbar({ open: true, message: "Results copied to clipboard", severity: "success" });
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for older browsers or non-HTTPS
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setSnackbar({ open: true, message: "Results copied to clipboard", severity: "success" });
+    } catch (err) {
+      console.error("Failed to copy results:", err);
+      setSnackbar({ open: true, message: "Failed to copy to clipboard", severity: "error" });
+    }
   };
 
   // Delete a saved report
@@ -986,40 +1130,125 @@ const TracerouteAnalyzerPage: React.FC = () => {
         </Alert>
       )}
 
+      {/* Docker Network Notice */}
+      <Alert 
+        severity="warning" 
+        sx={{ mb: 3 }}
+        icon={<WarningIcon />}
+      >
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          <strong>Docker Desktop Limitation:</strong> On Windows/macOS, Docker Desktop's NAT hides intermediate network hops. 
+          You'll see the Docker bridge (172.18.x.x) then the destination, but not your router or ISP hops. 
+          For full network path visibility, run <code>tracert [target]</code> (Windows) or <code>traceroute [target]</code> (macOS/Linux) 
+          directly from your terminal.
+        </Typography>
+      </Alert>
+
       {/* Main Content */}
       <Grid container spacing={3}>
         {/* Left Panel - Configuration */}
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Scan Configuration
-            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+              <Typography variant="h6">
+                Scan Configuration
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={batchMode}
+                    onChange={(e) => {
+                      setBatchMode(e.target.checked);
+                      setBatchResult(null);
+                      setResult(null);
+                    }}
+                    disabled={scanning || batchScanning}
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography variant="caption" sx={{ fontWeight: "bold", color: batchMode ? "primary.main" : "text.secondary" }}>
+                    Batch Mode
+                  </Typography>
+                }
+              />
+            </Box>
 
-            {/* Target Input */}
-            <TextField
-              fullWidth
-              label="Target (hostname or IP)"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder="e.g., google.com or 8.8.8.8"
-              sx={{ mb: 2 }}
-              disabled={scanning}
-            />
-
-            {/* Quick Targets */}
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
-              {quickTargets.map((qt) => (
-                <Chip
-                  key={qt.value}
-                  label={qt.label}
-                  onClick={() => setTarget(qt.value)}
-                  size="small"
-                  variant={target === qt.value ? "filled" : "outlined"}
-                  color="primary"
+            {/* Single Target Mode */}
+            {!batchMode && (
+              <>
+                <TextField
+                  fullWidth
+                  label="Target (hostname or IP)"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder="e.g., google.com or 8.8.8.8"
+                  sx={{ mb: 2 }}
                   disabled={scanning}
                 />
-              ))}
-            </Box>
+
+                {/* Quick Targets */}
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
+                  {quickTargets.map((qt) => (
+                    <Chip
+                      key={qt.value}
+                      label={qt.label}
+                      onClick={() => setTarget(qt.value)}
+                      size="small"
+                      variant={target === qt.value ? "filled" : "outlined"}
+                      color="primary"
+                      disabled={scanning}
+                    />
+                  ))}
+                </Box>
+              </>
+            )}
+
+            {/* Batch Mode Input */}
+            {batchMode && (
+              <>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={6}
+                  label="Targets (one per line, max 10)"
+                  value={batchTargets}
+                  onChange={(e) => setBatchTargets(e.target.value)}
+                  placeholder={"google.com\ngithub.com\namazon.com\n8.8.8.8\n1.1.1.1"}
+                  sx={{ mb: 2 }}
+                  disabled={batchScanning}
+                  helperText={`${batchTargets.split('\n').filter(t => t.trim()).length} target(s) entered`}
+                />
+
+                {/* Quick Fill for Batch */}
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
+                  <Chip
+                    label="Popular Sites"
+                    onClick={() => setBatchTargets("google.com\ngithub.com\namazon.com\nmicrosoft.com\napple.com")}
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                    disabled={batchScanning}
+                  />
+                  <Chip
+                    label="DNS Servers"
+                    onClick={() => setBatchTargets("8.8.8.8\n1.1.1.1\n208.67.222.222\n9.9.9.9\n4.2.2.1")}
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    disabled={batchScanning}
+                  />
+                  <Chip
+                    label="Cloud Providers"
+                    onClick={() => setBatchTargets("aws.amazon.com\nazure.microsoft.com\ncloud.google.com\ncloudflare.com")}
+                    size="small"
+                    variant="outlined"
+                    color="info"
+                    disabled={batchScanning}
+                  />
+                </Box>
+              </>
+            )}
 
             {/* Settings Toggle */}
             <Button
@@ -1130,36 +1359,58 @@ const TracerouteAnalyzerPage: React.FC = () => {
 
             {/* Action Buttons */}
             <Box sx={{ display: "flex", gap: 2 }}>
-              {scanning ? (
+              {/* Single Mode Buttons */}
+              {!batchMode && (
+                <>
+                  {scanning ? (
+                    <Button
+                      variant="contained"
+                      color="error"
+                      onClick={handleStopTraceroute}
+                      startIcon={<StopIcon />}
+                      fullWidth
+                    >
+                      Stop
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="contained"
+                      onClick={handleRunTraceroute}
+                      startIcon={<PlayIcon />}
+                      fullWidth
+                      disabled={!status?.available || !target.trim()}
+                      sx={{
+                        bgcolor: "#ec4899",
+                        "&:hover": { bgcolor: "#db2777" },
+                      }}
+                    >
+                      Run Traceroute
+                    </Button>
+                  )}
+                  <Tooltip title="Copy command">
+                    <IconButton onClick={copyCommand} disabled={!target.trim()}>
+                      <CopyIcon />
+                    </IconButton>
+                  </Tooltip>
+                </>
+              )}
+              
+              {/* Batch Mode Buttons */}
+              {batchMode && (
                 <Button
                   variant="contained"
-                  color="error"
-                  onClick={handleStopTraceroute}
-                  startIcon={<StopIcon />}
+                  onClick={handleRunBatchTraceroute}
+                  startIcon={batchScanning ? <CircularProgress size={20} color="inherit" /> : <PlayIcon />}
                   fullWidth
-                >
-                  Stop
-                </Button>
-              ) : (
-                <Button
-                  variant="contained"
-                  onClick={handleRunTraceroute}
-                  startIcon={<PlayIcon />}
-                  fullWidth
-                  disabled={!status?.available || !target.trim()}
+                  disabled={!status?.available || batchScanning || batchTargets.split('\n').filter(t => t.trim()).length === 0}
                   sx={{
-                    bgcolor: "#ec4899",
-                    "&:hover": { bgcolor: "#db2777" },
+                    bgcolor: "#8b5cf6",
+                    "&:hover": { bgcolor: "#7c3aed" },
                   }}
                 >
-                  Run Traceroute
+                  {batchScanning ? "Tracing..." : "Run Batch Traceroute"}
                 </Button>
               )}
-              <Tooltip title="Copy command">
-                <IconButton onClick={copyCommand} disabled={!target.trim()}>
-                  <CopyIcon />
-                </IconButton>
-              </Tooltip>
             </Box>
           </Paper>
 
@@ -1212,7 +1463,7 @@ const TracerouteAnalyzerPage: React.FC = () => {
 
         {/* Right Panel - Results */}
         <Grid item xs={12} md={8}>
-          {/* Live Progress */}
+          {/* Live Progress (Single Mode) */}
           {scanning && (
             <Paper sx={{ p: 3, mb: 3 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
@@ -1234,8 +1485,271 @@ const TracerouteAnalyzerPage: React.FC = () => {
             </Paper>
           )}
 
-          {/* Results */}
-          {result && (
+          {/* Batch Progress */}
+          {batchScanning && (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <CircularProgress size={24} sx={{ color: "#8b5cf6" }} />
+                <Typography variant="h6">Running batch traceroute...</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Tracing routes to {batchTargets.split('\n').filter(t => t.trim()).length} targets in parallel.
+                This may take several minutes depending on the number of targets.
+              </Typography>
+              <LinearProgress sx={{ mt: 2, bgcolor: "grey.800", "& .MuiLinearProgress-bar": { bgcolor: "#8b5cf6" } }} />
+            </Paper>
+          )}
+
+          {/* Batch Results */}
+          {batchResult && batchMode && (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              {/* Batch Summary Header */}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+                <Typography variant="h6">
+                  Batch Results
+                </Typography>
+                <Chip
+                  label={`${batchResult.successful}/${batchResult.targets_traced} Successful`}
+                  color={batchResult.failed === 0 ? "success" : "warning"}
+                  size="small"
+                />
+                {batchResult.failed > 0 && (
+                  <Chip
+                    label={`${batchResult.failed} Failed`}
+                    color="error"
+                    size="small"
+                  />
+                )}
+              </Box>
+
+              {/* Combined Network Topology */}
+              {batchResult.combined_topology && batchResult.combined_topology.nodes.length > 1 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: "bold" }}>
+                    Combined Network Topology
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    All traced paths visualized together. Node colors indicate latency/packet loss levels.
+                    Shared infrastructure is highlighted where multiple paths converge.
+                  </Typography>
+                  <NetworkTopologyGraph
+                    nodes={batchResult.combined_topology.nodes.map(n => ({
+                      id: n.id,
+                      ip: n.ip,
+                      type: n.type,
+                      hostname: n.hostname,
+                      riskLevel: n.riskLevel,
+                      services: n.targets ? [`Routes: ${n.targets.join(', ')}`] : undefined,
+                    }))}
+                    links={batchResult.combined_topology.links.map(l => ({
+                      source: l.source,
+                      target: l.target,
+                      protocol: l.protocol,
+                      packets: l.packets,
+                    }))}
+                    title="Combined Network Paths"
+                    height={450}
+                  />
+                </Box>
+              )}
+
+              {/* Comparative Analysis */}
+              {batchResult.comparative_analysis && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: "bold", display: "flex", alignItems: "center", gap: 1 }}>
+                    <SmartToyIcon fontSize="small" />
+                    Comparative Analysis
+                  </Typography>
+                  
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    {batchResult.comparative_analysis.summary || "Analysis complete"}
+                  </Alert>
+
+                  {/* Shared Infrastructure */}
+                  {batchResult.comparative_analysis.shared_infrastructure && (
+                    <Card variant="outlined" sx={{ mb: 2 }}>
+                      <CardContent>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>Shared Infrastructure</Typography>
+                        {(batchResult.comparative_analysis.shared_infrastructure.common_hops || []).length > 0 && (
+                          <Box sx={{ mb: 1 }}>
+                            <Typography variant="caption" color="text.secondary">Common Hops:</Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                              {(batchResult.comparative_analysis.shared_infrastructure.common_hops || []).map((hop, i) => (
+                                <Chip key={i} label={hop} size="small" variant="outlined" />
+                              ))}
+                            </Box>
+                          </Box>
+                        )}
+                        {(batchResult.comparative_analysis.shared_infrastructure.shared_isps || []).length > 0 && (
+                          <Box sx={{ mb: 1 }}>
+                            <Typography variant="caption" color="text.secondary">Shared ISPs:</Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                              {(batchResult.comparative_analysis.shared_infrastructure.shared_isps || []).map((isp, i) => (
+                                <Chip key={i} label={isp} size="small" color="primary" variant="outlined" />
+                              ))}
+                            </Box>
+                          </Box>
+                        )}
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          {batchResult.comparative_analysis.shared_infrastructure.convergence_analysis || ""}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Performance Comparison */}
+                  {batchResult.comparative_analysis.performance_comparison && (
+                    <Card variant="outlined" sx={{ mb: 2 }}>
+                      <CardContent>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>Performance Comparison</Typography>
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <Typography variant="caption" color="text.secondary">Fastest</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: "bold", color: "success.main" }}>
+                              {batchResult.comparative_analysis.performance_comparison.fastest_target || "N/A"}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Typography variant="caption" color="text.secondary">Slowest</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: "bold", color: "warning.main" }}>
+                              {batchResult.comparative_analysis.performance_comparison.slowest_target || "N/A"}
+                            </Typography>
+                          </Grid>
+                        </Grid>
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          {batchResult.comparative_analysis.performance_comparison.hop_count_analysis || ""}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Security Observations */}
+                  {batchResult.comparative_analysis.security_observations && batchResult.comparative_analysis.security_observations.length > 0 && (
+                    <Card variant="outlined" sx={{ mb: 2 }}>
+                      <CardContent>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>Security Observations</Typography>
+                        {batchResult.comparative_analysis.security_observations.map((obs, i) => (
+                          <Alert 
+                            key={i} 
+                            severity={obs.severity === "high" ? "error" : obs.severity === "medium" ? "warning" : "info"}
+                            sx={{ mb: 1 }}
+                          >
+                            <Typography variant="body2" sx={{ fontWeight: "bold" }}>{obs.observation || ""}</Typography>
+                            <Typography variant="caption">
+                              Affected: {(obs.affected_targets || []).join(", ")}
+                            </Typography>
+                          </Alert>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Recommendations */}
+                  {batchResult.comparative_analysis.recommendations && batchResult.comparative_analysis.recommendations.length > 0 && (
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Recommendations</Typography>
+                      <List dense>
+                        {batchResult.comparative_analysis.recommendations.map((rec, i) => (
+                          <ListItem key={i}>
+                            <ListItemIcon sx={{ minWidth: 32 }}>
+                              <CheckIcon fontSize="small" color="primary" />
+                            </ListItemIcon>
+                            <ListItemText primary={rec} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Box>
+                  )}
+                </Box>
+              )}
+
+              {/* Individual Results Table */}
+              <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: "bold", mt: 2 }}>
+                Individual Traces
+              </Typography>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Target</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Hops</TableCell>
+                      <TableCell>Completed</TableCell>
+                      <TableCell>Duration</TableCell>
+                      <TableCell>Risk</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(batchResult.results || []).map((r, i) => (
+                      <TableRow 
+                        key={i}
+                        sx={{ 
+                          cursor: r.success ? "pointer" : "default",
+                          "&:hover": r.success ? { bgcolor: "action.hover" } : {},
+                        }}
+                        onClick={() => {
+                          if (r.success && r.result && r.ai_analysis) {
+                            setResult({
+                              result: r.result,
+                              ai_analysis: r.ai_analysis,
+                            });
+                            setBatchMode(false);
+                          }
+                        }}
+                      >
+                        <TableCell sx={{ fontFamily: "monospace" }}>{r.target}</TableCell>
+                        <TableCell>
+                          {r.success ? (
+                            <Chip label="Success" size="small" color="success" />
+                          ) : (
+                            <Chip label="Failed" size="small" color="error" />
+                          )}
+                        </TableCell>
+                        <TableCell>{r.result?.total_hops || "-"}</TableCell>
+                        <TableCell>
+                          {r.result?.completed ? (
+                            <CheckIcon fontSize="small" color="success" />
+                          ) : r.success ? (
+                            <WarningIcon fontSize="small" color="warning" />
+                          ) : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {r.result?.duration_ms ? `${(r.result.duration_ms / 1000).toFixed(1)}s` : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {r.ai_analysis?.risk_score !== undefined ? (
+                            <Chip 
+                              label={r.ai_analysis.risk_score} 
+                              size="small" 
+                              color={
+                                r.ai_analysis.risk_score >= 70 ? "error" :
+                                r.ai_analysis.risk_score >= 40 ? "warning" : "success"
+                              }
+                            />
+                          ) : "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Validation Errors */}
+              {batchResult.validation_errors && batchResult.validation_errors.length > 0 && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">Could not resolve:</Typography>
+                  {batchResult.validation_errors.map((err, i) => (
+                    <Typography key={i} variant="body2">
+                      • {err.target}: {err.error}
+                    </Typography>
+                  ))}
+                </Alert>
+              )}
+            </Paper>
+          )}
+
+          {/* Single Results */}
+          {result && result.result && !batchMode && (
             <Paper sx={{ p: 3 }}>
               {/* Result Header */}
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
@@ -1327,7 +1841,7 @@ const TracerouteAnalyzerPage: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {result.result.hops.map((hop) => (
+                      {(result.result.hops || []).map((hop) => (
                         <TableRow key={hop.hop_number}>
                           <TableCell>{hop.hop_number}</TableCell>
                           <TableCell>
@@ -1337,7 +1851,7 @@ const TracerouteAnalyzerPage: React.FC = () => {
                           <TableCell>
                             {hop.is_timeout
                               ? "*"
-                              : hop.rtt_ms.map((r) => r.toFixed(1)).join(" / ")}
+                              : (hop.rtt_ms || []).map((r) => r.toFixed(1)).join(" / ")}
                           </TableCell>
                           <TableCell>
                             {hop.avg_rtt_ms ? hop.avg_rtt_ms.toFixed(1) : "-"}
@@ -1364,7 +1878,7 @@ const TracerouteAnalyzerPage: React.FC = () => {
           )}
 
           {/* No results placeholder */}
-          {!result && !scanning && (
+          {!result && !scanning && !batchMode && !batchScanning && (
             <Paper sx={{ p: 6, textAlign: "center" }}>
               <RouteIcon sx={{ fontSize: 80, color: "#ec4899", opacity: 0.3, mb: 2 }} />
               <Typography variant="h6" color="text.secondary">
@@ -1375,125 +1889,219 @@ const TracerouteAnalyzerPage: React.FC = () => {
               </Typography>
             </Paper>
           )}
+
+          {/* Batch mode placeholder */}
+          {batchMode && !batchResult && !batchScanning && (
+            <Paper sx={{ p: 6, textAlign: "center" }}>
+              <HubIcon sx={{ fontSize: 80, color: "#8b5cf6", opacity: 0.3, mb: 2 }} />
+              <Typography variant="h6" color="text.secondary">
+                Batch Traceroute Mode
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Enter multiple targets (one per line) to trace routes to all of them simultaneously.
+                Results will show a combined network topology and comparative analysis.
+              </Typography>
+            </Paper>
+          )}
         </Grid>
       </Grid>
 
       {/* Floating Chat Window */}
-      {showChat && result && (
+      {result && (
         <Paper
           elevation={8}
           sx={{
             position: "fixed",
-            bottom: 24,
-            right: 24,
-            width: 400,
-            height: 500,
-            display: "flex",
-            flexDirection: "column",
-            zIndex: 1300,
-            borderRadius: 2,
+            bottom: 16,
+            right: 16,
+            left: chatMaximized ? { xs: 16, md: 280 } : "auto",
+            width: showChat ? (chatMaximized ? "auto" : { xs: "calc(100% - 32px)", sm: 400 }) : "auto",
+            maxWidth: chatMaximized ? "none" : 400,
+            zIndex: 1200,
+            borderRadius: 3,
             overflow: "hidden",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
           {/* Chat Header */}
           <Box
             sx={{
-              p: 2,
-              bgcolor: "#ec4899",
-              color: "white",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
+              p: 1.5,
+              background: `linear-gradient(135deg, #ec4899 0%, #db2777 100%)`,
+              color: "white",
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                cursor: "pointer",
+                flex: 1,
+              }}
+              onClick={() => setShowChat(!showChat)}
+            >
               <ChatIcon />
-              <Typography variant="subtitle1">Ask about Traceroute</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Traceroute Assistant
+              </Typography>
             </Box>
-            <IconButton size="small" onClick={() => setShowChat(false)} sx={{ color: "white" }}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-
-          {/* Chat Messages */}
-          <Box
-            sx={{
-              flex: 1,
-              overflow: "auto",
-              p: 2,
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-          >
-            {chatMessages.length === 0 && (
-              <Box sx={{ textAlign: "center", mt: 2 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Ask questions about the traceroute results, network path, or routing issues
-                </Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, justifyContent: "center" }}>
-                  {chatSuggestions.map((suggestion, i) => (
-                    <Chip
-                      key={i}
-                      label={suggestion}
-                      size="small"
-                      onClick={() => setChatInput(suggestion)}
-                      sx={{ fontSize: "0.7rem", cursor: "pointer" }}
-                    />
-                  ))}
-                </Box>
-              </Box>
-            )}
-            {chatMessages.map((msg, i) => (
-              <Box
-                key={i}
-                sx={{
-                  alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-                  maxWidth: "80%",
-                }}
-              >
-                <Paper
-                  sx={{
-                    p: 1.5,
-                    bgcolor: msg.role === "user" ? "#ec4899" : "grey.100",
-                    color: msg.role === "user" ? "white" : "text.primary",
-                    borderRadius: 2,
-                  }}
-                  elevation={1}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              {showChat && (
+                <IconButton
+                  size="small"
+                  onClick={() => setChatMaximized(!chatMaximized)}
+                  sx={{ color: "white" }}
                 >
-                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                    {msg.content}
-                  </Typography>
-                </Paper>
-              </Box>
-            ))}
-            {chatLoading && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <CircularProgress size={16} />
-                <Typography variant="body2" color="text.secondary">
-                  Thinking...
-                </Typography>
-              </Box>
-            )}
-          </Box>
-
-          {/* Chat Input */}
-          <Box sx={{ p: 2, borderTop: 1, borderColor: "divider" }}>
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <TextField
-                fullWidth
+                  {chatMaximized ? <CloseFullscreenIcon fontSize="small" /> : <OpenInFullIcon fontSize="small" />}
+                </IconButton>
+              )}
+              <IconButton
                 size="small"
-                placeholder="Ask about the route..."
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleSendChat()}
-                disabled={chatLoading}
-              />
-              <IconButton onClick={handleSendChat} disabled={chatLoading || !chatInput.trim()}>
-                <SendIcon />
+                onClick={() => setShowChat(!showChat)}
+                sx={{ color: "white" }}
+              >
+                {showChat ? <ExpandMoreIcon /> : <ExpandLessIcon />}
               </IconButton>
             </Box>
           </Box>
+
+          {/* Chat Content */}
+          <Collapse in={showChat}>
+            <Box sx={{ display: "flex", flexDirection: "column", height: chatMaximized ? "calc(66vh - 120px)" : 280 }}>
+              {/* Messages */}
+              <Box
+                sx={{
+                  flex: 1,
+                  overflow: "auto",
+                  p: 2,
+                  bgcolor: alpha(theme.palette.background.paper, 0.98),
+                }}
+              >
+                {chatMessages.length === 0 ? (
+                  <Box sx={{ textAlign: "center", py: 3 }}>
+                    <SmartToyIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Ask questions about the traceroute results, network path, or routing issues
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, justifyContent: "center" }}>
+                      {chatSuggestions.map((suggestion, i) => (
+                        <Chip
+                          key={i}
+                          label={suggestion}
+                          size="small"
+                          onClick={() => setChatInput(suggestion)}
+                          sx={{ fontSize: "0.7rem", cursor: "pointer" }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                ) : (
+                  chatMessages.map((msg, i) => (
+                    <Box
+                      key={i}
+                      sx={{
+                        display: "flex",
+                        gap: 1,
+                        mb: 2,
+                        flexDirection: msg.role === "user" ? "row-reverse" : "row",
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          bgcolor: msg.role === "user" ? "#ec4899" : "secondary.main",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {msg.role === "user" ? (
+                          <PersonIcon sx={{ fontSize: 16, color: "white" }} />
+                        ) : (
+                          <SmartToyIcon sx={{ fontSize: 16, color: "white" }} />
+                        )}
+                      </Box>
+                      <Paper
+                        sx={{
+                          p: 1.5,
+                          maxWidth: "80%",
+                          bgcolor: msg.role === "user" ? "#ec4899" : alpha(theme.palette.background.default, 0.8),
+                          color: msg.role === "user" ? "white" : "text.primary",
+                          borderRadius: 2,
+                          "& p": { m: 0 },
+                          "& p:not(:last-child)": { mb: 1 },
+                          "& ul, & ol": { pl: 2, m: 0 },
+                          "& li": { mb: 0.5 },
+                        }}
+                      >
+                        <ReactMarkdown
+                          components={{
+                            code: ({ className, children }) => (
+                              <ChatCodeBlock className={className} theme={theme}>
+                                {children}
+                              </ChatCodeBlock>
+                            ),
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </Paper>
+                    </Box>
+                  ))
+                )}
+                {chatLoading && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <CircularProgress size={20} />
+                    <Typography variant="body2" color="text.secondary">
+                      Analyzing...
+                    </Typography>
+                  </Box>
+                )}
+                <div ref={chatEndRef} />
+              </Box>
+
+              {/* Input */}
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderTop: 1,
+                  borderColor: "divider",
+                  bgcolor: "background.paper",
+                }}
+              >
+                <Box sx={{ display: "flex", gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Ask about the route..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && handleSendChat()}
+                    disabled={chatLoading}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: 2,
+                      },
+                    }}
+                  />
+                  <IconButton
+                    color="primary"
+                    onClick={handleSendChat}
+                    disabled={!chatInput.trim() || chatLoading}
+                  >
+                    <SendIcon />
+                  </IconButton>
+                </Box>
+              </Box>
+            </Box>
+          </Collapse>
         </Paper>
       )}
 

@@ -30,6 +30,7 @@ import {
   Menu,
   Grid,
   Alert,
+  Autocomplete,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -46,6 +47,7 @@ import {
   Send as SendIcon,
   BugReport as BugIcon,
   Link as LinkIcon,
+  Palette as PaletteIcon,
 } from '@mui/icons-material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -53,16 +55,24 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
 import { CardData, CardLabel, ChecklistItem, AssigneeInfo } from './KanbanCard';
 import { ColumnData } from './KanbanBoard';
-import { kanbanApi } from '../../api/client';
+import { kanbanApi, api, ProjectCollaborator } from '../../api/client';
 
 interface CardDetailDialogProps {
   open: boolean;
   card: CardData;
   columns: ColumnData[];
+  projectId: number;
   onClose: () => void;
   onUpdate: () => void;
   onDelete: () => void;
   onFindingClick?: (findingId: number) => void;
+}
+
+interface ProjectMember {
+  user_id: number;
+  username: string;
+  email?: string;
+  role: string;
 }
 
 interface CommentData {
@@ -89,16 +99,37 @@ const labelColors = [
   '#ffee58', '#ffca28', '#ffa726', '#ff7043',
 ];
 
+// Card background colors (dark theme compatible)
+const cardColors = [
+  { value: '', label: 'Default', color: 'transparent' },
+  { value: '#4a3728', label: 'Brown', color: '#4a3728' },
+  { value: '#2d4a3e', label: 'Dark Green', color: '#2d4a3e' },
+  { value: '#2a3f5f', label: 'Dark Blue', color: '#2a3f5f' },
+  { value: '#4a2d4a', label: 'Dark Purple', color: '#4a2d4a' },
+  { value: '#4a2d3a', label: 'Dark Pink', color: '#4a2d3a' },
+  { value: '#4a4a2d', label: 'Olive', color: '#4a4a2d' },
+  { value: '#2d4a4a', label: 'Teal', color: '#2d4a4a' },
+  { value: '#5c3d2e', label: 'Rust', color: '#5c3d2e' },
+  { value: '#3d3d5c', label: 'Slate', color: '#3d3d5c' },
+  { value: '#bf360c', label: 'Deep Orange', color: '#bf360c' },
+  { value: '#1565c0', label: 'Blue', color: '#1565c0' },
+  { value: '#2e7d32', label: 'Green', color: '#2e7d32' },
+  { value: '#ad1457', label: 'Pink', color: '#ad1457' },
+  { value: '#6a1b9a', label: 'Purple', color: '#6a1b9a' },
+  { value: '#f9a825', label: 'Yellow', color: '#f9a825' },
+];
+
 export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
   open,
   card: initialCard,
   columns,
+  projectId,
   onClose,
   onUpdate,
   onDelete,
   onFindingClick,
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(true); // Start in edit mode for better UX
   const [card, setCard] = useState<CardData>(initialCard);
   const [editedCard, setEditedCard] = useState<Partial<CardData>>({});
   const [saving, setSaving] = useState(false);
@@ -116,11 +147,50 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelColor, setNewLabelColor] = useState(labelColors[0]);
   
+  // Project members for assignee selection
+  const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  
+  // Color picker
+  const [colorAnchor, setColorAnchor] = useState<null | HTMLElement>(null);
+  
   useEffect(() => {
     setCard(initialCard);
     setEditedCard({});
     loadComments();
+    loadProjectMembers();
   }, [initialCard]);
+  
+  const loadProjectMembers = async () => {
+    try {
+      setLoadingMembers(true);
+      const collaborators = await api.getProjectCollaborators(projectId);
+      // Also get project info to include owner
+      const project = await api.getProject(projectId);
+      
+      const members: ProjectMember[] = collaborators.map((c: ProjectCollaborator) => ({
+        user_id: c.user_id,
+        username: c.username || `User ${c.user_id}`,
+        email: c.email,
+        role: c.role,
+      }));
+      
+      // Add owner if not already in list
+      if (project.owner_id && !members.find(m => m.user_id === project.owner_id)) {
+        members.unshift({
+          user_id: project.owner_id,
+          username: project.owner_username || `User ${project.owner_id}`,
+          role: 'owner',
+        });
+      }
+      
+      setProjectMembers(members);
+    } catch (err) {
+      console.error('Failed to load project members:', err);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
   
   const loadComments = async () => {
     try {
@@ -145,6 +215,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
         due_date: editedCard.due_date ?? card.due_date,
         assignee_ids: editedCard.assignee_ids ?? card.assignee_ids,
         checklist: editedCard.checklist ?? card.checklist,
+        color: editedCard.color ?? card.color,
       });
       setIsEditing(false);
       onUpdate();
@@ -563,26 +634,98 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                 </Box>
               </Box>
               
+              {/* Card Color */}
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Card Color
+                  </Typography>
+                  <IconButton size="small" onClick={(e) => setColorAnchor(e.currentTarget)}>
+                    <PaletteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                <Box
+                  onClick={(e) => setColorAnchor(e.currentTarget)}
+                  sx={{
+                    width: '100%',
+                    height: 24,
+                    borderRadius: 1,
+                    bgcolor: (editedCard.color ?? card.color) || 'background.default',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                    },
+                  }}
+                />
+              </Box>
+              
               {/* Assignees */}
               <Box>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                   Assignees
                 </Typography>
-                {card.assignees && card.assignees.length > 0 ? (
-                  <AvatarGroup max={5}>
-                    {card.assignees.map((assignee) => (
-                      <Tooltip key={assignee.user_id} title={assignee.first_name || assignee.username}>
-                        <Avatar src={assignee.avatar_url}>
-                          {(assignee.first_name || assignee.username).charAt(0).toUpperCase()}
-                        </Avatar>
-                      </Tooltip>
-                    ))}
-                  </AvatarGroup>
-                ) : (
-                  <Typography variant="caption" color="text.secondary">
-                    No assignees
-                  </Typography>
-                )}
+                <Autocomplete
+                  multiple
+                  size="small"
+                  options={projectMembers}
+                  getOptionLabel={(option) => option.username}
+                  value={projectMembers.filter(m => 
+                    (editedCard.assignee_ids ?? card.assignee_ids ?? []).includes(m.user_id)
+                  )}
+                  onChange={async (_, newValue) => {
+                    const newAssigneeIds = newValue.map(m => m.user_id);
+                    setEditedCard({
+                      ...editedCard,
+                      assignee_ids: newAssigneeIds
+                    });
+                    // Auto-save assignee changes
+                    try {
+                      await kanbanApi.updateCard(card.id, { assignee_ids: newAssigneeIds });
+                      setCard({ ...card, assignee_ids: newAssigneeIds });
+                      onUpdate();
+                    } catch (err) {
+                      console.error('Failed to update assignees:', err);
+                    }
+                  }}
+                  loading={loadingMembers}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Avatar sx={{ width: 24, height: 24, fontSize: 12 }}>
+                        {option.username.charAt(0).toUpperCase()}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="body2">{option.username}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {option.role}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        {...getTagProps({ index })}
+                        key={option.user_id}
+                        avatar={
+                          <Avatar sx={{ width: 20, height: 20 }}>
+                            {option.username.charAt(0).toUpperCase()}
+                          </Avatar>
+                        }
+                        label={option.username}
+                        size="small"
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder={loadingMembers ? 'Loading...' : 'Add assignees'}
+                      variant="outlined"
+                    />
+                  )}
+                />
               </Box>
               
               <Divider />
@@ -681,6 +824,55 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
           >
             Add Label
           </Button>
+        </Box>
+      </Menu>
+      
+      {/* Card Color Picker Menu */}
+      <Menu
+        anchorEl={colorAnchor}
+        open={Boolean(colorAnchor)}
+        onClose={() => setColorAnchor(null)}
+      >
+        <Box sx={{ p: 2, width: 280 }}>
+          <Typography variant="subtitle2" gutterBottom>Card Color</Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            {cardColors.map((colorOption) => (
+              <Tooltip key={colorOption.value} title={colorOption.label}>
+                <IconButton
+                  size="small"
+                  onClick={async () => {
+                    const newColor = colorOption.value || undefined;
+                    setEditedCard({ ...editedCard, color: newColor });
+                    setColorAnchor(null);
+                    // Auto-save color change
+                    try {
+                      await kanbanApi.updateCard(card.id, { color: newColor });
+                      setCard({ ...card, color: newColor });
+                      onUpdate();
+                    } catch (err) {
+                      console.error('Failed to update card color:', err);
+                    }
+                  }}
+                  sx={{
+                    bgcolor: colorOption.color || 'background.default',
+                    width: 32,
+                    height: 32,
+                    border: (editedCard.color ?? card.color ?? '') === colorOption.value 
+                      ? '2px solid #1976d2' 
+                      : '1px solid rgba(255,255,255,0.2)',
+                    '&:hover': { 
+                      bgcolor: colorOption.color || 'background.default', 
+                      opacity: 0.8 
+                    },
+                  }}
+                >
+                  {(editedCard.color ?? card.color ?? '') === colorOption.value && (
+                    <CheckIcon sx={{ fontSize: 16, color: '#fff' }} />
+                  )}
+                </IconButton>
+              </Tooltip>
+            ))}
+          </Box>
         </Box>
       </Menu>
     </Dialog>

@@ -291,6 +291,7 @@ export default function ProjectTeamChatTab({ projectId, projectName }: ProjectTe
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -690,8 +691,16 @@ export default function ProjectTeamChatTab({ projectId, projectName }: ProjectTe
 
   // Navigate to bookmarked message
   const handleNavigateToBookmark = async (convId: number, messageId: number) => {
-    // Already in this conversation - just scroll
-    // TODO: scroll to specific message
+    // Scroll to the specific message
+    const messageElement = messageRefs.current[messageId];
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Highlight the message briefly
+      messageElement.style.backgroundColor = alpha(theme.palette.primary.main, 0.2);
+      setTimeout(() => {
+        messageElement.style.backgroundColor = '';
+      }, 2000);
+    }
   };
 
   // Get read receipts for a message
@@ -917,29 +926,33 @@ export default function ProjectTeamChatTab({ projectId, projectName }: ProjectTe
         ) : (
           <Stack spacing={1}>
             {messages.map((msg) => (
-              <MessageBubble
+              <div
                 key={msg.id}
-                message={msg}
-                isOwn={msg.is_own_message}
-                onReaction={(emoji, hasReacted) => handleReaction(msg.id, emoji, hasReacted)}
-                onReply={() => setReplyingTo(msg)}
-                onPin={() => handlePinMessage(msg.id)}
-                onBookmark={() => handleBookmarkMessage(msg.id)}
-                onViewEditHistory={() => handleViewEditHistory(msg)}
-                onViewThread={() => {
-                  setThreadParentMessage(msg);
-                  setShowThreadView(true);
-                }}
-                onImageClick={() => handleImageClick(msg.id)}
-                isPinned={pinnedMessages.some(p => p.message_id === msg.id)}
-                readBy={getReadByForMessage(msg.id)}
-                currentUserId={user?.id}
-                poll={conversationPolls.find(p => p.message_id === msg.id)}
-                onPollUpdate={(updatedPoll) => {
-                  setConversationPolls(prev => prev.map(p => p.id === updatedPoll.id ? updatedPoll : p));
-                }}
-                formatTime={formatTime}
-              />
+                ref={(el) => { messageRefs.current[msg.id] = el; }}
+              >
+                <MessageBubble
+                  message={msg}
+                  isOwn={msg.is_own_message}
+                  onReaction={(emoji, hasReacted) => handleReaction(msg.id, emoji, hasReacted)}
+                  onReply={() => setReplyingTo(msg)}
+                  onPin={() => handlePinMessage(msg.id)}
+                  onBookmark={() => handleBookmarkMessage(msg.id)}
+                  onViewEditHistory={() => handleViewEditHistory(msg)}
+                  onViewThread={() => {
+                    setThreadParentMessage(msg);
+                    setShowThreadView(true);
+                  }}
+                  onImageClick={() => handleImageClick(msg.id)}
+                  isPinned={pinnedMessages.some(p => p.message_id === msg.id)}
+                  readBy={getReadByForMessage(msg.id)}
+                  currentUserId={user?.id}
+                  poll={conversationPolls.find(p => p.message_id === msg.id)}
+                  onPollUpdate={(updatedPoll) => {
+                    setConversationPolls(prev => prev.map(p => p.id === updatedPoll.id ? updatedPoll : p));
+                  }}
+                  formatTime={formatTime}
+                />
+              </div>
             ))}
             <div ref={messagesEndRef} />
             

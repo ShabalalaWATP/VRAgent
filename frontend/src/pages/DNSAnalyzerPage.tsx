@@ -64,6 +64,8 @@ import SendIcon from "@mui/icons-material/Send";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import PersonIcon from "@mui/icons-material/Person";
 import ChatIcon from "@mui/icons-material/Chat";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
+import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
 import LanguageIcon from "@mui/icons-material/Language";
 import GppBadIcon from "@mui/icons-material/GppBad";
 import GppGoodIcon from "@mui/icons-material/GppGood";
@@ -75,7 +77,14 @@ import ManageSearchIcon from "@mui/icons-material/ManageSearch";
 import BusinessIcon from "@mui/icons-material/Business";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import RouterIcon from "@mui/icons-material/Router";
+import CloudIcon from "@mui/icons-material/Cloud";
+import SecurityIcon from "@mui/icons-material/Security";
+import BugReportIcon from "@mui/icons-material/BugReport";
+import LinkOffIcon from "@mui/icons-material/LinkOff";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import DeviceHubIcon from "@mui/icons-material/DeviceHub";
 import ReactMarkdown from "react-markdown";
+import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import ForceGraph2D from "react-force-graph-2d";
 import {
   apiClient,
@@ -131,7 +140,22 @@ interface ScanProgress {
   message: string;
 }
 
-// Copy to clipboard helper
+// Simple copy to clipboard utility (for inline handlers)
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // Fallback for older browsers
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  }
+}
+
+// Copy to clipboard hook (for components that need copy state)
 function useCopyToClipboard() {
   const [copied, setCopied] = useState(false);
 
@@ -420,6 +444,7 @@ export default function DNSAnalyzerPage() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatMaximized, setChatMaximized] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   
@@ -581,19 +606,29 @@ export default function DNSAnalyzerPage() {
   };
 
   // Copy all data
-  const handleCopyAll = (dataType: "records" | "subdomains" | "ips") => {
+  const handleCopyAll = async (dataType: "records" | "subdomains" | "ips") => {
     if (!result) return;
     
     let text = "";
     if (dataType === "records") {
-      text = result.records.map((r) => `${r.record_type}\t${r.name}\t${r.value}`).join("\n");
+      text = (result.records || []).map((r) => `${r.record_type}\t${r.name}\t${r.value}`).join("\n");
     } else if (dataType === "subdomains") {
-      text = result.subdomains.map((s) => s.full_domain).join("\n");
+      text = (result.subdomains || []).map((s) => s.full_domain).join("\n");
     } else if (dataType === "ips") {
-      text = result.unique_ips.join("\n");
+      text = (result.unique_ips || []).join("\n");
     }
     
-    navigator.clipboard.writeText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
     setSnackbar({ open: true, message: `Copied ${dataType} to clipboard!` });
   };
 
@@ -621,6 +656,13 @@ export default function DNSAnalyzerPage() {
           subdomains: result.subdomains.slice(0, 20),
           unique_ips: result.unique_ips.slice(0, 20),
           ai_analysis: result.ai_analysis,
+          // Advanced reconnaissance data
+          takeover_risks: result.takeover_risks?.slice(0, 10),
+          dangling_cnames: result.dangling_cnames?.slice(0, 10),
+          cloud_providers: result.cloud_providers?.slice(0, 10),
+          asn_info: result.asn_info?.slice(0, 10),
+          has_wildcard: result.has_wildcard,
+          infrastructure_summary: result.infrastructure_summary,
         },
         chatMessages.map((m) => ({ role: m.role, content: m.content }))
       );
@@ -677,7 +719,7 @@ export default function DNSAnalyzerPage() {
   };
 
   // Copy WHOIS data to clipboard
-  const handleCopyWhoisData = () => {
+  const handleCopyWhoisData = async () => {
     let text = "";
     if (whoisDomainResult) {
       text = `Domain: ${whoisDomainResult.domain}\n`;
@@ -685,7 +727,7 @@ export default function DNSAnalyzerPage() {
       if (whoisDomainResult.creation_date) text += `Created: ${whoisDomainResult.creation_date}\n`;
       if (whoisDomainResult.expiration_date) text += `Expires: ${whoisDomainResult.expiration_date}\n`;
       if (whoisDomainResult.registrant_organization) text += `Organization: ${whoisDomainResult.registrant_organization}\n`;
-      if (whoisDomainResult.name_servers.length) text += `Name Servers: ${whoisDomainResult.name_servers.join(", ")}\n`;
+      if ((whoisDomainResult.name_servers || []).length) text += `Name Servers: ${whoisDomainResult.name_servers.join(", ")}\n`;
     } else if (whoisIPResult) {
       text = `IP: ${whoisIPResult.ip_address}\n`;
       if (whoisIPResult.organization) text += `Organization: ${whoisIPResult.organization}\n`;
@@ -694,7 +736,17 @@ export default function DNSAnalyzerPage() {
       if (whoisIPResult.asn) text += `ASN: ${whoisIPResult.asn}\n`;
       if (whoisIPResult.country) text += `Country: ${whoisIPResult.country}\n`;
     }
-    navigator.clipboard.writeText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
     setSnackbar({ open: true, message: "WHOIS data copied to clipboard!" });
   };
 
@@ -1260,13 +1312,13 @@ export default function DNSAnalyzerPage() {
                     </Button>
                   </Box>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                    {result.unique_ips.map((ip, i) => (
+                    {(result.unique_ips || []).map((ip, i) => (
                       <Chip
                         key={i}
                         label={ip}
                         size="small"
                         sx={{ fontFamily: "monospace" }}
-                        onDelete={() => navigator.clipboard.writeText(ip)}
+                        onDelete={() => copyToClipboard(ip)}
                         deleteIcon={<ContentCopyIcon fontSize="small" />}
                       />
                     ))}
@@ -1333,28 +1385,61 @@ export default function DNSAnalyzerPage() {
               {result.ai_analysis && !result.ai_analysis.error && (
                 <Accordion sx={{ mt: 3 }} defaultExpanded>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="h6" fontWeight={600} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <SmartToyIcon />
-                      AI Security Analysis
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, flex: 1 }}>
+                      <Typography variant="h6" fontWeight={600} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <SmartToyIcon />
+                        AI Security Analysis
+                      </Typography>
+                      {result.ai_analysis.risk_level && (
+                        <Chip
+                          label={result.ai_analysis.risk_level.toUpperCase()}
+                          size="small"
+                          sx={{
+                            bgcolor: alpha(severityColors[result.ai_analysis.risk_level] || "#888", 0.15),
+                            color: severityColors[result.ai_analysis.risk_level] || "#888",
+                            fontWeight: 700,
+                          }}
+                        />
+                      )}
+                      {result.ai_analysis.overall_risk_score !== undefined && (
+                        <Chip
+                          label={`Risk Score: ${result.ai_analysis.overall_risk_score}/100`}
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
                   </AccordionSummary>
                   <AccordionDetails>
                     {/* Executive Summary */}
                     {result.ai_analysis.executive_summary && (
                       <Paper sx={{ p: 2, mb: 3, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Executive Summary</Typography>
-                        <Typography variant="body2">{result.ai_analysis.executive_summary}</Typography>
+                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>📋 Executive Summary</Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{result.ai_analysis.executive_summary}</Typography>
                       </Paper>
                     )}
 
                     {/* Key Findings */}
                     {result.ai_analysis.key_findings && result.ai_analysis.key_findings.length > 0 && (
                       <Box sx={{ mb: 3 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>Key Findings</Typography>
+                        <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>🔍 Key Findings</Typography>
                         {result.ai_analysis.key_findings.map((finding: any, i: number) => (
                           <Paper key={i} sx={{ p: 2, mb: 1, borderLeft: `4px solid ${severityColors[finding.severity] || "#888"}` }}>
-                            <Typography variant="subtitle2" fontWeight={600}>{finding.finding}</Typography>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                              <Typography variant="subtitle2" fontWeight={600}>{finding.finding}</Typography>
+                              {finding.cvss_estimate && (
+                                <Chip label={`CVSS: ${finding.cvss_estimate}`} size="small" variant="outlined" />
+                              )}
+                              {finding.effort && (
+                                <Chip label={`Effort: ${finding.effort}`} size="small" variant="outlined" />
+                              )}
+                            </Box>
                             <Typography variant="body2" color="text.secondary">{finding.description}</Typography>
+                            {finding.impact && (
+                              <Typography variant="body2" sx={{ mt: 1, color: "#dc2626" }}>
+                                ⚠️ Impact: {finding.impact}
+                              </Typography>
+                            )}
                             {finding.recommendation && (
                               <Typography variant="body2" sx={{ mt: 1, color: "#3b82f6" }}>
                                 💡 {finding.recommendation}
@@ -1365,17 +1450,242 @@ export default function DNSAnalyzerPage() {
                       </Box>
                     )}
 
-                    {/* Next Steps */}
+                    {/* Attack Surface Analysis */}
+                    {result.ai_analysis.attack_surface && (
+                      <Accordion sx={{ mb: 2 }}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Typography variant="subtitle2" fontWeight={600}>🎯 Attack Surface Analysis</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          {/* Reconnaissance Value */}
+                          {result.ai_analysis.attack_surface.reconnaissance_value && (
+                            <Alert severity="warning" sx={{ mb: 2 }}>
+                              <Typography variant="body2">
+                                <strong>What an attacker learned:</strong> {result.ai_analysis.attack_surface.reconnaissance_value}
+                              </Typography>
+                            </Alert>
+                          )}
+                          
+                          {/* High Value Targets */}
+                          {result.ai_analysis.attack_surface.high_value_targets && result.ai_analysis.attack_surface.high_value_targets.length > 0 && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>High Value Targets:</Typography>
+                              <Grid container spacing={1}>
+                                {result.ai_analysis.attack_surface.high_value_targets.map((target: any, i: number) => (
+                                  <Grid item xs={12} sm={6} key={i}>
+                                    <Paper sx={{ p: 1.5, bgcolor: alpha("#dc2626", 0.05) }}>
+                                      <Typography variant="body2" fontWeight={600}>{target.target}</Typography>
+                                      <Typography variant="caption" color="text.secondary">{target.reason}</Typography>
+                                      {target.attack_vector && (
+                                        <Typography variant="caption" display="block" sx={{ color: "#f59e0b", mt: 0.5 }}>
+                                          Vector: {target.attack_vector}
+                                        </Typography>
+                                      )}
+                                    </Paper>
+                                  </Grid>
+                                ))}
+                              </Grid>
+                            </Box>
+                          )}
+
+                          {/* Attack Paths */}
+                          {result.ai_analysis.attack_surface.attack_paths && result.ai_analysis.attack_surface.attack_paths.length > 0 && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>Potential Attack Paths:</Typography>
+                              {result.ai_analysis.attack_surface.attack_paths.map((path: any, i: number) => (
+                                <Paper key={i} sx={{ p: 1.5, mb: 1, bgcolor: alpha("#8b5cf6", 0.05) }}>
+                                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                                    <Typography variant="body2" fontWeight={600}>{path.name}</Typography>
+                                    <Chip label={`Likelihood: ${path.likelihood}`} size="small" />
+                                    <Chip label={`Impact: ${path.impact}`} size="small" />
+                                  </Box>
+                                  <Box sx={{ pl: 2 }}>
+                                    {path.steps && path.steps.map((step: string, j: number) => (
+                                      <Typography key={j} variant="caption" display="block" color="text.secondary">
+                                        {j + 1}. {step}
+                                      </Typography>
+                                    ))}
+                                  </Box>
+                                </Paper>
+                              ))}
+                            </Box>
+                          )}
+
+                          {/* Exposed Services */}
+                          {result.ai_analysis.attack_surface.exposed_services && result.ai_analysis.attack_surface.exposed_services.length > 0 && (
+                            <Box>
+                              <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>Exposed Services:</Typography>
+                              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                                {result.ai_analysis.attack_surface.exposed_services.map((service: any, i: number) => (
+                                  <Tooltip key={i} title={typeof service === 'object' ? `${service.location}: ${service.risk}` : service}>
+                                    <Chip 
+                                      label={typeof service === 'object' ? service.service : service} 
+                                      size="small" 
+                                      variant="outlined"
+                                    />
+                                  </Tooltip>
+                                ))}
+                              </Box>
+                            </Box>
+                          )}
+                        </AccordionDetails>
+                      </Accordion>
+                    )}
+
+                    {/* Predicted Subdomains */}
+                    {result.ai_analysis.predicted_subdomains && result.ai_analysis.predicted_subdomains.length > 0 && (
+                      <Paper sx={{ p: 2, mb: 2, bgcolor: alpha("#10b981", 0.05), border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: "#10b981" }}>
+                          🔮 AI Predicted Subdomains (based on naming patterns)
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                          These subdomains may exist based on patterns found in the scan. Consider probing them:
+                        </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                          {result.ai_analysis.predicted_subdomains.map((subdomain: string, i: number) => (
+                            <Chip
+                              key={i}
+                              label={subdomain}
+                              size="small"
+                              sx={{ fontFamily: "monospace" }}
+                              onDelete={() => copyToClipboard(`${subdomain}.${result.domain}`)}
+                              deleteIcon={<ContentCopyIcon fontSize="small" />}
+                            />
+                          ))}
+                        </Box>
+                      </Paper>
+                    )}
+
+                    {/* Remediation Roadmap */}
+                    {result.ai_analysis.remediation_roadmap && (
+                      <Accordion sx={{ mb: 2 }}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Typography variant="subtitle2" fontWeight={600}>🗺️ Remediation Roadmap</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          <Grid container spacing={2}>
+                            {/* Immediate Actions */}
+                            {result.ai_analysis.remediation_roadmap.immediate && result.ai_analysis.remediation_roadmap.immediate.length > 0 && (
+                              <Grid item xs={12} md={4}>
+                                <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.05), height: "100%" }}>
+                                  <Typography variant="body2" fontWeight={700} sx={{ color: "#dc2626", mb: 1 }}>
+                                    🚨 IMMEDIATE (P1)
+                                  </Typography>
+                                  {result.ai_analysis.remediation_roadmap.immediate.map((item: any, i: number) => (
+                                    <Box key={i} sx={{ mb: 1 }}>
+                                      <Typography variant="body2" fontWeight={500}>{item.action}</Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {item.effort} • Addresses: {item.finding}
+                                      </Typography>
+                                    </Box>
+                                  ))}
+                                </Paper>
+                              </Grid>
+                            )}
+                            {/* Short Term */}
+                            {result.ai_analysis.remediation_roadmap.short_term && result.ai_analysis.remediation_roadmap.short_term.length > 0 && (
+                              <Grid item xs={12} md={4}>
+                                <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), height: "100%" }}>
+                                  <Typography variant="body2" fontWeight={700} sx={{ color: "#f59e0b", mb: 1 }}>
+                                    📅 SHORT TERM (P2)
+                                  </Typography>
+                                  {result.ai_analysis.remediation_roadmap.short_term.map((item: any, i: number) => (
+                                    <Box key={i} sx={{ mb: 1 }}>
+                                      <Typography variant="body2" fontWeight={500}>{item.action}</Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {item.effort} • Addresses: {item.finding}
+                                      </Typography>
+                                    </Box>
+                                  ))}
+                                </Paper>
+                              </Grid>
+                            )}
+                            {/* Long Term */}
+                            {result.ai_analysis.remediation_roadmap.long_term && result.ai_analysis.remediation_roadmap.long_term.length > 0 && (
+                              <Grid item xs={12} md={4}>
+                                <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), height: "100%" }}>
+                                  <Typography variant="body2" fontWeight={700} sx={{ color: "#3b82f6", mb: 1 }}>
+                                    📆 LONG TERM (P3)
+                                  </Typography>
+                                  {result.ai_analysis.remediation_roadmap.long_term.map((item: any, i: number) => (
+                                    <Box key={i} sx={{ mb: 1 }}>
+                                      <Typography variant="body2" fontWeight={500}>{item.action}</Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {item.effort} • Addresses: {item.finding}
+                                      </Typography>
+                                    </Box>
+                                  ))}
+                                </Paper>
+                              </Grid>
+                            )}
+                          </Grid>
+                        </AccordionDetails>
+                      </Accordion>
+                    )}
+
+                    {/* Threat Intel Correlation */}
+                    {result.ai_analysis.threat_intel_correlation && (
+                      <Accordion sx={{ mb: 2 }}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Typography variant="subtitle2" fontWeight={600}>🛡️ Threat Intelligence Correlation</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          {result.ai_analysis.threat_intel_correlation.known_attack_patterns && 
+                           result.ai_analysis.threat_intel_correlation.known_attack_patterns.length > 0 && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>Known Attack Patterns (TTPs):</Typography>
+                              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                                {result.ai_analysis.threat_intel_correlation.known_attack_patterns.map((pattern: string, i: number) => (
+                                  <Chip key={i} label={pattern} size="small" color="warning" variant="outlined" />
+                                ))}
+                              </Box>
+                            </Box>
+                          )}
+                          {result.ai_analysis.threat_intel_correlation.relevant_cves && 
+                           result.ai_analysis.threat_intel_correlation.relevant_cves.length > 0 && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>Potentially Relevant CVEs:</Typography>
+                              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                                {result.ai_analysis.threat_intel_correlation.relevant_cves.map((cve: string, i: number) => (
+                                  <Chip key={i} label={cve} size="small" color="error" variant="outlined" />
+                                ))}
+                              </Box>
+                            </Box>
+                          )}
+                          {result.ai_analysis.threat_intel_correlation.apt_relevance && (
+                            <Alert severity="info">
+                              <Typography variant="body2">
+                                <strong>APT Relevance:</strong> {result.ai_analysis.threat_intel_correlation.apt_relevance}
+                              </Typography>
+                            </Alert>
+                          )}
+                        </AccordionDetails>
+                      </Accordion>
+                    )}
+
+                    {/* Next Steps with Tools */}
                     {result.ai_analysis.next_steps && result.ai_analysis.next_steps.length > 0 && (
                       <Box>
-                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Recommended Next Steps</Typography>
+                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>🚀 Recommended Next Steps</Typography>
                         <List dense>
-                          {result.ai_analysis.next_steps.map((step: string, i: number) => (
-                            <ListItem key={i}>
-                              <ListItemIcon sx={{ minWidth: 32 }}>
-                                <CheckCircleIcon fontSize="small" color="success" />
-                              </ListItemIcon>
-                              <ListItemText primary={step} />
+                          {result.ai_analysis.next_steps.map((step: any, i: number) => (
+                            <ListItem key={i} sx={{ flexDirection: "column", alignItems: "flex-start" }}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1, width: "100%" }}>
+                                <ListItemIcon sx={{ minWidth: 32 }}>
+                                  <CheckCircleIcon fontSize="small" color="success" />
+                                </ListItemIcon>
+                                <ListItemText 
+                                  primary={typeof step === 'object' ? step.action : step}
+                                  secondary={typeof step === 'object' && step.reason ? step.reason : null}
+                                />
+                              </Box>
+                              {typeof step === 'object' && step.tools && step.tools.length > 0 && (
+                                <Box sx={{ pl: 5, mt: 0.5 }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Tools: {step.tools.join(", ")}
+                                  </Typography>
+                                </Box>
+                              )}
                             </ListItem>
                           ))}
                         </List>
@@ -1383,6 +1693,413 @@ export default function DNSAnalyzerPage() {
                     )}
                   </AccordionDetails>
                 </Accordion>
+              )}
+
+              {/* ===== ADVANCED RECONNAISSANCE SECTION ===== */}
+              
+              {/* Infrastructure Summary Card */}
+              {result.infrastructure_summary && Object.keys(result.infrastructure_summary).length > 0 && (
+                <Paper sx={{ p: 3, mt: 3, bgcolor: alpha("#6366f1", 0.05), border: `1px solid ${alpha("#6366f1", 0.2)}` }}>
+                  <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, display: "flex", alignItems: "center", gap: 1 }}>
+                    <DeviceHubIcon sx={{ color: "#6366f1" }} />
+                    Infrastructure Summary
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6} sm={4} md={2}>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="h4" fontWeight={700} color="primary">
+                          {result.infrastructure_summary.total_unique_ips || 0}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">Unique IPs</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={4} md={2}>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="h4" fontWeight={700} color="secondary">
+                          {result.infrastructure_summary.total_asns || 0}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">ASNs Detected</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={4} md={2}>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="h4" fontWeight={700} sx={{ color: "#dc2626" }}>
+                          {result.infrastructure_summary.potential_takeovers || 0}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">Takeover Risks</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={4} md={2}>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="h4" fontWeight={700} sx={{ color: "#f59e0b" }}>
+                          {result.infrastructure_summary.dangling_records || 0}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">Dangling CNAMEs</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={4} md={2}>
+                      <Box sx={{ textAlign: "center" }}>
+                        {result.infrastructure_summary.cdn_usage ? (
+                          <CheckCircleIcon sx={{ fontSize: 40, color: "#22c55e" }} />
+                        ) : (
+                          <ErrorIcon sx={{ fontSize: 40, color: "#888" }} />
+                        )}
+                        <Typography variant="caption" color="text.secondary" display="block">CDN Detected</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} sm={4} md={2}>
+                      <Box sx={{ textAlign: "center" }}>
+                        {result.infrastructure_summary.has_wildcard ? (
+                          <WarningIcon sx={{ fontSize: 40, color: "#f59e0b" }} />
+                        ) : (
+                          <CheckCircleIcon sx={{ fontSize: 40, color: "#22c55e" }} />
+                        )}
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {result.infrastructure_summary.has_wildcard ? "Wildcard DNS" : "No Wildcard"}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                  {result.infrastructure_summary.cloud_providers_detected && result.infrastructure_summary.cloud_providers_detected.length > 0 && (
+                    <Box sx={{ mt: 2, display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                      <Typography variant="body2" color="text.secondary">Cloud Providers:</Typography>
+                      {result.infrastructure_summary.cloud_providers_detected.map((provider: string, i: number) => (
+                        <Chip key={i} label={provider} size="small" icon={<CloudIcon />} sx={{ bgcolor: alpha("#3b82f6", 0.1) }} />
+                      ))}
+                    </Box>
+                  )}
+                </Paper>
+              )}
+
+              {/* Subdomain Takeover Risks */}
+              {result.takeover_risks && result.takeover_risks.length > 0 && (
+                <Accordion sx={{ mt: 3 }} defaultExpanded>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, flex: 1 }}>
+                      <Typography variant="h6" fontWeight={600} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <BugReportIcon sx={{ color: "#dc2626" }} />
+                        Subdomain Takeover Risks ({result.takeover_risks.length})
+                      </Typography>
+                      {result.takeover_risks.some(r => r.is_vulnerable) && (
+                        <Chip label="VULNERABLE" size="small" color="error" />
+                      )}
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                      Subdomain takeover occurs when a subdomain points to an unclaimed external service. Attackers can claim these services and serve malicious content.
+                    </Alert>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Subdomain</TableCell>
+                            <TableCell>CNAME Target</TableCell>
+                            <TableCell>Provider</TableCell>
+                            <TableCell>Risk Level</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Reason</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {result.takeover_risks.map((risk, i) => (
+                            <TableRow key={i} hover sx={{ bgcolor: risk.is_vulnerable ? alpha("#dc2626", 0.05) : "inherit" }}>
+                              <TableCell sx={{ fontFamily: "monospace", fontWeight: 500 }}>
+                                {risk.subdomain}
+                              </TableCell>
+                              <TableCell sx={{ fontFamily: "monospace" }}>
+                                {risk.cname_target}
+                              </TableCell>
+                              <TableCell>
+                                <Chip label={risk.provider} size="small" />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={risk.risk_level.toUpperCase()}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: alpha(severityColors[risk.risk_level] || "#888", 0.15),
+                                    color: severityColors[risk.risk_level] || "#888",
+                                    fontWeight: 700,
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {risk.is_vulnerable ? (
+                                  <Chip label="VULNERABLE" size="small" color="error" icon={<WarningIcon />} />
+                                ) : (
+                                  <Chip label="Potential Risk" size="small" color="warning" variant="outlined" />
+                                )}
+                              </TableCell>
+                              <TableCell>{risk.reason}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Dangling CNAMEs */}
+              {result.dangling_cnames && result.dangling_cnames.length > 0 && (
+                <Accordion sx={{ mt: 3 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="h6" fontWeight={600} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <LinkOffIcon sx={{ color: "#f59e0b" }} />
+                      Dangling CNAMEs ({result.dangling_cnames.length})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                      Dangling CNAMEs point to targets that do not resolve. These can indicate misconfiguration or potential takeover opportunities.
+                    </Alert>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Subdomain</TableCell>
+                            <TableCell>CNAME Target</TableCell>
+                            <TableCell>Error</TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {result.dangling_cnames.map((cname, i) => (
+                            <TableRow key={i} hover>
+                              <TableCell sx={{ fontFamily: "monospace", fontWeight: 500 }}>
+                                {cname.subdomain}
+                              </TableCell>
+                              <TableCell sx={{ fontFamily: "monospace" }}>
+                                {cname.cname}
+                              </TableCell>
+                              <TableCell sx={{ color: "error.main" }}>
+                                {cname.error}
+                              </TableCell>
+                              <TableCell>
+                                <CopyButton text={cname.subdomain} />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Cloud Providers Detected */}
+              {result.cloud_providers && result.cloud_providers.length > 0 && (
+                <Accordion sx={{ mt: 3 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="h6" fontWeight={600} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <CloudIcon sx={{ color: "#3b82f6" }} />
+                      Cloud Providers Detected ({result.cloud_providers.length})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
+                      {result.cloud_providers.map((cp, i) => (
+                        <Grid item xs={12} sm={6} md={4} key={i}>
+                          <Card sx={{ bgcolor: alpha("#3b82f6", 0.05), border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+                            <CardContent sx={{ pb: "16px !important" }}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                                <CloudIcon sx={{ color: "#3b82f6" }} />
+                                <Typography variant="subtitle2" fontWeight={600}>
+                                  {cp.provider.toUpperCase()}
+                                </Typography>
+                                {cp.is_cdn && <Chip label="CDN" size="small" color="info" />}
+                              </Box>
+                              <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 0.5 }}>
+                                {cp.ip_or_domain}
+                              </Typography>
+                              {cp.service && (
+                                <Typography variant="caption" color="text.secondary">
+                                  Service: {cp.service}
+                                </Typography>
+                              )}
+                              {cp.region && (
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  Region: {cp.region}
+                                </Typography>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* ASN Information */}
+              {result.asn_info && result.asn_info.length > 0 && (
+                <Accordion sx={{ mt: 3 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="h6" fontWeight={600} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <HubIcon sx={{ color: "#10b981" }} />
+                      ASN / BGP Information ({result.asn_info.length})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>IP Address</TableCell>
+                            <TableCell>ASN</TableCell>
+                            <TableCell>Organization</TableCell>
+                            <TableCell>Country</TableCell>
+                            <TableCell>Network Range</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {result.asn_info.map((asn, i) => (
+                            <TableRow key={i} hover>
+                              <TableCell sx={{ fontFamily: "monospace", fontWeight: 500 }}>
+                                {asn.ip_address}
+                              </TableCell>
+                              <TableCell>
+                                {asn.asn ? (
+                                  <Chip label={asn.asn} size="small" sx={{ fontFamily: "monospace" }} />
+                                ) : "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Box>
+                                  {asn.asn_name && <Typography variant="body2" fontWeight={500}>{asn.asn_name}</Typography>}
+                                  {asn.organization && asn.organization !== asn.asn_name && (
+                                    <Typography variant="caption" color="text.secondary">{asn.organization}</Typography>
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell>{asn.country || "-"}</TableCell>
+                              <TableCell sx={{ fontFamily: "monospace" }}>
+                                {asn.network_range || "-"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Certificate Transparency Logs */}
+              {result.ct_logs && result.ct_logs.length > 0 && (
+                <Accordion sx={{ mt: 3 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="h6" fontWeight={600} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <VerifiedUserIcon sx={{ color: "#8b5cf6" }} />
+                      Certificate Transparency Logs ({result.ct_logs.length})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      CT logs reveal SSL certificates issued for this domain, which can help discover subdomains and track certificate issuance.
+                    </Alert>
+                    <TableContainer sx={{ maxHeight: 400 }}>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Common Name</TableCell>
+                            <TableCell>Issuer</TableCell>
+                            <TableCell>Valid From</TableCell>
+                            <TableCell>Valid Until</TableCell>
+                            <TableCell>SAN Entries</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {result.ct_logs.map((cert, i) => (
+                            <TableRow key={i} hover>
+                              <TableCell sx={{ fontFamily: "monospace", fontWeight: 500 }}>
+                                {cert.common_name}
+                              </TableCell>
+                              <TableCell>{cert.issuer}</TableCell>
+                              <TableCell>{cert.not_before}</TableCell>
+                              <TableCell>{cert.not_after}</TableCell>
+                              <TableCell>
+                                <Tooltip title={cert.san_names.join(", ")}>
+                                  <Chip label={`${cert.san_names.length} names`} size="small" variant="outlined" />
+                                </Tooltip>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Wildcard DNS Detection */}
+              {result.has_wildcard && (
+                <Alert 
+                  severity="warning" 
+                  sx={{ mt: 3 }}
+                  icon={<SecurityIcon />}
+                >
+                  <Typography variant="subtitle2" fontWeight={700}>Wildcard DNS Detected</Typography>
+                  <Typography variant="body2">
+                    This domain has wildcard DNS configured, meaning any subdomain will resolve.
+                    This can make subdomain enumeration less reliable and may indicate a catch-all configuration.
+                  </Typography>
+                  {result.wildcard_ips && result.wildcard_ips.length > 0 && (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Wildcard resolves to: {result.wildcard_ips.join(", ")}
+                      </Typography>
+                    </Box>
+                  )}
+                </Alert>
+              )}
+
+              {/* BIMI and MTA-STS indicators in Email Security */}
+              {result.security && (result.security.has_bimi || result.security.has_mta_sts) && (
+                <Paper sx={{ p: 2, mt: 3, bgcolor: alpha("#10b981", 0.05), border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, color: "#10b981", display: "flex", alignItems: "center", gap: 1 }}>
+                    <EmailIcon fontSize="small" />
+                    Advanced Email Security
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Chip
+                          icon={result.security.has_bimi ? <CheckCircleIcon /> : <ErrorIcon />}
+                          label="BIMI"
+                          color={result.security.has_bimi ? "success" : "default"}
+                          variant={result.security.has_bimi ? "filled" : "outlined"}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          Brand Indicators for Message Identification
+                        </Typography>
+                      </Box>
+                      {result.security.bimi_record && (
+                        <Typography variant="caption" sx={{ fontFamily: "monospace", mt: 1, display: "block" }}>
+                          {result.security.bimi_record}
+                        </Typography>
+                      )}
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Chip
+                          icon={result.security.has_mta_sts ? <CheckCircleIcon /> : <ErrorIcon />}
+                          label="MTA-STS"
+                          color={result.security.has_mta_sts ? "success" : "default"}
+                          variant={result.security.has_mta_sts ? "filled" : "outlined"}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          Mail Transfer Agent Strict Transport Security
+                        </Typography>
+                      </Box>
+                      {result.security.mta_sts_record && (
+                        <Typography variant="caption" sx={{ fontFamily: "monospace", mt: 1, display: "block" }}>
+                          {result.security.mta_sts_record}
+                        </Typography>
+                      )}
+                    </Grid>
+                  </Grid>
+                </Paper>
               )}
             </Box>
           )}
@@ -1987,40 +2704,46 @@ export default function DNSAnalyzerPage() {
         <Paper
           sx={{
             position: "fixed",
-            bottom: 0,
-            right: 24,
-            width: chatOpen ? 450 : 200,
-            maxHeight: chatOpen ? "60vh" : "auto",
+            bottom: 16,
+            right: 16,
+            left: chatMaximized ? { xs: 16, md: 256 } : "auto",
+            width: chatMaximized ? "auto" : chatOpen ? { xs: "calc(100% - 32px)", sm: 400 } : 200,
+            maxWidth: chatMaximized ? "none" : 400,
             zIndex: 1200,
-            borderRadius: "12px 12px 0 0",
+            borderRadius: 3,
             boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
             overflow: "hidden",
-            transition: "all 0.3s ease",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
           {/* Chat Header */}
           <Box
-            onClick={() => setChatOpen(!chatOpen)}
             sx={{
               p: 2,
               bgcolor: theme.palette.primary.main,
               color: "white",
-              cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              "&:hover": { bgcolor: theme.palette.primary.dark },
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box 
+              sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer", flex: 1 }}
+              onClick={() => setChatOpen(!chatOpen)}
+            >
               <ChatIcon />
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 Ask About DNS Results
               </Typography>
             </Box>
-            <IconButton size="small" sx={{ color: "white" }}>
-              {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-            </IconButton>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <IconButton size="small" sx={{ color: "white" }} onClick={() => setChatMaximized(!chatMaximized)}>
+                {chatMaximized ? <CloseFullscreenIcon /> : <OpenInFullIcon />}
+              </IconButton>
+              <IconButton size="small" sx={{ color: "white" }} onClick={() => setChatOpen(!chatOpen)}>
+                {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+              </IconButton>
+            </Box>
           </Box>
 
           {/* Chat Content */}
@@ -2028,11 +2751,11 @@ export default function DNSAnalyzerPage() {
             {/* Messages Area */}
             <Box
               sx={{
-                height: "calc(60vh - 140px)",
-                maxHeight: 400,
+                height: chatMaximized ? "calc(66vh - 120px)" : 280,
                 overflowY: "auto",
                 p: 2,
                 bgcolor: alpha(theme.palette.background.default, 0.5),
+                transition: "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
               {/* Welcome message */}
@@ -2044,10 +2767,12 @@ export default function DNSAnalyzerPage() {
                   </Typography>
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     {[
-                      "What security risks did you find?",
-                      "Explain the email security score",
-                      "What subdomains are most interesting?",
-                      "Summarize the DNS configuration",
+                      "What are the most critical vulnerabilities?",
+                      "How would an attacker exploit this?",
+                      "Explain the subdomain takeover risks",
+                      "Generate a penetration testing plan",
+                      "What's the remediation priority?",
+                      "Predict additional subdomains to probe",
                     ].map((suggestion, i) => (
                       <Chip
                         key={i}
@@ -2106,18 +2831,22 @@ export default function DNSAnalyzerPage() {
                         borderRadius: 2,
                         "& p": { m: 0 },
                         "& p:not(:last-child)": { mb: 1 },
-                        "& code": {
-                          bgcolor: alpha(msg.role === "user" ? "#fff" : theme.palette.primary.main, 0.2),
-                          px: 0.5,
-                          borderRadius: 0.5,
-                          fontFamily: "monospace",
-                          fontSize: "0.85em",
-                        },
                         "& ul, & ol": { pl: 2, m: 0 },
                         "& li": { mb: 0.5 },
+                        "& strong": { fontWeight: 600 },
                       }}
                     >
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown
+                        components={{
+                          code: ({ className, children }) => (
+                            <ChatCodeBlock className={className} theme={theme}>
+                              {children}
+                            </ChatCodeBlock>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </Paper>
                   </Box>
                 </Box>

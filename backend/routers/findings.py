@@ -8,9 +8,54 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from backend.core.database import get_db
-from backend.models.models import Finding, FindingNote, ProjectNote, Project, User
+from backend.core.auth import get_current_user
+from backend.models.models import Finding, FindingNote, ProjectNote, Project, User, ProjectCollaborator
 
 router = APIRouter(prefix="/findings", tags=["findings"])
+
+
+def _verify_finding_access(db: Session, finding_id: int, user_id: int) -> Finding:
+    """Verify user has access to the finding's project."""
+    finding = db.get(Finding, finding_id)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    
+    project = db.query(Project).filter(Project.id == finding.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.owner_id == user_id:
+        return finding
+    
+    collaborator = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == project.id,
+        ProjectCollaborator.user_id == user_id
+    ).first()
+    
+    if not collaborator:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    return finding
+
+
+def _verify_project_access(db: Session, project_id: int, user_id: int) -> Project:
+    """Verify user has access to the project."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.owner_id == user_id:
+        return project
+    
+    collaborator = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == project_id,
+        ProjectCollaborator.user_id == user_id
+    ).first()
+    
+    if not collaborator:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    return project
 
 
 # ============================================================================
@@ -74,13 +119,12 @@ class NoteSummary(BaseModel):
 def get_finding_notes(
     finding_id: int,
     note_type: Optional[str] = Query(None, description="Filter by note type"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all notes for a specific finding."""
-    # Verify finding exists
-    finding = db.get(Finding, finding_id)
-    if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+    # Verify finding exists and user has access
+    finding = _verify_finding_access(db, finding_id, current_user.id)
     
     query = db.query(FindingNote).filter(FindingNote.finding_id == finding_id)
     
@@ -96,13 +140,12 @@ def get_finding_notes(
 def create_finding_note(
     finding_id: int,
     note_data: NoteCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new note for a finding."""
-    # Verify finding exists
-    finding = db.get(Finding, finding_id)
-    if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+    # Verify finding exists and user has access
+    finding = _verify_finding_access(db, finding_id, current_user.id)
     
     # Validate note_type
     valid_types = ["comment", "remediation", "false_positive", "accepted_risk", "in_progress"]
@@ -130,12 +173,16 @@ def create_finding_note(
 def update_finding_note(
     note_id: int,
     note_data: NoteUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Update an existing note."""
     note = db.get(FindingNote, note_id)
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Verify user has access to the finding's project
+    _verify_finding_access(db, note.finding_id, current_user.id)
     
     if note_data.content is not None:
         note.content = note_data.content
@@ -161,12 +208,16 @@ def update_finding_note(
 @router.delete("/notes/{note_id}", status_code=204)
 def delete_finding_note(
     note_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Delete a note."""
     note = db.get(FindingNote, note_id)
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Verify user has access to the finding's project
+    _verify_finding_access(db, note.finding_id, current_user.id)
     
     db.delete(note)
     db.commit()
@@ -175,9 +226,13 @@ def delete_finding_note(
 @router.get("/project/{project_id}/notes-summary", response_model=NoteSummary)
 def get_project_notes_summary(
     project_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get summary of all notes across a project's findings."""
+    # Verify user has access to the project
+    _verify_project_access(db, project_id, current_user.id)
+    
     # Get all notes for findings in this project
     all_notes = (
         db.query(FindingNote)
@@ -207,9 +262,12 @@ def get_findings_with_notes(
     project_id: int,
     has_notes: Optional[bool] = Query(None, description="Filter to findings with/without notes"),
     note_type: Optional[str] = Query(None, description="Filter by note type"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all findings for a project with their notes."""
+    _verify_project_access(db, project_id, current_user.id)
+    
     findings = (
         db.query(Finding)
         .filter(Finding.project_id == project_id)
@@ -301,13 +359,11 @@ class ProjectNoteResponse(BaseModel):
 def get_project_notes(
     project_id: int,
     note_type: Optional[str] = Query(None, description="Filter by note type"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all general notes for a project (not tied to findings)."""
-    # Verify project exists
-    project = db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    _verify_project_access(db, project_id, current_user.id)
     
     query = db.query(ProjectNote).filter(ProjectNote.project_id == project_id)
     
@@ -323,13 +379,11 @@ def get_project_notes(
 def create_project_note(
     project_id: int,
     note_data: ProjectNoteCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new general note for a project."""
-    # Verify project exists
-    project = db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    _verify_project_access(db, project_id, current_user.id)
     
     # Validate note_type
     valid_types = ["general", "todo", "important", "reference"]
@@ -358,12 +412,15 @@ def create_project_note(
 def update_project_note(
     note_id: int,
     note_data: ProjectNoteUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Update an existing project note."""
     note = db.get(ProjectNote, note_id)
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
+    
+    _verify_project_access(db, note.project_id, current_user.id)
     
     if note_data.title is not None:
         note.title = note_data.title
@@ -392,12 +449,15 @@ def update_project_note(
 @router.delete("/project-notes/{note_id}", status_code=204)
 def delete_project_note(
     note_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Delete a project note."""
     note = db.get(ProjectNote, note_id)
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
+    
+    _verify_project_access(db, note.project_id, current_user.id)
     
     db.delete(note)
     db.commit()

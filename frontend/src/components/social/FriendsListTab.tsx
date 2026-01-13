@@ -80,7 +80,7 @@ export default function FriendsListTab({ onStartChat }: FriendsListTabProps) {
     try {
       const response = await fetch('/api/social/presence/friends/all', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`,
         },
       });
       if (response.ok) {

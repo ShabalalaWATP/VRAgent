@@ -101,6 +101,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import AppleIcon from "@mui/icons-material/Apple";
 import ViewInArIcon from "@mui/icons-material/ViewInAr";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
+import AnalyticsIcon from "@mui/icons-material/Analytics";
 
 interface LearnCard {
   title: string;
@@ -126,21 +127,13 @@ interface CategorySection {
 // ========== CATEGORY: About VRAgent ==========
 const appCards: LearnCard[] = [
   {
-    title: "How Scanning Works",
-    description: "Discover the 11-phase pipeline VRAgent uses to scan your code, from git cloning through AI analysis.",
+    title: "Security Scan & AI Analysis Guide",
+    description: "Complete guide to VRAgent's 10-phase scanning pipeline, 11 SAST scanners, and AI-powered analysis with Agentic corroboration, attack chains, and exploit scenarios.",
     icon: <SecurityIcon sx={{ fontSize: 40 }} />,
     path: "/learn/scanning",
     color: "#3b82f6",
-    tags: ["SAST", "SCA", "SBOM", "Secrets"],
+    tags: ["SAST", "Gemini AI", "Agentic", "Multi-Pass"],
     badge: "Start Here",
-  },
-  {
-    title: "AI Analysis Explained",
-    description: "Multi-pass deep scanning, Agentic AI corroboration, exploit scenarios, and how Gemini transforms findings into intelligence.",
-    icon: <PsychologyIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/ai-analysis",
-    color: "#8b5cf6",
-    tags: ["Gemini AI", "Multi-Pass", "Agentic"],
   },
   {
     title: "VRAgent Architecture",
@@ -152,11 +145,11 @@ const appCards: LearnCard[] = [
   },
   {
     title: "Network Analysis Hub Guide",
-    description: "Learn what the Network Analysis Hub does: 8 tools including Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Fuzzer, and MITM.",
+    description: "Learn what the Network Analysis Hub does: 10 tools including Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Security Fuzzer, Agentic Fuzzer, Binary Fuzzer, and MITM.",
     icon: <HubIcon sx={{ fontSize: 40 }} />,
     path: "/learn/network-hub",
     color: "#0ea5e9",
-    tags: ["Nmap", "PCAP", "API Tester"],
+    tags: ["Nmap", "PCAP", "API Tester", "Fuzzing"],
   },
   {
     title: "Wireshark PCAP Guide",
@@ -207,12 +200,12 @@ const appCards: LearnCard[] = [
     tags: ["CIDR Scanning", "JWT", "WebSocket"],
   },
   {
-    title: "Fuzzer Tool Guide",
-    description: "VRAgent's Fuzzing Tool: Smart Detection, session management, payload modes, and vulnerability analysis.",
+    title: "Fuzzing Tools Guide",
+    description: "Master all VRAgent fuzzers: Security Fuzzer, Agentic Fuzzer & Binary Fuzzer with Smart Detection.",
     icon: <RadarIcon sx={{ fontSize: 40 }} />,
     path: "/learn/fuzzing-tool",
     color: "#f97316",
-    tags: ["Smart Detection", "Sessions", "Payloads"],
+    tags: ["Security Fuzzer", "Agentic Fuzzer", "Binary Fuzzer"],
   },
   {
     title: "MITM Workbench Guide",
@@ -253,6 +246,14 @@ const appCards: LearnCard[] = [
     path: "/learn/docker-forensics",
     color: "#0ea5e9",
     tags: ["Layers", "Secrets", "Risk"],
+  },
+  {
+    title: "Combined Analysis Guide",
+    description: "Merge security scans, network reports, RE findings, and fuzzing sessions into one AI-powered report with 9 specialized agents.",
+    icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/combined-analysis",
+    color: "#8b5cf6",
+    tags: ["AI Report", "Cross-Correlation", "9 Agents"],
   },
 ];
 
@@ -1756,6 +1757,148 @@ export default function LearnHubPage() {
               </Popper>
             </Box>
           </Box>
+
+          {/* Quick Access to Tool Hubs */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 3,
+              mb: 4,
+              borderRadius: 3,
+              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
+              border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <RocketLaunchIcon sx={{ color: theme.palette.primary.main }} />
+              Quick Access to Tool Hubs
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <Card
+                  sx={{
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    border: `1px solid ${alpha("#6366f1", 0.2)}`,
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                      boxShadow: `0 4px 20px ${alpha("#6366f1", 0.2)}`,
+                      borderColor: "#6366f1",
+                    },
+                  }}
+                  onClick={() => navigate("/")}
+                >
+                  <CardActionArea sx={{ p: 2 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Box
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 2,
+                          bgcolor: alpha("#6366f1", 0.1),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <FolderSpecialIcon sx={{ fontSize: 28, color: "#6366f1" }} />
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          Projects
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Manage & scan your repositories
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </CardActionArea>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Card
+                  sx={{
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    border: `1px solid ${alpha("#0ea5e9", 0.2)}`,
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                      boxShadow: `0 4px 20px ${alpha("#0ea5e9", 0.2)}`,
+                      borderColor: "#0ea5e9",
+                    },
+                  }}
+                  onClick={() => navigate("/network")}
+                >
+                  <CardActionArea sx={{ p: 2 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Box
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 2,
+                          bgcolor: alpha("#0ea5e9", 0.1),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <HubIcon sx={{ fontSize: 28, color: "#0ea5e9" }} />
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          Network Analysis Hub
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Nmap, PCAP, SSL, DNS, API Tester
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </CardActionArea>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Card
+                  sx={{
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    border: `1px solid ${alpha("#a855f7", 0.2)}`,
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                      boxShadow: `0 4px 20px ${alpha("#a855f7", 0.2)}`,
+                      borderColor: "#a855f7",
+                    },
+                  }}
+                  onClick={() => navigate("/reverse")}
+                >
+                  <CardActionArea sx={{ p: 2 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Box
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 2,
+                          bgcolor: alpha("#a855f7", 0.1),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <BuildIcon sx={{ fontSize: 28, color: "#a855f7" }} />
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          Reverse Engineering Hub
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          APK, Binary, Docker analysis
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </CardActionArea>
+                </Card>
+              </Grid>
+            </Grid>
+          </Paper>
 
           {/* Quick Jump Chips - Horizontal scroll on mobile */}
           <Box

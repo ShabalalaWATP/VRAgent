@@ -19454,11 +19454,16 @@ Sample Meaningful Class Names:
         for pattern in base_result.string_encryption:
             analysis_context += f"- {pattern.pattern_type}: {pattern.description} (occurrences: {pattern.occurrences})\n"
         
+        # Safely access native_protection attributes with fallbacks
+        native_prot = base_result.native_protection
+        native_libs = getattr(native_prot, 'native_lib_names', None) or getattr(native_prot, 'native_libs', []) or []
+        protection_indicators = getattr(native_prot, 'protection_indicators', []) or []
+        
         analysis_context += f"""
 === NATIVE PROTECTION ===
-Has Native Libs: {base_result.native_protection.has_native_libs}
-Native Libraries: {', '.join(base_result.native_protection.native_libs[:5])}
-Protection Indicators: {', '.join(base_result.native_protection.protection_indicators[:3])}
+Has Native Libs: {getattr(native_prot, 'has_native_libs', False)}
+Native Libraries: {', '.join(native_libs[:5]) if native_libs else 'None'}
+Protection Indicators: {', '.join(protection_indicators[:3]) if protection_indicators else 'None'}
 """
         
         if obfuscated_code_samples:
@@ -26303,53 +26308,69 @@ async def verify_findings_unified(
     source_cache = {}
     
     def get_source_context(finding: Dict[str, Any]) -> str:
-        """Get source code context around a finding."""
-        file_path = finding.get("file_path") or finding.get("affected_class") or finding.get("class") or ""
-        if not file_path:
-            return finding.get("code_snippet", "")
-        
-        # Try to find and read the file
-        if file_path in source_cache:
-            source_lines = source_cache[file_path]
-        else:
-            # Try multiple path resolutions
-            potential_paths = [
-                sources_dir / file_path,
-                sources_dir / file_path.replace(".", "/") + ".java",
-                sources_dir / "sources" / file_path,
-            ]
+        """Get source code context around a finding with robust error handling."""
+        try:
+            file_path = finding.get("file_path") or finding.get("affected_class") or finding.get("class") or ""
+            if not file_path:
+                return finding.get("code_snippet", "") or ""
             
-            source_lines = None
-            for p in potential_paths:
-                if p.exists():
+            # Ensure file_path is a string
+            file_path = str(file_path)
+            
+            # Try to find and read the file
+            if file_path in source_cache:
+                source_lines = source_cache[file_path]
+            else:
+                # Build potential paths safely
+                potential_paths = []
+                try:
+                    potential_paths.append(sources_dir / file_path)
+                    # Safely build .java path
+                    java_path = file_path.replace(".", "/") + ".java"
+                    potential_paths.append(sources_dir / java_path)
+                    potential_paths.append(sources_dir / "sources" / file_path)
+                except Exception:
+                    pass
+                
+                source_lines = None
+                for p in potential_paths:
                     try:
-                        source_lines = p.read_text(encoding='utf-8', errors='ignore').split('\n')
-                        source_cache[file_path] = source_lines
-                        break
-                    except:
+                        if p.exists():
+                            source_lines = p.read_text(encoding='utf-8', errors='ignore').split('\n')
+                            source_cache[file_path] = source_lines
+                            break
+                    except Exception:
+                        continue
+                
+                if source_lines is None:
+                    # Try globbing
+                    try:
+                        pattern = f"**/{file_path.split('/')[-1]}" if "/" in file_path else f"**/{file_path}.java"
+                        matches = list(sources_dir.rglob(pattern))
+                        if matches:
+                            source_lines = matches[0].read_text(encoding='utf-8', errors='ignore').split('\n')
+                            source_cache[file_path] = source_lines
+                    except Exception:
                         pass
             
-            if source_lines is None:
-                # Try globbing
-                pattern = f"**/{file_path.split('/')[-1]}" if "/" in file_path else f"**/{file_path}.java"
-                matches = list(sources_dir.rglob(pattern))
-                if matches:
-                    try:
-                        source_lines = matches[0].read_text(encoding='utf-8', errors='ignore').split('\n')
-                        source_cache[file_path] = source_lines
-                    except:
-                        pass
-        
-        if not source_lines:
-            return finding.get("code_snippet", "")
-        
-        # Get lines around the finding
-        line_num = finding.get("line") or finding.get("line_number") or 0
-        start = max(0, line_num - 15)
-        end = min(len(source_lines), line_num + 15)
-        
-        context = '\n'.join(f"{i+1}: {line}" for i, line in enumerate(source_lines[start:end], start=start))
-        return context[:5000]  # FIX #5: Increased from 3000 for better verification context
+            if not source_lines:
+                return finding.get("code_snippet", "") or ""
+            
+            # Get lines around the finding
+            line_num = finding.get("line") or finding.get("line_number") or 0
+            if not isinstance(line_num, int):
+                try:
+                    line_num = int(line_num)
+                except (ValueError, TypeError):
+                    line_num = 0
+            start = max(0, line_num - 15)
+            end = min(len(source_lines), line_num + 15)
+            
+            context = '\n'.join(f"{i+1}: {line}" for i, line in enumerate(source_lines[start:end], start=start))
+            return context[:5000]  # Increased for better verification context
+        except Exception as e:
+            logger.debug(f"Error getting source context: {e}")
+            return finding.get("code_snippet", "") or ""
     
     # ========================================================================
     # Step 3: Process findings in batches with AI verification
@@ -26800,20 +26821,21 @@ async def enhanced_security_analysis(
             
             if libraries:
                 # Lookup CVEs for detected libraries
-                cve_result = await lookup_apk_cves(libraries)
+                # lookup_apk_cves returns List[Dict] directly, not a dict with "cves" key
+                cve_results = await lookup_apk_cves(libraries)
                 
                 # Convert CVE findings to unified format
-                for cve in cve_result.get("cves", []):
+                for cve in cve_results:
                     cve_finding = {
                         "source": "cve",
                         "detection_method": "OSV.dev CVE database lookup",
-                        "title": f"CVE in {cve.get('affected_library', 'Unknown')}",
-                        "severity": _cvss_to_severity(cve.get("cvss_score", 0)),
+                        "title": f"CVE in {cve.get('library', 'Unknown')}",
+                        "severity": cve.get("severity", "medium"),
                         "category": "Known Vulnerability",
                         "cve_id": cve.get("cve_id", ""),
                         "description": cve.get("summary", ""),
-                        "affected_library": cve.get("affected_library", ""),
-                        "affected_versions": cve.get("affected_versions", ""),
+                        "affected_library": cve.get("library", ""),
+                        "affected_versions": cve.get("affected_versions", []),
                         "fixed_version": cve.get("fixed_version", ""),
                         "cvss_score": cve.get("cvss_score", 0),
                         "exploitation_potential": cve.get("exploitation_potential", ""),

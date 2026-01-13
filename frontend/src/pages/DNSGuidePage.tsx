@@ -26,7 +26,10 @@ import {
   Link as MuiLink,
   Divider,
   Button,
+  Tabs,
+  Tab,
 } from "@mui/material";
+import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -51,6 +54,30 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import CloudIcon from "@mui/icons-material/Cloud";
+import LinkOffIcon from "@mui/icons-material/LinkOff";
+import VerifiedIcon from "@mui/icons-material/Verified";
+import HubIcon from "@mui/icons-material/Hub";
+import GppMaybeIcon from "@mui/icons-material/GppMaybe";
+import TuneIcon from "@mui/icons-material/Tune";
+import MapIcon from "@mui/icons-material/Map";
+import BadgeIcon from "@mui/icons-material/Badge";
+
+// Tab panel component
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div role="tabpanel" hidden={value !== index} {...other}>
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+}
 
 // DNS Record Types reference
 const DNS_RECORD_TYPES = [
@@ -137,9 +164,94 @@ const ZONE_TRANSFER_INFO = {
   testCommand: "dig @ns1.example.com example.com AXFR",
 };
 
+// VRAgent DNS Scan Types
+const DNS_SCAN_TYPES = [
+  {
+    id: "quick",
+    name: "Quick Scan",
+    description: "Basic DNS records only (A, AAAA, MX, NS, TXT)",
+    time: "5-15 sec",
+    features: ["Basic record types", "No subdomain enumeration"],
+    color: "#10b981",
+  },
+  {
+    id: "standard",
+    name: "Standard Scan",
+    description: "All record types + top 50 subdomains + security check",
+    time: "30-90 sec",
+    features: ["All DNS record types", "Top 50 subdomains", "Email security check", "Zone transfer test"],
+    color: "#3b82f6",
+  },
+  {
+    id: "thorough",
+    name: "Thorough Scan",
+    description: "All records + 150 subdomains + full security analysis",
+    time: "2-5 min",
+    features: ["All DNS records", "150+ subdomains", "Full security analysis", "Takeover detection", "Cloud provider detection"],
+    color: "#8b5cf6",
+  },
+  {
+    id: "subdomain_focus",
+    name: "Subdomain Enumeration",
+    description: "Focused on finding subdomains (300+ checked)",
+    time: "3-10 min",
+    features: ["300+ subdomain checks", "Wildcard detection", "CT log search", "Dangling CNAME detection"],
+    color: "#f59e0b",
+  },
+  {
+    id: "security_focus",
+    name: "Security Analysis",
+    description: "Focus on email security (SPF, DMARC, DKIM, MTA-STS, BIMI) and DNSSEC",
+    time: "30-60 sec",
+    features: ["SPF analysis", "DMARC policy check", "DKIM validation", "MTA-STS detection", "BIMI record check", "DNSSEC status"],
+    color: "#ef4444",
+  },
+];
+
+// Subdomain Takeover Providers
+const TAKEOVER_PROVIDERS = [
+  { category: "Cloud Platforms", providers: ["AWS S3", "AWS CloudFront", "AWS Elastic Beanstalk", "Azure Web Apps", "Azure Blob Storage", "Azure CDN", "Google Cloud Storage", "Google App Engine", "Firebase"] },
+  { category: "CDN & Hosting", providers: ["Fastly", "Heroku", "Netlify", "Vercel", "Surge.sh", "Pantheon", "WP Engine"] },
+  { category: "Git Platforms", providers: ["GitHub Pages", "GitLab Pages", "Bitbucket"] },
+  { category: "SaaS Services", providers: ["Shopify", "Zendesk", "ReadMe.io", "Freshdesk", "Statuspage", "UserVoice", "HelpJuice", "Ghost"] },
+];
+
+// Cloud Provider Detection Patterns
+const CLOUD_PROVIDERS = [
+  { provider: "AWS", patterns: ["amazonaws.com", "cloudfront.net", "elasticbeanstalk", "elb.amazonaws.com", "s3.amazonaws.com", "execute-api", "apigateway"], color: "#ff9900" },
+  { provider: "Azure", patterns: ["azure", "microsoft.com", "windows.net", "azurewebsites.net", "azureedge.net", "cloudapp.azure.com"], color: "#0078d4" },
+  { provider: "GCP", patterns: ["google", "googleapis.com", "appspot.com", "cloudfunctions.net", "run.app", "firebaseapp.com"], color: "#4285f4" },
+  { provider: "Cloudflare", patterns: ["cloudflare"], color: "#f38020" },
+  { provider: "Akamai", patterns: ["akamai", "akamaiedge", "akamaitechnologies"], color: "#0096d6" },
+  { provider: "Fastly", patterns: ["fastly"], color: "#ff282d" },
+  { provider: "Vercel", patterns: ["vercel", "now.sh"], color: "#000000" },
+  { provider: "Netlify", patterns: ["netlify"], color: "#00c7b7" },
+];
+
+// Advanced Email Security (MTA-STS, BIMI)
+const ADVANCED_EMAIL_SECURITY = [
+  {
+    name: "MTA-STS (Mail Transfer Agent Strict Transport Security)",
+    record: "TXT at _mta-sts.domain.com",
+    purpose: "Enforces TLS encryption for email delivery, preventing downgrade attacks",
+    example: 'v=STSv1; id=20240101000000Z',
+    requirements: ["Requires HTTPS-hosted policy file at .well-known/mta-sts.txt", "Policy specifies MX hosts and TLS requirements"],
+  },
+  {
+    name: "BIMI (Brand Indicators for Message Identification)",
+    record: "TXT at default._bimi.domain.com",
+    purpose: "Displays brand logo next to authenticated emails, requires valid DMARC p=quarantine/reject",
+    example: 'v=BIMI1; l=https://example.com/logo.svg; a=https://example.com/vmc.pem',
+    requirements: ["DMARC policy must be quarantine or reject", "Logo must be SVG Tiny PS format", "Optional VMC (Verified Mark Certificate)"],
+  },
+];
+
 export default function DNSGuidePage() {
   const theme = useTheme();
   const navigate = useNavigate();
+
+  // State for advanced features tab
+  const [advancedTab, setAdvancedTab] = React.useState(0);
 
   const pageContext = `This page covers DNS reconnaissance and security including:
 - DNS record types: A, AAAA, MX, NS, TXT, CNAME, SOA, SRV, PTR, CAA
@@ -148,7 +260,8 @@ export default function DNSGuidePage() {
 - Zone transfer vulnerabilities and prevention
 - Subdomain enumeration techniques
 - DNS security best practices and hardening
-- Tools for DNS reconnaissance and analysis`;
+- Tools for DNS reconnaissance and analysis
+- Advanced: Subdomain takeover detection, Cloud provider identification, CT logs, MTA-STS, BIMI`;
 
   return (
     <LearnPageLayout pageTitle="DNS Reconnaissance" pageContext={pageContext}>
@@ -308,6 +421,369 @@ export default function DNSGuidePage() {
             </Card>
           </Grid>
         </Grid>
+      </Paper>
+
+      {/* VRAgent Advanced DNS Features */}
+      <Paper
+        sx={{
+          p: 3,
+          mb: 4,
+          background: `linear-gradient(135deg, ${alpha("#ef4444", 0.05)} 0%, ${alpha("#8b5cf6", 0.05)} 100%)`,
+          border: `1px solid ${alpha("#ef4444", 0.2)}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+          <GppMaybeIcon sx={{ color: "#ef4444", fontSize: 32 }} />
+          <Box>
+            <Typography variant="h6" fontWeight={700}>
+              VRAgent Advanced DNS Features
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Offensive security capabilities for thorough DNS reconnaissance
+            </Typography>
+          </Box>
+        </Box>
+
+        <Tabs
+          value={advancedTab}
+          onChange={(_, v) => setAdvancedTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            borderBottom: 1,
+            borderColor: "divider",
+            mt: 2,
+            "& .MuiTab-root": { fontWeight: 600, textTransform: "none" },
+          }}
+        >
+          <Tab icon={<TuneIcon />} iconPosition="start" label="Scan Types" />
+          <Tab icon={<LinkOffIcon />} iconPosition="start" label="Subdomain Takeover" />
+          <Tab icon={<CloudIcon />} iconPosition="start" label="Cloud Detection" />
+          <Tab icon={<VerifiedIcon />} iconPosition="start" label="CT Logs & ASN" />
+          <Tab icon={<BadgeIcon />} iconPosition="start" label="MTA-STS & BIMI" />
+        </Tabs>
+
+        {/* Scan Types Tab */}
+        <TabPanel value={advancedTab} index={0}>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            VRAgent offers <strong>5 specialized scan profiles</strong> to match your reconnaissance needs:
+          </Typography>
+          <Grid container spacing={2}>
+            {DNS_SCAN_TYPES.map((scanType) => (
+              <Grid item xs={12} sm={6} key={scanType.id}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    border: `1px solid ${alpha(scanType.color, 0.3)}`,
+                    bgcolor: alpha(scanType.color, 0.02),
+                    height: "100%",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{scanType.name}</Typography>
+                    <Chip label={scanType.time} size="small" sx={{ bgcolor: alpha(scanType.color, 0.1), color: scanType.color }} />
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {scanType.description}
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {scanType.features.map((feature) => (
+                      <Chip
+                        key={feature}
+                        label={feature}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontSize: "0.65rem", height: 22 }}
+                      />
+                    ))}
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </TabPanel>
+
+        {/* Subdomain Takeover Tab */}
+        <TabPanel value={advancedTab} index={1}>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            VRAgent detects <strong>50+ subdomain takeover signatures</strong> across cloud platforms, CDNs, and SaaS services.
+            A takeover occurs when a CNAME points to an external service that no longer exists, allowing attackers to claim it.
+          </Typography>
+
+          <Paper
+            sx={{
+              p: 2,
+              mb: 3,
+              bgcolor: alpha("#ef4444", 0.05),
+              border: `1px solid ${alpha("#ef4444", 0.2)}`,
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: "#ef4444" }}>
+              ⚠️ How Subdomain Takeover Works
+            </Typography>
+            <List dense disablePadding>
+              <ListItem disableGutters>
+                <ListItemIcon sx={{ minWidth: 28 }}><Typography variant="body2">1.</Typography></ListItemIcon>
+                <ListItemText primary="subdomain.example.com has CNAME → myapp.herokuapp.com" primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+              <ListItem disableGutters>
+                <ListItemIcon sx={{ minWidth: 28 }}><Typography variant="body2">2.</Typography></ListItemIcon>
+                <ListItemText primary="Organization deletes the Heroku app but forgets to remove DNS record" primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+              <ListItem disableGutters>
+                <ListItemIcon sx={{ minWidth: 28 }}><Typography variant="body2">3.</Typography></ListItemIcon>
+                <ListItemText primary="Attacker creates 'myapp' on Heroku and now controls subdomain.example.com" primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            </List>
+          </Paper>
+
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>Monitored Providers:</Typography>
+          <Grid container spacing={2}>
+            {TAKEOVER_PROVIDERS.map((cat) => (
+              <Grid item xs={12} sm={6} md={3} key={cat.category}>
+                <Paper sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: "#8b5cf6" }}>{cat.category}</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 1 }}>
+                    {cat.providers.map((p) => (
+                      <Chip key={p} label={p} size="small" variant="outlined" sx={{ fontSize: "0.65rem", height: 20 }} />
+                    ))}
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </TabPanel>
+
+        {/* Cloud Detection Tab */}
+        <TabPanel value={advancedTab} index={2}>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            VRAgent automatically identifies <strong>cloud infrastructure</strong> from DNS records and CNAMEs,
+            revealing hosting providers, CDNs, and specific services in use.
+          </Typography>
+
+          <Grid container spacing={2}>
+            {CLOUD_PROVIDERS.map((provider) => (
+              <Grid item xs={12} sm={6} md={3} key={provider.provider}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    border: `2px solid ${provider.color}`,
+                    bgcolor: alpha(provider.color, 0.02),
+                    height: "100%",
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: provider.color }}>
+                    {provider.provider}
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {provider.patterns.slice(0, 4).map((pattern) => (
+                      <Chip
+                        key={pattern}
+                        label={pattern}
+                        size="small"
+                        sx={{ fontSize: "0.65rem", height: 20, bgcolor: alpha(provider.color, 0.1) }}
+                      />
+                    ))}
+                    {provider.patterns.length > 4 && (
+                      <Chip label={`+${provider.patterns.length - 4}`} size="small" sx={{ fontSize: "0.65rem", height: 20 }} />
+                    )}
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Paper sx={{ p: 2, mt: 3, bgcolor: alpha("#06b6d4", 0.05), border: `1px solid ${alpha("#06b6d4", 0.2)}` }}>
+            <Typography variant="body2">
+              <strong>💡 Why It Matters:</strong> Cloud provider detection helps identify potential security boundaries,
+              shared responsibility models, and enables targeted testing (e.g., S3 bucket misconfiguration checks for AWS,
+              Blob storage public access for Azure).
+            </Typography>
+          </Paper>
+        </TabPanel>
+
+        {/* CT Logs & ASN Tab */}
+        <TabPanel value={advancedTab} index={3}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Paper
+                sx={{
+                  p: 3,
+                  borderRadius: 2,
+                  border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+                  bgcolor: alpha("#8b5cf6", 0.02),
+                  height: "100%",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                  <VerifiedIcon sx={{ color: "#8b5cf6" }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Certificate Transparency Logs
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  CT logs are public records of SSL certificates issued for domains. VRAgent searches these logs to discover
+                  subdomains that may not be found through DNS brute-forcing.
+                </Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Advantages:</Typography>
+                <List dense disablePadding>
+                  {[
+                    "Discovers subdomains that may not resolve in DNS",
+                    "Finds internal/staging subdomains that got certificates",
+                    "Passive reconnaissance - no direct queries to target",
+                    "Historical data shows previously used subdomains",
+                  ].map((item, idx) => (
+                    <ListItem key={idx} disableGutters sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <CheckCircleIcon sx={{ fontSize: 14, color: "#8b5cf6" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper
+                sx={{
+                  p: 3,
+                  borderRadius: 2,
+                  border: `1px solid ${alpha("#10b981", 0.3)}`,
+                  bgcolor: alpha("#10b981", 0.02),
+                  height: "100%",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                  <HubIcon sx={{ color: "#10b981" }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    ASN/BGP Information
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  For each discovered IP, VRAgent retrieves Autonomous System Number (ASN) and BGP routing information,
+                  helping identify the organization and network that owns the IP space.
+                </Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Retrieved Data:</Typography>
+                <List dense disablePadding>
+                  {[
+                    "ASN number and name",
+                    "Organization that owns the IP block",
+                    "Network CIDR range",
+                    "Country/region information",
+                    "Geographic distribution of infrastructure",
+                  ].map((item, idx) => (
+                    <ListItem key={idx} disableGutters sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <CheckCircleIcon sx={{ fontSize: 14, color: "#10b981" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          {/* Additional Features */}
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>Additional Detection Features</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <Paper sx={{ p: 2, textAlign: "center" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Wildcard DNS</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Detects if domain uses wildcard A records (*.example.com)
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Paper sx={{ p: 2, textAlign: "center" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Dangling CNAMEs</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Identifies CNAMEs pointing to non-resolving targets
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Paper sx={{ p: 2, textAlign: "center" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Geo Distribution</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Maps IP addresses to countries for infrastructure overview
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Box>
+        </TabPanel>
+
+        {/* MTA-STS & BIMI Tab */}
+        <TabPanel value={advancedTab} index={4}>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Beyond SPF, DMARC, and DKIM, VRAgent checks for modern email security standards that provide 
+            additional protection and brand verification.
+          </Typography>
+
+          <Grid container spacing={3}>
+            {ADVANCED_EMAIL_SECURITY.map((item) => (
+              <Grid item xs={12} md={6} key={item.name}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    borderRadius: 2,
+                    border: `1px solid ${alpha("#f59e0b", 0.3)}`,
+                    height: "100%",
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                    {item.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {item.purpose}
+                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>Record Location:</Typography>
+                    <Chip label={item.record} size="small" sx={{ ml: 1 }} />
+                  </Box>
+                  <Box
+                    component="pre"
+                    sx={{
+                      p: 1.5,
+                      bgcolor: alpha("#f59e0b", 0.1),
+                      borderRadius: 1,
+                      fontFamily: "monospace",
+                      fontSize: "0.75rem",
+                      overflow: "auto",
+                      mb: 2,
+                    }}
+                  >
+                    {item.example}
+                  </Box>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Requirements:</Typography>
+                  <List dense disablePadding>
+                    {item.requirements.map((req, idx) => (
+                      <ListItem key={idx} disableGutters sx={{ py: 0.25 }}>
+                        <ListItemIcon sx={{ minWidth: 20 }}>
+                          <CheckCircleIcon sx={{ fontSize: 12, color: "#f59e0b" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={req} primaryTypographyProps={{ variant: "caption" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Paper sx={{ p: 2, mt: 3, bgcolor: alpha("#10b981", 0.05), border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+            <Typography variant="body2">
+              <strong>✅ Email Security Score Update:</strong> VRAgent now includes MTA-STS and BIMI in its email security 
+              scoring. Having all 5 records (SPF, DMARC, DKIM, MTA-STS, BIMI) properly configured represents maximum email 
+              authentication maturity.
+            </Typography>
+          </Paper>
+        </TabPanel>
       </Paper>
 
       {/* DNS Record Types */}

@@ -6,9 +6,11 @@ Provides endpoints to start scans, check progress, and retrieve results.
 """
 
 import asyncio
+from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from ..services.agentic_scan_service import (
     agentic_scan_service,
@@ -17,6 +19,8 @@ from ..services.agentic_scan_service import (
     ScanPhase
 )
 from ..core.logging import get_logger
+from ..core.database import get_db
+from ..models.models import AgenticScanReport
 
 logger = get_logger(__name__)
 
@@ -41,6 +45,26 @@ class StartScanRequest(BaseModel):
                 "file_extensions": [".py", ".js", ".ts"]
             }
         }
+
+
+class SaveReportRequest(BaseModel):
+    """Request to save an agentic scan report"""
+    scan_id: str
+    project_id: int
+    title: str
+    project_path: Optional[str] = None
+    started_at: str
+    completed_at: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    total_chunks: int = 0
+    analyzed_chunks: int = 0
+    entry_points_found: int = 0
+    flows_traced: int = 0
+    executive_summary: Optional[str] = None
+    vulnerabilities: Optional[List[dict]] = None
+    entry_points: Optional[List[dict]] = None
+    traced_flows: Optional[List[dict]] = None
+    statistics: Optional[dict] = None
 
 
 class ScanStatusResponse(BaseModel):
@@ -366,3 +390,178 @@ async def cancel_scan(scan_id: str):
     progress.message = "Cancelled by user"
     
     return {"message": "Scan cancellation requested", "scan_id": scan_id}
+
+
+@router.post("/save-report")
+async def save_report(request: SaveReportRequest, db: Session = Depends(get_db)):
+    """
+    Save an agentic scan report to the database for the project.
+    """
+    try:
+        # Count vulnerabilities by severity
+        findings_critical = 0
+        findings_high = 0
+        findings_medium = 0
+        findings_low = 0
+        findings_info = 0
+        
+        if request.vulnerabilities:
+            for vuln in request.vulnerabilities:
+                severity = vuln.get("severity", "").lower()
+                if severity == "critical":
+                    findings_critical += 1
+                elif severity == "high":
+                    findings_high += 1
+                elif severity == "medium":
+                    findings_medium += 1
+                elif severity == "low":
+                    findings_low += 1
+                else:
+                    findings_info += 1
+        
+        # Parse datetime
+        started_at = datetime.fromisoformat(request.started_at.replace("Z", "+00:00"))
+        completed_at = None
+        if request.completed_at:
+            completed_at = datetime.fromisoformat(request.completed_at.replace("Z", "+00:00"))
+        
+        # Check if report already exists
+        existing = db.query(AgenticScanReport).filter(
+            AgenticScanReport.scan_id == request.scan_id
+        ).first()
+        
+        if existing:
+            return {
+                "message": "Report already saved",
+                "report_id": existing.id,
+                "scan_id": request.scan_id
+            }
+        
+        # Create new report
+        report = AgenticScanReport(
+            scan_id=request.scan_id,
+            project_id=request.project_id,
+            title=request.title,
+            project_path=request.project_path,
+            started_at=started_at,
+            completed_at=completed_at,
+            duration_seconds=request.duration_seconds,
+            total_chunks=request.total_chunks,
+            analyzed_chunks=request.analyzed_chunks,
+            entry_points_found=request.entry_points_found,
+            flows_traced=request.flows_traced,
+            findings_critical=findings_critical,
+            findings_high=findings_high,
+            findings_medium=findings_medium,
+            findings_low=findings_low,
+            findings_info=findings_info,
+            executive_summary=request.executive_summary,
+            vulnerabilities=request.vulnerabilities,
+            entry_points=request.entry_points,
+            traced_flows=request.traced_flows,
+            statistics=request.statistics,
+        )
+        
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+        
+        logger.info(f"Saved agentic scan report {report.id} for project {request.project_id}")
+        
+        return {
+            "message": "Report saved successfully",
+            "report_id": report.id,
+            "scan_id": request.scan_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to save report: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/reports/{project_id}")
+async def get_project_reports(project_id: int, db: Session = Depends(get_db)):
+    """
+    Get all saved agentic scan reports for a project.
+    """
+    reports = db.query(AgenticScanReport).filter(
+        AgenticScanReport.project_id == project_id
+    ).order_by(AgenticScanReport.created_at.desc()).all()
+    
+    return {
+        "reports": [
+            {
+                "id": r.id,
+                "scan_id": r.scan_id,
+                "title": r.title,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                "duration_seconds": r.duration_seconds,
+                "total_chunks": r.total_chunks,
+                "entry_points_found": r.entry_points_found,
+                "flows_traced": r.flows_traced,
+                "findings_critical": r.findings_critical,
+                "findings_high": r.findings_high,
+                "findings_medium": r.findings_medium,
+                "findings_low": r.findings_low,
+                "findings_info": r.findings_info,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in reports
+        ],
+        "count": len(reports)
+    }
+
+
+@router.get("/report/{report_id}")
+async def get_report(report_id: int, db: Session = Depends(get_db)):
+    """
+    Get a single saved agentic scan report by ID.
+    """
+    report = db.query(AgenticScanReport).filter(AgenticScanReport.id == report_id).first()
+    
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    return {
+        "id": report.id,
+        "scan_id": report.scan_id,
+        "project_id": report.project_id,
+        "title": report.title,
+        "project_path": report.project_path,
+        "started_at": report.started_at.isoformat() if report.started_at else None,
+        "completed_at": report.completed_at.isoformat() if report.completed_at else None,
+        "duration_seconds": report.duration_seconds,
+        "total_chunks": report.total_chunks,
+        "analyzed_chunks": report.analyzed_chunks,
+        "entry_points_found": report.entry_points_found,
+        "flows_traced": report.flows_traced,
+        "findings_critical": report.findings_critical,
+        "findings_high": report.findings_high,
+        "findings_medium": report.findings_medium,
+        "findings_low": report.findings_low,
+        "findings_info": report.findings_info,
+        "executive_summary": report.executive_summary,
+        "vulnerabilities": report.vulnerabilities,
+        "entry_points": report.entry_points,
+        "traced_flows": report.traced_flows,
+        "statistics": report.statistics,
+        "created_at": report.created_at.isoformat() if report.created_at else None,
+    }
+
+
+@router.delete("/report/{report_id}")
+async def delete_report(report_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a saved agentic scan report.
+    """
+    report = db.query(AgenticScanReport).filter(AgenticScanReport.id == report_id).first()
+    
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    db.delete(report)
+    db.commit()
+    
+    return {"message": "Report deleted successfully", "report_id": report_id}

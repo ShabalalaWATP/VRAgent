@@ -9559,6 +9559,8 @@ async def unified_apk_scan(
                 yield make_progress("Analyzing obfuscation techniques...", 60)
                 obfuscation_result = re_service.analyze_apk_obfuscation(tmp_path)
                 if obfuscation_result:
+                    # Use getattr with fallbacks for robustness against schema changes
+                    class_naming = obfuscation_result.class_naming
                     result.obfuscation_analysis = {
                         "package_name": obfuscation_result.package_name,
                         "overall_obfuscation_level": obfuscation_result.overall_obfuscation_level,
@@ -9569,19 +9571,19 @@ async def unified_apk_scan(
                             for i in obfuscation_result.indicators
                         ],
                         "class_naming": {
-                            "total_classes": obfuscation_result.class_naming.total_classes,
-                            "short_name_count": obfuscation_result.class_naming.short_name_count,
-                            "obfuscated_count": obfuscation_result.class_naming.obfuscated_count,
-                            "readable_count": obfuscation_result.class_naming.readable_count,
-                            "obfuscation_ratio": obfuscation_result.class_naming.obfuscation_ratio,
+                            "total_classes": getattr(class_naming, 'total_classes', 0),
+                            "short_name_count": getattr(class_naming, 'short_name_classes', getattr(class_naming, 'short_name_count', 0)),
+                            "obfuscated_count": getattr(class_naming, 'single_letter_classes', getattr(class_naming, 'obfuscated_count', 0)),
+                            "readable_count": getattr(class_naming, 'meaningful_name_classes', getattr(class_naming, 'readable_count', 0)),
+                            "obfuscation_ratio": getattr(class_naming, 'obfuscation_ratio', 0.0),
                         },
                         "deobfuscation_strategies": obfuscation_result.deobfuscation_strategies,
                         "recommended_tools": obfuscation_result.recommended_tools,
                         "frida_hooks": obfuscation_result.frida_hooks,
                         "analysis_time": obfuscation_result.analysis_time,
                         "warnings": obfuscation_result.warnings,
-                        "ai_analysis_summary": obfuscation_result.ai_analysis_summary,
-                        "reverse_engineering_difficulty": obfuscation_result.reverse_engineering_difficulty,
+                        "ai_analysis_summary": getattr(obfuscation_result, 'ai_analysis_summary', None),
+                        "reverse_engineering_difficulty": getattr(obfuscation_result, 'reverse_engineering_difficulty', None),
                     }
                     logger.info(f"Obfuscation analysis: {obfuscation_result.overall_obfuscation_level} level, score {obfuscation_result.obfuscation_score}/100")
                 
@@ -9663,12 +9665,29 @@ async def unified_apk_scan(
                     yield make_progress("Generating SSL pinning bypass scripts...", 20)
                     
                     # Extract required data from apk_result for Frida generation
+                    # Note: apk_result.strings may be dicts or objects - handle both
                     strings_list = []
-                    for s in apk_result.strings[:1000] if hasattr(apk_result, 'strings') else []:
-                        strings_list.append(re_service.ExtractedString(
-                            value=s.get("value", "") if isinstance(s, dict) else str(s),
-                            string_type=s.get("type", "unknown") if isinstance(s, dict) else "unknown"
-                        ))
+                    for s in (apk_result.strings[:1000] if hasattr(apk_result, 'strings') and apk_result.strings else []):
+                        try:
+                            if isinstance(s, dict):
+                                strings_list.append(re_service.ExtractedString(
+                                    value=s.get("value", ""),
+                                    offset=s.get("offset", 0),
+                                    encoding=s.get("encoding", "utf-8"),
+                                    category=s.get("category") or s.get("type", None),
+                                    confidence=s.get("confidence", 1.0)
+                                ))
+                            elif hasattr(s, 'value'):
+                                strings_list.append(s)  # Already an ExtractedString
+                            else:
+                                strings_list.append(re_service.ExtractedString(
+                                    value=str(s),
+                                    offset=0,
+                                    encoding="utf-8"
+                                ))
+                        except Exception as str_err:
+                            logger.debug(f"Skipping malformed string: {str_err}")
+                            continue
                     
                     permissions_list = [
                         re_service.ApkPermission(
@@ -12190,7 +12209,7 @@ async def analyze_apk_obfuscation_ai_enhanced(
             ],
             native_protection=NativeProtectionResponse(
                 has_native_libs=result.native_protection.has_native_libs,
-                native_lib_names=getattr(result.native_protection, 'native_lib_names', result.native_protection.native_libs),
+                native_lib_names=result.native_protection.native_lib_names,
                 protection_indicators=result.native_protection.protection_indicators,
                 jni_functions=getattr(result.native_protection, 'jni_functions', []),
             ),

@@ -21,12 +21,16 @@ import SendIcon from "@mui/icons-material/Send";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
+import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import SchoolIcon from "@mui/icons-material/School";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useLocation } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import { ChatCodeBlock } from "./ChatCodeBlock";
 
 interface Message {
   id: string;
@@ -48,6 +52,7 @@ const LearnAIChatWidget: React.FC<LearnAIChatWidgetProps> = ({
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -206,13 +211,15 @@ const LearnAIChatWidget: React.FC<LearnAIChatWidgetProps> = ({
         position: "fixed",
         bottom: 24,
         right: 24,
-        width: isMinimized ? 320 : { xs: "calc(100% - 48px)", sm: 420 },
-        maxWidth: 420,
+        left: isMaximized ? { xs: 24, md: 280 } : "auto",
+        width: isMaximized ? "auto" : isMinimized ? 320 : { xs: "calc(100% - 48px)", sm: 420 },
+        maxWidth: isMaximized ? "none" : 420,
         borderRadius: 3,
         overflow: "hidden",
         zIndex: 1300,
         border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
         boxShadow: `0 8px 32px ${alpha("#000", 0.2)}, 0 0 0 1px ${alpha(theme.palette.primary.main, 0.1)}`,
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
       {/* Header */}
@@ -249,6 +256,16 @@ const LearnAIChatWidget: React.FC<LearnAIChatWidgetProps> = ({
           size="small"
           onClick={(e) => {
             e.stopPropagation();
+            setIsMaximized(!isMaximized);
+          }}
+          sx={{ color: "white" }}
+        >
+          {isMaximized ? <CloseFullscreenIcon /> : <OpenInFullIcon />}
+        </IconButton>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
             setIsMinimized(!isMinimized);
           }}
           sx={{ color: "white" }}
@@ -269,7 +286,7 @@ const LearnAIChatWidget: React.FC<LearnAIChatWidgetProps> = ({
 
       {/* Chat Content */}
       <Collapse in={!isMinimized}>
-        <Box sx={{ display: "flex", flexDirection: "column", height: 400 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", height: isMaximized ? "calc(66vh - 120px)" : 400 }}>
           {/* Messages Area */}
           <Box
             sx={{
@@ -346,17 +363,29 @@ const LearnAIChatWidget: React.FC<LearnAIChatWidgetProps> = ({
                           </Typography>
                         </Box>
                       )}
-                      <Typography
-                        variant="body2"
+                      <Box
                         sx={{
-                          whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
                           fontSize: "0.85rem",
                           lineHeight: 1.5,
+                          "& p": { m: 0 },
+                          "& p:not(:last-child)": { mb: 1 },
+                          "& ul, & ol": { pl: 2, m: 0 },
+                          "& li": { mb: 0.5 },
                         }}
                       >
-                        {msg.content}
-                      </Typography>
+                        <ReactMarkdown
+                          components={{
+                            code: ({ className, children }) => (
+                              <ChatCodeBlock className={className} theme={theme}>
+                                {children}
+                              </ChatCodeBlock>
+                            ),
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </Box>
                       {msg.role === "assistant" && (
                         <IconButton
                           size="small"

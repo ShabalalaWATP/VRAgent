@@ -692,6 +692,8 @@ async def _generate_dns_ai_analysis(result: DNSReconResult) -> Dict[str, Any]:
 - DKIM: {'✅ Found' if result.security.has_dkim else '❌ Not found'} (selectors: {', '.join(result.security.dkim_selectors_found) if result.security.dkim_selectors_found else 'none'})
 - DNSSEC: {'✅ Enabled' if result.security.has_dnssec else '❌ Not enabled'}
 - CAA: {'✅ Present' if result.security.has_caa else '❌ Missing'}
+- BIMI: {'✅ Present' if getattr(result.security, 'has_bimi', False) else '❌ Missing'}
+- MTA-STS: {'✅ Present' if getattr(result.security, 'has_mta_sts', False) else '❌ Missing'}
 - Mail Security Score: {result.security.mail_security_score}/100
 """
         
@@ -699,7 +701,10 @@ async def _generate_dns_ai_analysis(result: DNSReconResult) -> Dict[str, Any]:
         if result.subdomains:
             subdomains_text = "\n## Subdomains Found\n"
             for sub in result.subdomains[:30]:
-                subdomains_text += f"- {sub.full_domain}: {', '.join(sub.ip_addresses) if sub.ip_addresses else 'No A record'}\n"
+                subdomains_text += f"- {sub.full_domain}: {', '.join(sub.ip_addresses) if sub.ip_addresses else 'No A record'}"
+                if sub.cname:
+                    subdomains_text += f" (CNAME: {sub.cname})"
+                subdomains_text += "\n"
             if len(result.subdomains) > 30:
                 subdomains_text += f"... and {len(result.subdomains) - 30} more\n"
         
@@ -707,7 +712,76 @@ async def _generate_dns_ai_analysis(result: DNSReconResult) -> Dict[str, Any]:
         for record in result.records[:50]:
             records_text += f"- {record.record_type}: {record.value}\n"
         
-        prompt = f"""Analyze this DNS reconnaissance data for security implications and attack surface.
+        # Build advanced reconnaissance context
+        advanced_recon_text = ""
+        
+        # Takeover risks
+        if result.takeover_risks:
+            advanced_recon_text += "\n## ⚠️ Subdomain Takeover Risks\n"
+            for risk in result.takeover_risks[:10]:
+                advanced_recon_text += f"- {risk.subdomain} -> {risk.cname_target} ({risk.provider}) - {risk.risk_level.upper()}"
+                if risk.is_vulnerable:
+                    advanced_recon_text += " **CONFIRMED VULNERABLE**"
+                advanced_recon_text += f"\n  Reason: {risk.reason}\n"
+        
+        # Dangling CNAMEs
+        if result.dangling_cnames:
+            advanced_recon_text += "\n## 🔗 Dangling CNAMEs (Potential Takeover)\n"
+            for dc in result.dangling_cnames[:10]:
+                advanced_recon_text += f"- {dc.get('subdomain')} -> {dc.get('cname')} (Error: {dc.get('error')})\n"
+        
+        # Cloud providers
+        if result.cloud_providers:
+            advanced_recon_text += "\n## ☁️ Cloud Infrastructure Detected\n"
+            providers_by_type = {}
+            for cp in result.cloud_providers:
+                key = f"{cp.provider.upper()}{' (CDN)' if cp.is_cdn else ''}"
+                if key not in providers_by_type:
+                    providers_by_type[key] = []
+                providers_by_type[key].append(f"{cp.ip_or_domain}" + (f" - {cp.service}" if cp.service else ""))
+            for provider, items in providers_by_type.items():
+                advanced_recon_text += f"- {provider}: {', '.join(items[:5])}\n"
+        
+        # ASN Info
+        if result.asn_info:
+            advanced_recon_text += "\n## 🌐 ASN/Network Information\n"
+            unique_asns = {}
+            for asn in result.asn_info:
+                if asn.asn and asn.asn not in unique_asns:
+                    unique_asns[asn.asn] = asn
+            for asn_num, asn_data in list(unique_asns.items())[:5]:
+                advanced_recon_text += f"- {asn_num}: {asn_data.asn_name or 'Unknown'} ({asn_data.country or 'Unknown country'})\n"
+        
+        # Certificate Transparency
+        if result.ct_logs:
+            advanced_recon_text += f"\n## 📜 Certificate Transparency Logs ({len(result.ct_logs)} certs found)\n"
+            unique_domains = set()
+            for ct in result.ct_logs[:20]:
+                unique_domains.add(ct.common_name)
+                unique_domains.update(ct.san_names[:5])
+            # Filter to just subdomains of the target
+            ct_subdomains = [d for d in unique_domains if d.endswith(result.domain) and d != result.domain][:15]
+            if ct_subdomains:
+                advanced_recon_text += f"- Additional subdomains from CT logs: {', '.join(ct_subdomains)}\n"
+        
+        # Wildcard
+        if result.has_wildcard:
+            advanced_recon_text += f"\n## ⚡ Wildcard DNS Detected\n"
+            advanced_recon_text += f"- Wildcard resolves to: {', '.join(result.wildcard_ips)}\n"
+        
+        # Infrastructure summary
+        if result.infrastructure_summary:
+            infra = result.infrastructure_summary
+            advanced_recon_text += "\n## 📊 Infrastructure Summary\n"
+            advanced_recon_text += f"- Unique IPs: {infra.get('total_unique_ips', 0)}\n"
+            advanced_recon_text += f"- Total ASNs: {infra.get('total_asns', 0)}\n"
+            if infra.get('cloud_providers_detected'):
+                advanced_recon_text += f"- Cloud Providers: {', '.join(infra.get('cloud_providers_detected', []))}\n"
+            advanced_recon_text += f"- CDN Usage: {'Yes' if infra.get('cdn_usage') else 'No'}\n"
+            advanced_recon_text += f"- Potential Takeovers: {infra.get('potential_takeovers', 0)}\n"
+            advanced_recon_text += f"- Dangling Records: {infra.get('dangling_records', 0)}\n"
+
+        prompt = f"""You are an expert penetration tester and DNS security analyst. Analyze this DNS reconnaissance data for security implications, attack surface, and exploitation opportunities.
 
 # DNS Reconnaissance: {result.domain}
 
@@ -725,28 +799,70 @@ async def _generate_dns_ai_analysis(result: DNSReconResult) -> Dict[str, Any]:
 
 {subdomains_text}
 
-Provide analysis in this JSON structure:
+{advanced_recon_text}
+
+Based on this reconnaissance data, provide a comprehensive security analysis in this JSON structure:
 {{
-  "executive_summary": "<2-3 paragraph overview of the domain's DNS configuration, security posture, and attack surface>",
+  "executive_summary": "<3-4 paragraph overview for executives: domain's DNS configuration, critical findings, overall security posture, and business risk. Be specific about what's at stake.>",
   "risk_level": "<critical/high/medium/low>",
+  "overall_risk_score": <0-100>,
   "key_findings": [
-    {{"finding": "<title>", "severity": "<critical/high/medium/low>", "description": "<details>", "recommendation": "<action>"}}
+    {{"finding": "<title>", "severity": "<critical/high/medium/low>", "cvss_estimate": "<0.0-10.0>", "description": "<detailed technical description>", "impact": "<what an attacker could do>", "recommendation": "<specific remediation action>", "effort": "<low/medium/high>"}}
   ],
   "attack_surface": {{
-    "exposed_services": ["<service descriptions based on DNS>"],
-    "potential_targets": ["<interesting subdomains or IPs>"],
-    "reconnaissance_value": "<what an attacker learned>"
+    "exposed_services": [
+      {{"service": "<service name>", "location": "<subdomain/IP>", "risk": "<description of risk>"}}
+    ],
+    "high_value_targets": [
+      {{"target": "<subdomain or service>", "reason": "<why it's interesting>", "attack_vector": "<how to approach>"}}
+    ],
+    "reconnaissance_value": "<what an attacker learned from this scan>",
+    "attack_paths": [
+      {{"name": "<attack name>", "steps": ["<step 1>", "<step 2>"], "likelihood": "<high/medium/low>", "impact": "<high/medium/low>"}}
+    ]
+  }},
+  "subdomain_takeover_assessment": {{
+    "vulnerable_count": <number>,
+    "critical_targets": ["<list of most critical takeover targets>"],
+    "immediate_actions": ["<what to do right now>"]
   }},
   "email_security": {{
     "assessment": "<overall email security assessment>",
-    "spoofing_risk": "<high/medium/low>",
-    "recommendations": ["<email security improvements>"]
+    "spoofing_risk": "<critical/high/medium/low>",
+    "phishing_exposure": "<how susceptible to email-based attacks>",
+    "recommendations": ["<prioritized email security improvements>"]
   }},
-  "infrastructure_insights": "<what we can infer about their infrastructure>",
-  "next_steps": ["<recommended follow-up actions>"]
+  "infrastructure_analysis": {{
+    "cloud_posture": "<assessment of cloud infrastructure>",
+    "cdn_analysis": "<CDN usage and implications>",
+    "network_diversity": "<are they using multiple providers, single points of failure?>",
+    "geographic_distribution": "<where is infrastructure located>"
+  }},
+  "predicted_subdomains": [
+    "<based on naming patterns found, suggest 10-15 additional subdomains that likely exist>"
+  ],
+  "remediation_roadmap": {{
+    "immediate": [
+      {{"action": "<action>", "finding": "<which finding this addresses>", "effort": "<hours/days>", "priority": "P1"}}
+    ],
+    "short_term": [
+      {{"action": "<action>", "finding": "<which finding this addresses>", "effort": "<days/weeks>", "priority": "P2"}}
+    ],
+    "long_term": [
+      {{"action": "<action>", "finding": "<which finding this addresses>", "effort": "<weeks/months>", "priority": "P3"}}
+    ]
+  }},
+  "next_steps": [
+    {{"action": "<specific follow-up scan or test>", "reason": "<why this is valuable>", "tools": ["<tool suggestions>"]}}
+  ],
+  "threat_intel_correlation": {{
+    "known_attack_patterns": ["<TTPs that could exploit these findings>"],
+    "relevant_cves": ["<any CVEs that might apply based on detected services>"],
+    "apt_relevance": "<are any of these findings commonly exploited by APTs?>"
+  }}
 }}
 
-Focus on actionable security insights. Be specific about risks and recommendations."""
+Be specific, actionable, and prioritize findings by real-world exploitability. Consider both external attacker and insider threat perspectives."""
 
         response = client.models.generate_content(
             model=settings.gemini_model_id,
@@ -788,25 +904,82 @@ async def _chat_about_dns_results(
         
         client = genai.Client(api_key=settings.gemini_api_key)
         
-        # Build conversation context
-        context = f"""You are a DNS security expert helping analyze DNS reconnaissance results.
+        # Build comprehensive context
+        context = f"""You are an expert penetration tester and DNS security specialist. You're helping a security professional analyze DNS reconnaissance results.
 
 ## DNS Data for {dns_context.get('domain', 'Unknown')}
-- Records: {dns_context.get('total_records', 0)}
-- Subdomains: {dns_context.get('total_subdomains', 0)}
+
+### Basic Stats
+- Total Records: {dns_context.get('total_records', 0)}
+- Subdomains Found: {dns_context.get('total_subdomains', 0)}
+- Unique IPs: {len(dns_context.get('unique_ips', []))}
 - Nameservers: {', '.join(dns_context.get('nameservers', []))}
-- Zone Transfer Possible: {dns_context.get('zone_transfer_possible', False)}
-
-Security Analysis:
-{json.dumps(dns_context.get('security', {}), indent=2) if dns_context.get('security') else 'Not available'}
-
-Sample subdomains: {', '.join([s.get('full_domain', '') for s in dns_context.get('subdomains', [])[:10]])}
+- Mail Servers: {', '.join([m.get('server', '') for m in dns_context.get('mail_servers', [])])}
+- Zone Transfer Possible: {'⚠️ YES' if dns_context.get('zone_transfer_possible', False) else 'No'}
 """
+        
+        # Add security analysis
+        security = dns_context.get('security', {})
+        if security:
+            context += f"""
+### Email Security
+- SPF: {'Present' if security.get('has_spf') else 'Missing'}
+- DMARC: {'Present' if security.get('has_dmarc') else 'Missing'}
+- DKIM: {'Found' if security.get('has_dkim') else 'Not found'}
+- DNSSEC: {'Enabled' if security.get('has_dnssec') else 'Not enabled'}
+- BIMI: {'Present' if security.get('has_bimi') else 'Missing'}
+- MTA-STS: {'Present' if security.get('has_mta_sts') else 'Missing'}
+- Mail Security Score: {security.get('mail_security_score', 0)}/100
+- Issues: {', '.join(security.get('overall_issues', [])[:5]) or 'None'}
+"""
+        
+        # Add subdomain info
+        subdomains = dns_context.get('subdomains', [])
+        if subdomains:
+            context += f"\n### Sample Subdomains ({len(subdomains)} total)\n"
+            for sub in subdomains[:15]:
+                context += f"- {sub.get('full_domain', '')}: {', '.join(sub.get('ip_addresses', [])) or 'No IP'}"
+                if sub.get('cname'):
+                    context += f" (CNAME: {sub.get('cname')})"
+                context += "\n"
+        
+        # Add takeover risks if present
+        takeover_risks = dns_context.get('takeover_risks', [])
+        if takeover_risks:
+            context += f"\n### ⚠️ Subdomain Takeover Risks ({len(takeover_risks)} found)\n"
+            for risk in takeover_risks[:5]:
+                context += f"- {risk.get('subdomain')}: {risk.get('provider')} - {risk.get('risk_level', '').upper()}"
+                if risk.get('is_vulnerable'):
+                    context += " **VULNERABLE**"
+                context += "\n"
+        
+        # Add dangling CNAMEs
+        dangling = dns_context.get('dangling_cnames', [])
+        if dangling:
+            context += f"\n### Dangling CNAMEs ({len(dangling)} found)\n"
+            for dc in dangling[:5]:
+                context += f"- {dc.get('subdomain')} -> {dc.get('cname')}\n"
+        
+        # Add cloud providers
+        cloud = dns_context.get('cloud_providers', [])
+        if cloud:
+            providers = list(set([cp.get('provider', '').upper() for cp in cloud]))
+            context += f"\n### Cloud Infrastructure: {', '.join(providers)}\n"
+        
+        # Add AI analysis summary if present
+        ai_analysis = dns_context.get('ai_analysis', {})
+        if ai_analysis and not ai_analysis.get('error'):
+            context += f"\n### AI Analysis Summary\n"
+            context += f"- Risk Level: {ai_analysis.get('risk_level', 'Unknown').upper()}\n"
+            if ai_analysis.get('executive_summary'):
+                # Truncate to first 500 chars
+                summary = ai_analysis.get('executive_summary', '')[:500]
+                context += f"- Summary: {summary}...\n"
         
         # Add conversation history
         conversation = ""
         if history:
-            for msg in history[-6:]:  # Last 6 messages
+            for msg in history[-8:]:  # Last 8 messages for better context
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 conversation += f"\n{role.upper()}: {content}"
@@ -817,8 +990,16 @@ Sample subdomains: {', '.join([s.get('full_domain', '') for s in dns_context.get
 
 USER: {message}
 
-Provide a helpful, security-focused response. If suggesting commands or techniques, explain what they do.
-At the end, suggest 2-3 relevant follow-up questions the user might ask."""
+Provide a helpful, security-focused response as an expert penetration tester. Guidelines:
+1. Be specific and technical when appropriate
+2. Reference actual data from the scan when answering
+3. If suggesting commands, tools, or techniques, explain what they do and why
+4. For exploitation questions, explain the attack vector and potential impact
+5. Prioritize actionable advice
+6. If asked about remediation, provide specific configuration examples
+7. Consider both offensive and defensive perspectives
+
+At the end, suggest 2-3 highly relevant follow-up questions based on the conversation and data."""
 
         response = client.models.generate_content(
             model=settings.gemini_model_id,
@@ -830,8 +1011,8 @@ At the end, suggest 2-3 relevant follow-up questions the user might ask."""
         suggestions = []
         lines = response_text.split('\n')
         for i, line in enumerate(lines):
-            if 'follow-up' in line.lower() or 'you might ask' in line.lower():
-                for j in range(i+1, min(i+5, len(lines))):
+            if 'follow-up' in line.lower() or 'you might ask' in line.lower() or 'questions:' in line.lower():
+                for j in range(i+1, min(i+6, len(lines))):
                     if lines[j].strip().startswith(('-', '•', '*', '1', '2', '3')):
                         suggestion = lines[j].strip().lstrip('-•*123456789. ')
                         if suggestion and len(suggestion) > 10:

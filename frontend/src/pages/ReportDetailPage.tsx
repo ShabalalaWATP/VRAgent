@@ -94,6 +94,12 @@ const BackIcon = () => (
   </svg>
 );
 
+const RefreshIcon = ({ fontSize }: { fontSize?: "small" | "medium" }) => (
+  <svg width={fontSize === "small" ? "18" : "20"} height={fontSize === "small" ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+  </svg>
+);
+
 const ExpandIcon = ({ expanded }: { expanded: boolean }) => (
   <svg 
     width="20" 
@@ -310,6 +316,18 @@ const ExpandLessIcon = () => (
   </svg>
 );
 
+const OpenInFullIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M21 11V3h-8l3.29 3.29-10 10L3 13v8h8l-3.29-3.29 10-10z" />
+  </svg>
+);
+
+const CloseFullscreenIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M22 3.41L16.71 8.7 20 12h-8V4l3.29 3.29L20.59 2 22 3.41zM3.41 22l5.29-5.29L12 20v-8H4l3.29 3.29L2 20.59 3.41 22z" />
+  </svg>
+);
+
 const SearchIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
     <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
@@ -321,6 +339,118 @@ const ClearIcon = () => (
     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
   </svg>
 );
+
+const ContentCopyIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+  </svg>
+);
+
+// Custom code block component for chat messages with syntax highlighting and copy button
+const ChatCodeBlock = ({ className, children, theme }: { className?: string; children?: React.ReactNode; theme: Theme }) => {
+  const [copied, setCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || "");
+  const language = match ? match[1] : "";
+  const code = String(children).replace(/\n$/, "");
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (!className) {
+    // Inline code
+    return (
+      <code
+        style={{
+          backgroundColor: alpha(theme.palette.primary.main, 0.15),
+          padding: "2px 6px",
+          borderRadius: "4px",
+          fontFamily: "'Fira Code', 'Monaco', 'Consolas', monospace",
+          fontSize: "0.85em",
+        }}
+      >
+        {children}
+      </code>
+    );
+  }
+
+  // Block code with syntax highlighting
+  const highlighted = highlightCode(code, language);
+
+  return (
+    <Box
+      sx={{
+        position: "relative",
+        my: 1.5,
+        borderRadius: 1,
+        overflow: "hidden",
+        border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+      }}
+    >
+      {/* Header with language label and copy button */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          px: 1.5,
+          py: 0.5,
+          bgcolor: alpha(theme.palette.background.default, 0.8),
+          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+        }}
+      >
+        <Typography
+          variant="caption"
+          sx={{
+            fontFamily: "monospace",
+            color: theme.palette.text.secondary,
+            textTransform: "uppercase",
+            fontWeight: 600,
+            fontSize: "0.7rem",
+          }}
+        >
+          {language || "code"}
+        </Typography>
+        <Tooltip title={copied ? "Copied!" : "Copy code"}>
+          <IconButton
+            size="small"
+            onClick={handleCopy}
+            sx={{
+              p: 0.5,
+              color: copied ? "#22c55e" : theme.palette.text.secondary,
+              "&:hover": {
+                bgcolor: alpha(theme.palette.primary.main, 0.1),
+              },
+            }}
+          >
+            {copied ? <CheckIcon /> : <ContentCopyIcon />}
+          </IconButton>
+        </Tooltip>
+      </Box>
+      <pre
+        style={{
+          margin: 0,
+          padding: "12px 16px",
+          backgroundColor: "#1e1e1e",
+          overflow: "auto",
+          maxHeight: "400px",
+        }}
+      >
+        <code
+          className={`language-${language}`}
+          dangerouslySetInnerHTML={{ __html: highlighted }}
+          style={{
+            fontFamily: "'Fira Code', 'Monaco', 'Consolas', monospace",
+            fontSize: "0.8rem",
+            lineHeight: 1.5,
+          }}
+        />
+      </pre>
+    </Box>
+  );
+};
 
 // Severity styling
 const getSeverityConfig = (severity: string, theme: Theme) => {
@@ -4475,6 +4605,7 @@ export default function ReportDetailPage() {
 
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatMaximized, setChatMaximized] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -4533,6 +4664,23 @@ export default function ReportDetailPage() {
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
+
+  // State for regenerating AI summaries
+  const [regeneratingSummary, setRegeneratingSummary] = useState(false);
+  
+  // Function to regenerate AI summaries
+  const handleRegenerateSummary = async () => {
+    setRegeneratingSummary(true);
+    try {
+      const result = await api.getCodebaseSummary(id, true); // force_regenerate=true
+      // Update the query cache with the new data
+      queryClient.setQueryData(["codebase-summary", id], result);
+    } catch (error) {
+      console.error("Failed to regenerate summary:", error);
+    } finally {
+      setRegeneratingSummary(false);
+    }
+  };
 
   const startExploitMutation = useMutation({
     mutationFn: () => api.startExploitability(id, exploitMode),
@@ -4948,42 +5096,66 @@ export default function ReportDetailPage() {
               }}
             >
               <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 2,
-                      bgcolor: alpha(theme.palette.primary.main, 0.1),
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill={theme.palette.primary.main}>
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
-                    </svg>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Box
+                      sx={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 2,
+                        bgcolor: alpha(theme.palette.primary.main, 0.1),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill={theme.palette.primary.main}>
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+                      </svg>
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" fontWeight={700} color="primary.main">
+                        What Does This App Do?
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        AI-powered analysis of the codebase structure and purpose
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box>
-                    <Typography variant="h6" fontWeight={700} color="primary.main">
-                      What Does This App Do?
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      AI-powered analysis of the codebase structure and purpose
-                    </Typography>
-                  </Box>
+                  <Tooltip title="Regenerate AI analysis with enhanced comprehensive prompts">
+                    <IconButton
+                      onClick={handleRegenerateSummary}
+                      disabled={regeneratingSummary || summaryQuery.isLoading}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(theme.palette.primary.main, 0.1),
+                        "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.2) },
+                      }}
+                    >
+                      {regeneratingSummary ? (
+                        <CircularProgress size={20} />
+                      ) : (
+                        <RefreshIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  </Tooltip>
                 </Box>
                 
-                {summaryQuery.isLoading && (
+                {(summaryQuery.isLoading || regeneratingSummary) && (
                   <Box>
                     <Skeleton variant="text" width="90%" height={24} />
                     <Skeleton variant="text" width="85%" height={24} />
                     <Skeleton variant="text" width="80%" height={24} />
                     <Skeleton variant="rectangular" height={100} sx={{ mt: 2, borderRadius: 2 }} />
+                    {regeneratingSummary && (
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+                        Regenerating comprehensive AI analysis...
+                      </Typography>
+                    )}
                   </Box>
                 )}
                 
-                {summaryQuery.data?.has_app_summary && summaryQuery.data.app_summary && (
+                {!regeneratingSummary && summaryQuery.data?.has_app_summary && summaryQuery.data.app_summary && (
                   <Box
                     sx={{
                       lineHeight: 1.7,
@@ -5190,6 +5362,34 @@ export default function ReportDetailPage() {
                         m: 0,
                         mb: 1,
                       },
+                      // Code block styling for security reports
+                      "& pre": {
+                        backgroundColor: alpha(theme.palette.common.black, 0.4),
+                        borderRadius: 1,
+                        p: 2,
+                        my: 1.5,
+                        overflowX: "auto",
+                        border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+                        "& code": {
+                          backgroundColor: "transparent",
+                          color: theme.palette.success.light,
+                          fontFamily: "'Fira Code', 'Monaco', 'Consolas', monospace",
+                          fontSize: "0.8rem",
+                          lineHeight: 1.5,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                        },
+                      },
+                      // Inline code styling (not inside pre)
+                      "& code:not(pre code)": {
+                        backgroundColor: alpha(theme.palette.common.black, 0.3),
+                        color: theme.palette.warning.light,
+                        px: 0.75,
+                        py: 0.25,
+                        borderRadius: 0.5,
+                        fontFamily: "'Fira Code', 'Monaco', 'Consolas', monospace",
+                        fontSize: "0.8rem",
+                      },
                     }}
                     dangerouslySetInnerHTML={{
                       __html: (() => {
@@ -5227,6 +5427,16 @@ export default function ReportDetailPage() {
                           return `<ol>${items}</ol>`;
                         });
                         
+                        // FIX CODE BLOCKS: Convert inline <code> with code-like content to proper blocks
+                        // Match <code>...</code> that contains code patterns
+                        html = html.replace(
+                          /<code>([^<]*?(?:shell_exec|exec\s*\(|system\s*\(|\$\w+\s*=|curl\s|wget\s|\/\/\s|#\s|function\s|def\s|class\s|array\s*\(|=>\s*|;\s*$|\{\s*$)[^<]*?)<\/code>/gim,
+                          '<pre><code>$1</code></pre>'
+                        );
+                        
+                        // Also wrap any <code> that spans multiple lines
+                        html = html.replace(/<code>([^<]*\n[^<]*)<\/code>/g, '<pre><code>$1</code></pre>');
+                        
                         // Wrap remaining paragraphs
                         html = html.replace(/\n\n+/g, "</p><p>");
                         if (!html.startsWith("<")) html = "<p>" + html;
@@ -5234,8 +5444,8 @@ export default function ReportDetailPage() {
                         
                         // Clean up empty paragraphs
                         html = html.replace(/<p>\s*<\/p>/g, "");
-                        html = html.replace(/<p>\s*(<(?:ul|ol|span))/g, "$1");
-                        html = html.replace(/(<\/(?:ul|ol|span)>)\s*<\/p>/g, "$1");
+                        html = html.replace(/<p>\s*(<(?:ul|ol|span|pre))/g, "$1");
+                        html = html.replace(/(<\/(?:ul|ol|span|pre)>)\s*<\/p>/g, "$1");
                         
                         return html;
                       })()
@@ -5581,7 +5791,7 @@ export default function ReportDetailPage() {
       {activeTab === 2 && (
         <Box>
           {/* Attack Chains Section */}
-          {aiInsightsQuery.data && aiInsightsQuery.data.attack_chains.length > 0 && (
+          {aiInsightsQuery.data && (aiInsightsQuery.data.attack_chains?.length ?? 0) > 0 && (
             <Paper
               sx={{
                 p: 3,
@@ -5595,7 +5805,7 @@ export default function ReportDetailPage() {
                 ⛓️ Attack Chains Identified
                 <Chip 
                   size="small" 
-                  label={aiInsightsQuery.data.attack_chains.length}
+                  label={aiInsightsQuery.data.attack_chains?.length ?? 0}
                   sx={{ 
                     bgcolor: alpha(theme.palette.error.main, 0.15),
                     color: theme.palette.error.main,
@@ -5607,7 +5817,7 @@ export default function ReportDetailPage() {
                 These vulnerabilities can be chained together for greater impact.
               </Typography>
               <Grid container spacing={2}>
-                {aiInsightsQuery.data.attack_chains.map((chain: AttackChain, idx: number) => {
+                {aiInsightsQuery.data.attack_chains?.map((chain: AttackChain, idx: number) => {
                   const chainConfig = getSeverityConfig(chain.severity || "high", theme);
                   return (
                     <Grid item xs={12} md={6} key={idx}>
@@ -6100,44 +6310,71 @@ export default function ReportDetailPage() {
       {/* Chat Window - Visible on Findings and Exploitability tabs */}
       {(activeTab === 0 || activeTab === 2) && findingsQuery.data && (
         <Paper
+          elevation={6}
           sx={{
             position: "fixed",
-            bottom: 0,
-            right: 24,
-            width: chatOpen ? 450 : 200,
-            maxHeight: chatOpen ? "60vh" : "auto",
+            bottom: 16,
+            right: 16,
+            left: chatMaximized ? { xs: 16, md: 256 } : "auto",
+            width: chatMaximized ? "auto" : { xs: "calc(100% - 32px)", sm: 400 },
+            maxWidth: chatMaximized ? "none" : 400,
             zIndex: 1200,
-            borderRadius: "12px 12px 0 0",
-            boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
+            borderRadius: 3,
             overflow: "hidden",
-            transition: "all 0.3s ease",
+            boxShadow: "0 4px 30px rgba(0,0,0,0.3)",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
           {/* Chat Header */}
           <Box
-            onClick={() => setChatOpen(!chatOpen)}
+            onClick={() => !chatMaximized && setChatOpen(!chatOpen)}
             sx={{
-              p: 2,
+              p: 1.5,
               bgcolor: activeTab === 2 ? theme.palette.error.main : theme.palette.primary.main,
               color: "white",
-              cursor: "pointer",
+              cursor: chatMaximized ? "default" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               "&:hover": { 
-                bgcolor: activeTab === 2 ? theme.palette.error.dark : theme.palette.primary.dark 
+                bgcolor: chatMaximized 
+                  ? (activeTab === 2 ? theme.palette.error.main : theme.palette.primary.main)
+                  : (activeTab === 2 ? theme.palette.error.dark : theme.palette.primary.dark)
               },
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              onClick={() => chatMaximized && setChatOpen(!chatOpen)}
+              sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer", flex: 1 }}
+            >
               <ChatIcon />
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                Ask About {activeTab === 2 ? "Exploits" : "Findings"}
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                AI Chat
               </Typography>
             </Box>
-            <IconButton size="small" sx={{ color: "white" }}>
-              {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-            </IconButton>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <IconButton
+                size="small"
+                sx={{ color: "white", p: 0.5 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!chatOpen) setChatOpen(true);
+                  setChatMaximized(!chatMaximized);
+                }}
+              >
+                {chatMaximized ? <CloseFullscreenIcon /> : <OpenInFullIcon />}
+              </IconButton>
+              <IconButton
+                size="small"
+                sx={{ color: "white", p: 0.5 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setChatOpen(!chatOpen);
+                }}
+              >
+                {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+              </IconButton>
+            </Box>
           </Box>
 
           {/* Chat Content */}
@@ -6145,16 +6382,16 @@ export default function ReportDetailPage() {
             {/* Messages Area */}
             <Box
               sx={{
-                height: "calc(60vh - 140px)",
-                maxHeight: 400,
+                height: chatMaximized ? "calc(66vh - 120px)" : 280,
                 overflowY: "auto",
                 p: 2,
-                bgcolor: alpha(theme.palette.background.default, 0.5),
+                bgcolor: alpha(theme.palette.background.default, 0.98),
+                transition: "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
               {/* Welcome message */}
               {chatMessages.length === 0 && (
-                <Box sx={{ textAlign: "center", py: 4 }}>
+                <Box sx={{ textAlign: "center", py: chatMaximized ? 6 : 2 }}>
                   <SmartToyIcon />
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: 1 }}>
                     Ask me anything about these {activeTab === 2 ? "exploit scenarios" : "security findings"}!
@@ -6231,18 +6468,27 @@ export default function ReportDetailPage() {
                         borderRadius: 2,
                         "& p": { m: 0 },
                         "& p:not(:last-child)": { mb: 1 },
-                        "& code": {
-                          bgcolor: alpha(msg.role === "user" ? "#fff" : theme.palette.primary.main, 0.2),
-                          px: 0.5,
-                          borderRadius: 0.5,
-                          fontFamily: "monospace",
-                          fontSize: "0.85em",
-                        },
                         "& ul, & ol": { pl: 2, m: 0 },
                         "& li": { mb: 0.5 },
+                        "& h1, & h2, & h3, & h4": { mt: 1.5, mb: 1, fontWeight: 600 },
+                        "& h1": { fontSize: "1.25rem" },
+                        "& h2": { fontSize: "1.1rem" },
+                        "& h3": { fontSize: "1rem" },
+                        "& strong": { fontWeight: 600 },
+                        "& a": { color: theme.palette.primary.light },
                       }}
                     >
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown
+                        components={{
+                          code: ({ className, children }) => (
+                            <ChatCodeBlock className={className} theme={theme}>
+                              {children}
+                            </ChatCodeBlock>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </Paper>
                   </Box>
                 </Box>

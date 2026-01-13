@@ -120,6 +120,7 @@ def delete_project(
 ):
     """Delete a project and all associated data (only owner can delete)."""
     from backend import models
+    from backend.models.models import CombinedAnalysisReport
     
     project = project_service.get_project(db, project_id)
     if not project:
@@ -128,6 +129,11 @@ def delete_project(
     # Only owner can delete
     if project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the project owner can delete the project")
+    
+    # CRITICAL: Delete combined analysis reports FIRST before any other operations
+    # This prevents SQLAlchemy from trying to set project_id=NULL
+    db.query(CombinedAnalysisReport).filter(CombinedAnalysisReport.project_id == project_id).delete(synchronize_session='fetch')
+    db.flush()  # Ensure deletion is committed before other operations
     
     # Get all scan runs for this project
     scan_runs = db.query(models.ScanRun).filter(models.ScanRun.project_id == project_id).all()
@@ -214,6 +220,19 @@ def delete_project(
         db.query(ConversationParticipant).filter(ConversationParticipant.conversation_id == conv.id).delete()
         # Delete conversation
         db.delete(conv)
+    
+    # Delete kanban boards and their columns/cards (cascade handles columns->cards)
+    from backend.models.models import KanbanBoard, KanbanColumn, KanbanCard
+    
+    kanban_boards = db.query(KanbanBoard).filter(KanbanBoard.project_id == project_id).all()
+    for board in kanban_boards:
+        # Delete cards first
+        for col in board.columns:
+            db.query(KanbanCard).filter(KanbanCard.column_id == col.id).delete()
+        # Delete columns
+        db.query(KanbanColumn).filter(KanbanColumn.board_id == board.id).delete()
+        # Delete board
+        db.delete(board)
     
     # Delete the project itself
     db.delete(project)

@@ -129,7 +129,7 @@ const PHASE_CATEGORIES: PhaseCategory[] = [
   {
     name: "Multi-Pass Analysis",
     icon: "🤖",
-    phases: ["agentic_initial_analysis", "agentic_focused_analysis", "agentic_deep_analysis"],
+    phases: ["agentic_initial_analysis", "agentic_focused_analysis", "agentic_deep_analysis", "agentic_ultra_analysis"],
     description: "AI analyzes files with progressively increasing depth (89.5-90%)",
   },
   {
@@ -219,6 +219,7 @@ const PHASE_LABELS: Record<string, string> = {
   agentic_initial_analysis: "📋 Pass 1: Scanning Files",
   agentic_focused_analysis: "🔬 Pass 2: Focused Analysis",
   agentic_deep_analysis: "🎯 Pass 3: Deep Analysis",
+  agentic_ultra_analysis: "🚀 Pass 4: Ultra-Deep Analysis",
   agentic_chunking: "Breaking Code into Chunks",
   agentic_entry_points: "Detecting Entry Points",
   agentic_flow_tracing: "🔀 Data Flow Tracing",
@@ -255,8 +256,9 @@ export default function ScanProgress({ scanRunId, onComplete }: ScanProgressProp
 
       setReconnecting(reconnectAttemptsRef.current > 0);
 
-      // Connect to WebSocket
-      const wsUrl = `ws://${window.location.hostname}:8000/ws/scans/${scanRunId}`;
+      // Connect to WebSocket - use current host for proper proxy routing
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/scans/${scanRunId}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 

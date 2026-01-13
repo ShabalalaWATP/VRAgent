@@ -184,14 +184,14 @@ Complete guides to VRAgent's tools and capabilities:
 | **How Scanning Works** | The 9-step pipeline VRAgent uses to analyze code |
 | **AI Analysis Explained** | How Gemini AI transforms findings into intelligence |
 | **VRAgent Architecture** | Docker services, data models, and system design |
-| **Network Analysis Hub Guide** | 8 tools: Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Fuzzer, MITM |
+| **Network Analysis Hub Guide** | 10 tools: Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Security Fuzzer, Agentic Fuzzer, Binary Fuzzer, MITM |
 | **Wireshark PCAP Guide** | Packet capture analysis, display filters, protocol dissection |
 | **Nmap Scanner Guide** | Port scanning, service detection, NSE scripts |
 | **SSL/TLS Scanner Guide** | 12 CVE checks, certificate validation, cipher analysis |
 | **DNS Analyzer Guide** | Enumeration, subdomain discovery, email security (SPF/DMARC/DKIM) |
 | **Traceroute Analyzer Guide** | Network path analysis, hop-by-hop diagnostics |
 | **API Endpoint Tester Guide** | AI Auto-Test with CIDR scanning, JWT/WebSocket testing |
-| **Fuzzer Tool Guide** | Smart Detection, session management, payload modes |
+| **Fuzzing Tools Guide** | Security, Agentic & Binary Fuzzers - Smart Detection, payload modes, session management |
 | **MITM Workbench Guide** | Traffic interception, AI-powered rule creation |
 | **Reverse Engineering Hub Guide** | APK analysis, binary inspection, Docker Inspector, AI reports |
 | **APK Analysis Guide** | Permissions, certificates, manifest parsing, attack surface |
@@ -357,6 +357,54 @@ Core technology foundations for security professionals:
 | **Artificial Intelligence** | ML/DL fundamentals, NLP, LLMs, AI security, MLOps |
 | **IT Hardware** | Computer architecture, components, troubleshooting |
 
+### Combined Analysis Reports
+VRAgent includes a powerful **Combined Analysis** feature that generates comprehensive security reports from multiple scan results:
+
+#### Multi-Agent Report Generation
+- **Unified Report Pipeline**: Combines findings from all security scanners into a cohesive report
+- **AI-Powered Multi-Agent Architecture**: 9 specialized AI agents collaborate to analyze different aspects:
+  - Executive Summary Agent - High-level risk overview with user requirements
+  - PoC Scripts Agent - Working exploit code tailored to your needs
+  - Attack Guides Agent - Step-by-step beginner-friendly tutorials
+  - Prioritized Vulns Agent - Risk-ranked findings with exploitation steps
+  - Cross-Analysis Agent - Correlates ALL 7 scan types (Security, Network, SSL, DNS, Traceroute, RE, Fuzzing)
+  - Attack Surface Agent - Mermaid diagram generation
+  - Attack Chains Agent - Kill chain mapping
+  - Exploit Dev Agent - Advanced exploitation areas
+  - Source Code Findings Agent - Deep code analysis with secure fixes
+- **User Requirements Integration**: Custom requirements passed to key agents for tailored output
+
+#### Report Sections
+- **Executive Summary**: Business-friendly overview with risk score and key metrics
+- **Risk Overview & Attack Surface**: Entry points, exposed services, data flows
+- **Prioritized Vulnerabilities**: Severity-ranked findings with CVSS/EPSS scores and exploitation steps
+- **Cross-Analysis Findings**: Correlations across all 7 scan types with severity tags
+- **PoC Scripts**: Working exploit code (Python, Bash, curl) ready to execute
+- **Attack Guides**: Step-by-step beginner tutorials with tool setup and troubleshooting
+- **Attack Chains**: Kill chain mapping from Initial Access to Impact
+- **Source Code Findings**: Deep code analysis with:
+  - Vulnerability identification with file path and line numbers
+  - Complete exploitation examples
+  - Secure code fix showing corrected implementation
+  - Correlation with scan findings
+  - Detailed remediation steps
+- **Attack Surface Diagram**: Interactive Mermaid flowchart of attack vectors
+
+#### AI Chat Assistant
+- **Full Report Context**: Chat has access to all report sections for Q&A
+- **Smart Suggestions**: Context-aware follow-up questions after each response
+- **Floating Panel**: Collapsible chat window at bottom-right of report page
+- **Example Questions**:
+  - "What's the most critical vulnerability I should fix first?"
+  - "Explain the SQL injection exploit scenario in more detail"
+  - "How do I remediate the authentication issues?"
+
+#### Code Block Formatting
+- **In-App Display**: Prism.js syntax highlighting for 15+ languages
+- **Markdown Export**: Native triple-backtick code blocks preserved
+- **Word Export**: Courier New font with gray background styling
+- **PDF Export**: Styled code blocks with language labels
+
 ### Reports & Exports
 - **Multiple Export Formats**: Generate professional reports in:
   - **Markdown**: Well-structured with tables, links, and severity breakdown
@@ -420,6 +468,55 @@ REFRESH_TOKEN_EXPIRE_DAYS=7        # Default: 7 days
 
 > ⚠️ **Note**: Token refresh requires the backend to be running. If you're running VRAgent locally via Docker, ensure all containers are up (`docker-compose ps`).
 
+### Kanban Board
+
+VRAgent includes a **project-based Kanban board** for tracking security work and findings:
+
+#### Board Features
+- **Project-Scoped Boards**: Each project gets its own Kanban board
+- **Customizable Columns**: Create, rename, reorder, and delete columns (e.g., Backlog, In Progress, Testing, Done)
+- **Drag-and-Drop**: Move cards between columns with smooth animations
+
+#### Card Features
+- **Card Colors**: Choose from 16 dark-theme optimized colors for visual categorization:
+  - Red, Orange, Yellow, Lime, Green, Teal, Cyan, Blue, Indigo, Purple, Pink, Rose, Gray, Slate, Zinc, Neutral
+- **Card Assignment**: Assign cards to project members with avatar display
+- **Card Details**: Rich card editing with:
+  - Title and description
+  - Due dates
+  - Priority levels (Low, Medium, High, Critical)
+  - Labels/tags for categorization
+  - Checklists for sub-tasks
+- **Card Actions**: Duplicate, archive, or delete cards
+
+#### Team Collaboration
+- **Project Members**: Only users added to a project can be assigned to cards
+- **Real-Time Updates**: Changes sync instantly across all viewers
+- **Activity Log**: Track who made changes and when
+
+### Whiteboard
+
+VRAgent includes **collaborative whiteboards** for visual planning and brainstorming:
+
+#### Features
+- **Project-Scoped Whiteboards**: Each project can have multiple whiteboards
+- **Real-Time Collaboration**: WebSocket-based presence with live cursor tracking
+- **Drawing Tools**:
+  - Freehand drawing with customizable brush size and color
+  - Shapes: rectangles, circles, lines, arrows
+  - Text annotations
+  - Sticky notes
+- **Canvas Controls**:
+  - Infinite canvas with pan and zoom
+  - Grid and snap-to-grid options
+  - Undo/redo support
+
+#### Use Cases
+- **Threat Modeling**: Draw attack trees and data flow diagrams
+- **Architecture Review**: Map out system components and trust boundaries
+- **Incident Mapping**: Visualize attack paths and timeline
+- **Team Planning**: Sprint planning and task organization
+
 ### Network Security Analysis
 
 VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traffic and infrastructure:
@@ -476,6 +573,7 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
   - Authentication weaknesses
   - Recommendations
 - **AI Chat**: Interactive chat to discuss PCAP analysis with Gemini AI
+- **Combined Analysis Integration**: PCAP findings are passed to Combined Analysis for cross-correlation with code vulnerabilities, SSL issues, and other scan types
 - **Report Persistence**: Analysis reports saved to database for later retrieval
 
 #### SSL/TLS Scanner
@@ -657,6 +755,66 @@ VRAgent includes a dedicated **Network Analysis Hub** for analyzing network traf
 - **Security Scoring**: 0-100 score based on findings severity
 - **Air-Gapped Ready**: All core features work without internet (only AI Analysis requires Gemini API)
 - **Learning Resources**: Comprehensive API Endpoint Tester Guide at `/learn/api-testing`
+
+#### Fuzzing Tools
+
+VRAgent includes **three specialized fuzzing tools** for comprehensive vulnerability discovery:
+
+##### Security Fuzzer
+Web application fuzzing with smart detection and 500+ built-in payloads:
+- **Payload Modes**:
+  - Quick SQLi (100+ SQL injection payloads)
+  - Quick XSS (100+ cross-site scripting payloads)
+  - Comprehensive (500+ all attack types)
+  - Custom Wordlist (upload your own)
+  - AI-Generated (context-aware payloads)
+  - Number Range (IDOR testing)
+- **Smart Detection**: Automatic vulnerability classification with 50+ detection signatures:
+  - SQL Injection (10 signatures): MySQL, PostgreSQL, Oracle, MSSQL error patterns
+  - XSS (8 signatures): Reflected content, DOM sinks, event handlers
+  - Command Injection (6 signatures): Unix/Windows command output patterns
+  - Path Traversal (5 signatures): etc/passwd, win.ini, boot.ini patterns
+  - SSTI (7 signatures): Template engine output markers
+  - XXE (4 signatures): External entity processing indicators
+  - LDAP Injection (3 signatures): Directory service error patterns
+  - Information Disclosure (7 signatures): Stack traces, debug output
+- **Session Management**: Save, restore, and export fuzzing sessions
+- **Request Configuration**: HTTP method, headers, authentication, rate limiting
+- **Real-Time Results**: Live response analysis with status codes, sizes, timing
+
+##### Agentic Fuzzer
+AI-powered autonomous security testing with intelligent attack adaptation:
+- **AI-Powered Capabilities**:
+  - **Endpoint Discovery**: Automatically crawls and discovers hidden endpoints, parameters, and attack surfaces
+  - **Tech Fingerprinting**: Identifies server technologies, frameworks, WAF presence, and software versions
+  - **Adaptive Attacks**: Learns from responses and dynamically adjusts attack strategies
+- **Autonomous Attack Phases**:
+  1. Reconnaissance - Crawl target, discover endpoints, identify technologies
+  2. Fingerprinting - Detect server, framework, WAF, and version info
+  3. Vulnerability Discovery - Test discovered endpoints with adaptive payloads
+  4. Exploitation Validation - Confirm vulnerabilities and assess exploitability
+  5. Reporting - Generate detailed findings with remediation advice
+- **WAF Evasion**: Automatic payload encoding and bypass techniques
+
+##### Binary Fuzzer
+Native code vulnerability discovery with coverage-guided fuzzing:
+- **Supported Fuzzing Engines**:
+  - **AFL++**: Coverage-guided fuzzer with genetic algorithms, QEMU mode, persistent mode
+  - **Honggfuzz**: Multi-process fuzzer with Intel BTS/PT hardware coverage
+  - **libFuzzer**: LLVM's in-process, coverage-guided fuzzer
+- **Detectable Vulnerability Types**:
+  - Buffer Overflow (stack/heap)
+  - Use-After-Free
+  - Integer Overflow/Underflow
+  - Format String vulnerabilities
+  - Null Pointer Dereferences
+  - Double Free
+- **Crash Analysis Features**:
+  - Automatic crash triage and deduplication
+  - Stack trace analysis with root cause identification
+  - Exploitability assessment
+  - PoC generation (minimal reproducer inputs)
+- **Learning Resources**: Comprehensive Fuzzing Tools Guide at `/learn/fuzzing-tool-guide`
 
 #### Network Topology Graph
 - **D3.js Visualization**: Interactive force-directed network graph
@@ -1972,6 +2130,19 @@ The frontend will be available at http://localhost:5173
 | `GET` | `/reports/{id}/export/sbom/cyclonedx` | Export SBOM (CycloneDX) |
 | `GET` | `/reports/{id}/export/sbom/spdx` | Export SBOM (SPDX) |
 | `POST` | `/reports/{id}/chat` | Chat with AI about findings/exploits |
+
+### Combined Analysis
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/combined-analysis/reports/{project_id}` | List combined analysis reports for project |
+| `GET` | `/combined-analysis/reports/{project_id}/{report_id}` | Get specific combined analysis report |
+| `POST` | `/combined-analysis/generate/{project_id}` | Generate new combined analysis report |
+| `DELETE` | `/combined-analysis/reports/{project_id}/{report_id}` | Delete combined analysis report |
+| `GET` | `/combined-analysis/reports/{report_id}/export/markdown` | Export as Markdown |
+| `GET` | `/combined-analysis/reports/{report_id}/export/word` | Export as Word (DOCX) |
+| `GET` | `/combined-analysis/reports/{report_id}/export/pdf` | Export as PDF |
+| `POST` | `/combined-analysis/reports/{report_id}/chat` | AI chat about report content |
 
 ### Learning Hub
 

@@ -13,6 +13,15 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
   const location = useLocation();
   const theme = useTheme();
 
+  // Debug logging
+  console.log("[ProtectedRoute]", { 
+    path: location.pathname,
+    isLoading, 
+    isAuthenticated, 
+    isAdmin,
+    user: user?.email 
+  });
+
   // Show loading spinner while checking auth
   if (isLoading) {
     return (

@@ -31,6 +31,11 @@ import {
   Step,
   StepLabel,
   StepContent,
+  Drawer,
+  Fab,
+  IconButton,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import { useState } from "react";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -72,6 +77,9 @@ import GavelIcon from "@mui/icons-material/Gavel";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 
 // C2 Framework data with expanded details
 const c2Frameworks = [
@@ -1871,6 +1879,12 @@ export default function C2FrameworksGuidePage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
 
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const accent = "#dc2626"; // Red accent color for C2 theme
+
   const tabs = [
     { label: "Overview", icon: <SettingsRemoteIcon /> },
     { label: "Frameworks", icon: <BuildIcon /> },
@@ -1881,53 +1895,197 @@ export default function C2FrameworksGuidePage() {
     { label: "Resources", icon: <SchoolIcon /> },
   ];
 
+  // Section navigation items (matches tabs)
+  const sectionNavItems = tabs.map((tab, index) => ({
+    id: index,
+    label: tab.label,
+    icon: tab.icon,
+  }));
+
+  // Navigate to section (switch tab)
+  const navigateToSection = (index: number) => {
+    setActiveTab(index);
+    setNavDrawerOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Scroll to top
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // Progress calculation
+  const progressPercent = ((activeTab + 1) / tabs.length) * 100;
+
   const pageContext = `This page covers command and control (C2) frameworks for adversary simulation and red team operations. Topics include popular C2 platforms, payload generation, communication channels, evasion techniques, OPSEC considerations, detection methods, and defensive strategies.`;
+
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => navigateToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeTab === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeTab === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeTab === item.id ? 700 : 500,
+                      color: activeTab === item.id ? accent : "text.secondary",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="C2 Frameworks Guide" pageContext={pageContext}>
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 2 }}
-        />
+      <Box sx={{ display: "flex", gap: 3, position: "relative" }}>
+        {/* Sidebar Navigation */}
+        {sidebarNav}
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+        {/* Main Content */}
+        <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
+          {/* Back Button */}
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
+
+      {/* Hero Banner */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 4,
+          background: `linear-gradient(135deg, ${alpha(accent, 0.15)} 0%, ${alpha("#f59e0b", 0.1)} 100%)`,
+          border: `1px solid ${alpha(accent, 0.2)}`,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: -50,
+            right: -50,
+            width: 200,
+            height: 200,
+            borderRadius: "50%",
+            background: `linear-gradient(135deg, ${alpha(accent, 0.1)}, transparent)`,
+          }}
+        />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 3, position: "relative" }}>
           <Box
             sx={{
-              width: 56,
-              height: 56,
-              borderRadius: 2,
-              bgcolor: alpha("#dc2626", 0.1),
+              width: 80,
+              height: 80,
+              borderRadius: 3,
+              background: `linear-gradient(135deg, ${accent}, #f59e0b)`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              boxShadow: `0 8px 32px ${alpha(accent, 0.3)}`,
             }}
           >
-            <SettingsRemoteIcon sx={{ fontSize: 32, color: "#dc2626" }} />
+            <SettingsRemoteIcon sx={{ fontSize: 45, color: "white" }} />
           </Box>
           <Box>
-            <Typography variant="h4" sx={{ fontWeight: 800 }}>
+            <Chip label="Red Team" size="small" sx={{ mb: 1, fontWeight: 600, bgcolor: alpha(accent, 0.1), color: accent }} />
+            <Typography variant="h3" sx={{ fontWeight: 800, mb: 1 }}>
               Command & Control (C2) Frameworks
             </Typography>
-            <Typography variant="body1" color="text.secondary">
+            <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 600 }}>
               Understanding adversary communication infrastructure for red team operations
             </Typography>
           </Box>
         </Box>
+      </Paper>
 
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          <Chip label="Red Team" size="small" sx={{ bgcolor: alpha("#dc2626", 0.1), color: "#dc2626" }} />
-          <Chip label="Post-Exploitation" size="small" sx={{ bgcolor: alpha("#f59e0b", 0.1), color: "#f59e0b" }} />
-          <Chip label="Adversary Simulation" size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6" }} />
-          <Chip label="Advanced" size="small" variant="outlined" />
-        </Box>
+      {/* Tags */}
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 4 }}>
+        <Chip label="Post-Exploitation" size="small" sx={{ bgcolor: alpha("#f59e0b", 0.1), color: "#f59e0b" }} />
+        <Chip label="Adversary Simulation" size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6" }} />
+        <Chip label="Advanced" size="small" variant="outlined" />
       </Box>
 
       {/* Tabs */}
@@ -3612,12 +3770,140 @@ level: high
           variant="outlined"
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate("/learn")}
-          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          sx={{ borderColor: accent, color: accent }}
         >
           Back to Learning Hub
         </Button>
       </Box>
-    </Container>
+        </Container>
+      </Box>
+
+      {/* Floating Action Buttons */}
+      <Fab
+        color="primary"
+        onClick={() => setNavDrawerOpen(true)}
+        sx={{
+          position: "fixed",
+          bottom: 90,
+          right: 24,
+          zIndex: 1000,
+          bgcolor: accent,
+          "&:hover": { bgcolor: "#b91c1c" },
+          boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+          display: { xs: "flex", lg: "none" },
+        }}
+      >
+        <ListAltIcon />
+      </Fab>
+
+      {/* Scroll to Top FAB */}
+      <Fab
+        size="small"
+        onClick={scrollToTop}
+        sx={{
+          position: "fixed",
+          bottom: 32,
+          right: 28,
+          zIndex: 1000,
+          bgcolor: alpha(accent, 0.15),
+          color: accent,
+          "&:hover": { bgcolor: alpha(accent, 0.25) },
+          display: { xs: "flex", lg: "none" },
+        }}
+      >
+        <KeyboardArrowUpIcon />
+      </Fab>
+
+      {/* Navigation Drawer for Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => navigateToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeTab === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeTab === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.08),
+                  },
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, color: activeTab === item.id ? accent : "text.secondary" }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeTab === item.id ? 700 : 500,
+                        color: activeTab === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </Drawer>
     </LearnPageLayout>
   );
 }

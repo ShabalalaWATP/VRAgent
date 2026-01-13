@@ -237,11 +237,12 @@ const ReverseEngineeringPage: React.FC = () => {
                 icon: <MemoryIcon />,
                 color: "#8b5cf6",
                 capabilities: [
-                  "Unified binary scan with metadata, packer flags, and indicators",
-                  "Ghidra decompilation with AI function summaries",
-                  "Strings, imports/exports, and section/entropy insights",
-                  "YARA matches + fuzzy hashes (ssdeep, TLSH)",
-                  "Optional vulnerability hunt with risk scoring",
+                  "11-Phase Unified Scan with streaming progress + time estimates",
+                  "Ghidra decompilation with AI function summaries (500+ functions)",
+                  "Pattern vulnerability scanning (80+ patterns) + CVE lookup",
+                  "Unicorn emulation analysis for runtime behavior detection",
+                  "AI vulnerability hunt with attack chain detection",
+                  "Legitimacy detection to reduce false positives",
                 ],
               },
               {
@@ -263,10 +264,11 @@ const ReverseEngineeringPage: React.FC = () => {
                 color: "#06b6d4",
                 capabilities: [
                   "Layer command inventory with size breakdown",
-                  "Secrets detected in layer commands and metadata",
+                  "Deep layer scan for recoverable deleted secrets",
+                  "Base image intelligence (EOL, compromised, typosquatting)",
+                  "AI false positive adjudication",
                   "Attack-vector categories (escape, priv-esc, lateral)",
                   "Risk score with critical/high counts + base image",
-                  "AI security analysis and report saving",
                 ],
               },
               {
@@ -274,10 +276,11 @@ const ReverseEngineeringPage: React.FC = () => {
                 icon: <SmartToyIcon />,
                 color: "#f59e0b",
                 capabilities: [
-                  "Gemini analysis across binaries, APKs, and Docker",
-                  "Attack surface maps and threat modeling outputs",
-                  "Enhanced security scans and AI vulnerability findings",
-                  "Guided walkthrough and interactive AI chat",
+                  "Unified AI verification with false positive filtering",
+                  "Multi-pass autonomous vulnerability hunting (4-6 passes)",
+                  "Attack chain detection and prioritized remediation",
+                  "Sensitive data discovery (40+ patterns) with AI verification",
+                  "4 AI reports: functionality, security, architecture, attack surface",
                   "Exportable reports (Markdown/PDF/DOCX) and sharing",
                 ],
               },
@@ -322,10 +325,10 @@ const ReverseEngineeringPage: React.FC = () => {
           {/* Key Stats */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
             {[
-              { value: "3", label: "Analysis Types", color: "#8b5cf6" },
-              { value: "11", label: "APK Scan Phases", color: "#22c55e" },
-              { value: "AI", label: "Powered Analysis", color: "#f59e0b" },
-              { value: "500+", label: "Ghidra Functions", color: "#06b6d4" },
+              { value: "11", label: "Binary Scan Phases", color: "#8b5cf6" },
+              { value: "80+", label: "Vuln Patterns", color: "#ef4444" },
+              { value: "40+", label: "Secret Patterns", color: "#f59e0b" },
+              { value: "5000", label: "Max Functions", color: "#06b6d4" },
             ].map((stat, idx) => (
               <Grid item xs={6} sm={3} key={idx}>
                 <Box sx={{ textAlign: "center", py: 1 }}>
@@ -373,6 +376,251 @@ const ReverseEngineeringPage: React.FC = () => {
               Binary Analysis Guide
             </Button>
           </Box>
+        </Paper>
+
+        {/* VRAgent Advanced Features - Detailed Breakdown */}
+        <Paper
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 3,
+            bgcolor: "#0f1024",
+            border: `1px solid ${alpha("#ef4444", 0.3)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <SecurityIcon sx={{ fontSize: 32, color: "#ef4444" }} />
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0" }}>
+              VRAgent Advanced Binary Analysis Features
+            </Typography>
+          </Box>
+
+          <Typography variant="body1" sx={{ color: "grey.400", mb: 3 }}>
+            VRAgent's binary analysis goes far beyond basic disassembly. Here's a detailed breakdown of the 11-phase unified scan:
+          </Typography>
+
+          {/* 11-Phase Unified Scan */}
+          <Accordion defaultExpanded sx={{ bgcolor: "#12121a", mb: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="h6" sx={{ color: "#8b5cf6" }}>
+                📊 11-Phase Unified Binary Scan
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                {[
+                  { phase: "1", name: "Static Analysis", desc: "Metadata, strings, imports, exports, sections, entropy", time: "~5s" },
+                  { phase: "2", name: "Ghidra Decompilation", desc: "Headless decompiler with up to 5000 function exports", time: "~30s" },
+                  { phase: "3", name: "AI Function Summaries", desc: "Gemini summarizes decompiled functions (up to 200)", time: "~20s" },
+                  { phase: "4", name: "AI Security Summary", desc: "Overall Gemini analysis of binary behavior", time: "~10s" },
+                  { phase: "5", name: "Pattern Vulnerability Scan", desc: "80+ vulnerability patterns (buffer overflow, format string, etc.)", time: "~8s" },
+                  { phase: "6", name: "CVE Lookup", desc: "Query OSV.dev + NVD for library vulnerabilities", time: "~12s" },
+                  { phase: "7", name: "Sensitive Data Discovery", desc: "40+ patterns for secrets, credentials, API keys", time: "~10s" },
+                  { phase: "8", name: "AI Vulnerability Hunt", desc: "Multi-pass autonomous vulnerability hunting (4-6 passes)", time: "~60s" },
+                  { phase: "9", name: "AI Findings Verification", desc: "FP filtering, attack chain detection, risk assessment", time: "~15s" },
+                  { phase: "10", name: "Emulation Analysis", desc: "Unicorn-based emulation with evasion detection", time: "~25s" },
+                  { phase: "11", name: "AI Report Generation", desc: "4 reports: functionality, security, architecture, attack surface", time: "~30s" },
+                ].map((phase) => (
+                  <Grid item xs={12} sm={6} md={4} key={phase.phase}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.08), borderRadius: 1, height: "100%" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <Chip label={phase.phase} size="small" sx={{ bgcolor: "#8b5cf6", color: "#fff", minWidth: 24 }} />
+                        <Typography variant="subtitle2" sx={{ color: "#a855f7", fontWeight: 700 }}>
+                          {phase.name}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" sx={{ color: "grey.400" }}>
+                        {phase.desc}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "grey.600" }}>
+                        Est. time: {phase.time}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <strong>Time Estimates:</strong> VRAgent provides real-time progress with elapsed time, estimated remaining, and phase-by-phase tracking.
+              </Alert>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Pattern-Based Vulnerability Scanning */}
+          <Accordion sx={{ bgcolor: "#12121a", mb: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="h6" sx={{ color: "#ef4444" }}>
+                🔍 Pattern-Based Vulnerability Scanning (80+ Patterns)
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                VRAgent scans decompiled code with 80+ vulnerability patterns across multiple categories:
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { category: "Memory Corruption", patterns: ["Buffer Overflow", "Heap Overflow", "Stack Buffer Overrun", "Use-After-Free", "Double Free", "Integer Overflow"], color: "#ef4444" },
+                  { category: "Injection Attacks", patterns: ["Command Injection", "SQL Injection", "Format String", "Path Traversal", "LDAP Injection"], color: "#f59e0b" },
+                  { category: "Crypto Weaknesses", patterns: ["Weak RNG", "Hardcoded Keys", "Deprecated Ciphers", "Insufficient Key Length", "ECB Mode"], color: "#8b5cf6" },
+                  { category: "Access Control", patterns: ["Missing Auth", "Privilege Escalation", "TOCTOU Race", "Insecure Permissions"], color: "#22c55e" },
+                ].map((cat) => (
+                  <Grid item xs={12} sm={6} key={cat.category}>
+                    <Paper sx={{ p: 2, bgcolor: alpha(cat.color, 0.08), border: `1px solid ${alpha(cat.color, 0.3)}`, borderRadius: 1 }}>
+                      <Typography variant="subtitle2" sx={{ color: cat.color, fontWeight: 700, mb: 1 }}>
+                        {cat.category}
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                        {cat.patterns.map((p) => (
+                          <Chip key={p} label={p} size="small" sx={{ bgcolor: alpha(cat.color, 0.15), fontSize: "0.7rem" }} />
+                        ))}
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* AI Vulnerability Hunt */}
+          <Accordion sx={{ bgcolor: "#12121a", mb: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="h6" sx={{ color: "#f59e0b" }}>
+                🎯 Multi-Pass AI Vulnerability Hunt
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                VRAgent's autonomous vulnerability hunter performs iterative deep analysis:
+              </Typography>
+              <List dense>
+                {[
+                  { pass: "Pass 1 - Reconnaissance", desc: "Ghidra decompilation + attack surface mapping + dangerous function identification" },
+                  { pass: "Pass 2 - AI Triage", desc: "AI identifies highest-priority targets based on code patterns and risk indicators" },
+                  { pass: "Pass 3-6 - Deep Analysis", desc: "AI performs thorough vulnerability analysis on each target with PoC generation" },
+                ].map((item) => (
+                  <ListItem key={item.pass} sx={{ py: 0.5 }}>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ color: "#f59e0b", fontSize: 18 }} />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={<Typography sx={{ color: "#f59e0b", fontWeight: 600 }}>{item.pass}</Typography>}
+                      secondary={<Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+              <Typography variant="body2" sx={{ color: "grey.400", mt: 2 }}>
+                Each finding includes: CWE classification, CVSS estimate, exploitation steps, proof-of-concept code, and remediation guidance.
+              </Typography>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Unicorn Emulation */}
+          <Accordion sx={{ bgcolor: "#12121a", mb: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="h6" sx={{ color: "#06b6d4" }}>
+                🦄 Unicorn Emulation Analysis
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                VRAgent uses Unicorn CPU emulator to analyze binary behavior without actual execution:
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { feature: "Multi-Path Emulation", desc: "Emulates code from multiple entry points discovered in attack surface mapping" },
+                  { feature: "API Hook Detection", desc: "Detects API calls and extracts parameters during emulation" },
+                  { feature: "Evasion Detection", desc: "Identifies anti-debug, anti-VM, and anti-tampering techniques" },
+                  { feature: "String Recovery", desc: "Extracts decrypted/decoded strings that are hidden in static analysis" },
+                  { feature: "Malicious Pattern Detection", desc: "Identifies shellcode, process injection, and other malicious behaviors" },
+                  { feature: "AI Verification", desc: "Emulation findings are verified by AI to reduce false positives" },
+                ].map((item) => (
+                  <Grid item xs={12} sm={6} key={item.feature}>
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                      <CheckCircleIcon sx={{ color: "#06b6d4", fontSize: 18, mt: 0.3 }} />
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ color: "#06b6d4", fontWeight: 600 }}>
+                          {item.feature}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: "grey.400" }}>
+                          {item.desc}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Legitimacy Detection */}
+          <Accordion sx={{ bgcolor: "#12121a", mb: 2 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="h6" sx={{ color: "#22c55e" }}>
+                ✅ Legitimacy Detection (False Positive Reduction)
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                VRAgent automatically detects legitimate software to reduce false positives:
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { method: "Authenticode Verification", desc: "Checks digital signatures (Microsoft, Google, Mozilla, etc.)" },
+                  { method: "Version Info Analysis", desc: "Examines CompanyName, ProductName, FileDescription fields" },
+                  { method: "Known Publisher Detection", desc: "Recognizes 20+ major publishers (Microsoft, Adobe, Intel, etc.)" },
+                  { method: "Security Mitigations Check", desc: "Legitimate software typically has ASLR/DEP/CFG enabled" },
+                  { method: "Certificate Authority Scan", desc: "Detects references to VeriSign, DigiCert, Comodo, etc." },
+                ].map((item) => (
+                  <Grid item xs={12} sm={6} key={item.method}>
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                      <CheckCircleIcon sx={{ color: "#22c55e", fontSize: 18, mt: 0.3 }} />
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ color: "#22c55e", fontWeight: 600 }}>
+                          {item.method}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: "grey.400" }}>
+                          {item.desc}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+              <Alert severity="success" sx={{ mt: 2, bgcolor: alpha("#22c55e", 0.1) }}>
+                <strong>Result:</strong> When legitimate software is detected, VRAgent skips unnecessary scanning phases (like VulnHuntr) and filters out common false positives for a cleaner, faster report.
+              </Alert>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Attack Chain Detection */}
+          <Accordion sx={{ bgcolor: "#12121a" }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="h6" sx={{ color: "#a855f7" }}>
+                ⛓️ Attack Chain Detection & Prioritization
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                VRAgent's AI verification phase correlates findings to detect attack chains:
+              </Typography>
+              <List dense>
+                {[
+                  "Correlates pattern scan, CVE lookup, sensitive data, and vuln hunt findings",
+                  "Identifies multi-step attack paths (e.g., info disclosure → privilege escalation → RCE)",
+                  "Generates prioritized remediation actions based on exploitability and impact",
+                  "Filters false positives using context-aware AI analysis",
+                  "Produces risk scores and executive summary for reporting",
+                ].map((item, idx) => (
+                  <ListItem key={idx} sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ color: "#a855f7", fontSize: 16 }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                  </ListItem>
+                ))}
+              </List>
+            </AccordionDetails>
+          </Accordion>
         </Paper>
 
         {/* Educational Content Tabs */}

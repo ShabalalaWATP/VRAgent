@@ -85,6 +85,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         },
         opacity: isCompleted ? 0.7 : 1,
         borderLeft: card.priority ? `4px solid ${priorityColors[card.priority]}` : undefined,
+        bgcolor: card.color || 'background.paper',
       }}
       onClick={onClick}
     >
@@ -237,18 +238,23 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
           
           {/* Right side - Assignees */}
           {card.assignees && card.assignees.length > 0 && (
-            <AvatarGroup max={3} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: 12 } }}>
-              {card.assignees.map((assignee) => (
-                <Tooltip key={assignee.user_id} title={assignee.first_name || assignee.username}>
-                  <Avatar
-                    alt={assignee.username}
-                    src={assignee.avatar_url}
-                  >
-                    {(assignee.first_name || assignee.username).charAt(0).toUpperCase()}
-                  </Avatar>
-                </Tooltip>
-              ))}
-            </AvatarGroup>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <AvatarGroup max={2} sx={{ '& .MuiAvatar-root': { width: 20, height: 20, fontSize: 10 } }}>
+                {card.assignees.map((assignee) => (
+                  <Tooltip key={assignee.user_id} title={assignee.first_name || assignee.username}>
+                    <Avatar
+                      alt={assignee.username}
+                      src={assignee.avatar_url}
+                    >
+                      {(assignee.first_name || assignee.username).charAt(0).toUpperCase()}
+                    </Avatar>
+                  </Tooltip>
+                ))}
+              </AvatarGroup>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {card.assignees.map(a => a.first_name || a.username).join(', ')}
+              </Typography>
+            </Box>
           )}
         </Box>
       </CardContent>

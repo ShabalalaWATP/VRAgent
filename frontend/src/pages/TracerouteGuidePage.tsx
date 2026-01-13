@@ -29,6 +29,8 @@ import {
   Tab,
   alpha,
   useTheme,
+  Divider,
+  LinearProgress,
 } from "@mui/material";
 import {
   ArrowBack as BackIcon,
@@ -46,6 +48,23 @@ import {
   TrendingUp as TrendingIcon,
   ContentCopy as CopyIcon,
   Terminal as TerminalIcon,
+  Psychology as AiIcon,
+  Assessment as AssessmentIcon,
+  Hub as HubIcon,
+  CloudQueue as CloudIcon,
+  LocationOn as LocationIcon,
+  CompareArrows as CompareIcon,
+  Timeline as TimelineIcon,
+  Shield as ShieldIcon,
+  Layers as LayersIcon,
+  Chat as ChatIcon,
+  History as HistoryIcon,
+  Business as BusinessIcon,
+  Storage as StorageIcon,
+  Visibility as VisibilityIcon,
+  BugReport as BugReportIcon,
+  AccountTree as AccountTreeIcon,
+  BatchPrediction as BatchIcon,
 } from "@mui/icons-material";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -181,6 +200,148 @@ const TROUBLESHOOTING_SCENARIOS: TroubleshootingScenario[] = [
 // Main Component
 // ============================================================================
 
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => (
+  <div role="tabpanel" hidden={value !== index}>
+    {value === index && <Box>{children}</Box>}
+  </div>
+);
+
+// VRAgent Advanced Features Data
+const AI_ANALYSIS_FEATURES = [
+  {
+    title: "Network Inference",
+    icon: <AiIcon />,
+    color: "#8b5cf6",
+    items: [
+      "ISP identification from hostname patterns (e.g., comcast, att, level3)",
+      "Geographic path inference from router naming conventions",
+      "ASN (Autonomous System Number) pattern detection",
+      "Cloud provider detection (AWS, Azure, GCP, Cloudflare)",
+      "Network type classification (residential, business, datacenter)",
+    ],
+  },
+  {
+    title: "Network Segments",
+    icon: <LayersIcon />,
+    color: "#3b82f6",
+    items: [
+      "Local Network (hops 1-2): Your router and local infrastructure",
+      "ISP Network (hops 3-5): Your internet provider's infrastructure",
+      "Transit/Backbone (hops 6-12): Internet backbone, IXPs, peering",
+      "Destination Network (hops 13+): Target's hosting or CDN",
+      "Automatic segment boundary detection",
+    ],
+  },
+  {
+    title: "Performance Grading",
+    icon: <AssessmentIcon />,
+    color: "#10b981",
+    items: [
+      "Overall grade A-F based on latency, loss, and consistency",
+      "Bottleneck identification with specific hop flagging",
+      "Jitter assessment (RTT variance per hop)",
+      "Packet loss analysis with severity ratings",
+      "Comparative performance against baseline expectations",
+    ],
+  },
+];
+
+const SECURITY_ANALYSIS_FEATURES = [
+  {
+    title: "Attack Surface Analysis",
+    icon: <ShieldIcon />,
+    color: "#ef4444",
+    items: [
+      "Exposed infrastructure identification",
+      "Potential pivot points in the network path",
+      "Filtering detection (which hops block probes)",
+      "MITM position identification (where interception is possible)",
+      "Network chokepoint discovery",
+    ],
+  },
+  {
+    title: "Security Observations",
+    icon: <VisibilityIcon />,
+    color: "#f59e0b",
+    items: [
+      "Severity-rated security findings (info/low/medium/high)",
+      "Firewall placement inference",
+      "Router fingerprinting indicators",
+      "Geographic anomalies (unexpected routing)",
+      "Cloud provider security posture assessment",
+    ],
+  },
+  {
+    title: "Risk Scoring",
+    icon: <BugReportIcon />,
+    color: "#ec4899",
+    items: [
+      "0-100 risk score based on path analysis",
+      "Weighted factors: exposed hops, geographic path, filtering",
+      "Actionable recommendations for mitigation",
+      "Historical risk trend tracking",
+      "Comparison with industry baselines",
+    ],
+  },
+];
+
+const ADVANCED_TRACE_MODES = [
+  {
+    mode: "Multi-Trace Analysis",
+    icon: <CompareIcon />,
+    description: "Run multiple traces to detect routing variance",
+    features: [
+      "Up to 5 consecutive traces with configurable delay",
+      "Load balancing detection (ECMP/Per-flow)",
+      "Divergence and convergence point identification",
+      "Routing stability assessment",
+      "AI-powered variance analysis",
+    ],
+  },
+  {
+    mode: "Batch Traceroute",
+    icon: <BatchIcon />,
+    description: "Trace multiple targets simultaneously",
+    features: [
+      "Up to 10 targets in parallel (3 concurrent)",
+      "Combined network topology visualization",
+      "Shared infrastructure identification",
+      "Comparative performance analysis",
+      "Automatic report saving per target",
+    ],
+  },
+  {
+    mode: "Historical Comparison",
+    icon: <HistoryIcon />,
+    description: "Compare saved traces to detect routing changes",
+    features: [
+      "Side-by-side path comparison",
+      "Routing change detection with diff",
+      "AI-powered change significance analysis",
+      "Security implications of route changes",
+      "Trend analysis over time",
+    ],
+  },
+  {
+    mode: "Interactive Chat",
+    icon: <ChatIcon />,
+    description: "Ask AI questions about traceroute results",
+    features: [
+      "Natural language queries about network paths",
+      "Latency explanation and recommendations",
+      "Security assessment on demand",
+      "Troubleshooting guidance",
+      "Context-aware responses based on trace data",
+    ],
+  },
+];
+
 const TracerouteGuidePage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -273,12 +434,13 @@ const TracerouteGuidePage: React.FC = () => {
       </Box>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3 }}>
+      <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3 }} variant="scrollable" scrollButtons="auto">
         <Tab label="Overview" />
         <Tab label="Commands & Options" />
         <Tab label="Interpreting Results" />
         <Tab label="Troubleshooting" />
         <Tab label="Security" />
+        <Tab label="VRAgent AI Analysis" icon={<AiIcon />} iconPosition="start" />
       </Tabs>
 
       {/* Tab 0: Overview */}
@@ -843,6 +1005,397 @@ const TracerouteGuidePage: React.FC = () => {
                   </Card>
                 </Grid>
               </Grid>
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
+
+      {/* Tab 5: VRAgent AI Analysis */}
+      {activeTab === 5 && (
+        <Grid container spacing={3}>
+          {/* Header Alert */}
+          <Grid item xs={12}>
+            <Alert 
+              severity="info" 
+              icon={<AiIcon />}
+              sx={{ 
+                bgcolor: alpha("#8b5cf6", 0.1), 
+                border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+                "& .MuiAlert-icon": { color: "#8b5cf6" }
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight="bold">
+                VRAgent AI-Powered Network Analysis
+              </Typography>
+              <Typography variant="body2">
+                VRAgent extends traditional traceroute with AI-powered analysis, providing deep insights into 
+                network topology, security posture, and performance characteristics. Features include ISP inference, 
+                geographic path analysis, attack surface assessment, and risk scoring.
+              </Typography>
+            </Alert>
+          </Grid>
+
+          {/* AI Analysis Features */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <AiIcon sx={{ color: "#8b5cf6" }} />
+                AI Network Intelligence
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                VRAgent's AI engine analyzes every traceroute to extract actionable intelligence about the network path.
+              </Typography>
+              
+              <Grid container spacing={2}>
+                {AI_ANALYSIS_FEATURES.map((feature, index) => (
+                  <Grid item xs={12} md={4} key={index}>
+                    <Card 
+                      variant="outlined" 
+                      sx={{ 
+                        height: "100%",
+                        borderColor: alpha(feature.color, 0.3),
+                        "&:hover": { borderColor: feature.color }
+                      }}
+                    >
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                          <Box sx={{ color: feature.color }}>{feature.icon}</Box>
+                          <Typography variant="subtitle1" fontWeight="bold">
+                            {feature.title}
+                          </Typography>
+                        </Box>
+                        <List dense>
+                          {feature.items.map((item, i) => (
+                            <ListItem key={i} sx={{ py: 0.5 }}>
+                              <ListItemIcon sx={{ minWidth: 24 }}>
+                                <CheckIcon sx={{ fontSize: 14, color: feature.color }} />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary={item} 
+                                primaryTypographyProps={{ variant: "body2" }}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* Security Analysis */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <ShieldIcon sx={{ color: "#ef4444" }} />
+                Security & Risk Analysis
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Every trace is analyzed for security implications, identifying potential vulnerabilities and attack vectors.
+              </Typography>
+              
+              <Grid container spacing={2}>
+                {SECURITY_ANALYSIS_FEATURES.map((feature, index) => (
+                  <Grid item xs={12} md={4} key={index}>
+                    <Card 
+                      variant="outlined"
+                      sx={{ 
+                        height: "100%",
+                        borderColor: alpha(feature.color, 0.3),
+                        "&:hover": { borderColor: feature.color }
+                      }}
+                    >
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                          <Box sx={{ color: feature.color }}>{feature.icon}</Box>
+                          <Typography variant="subtitle1" fontWeight="bold">
+                            {feature.title}
+                          </Typography>
+                        </Box>
+                        <List dense>
+                          {feature.items.map((item, i) => (
+                            <ListItem key={i} sx={{ py: 0.5 }}>
+                              <ListItemIcon sx={{ minWidth: 24 }}>
+                                <WarningIcon sx={{ fontSize: 14, color: feature.color }} />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary={item} 
+                                primaryTypographyProps={{ variant: "body2" }}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* Risk Score Visualization */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <BugReportIcon sx={{ color: "#ec4899" }} />
+                Risk Scoring System
+              </Typography>
+              
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12} md={3}>
+                  <Card sx={{ bgcolor: alpha("#10b981", 0.1), textAlign: "center", p: 2 }}>
+                    <Typography variant="h3" fontWeight="bold" color="success.main">0-25</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">Low Risk</Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      Clean path, no suspicious hops, standard routing
+                    </Typography>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Card sx={{ bgcolor: alpha("#3b82f6", 0.1), textAlign: "center", p: 2 }}>
+                    <Typography variant="h3" fontWeight="bold" color="info.main">26-50</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">Moderate Risk</Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      Some filtering detected, minor routing anomalies
+                    </Typography>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Card sx={{ bgcolor: alpha("#f59e0b", 0.1), textAlign: "center", p: 2 }}>
+                    <Typography variant="h3" fontWeight="bold" color="warning.main">51-75</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">Elevated Risk</Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      Geographic anomalies, exposed infrastructure
+                    </Typography>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Card sx={{ bgcolor: alpha("#ef4444", 0.1), textAlign: "center", p: 2 }}>
+                    <Typography variant="h3" fontWeight="bold" color="error.main">76-100</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">High Risk</Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      Suspicious routing, potential MITM positions
+                    </Typography>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* Advanced Trace Modes */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <AccountTreeIcon sx={{ color: "#3b82f6" }} />
+                Advanced Trace Modes
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                VRAgent offers specialized trace modes for different analysis needs.
+              </Typography>
+              
+              <Grid container spacing={2}>
+                {ADVANCED_TRACE_MODES.map((mode, index) => (
+                  <Grid item xs={12} md={6} key={index}>
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                          <Box sx={{ color: "#8b5cf6" }}>{mode.icon}</Box>
+                          <Box>
+                            <Typography variant="subtitle1" fontWeight="bold">{mode.mode}</Typography>
+                            <Typography variant="body2" color="text.secondary">{mode.description}</Typography>
+                          </Box>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <List dense>
+                          {mode.features.map((feature, i) => (
+                            <ListItem key={i}>
+                              <ListItemIcon>
+                                <CheckIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                              </ListItemIcon>
+                              <ListItemText primary={feature} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </AccordionDetails>
+                    </Accordion>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* AI Analysis JSON Structure */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <StorageIcon sx={{ color: "#f59e0b" }} />
+                AI Analysis Output Structure
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Each traceroute generates a comprehensive AI analysis with the following structure:
+              </Typography>
+              
+              <Box
+                sx={{
+                  bgcolor: "#1e1e1e",
+                  borderRadius: 1,
+                  p: 2,
+                  fontFamily: "monospace",
+                  fontSize: "0.75rem",
+                  color: "#d4d4d4",
+                  overflow: "auto",
+                  maxHeight: 400,
+                }}
+              >
+                <pre style={{ margin: 0 }}>{`{
+  "summary": "Comprehensive network path analysis summary",
+  "network_inference": {
+    "isp_identified": "Comcast Business",
+    "geographic_path": ["Seattle", "San Jose", "Los Angeles"],
+    "asn_patterns": ["AS7922 (Comcast)", "AS15169 (Google)"],
+    "cloud_providers": ["Google Cloud", "Cloudflare"],
+    "network_type": "business"
+  },
+  "network_segments": [
+    {"segment": "Local", "hops": [1, 2], "ownership": "Private"},
+    {"segment": "ISP", "hops": [3, 4, 5], "ownership": "Comcast"},
+    {"segment": "Transit", "hops": [6, 7, 8], "ownership": "Level3"},
+    {"segment": "Destination", "hops": [9, 10], "ownership": "Google"}
+  ],
+  "performance_analysis": {
+    "overall_grade": "B+",
+    "bottlenecks": ["Hop 5: 45ms latency spike"],
+    "jitter_assessment": "Low variance (2-5ms)",
+    "packet_loss": "No significant loss detected"
+  },
+  "security_observations": [
+    {
+      "observation": "ICMP filtering at hop 7",
+      "severity": "info",
+      "implication": "Standard security practice"
+    },
+    {
+      "observation": "Geographic hop to unexpected region",
+      "severity": "medium",
+      "implication": "Potential traffic routing concern"
+    }
+  ],
+  "attack_surface_analysis": {
+    "exposed_infrastructure": ["10.0.0.1", "72.14.215.85"],
+    "mitm_positions": ["Hops 5-6: ISP to transit boundary"],
+    "filtering_detected": ["Hop 7 blocks ICMP"],
+    "pivot_points": ["Hop 4: Access to ISP network"]
+  },
+  "recommendations": [
+    "Monitor hop 5 for persistent latency",
+    "Consider VPN for sensitive traffic",
+    "Verify expected geographic path"
+  ],
+  "risk_score": 35
+}`}</pre>
+              </Box>
+            </Paper>
+          </Grid>
+
+          {/* Report Features */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <AssessmentIcon sx={{ color: "#10b981" }} />
+                Report & History Features
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <StorageIcon sx={{ color: "#3b82f6" }} />
+                        Save Reports
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        Automatically save traceroute results and AI analysis for future reference.
+                      </Typography>
+                      <List dense>
+                        <ListItem><ListItemText primary="• Full trace data preservation" /></ListItem>
+                        <ListItem><ListItemText primary="• AI analysis included" /></ListItem>
+                        <ListItem><ListItemText primary="• Project organization" /></ListItem>
+                        <ListItem><ListItemText primary="• Risk score tracking" /></ListItem>
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <HistoryIcon sx={{ color: "#f59e0b" }} />
+                        Historical Analysis
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        Track routing changes over time for any target.
+                      </Typography>
+                      <List dense>
+                        <ListItem><ListItemText primary="• Last 10 traces to any target" /></ListItem>
+                        <ListItem><ListItemText primary="• Path change detection" /></ListItem>
+                        <ListItem><ListItemText primary="• Performance trending" /></ListItem>
+                        <ListItem><ListItemText primary="• Anomaly identification" /></ListItem>
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <CompareIcon sx={{ color: "#8b5cf6" }} />
+                        Compare Traces
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        Side-by-side comparison of multiple traces with AI analysis.
+                      </Typography>
+                      <List dense>
+                        <ListItem><ListItemText primary="• Path difference highlighting" /></ListItem>
+                        <ListItem><ListItemText primary="• Routing stability assessment" /></ListItem>
+                        <ListItem><ListItemText primary="• Change significance scoring" /></ListItem>
+                        <ListItem><ListItemText primary="• Security impact analysis" /></ListItem>
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* Streaming Progress */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <TimelineIcon sx={{ color: "#ec4899" }} />
+                Real-Time Streaming Analysis
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                VRAgent provides real-time streaming of traceroute progress with live hop updates.
+              </Typography>
+              
+              <Card variant="outlined" sx={{ p: 2, bgcolor: alpha("#1e1e1e", 0.5) }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                  <Chip label="LIVE" color="success" size="small" sx={{ animation: "pulse 2s infinite" }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Tracing route to google.com (142.250.80.46)...
+                  </Typography>
+                </Box>
+                <Box sx={{ fontFamily: "monospace", fontSize: "0.75rem", color: "#d4d4d4" }}>
+                  <Box sx={{ mb: 0.5 }}>✓ Hop 1: 192.168.1.1 (1.2ms)</Box>
+                  <Box sx={{ mb: 0.5 }}>✓ Hop 2: 10.0.0.1 (8.5ms)</Box>
+                  <Box sx={{ mb: 0.5 }}>✓ Hop 3: 72.14.215.85 (25.3ms)</Box>
+                  <Box sx={{ color: "#f59e0b" }}>⟳ Hop 4: Probing...</Box>
+                </Box>
+                <LinearProgress sx={{ mt: 2, bgcolor: alpha("#8b5cf6", 0.2), "& .MuiLinearProgress-bar": { bgcolor: "#8b5cf6" } }} />
+              </Card>
             </Paper>
           </Grid>
         </Grid>

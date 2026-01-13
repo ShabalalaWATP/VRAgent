@@ -32,6 +32,12 @@ import {
   Tooltip,
   LinearProgress,
   useMediaQuery,
+  Slider,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -302,7 +308,22 @@ const devOpsConcepts = [
   { concept: "Observability", description: "Ability to understand system state from external outputs", tools: "Prometheus, Grafana, Datadog, New Relic", benefit: "Faster debugging, proactive monitoring, SLO tracking" },
 ];
 
-// ========== CLI TOOLS ==========
+// ========== OBSERVABILITY & SRE ==========
+const observabilitySignals = [
+  { signal: "Metrics", description: "Numeric time-series measurements of system behavior", examples: "Latency, error rate, CPU, queue depth", value: "Capacity planning, SLO tracking, trend analysis" },
+  { signal: "Logs", description: "Structured records of events and state changes", examples: "HTTP access logs, audit logs, application events", value: "Forensics, debugging, compliance trails" },
+  { signal: "Traces", description: "End-to-end request paths across distributed systems", examples: "Trace IDs across API gateway, services, and databases", value: "Bottleneck detection and latency root cause" },
+  { signal: "Profiles", description: "Low-level performance samples for CPU, memory, and I/O", examples: "CPU flame graphs, heap profiles, eBPF traces", value: "Optimization of hot paths and resource usage" },
+];
+
+const availabilityTargets = [
+  { tier: "99.5%", downtime: "3h 39m / month", useCase: "Internal tools, low-risk workloads", guidance: "Single region with good backup practices" },
+  { tier: "99.9%", downtime: "43m 49s / month", useCase: "Customer-facing apps, SaaS MVPs", guidance: "Multi-AZ design, automated failover" },
+  { tier: "99.95%", downtime: "21m 54s / month", useCase: "Payments, critical services", guidance: "Multi-AZ + active monitoring + playbooks" },
+  { tier: "99.99%", downtime: "4m 23s / month", useCase: "Global platforms, regulated systems", guidance: "Multi-region, active-active or hot standby" },
+];
+
+// ========== CLI TOOLS ========== 
 const cliTools = [
   { name: "AWS CLI", command: "aws", example: "aws s3 ls", description: "Official AWS command-line interface for all AWS services", install: "pip install awscli or brew install awscli" },
   { name: "Azure CLI", command: "az", example: "az vm list", description: "Cross-platform CLI for managing Azure resources", install: "pip install azure-cli or brew install azure-cli" },
@@ -331,11 +352,273 @@ const cloudSecurityTools = [
   { tool: "Web Application Firewall (WAF)", purpose: "Protect web applications from common attacks (SQLi, XSS)", examples: "AWS WAF, Azure WAF, Cloudflare WAF", importance: "High" },
 ];
 
-// ========== OUTLINE SECTIONS (Placeholders for future content) ==========
-const outlineSections = [
-  { title: "Disaster Recovery Strategies", description: "RPO/RTO, backup strategies, multi-region failover", status: "Coming Soon" },
-  { title: "Cloud Cost Optimization", description: "FinOps practices, rightsizing, reserved capacity planning", status: "Coming Soon" },
-  { title: "Cloud Certifications Guide", description: "AWS, Azure, and GCP certification paths and study tips", status: "Coming Soon" },
+// ========== DATA GOVERNANCE & LIFECYCLE ==========
+const dataGovernancePractices = [
+  { practice: "Classification & Tagging", description: "Label data by sensitivity (public, internal, confidential, regulated)", tools: "AWS Macie, Azure Purview, Google Cloud DLP", outcome: "Drives access control and retention policies" },
+  { practice: "Data Residency", description: "Keep data in specific regions for legal or contractual reasons", tools: "Region policies, org-level constraints, data zoning", outcome: "Meets regulatory and customer requirements" },
+  { practice: "Access Governance", description: "Enforce least privilege with periodic reviews and approvals", tools: "IAM, Access Analyzer, PIM/PAM workflows", outcome: "Reduces unauthorized access risk" },
+  { practice: "Encryption & Key Management", description: "Encrypt at rest/in transit and control keys centrally", tools: "KMS, HSMs, customer-managed keys", outcome: "Protects data from exposure and theft" },
+  { practice: "Retention & Disposal", description: "Define how long data is kept and how it is deleted", tools: "Lifecycle policies, legal holds, secure wipe", outcome: "Avoids compliance and storage cost issues" },
+  { practice: "Auditability", description: "Track who accessed data and when, with tamper-evident logs", tools: "CloudTrail, Azure Monitor, Cloud Logging", outcome: "Supports incident response and compliance audits" },
+];
+
+const dataLifecycleStages = [
+  { stage: "Ingest", goal: "Validate, sanitize, and encrypt data on entry", controls: "Schema checks, rate limits, TLS", services: "API Gateway, Event Hub, Pub/Sub" },
+  { stage: "Store", goal: "Protect data at rest with access control", controls: "KMS, bucket policies, private endpoints", services: "S3, Blob Storage, Cloud Storage" },
+  { stage: "Process", goal: "Use isolated compute with minimal permissions", controls: "IAM roles, network segmentation, temp data hygiene", services: "EMR, Dataproc, Databricks" },
+  { stage: "Share", goal: "Control distribution and reduce data exposure", controls: "Tokenization, data contracts, row-level security", services: "Lake Formation, BigQuery, Synapse" },
+  { stage: "Archive", goal: "Store long-term data cheaply with policy controls", controls: "Retention rules, legal holds, immutable storage", services: "Glacier, Archive Storage" },
+  { stage: "Dispose", goal: "Remove data safely when retention ends", controls: "Secure delete, key revocation, audit trails", services: "Object lock expiration, lifecycle delete" },
+];
+
+// ========== WELL-ARCHITECTED FRAMEWORK ========== 
+const wellArchitectedPillars = [
+  {
+    pillar: "Operational Excellence",
+    description: "Run and monitor systems to deliver business value and continually improve processes",
+    keyPrinciples: ["Perform operations as code", "Make frequent, small, reversible changes", "Anticipate failure", "Learn from operational events"],
+    awsTools: "CloudWatch, CloudFormation, Systems Manager, X-Ray",
+    questions: "How do you manage and automate changes? How do you respond to unplanned events?",
+    color: "#3b82f6",
+    icon: "⚙️"
+  },
+  {
+    pillar: "Security",
+    description: "Protect information, systems, and assets while delivering business value through risk assessment",
+    keyPrinciples: ["Implement strong identity foundation", "Enable traceability", "Apply security at all layers", "Automate security best practices", "Protect data in transit and at rest"],
+    awsTools: "IAM, KMS, CloudTrail, Security Hub, GuardDuty, WAF",
+    questions: "How do you manage identities? How do you detect and investigate security events?",
+    color: "#ef4444",
+    icon: "🔒"
+  },
+  {
+    pillar: "Reliability",
+    description: "Ensure a workload performs its intended function correctly and consistently",
+    keyPrinciples: ["Automatically recover from failure", "Test recovery procedures", "Scale horizontally", "Stop guessing capacity", "Manage change through automation"],
+    awsTools: "Auto Scaling, Multi-AZ, Route 53, Backup, Elastic Load Balancing",
+    questions: "How do you manage service quotas and constraints? How do you implement change management?",
+    color: "#22c55e",
+    icon: "🛡️"
+  },
+  {
+    pillar: "Performance Efficiency",
+    description: "Use computing resources efficiently to meet requirements and maintain that efficiency as demand changes",
+    keyPrinciples: ["Democratize advanced technologies", "Go global in minutes", "Use serverless architectures", "Experiment more often", "Consider mechanical sympathy"],
+    awsTools: "Lambda, CloudFront, ElastiCache, Auto Scaling, Compute Optimizer",
+    questions: "How do you select appropriate resource types? How do you monitor resources to ensure performance?",
+    color: "#f59e0b",
+    icon: "⚡"
+  },
+  {
+    pillar: "Cost Optimization",
+    description: "Avoid unnecessary costs and run systems to deliver business value at the lowest price point",
+    keyPrinciples: ["Implement cloud financial management", "Adopt a consumption model", "Measure overall efficiency", "Stop spending on undifferentiated heavy lifting", "Analyze and attribute expenditure"],
+    awsTools: "Cost Explorer, Budgets, Savings Plans, Reserved Instances, Compute Optimizer",
+    questions: "How do you implement cloud financial management? How do you monitor usage and cost?",
+    color: "#8b5cf6",
+    icon: "💰"
+  },
+  {
+    pillar: "Sustainability",
+    description: "Minimize environmental impacts of running cloud workloads",
+    keyPrinciples: ["Understand your impact", "Establish sustainability goals", "Maximize utilization", "Use efficient hardware and software", "Reduce downstream impact"],
+    awsTools: "Customer Carbon Footprint Tool, Graviton processors, Spot Instances",
+    questions: "How do you select regions to support your sustainability goals? How do you take advantage of user behavior patterns?",
+    color: "#14b8a6",
+    icon: "🌱"
+  },
+];
+
+// ========== CLOUD MIGRATION STRATEGIES (6 Rs) ==========
+const migrationStrategies = [
+  {
+    strategy: "Rehost",
+    nickname: "Lift and Shift",
+    description: "Move applications to the cloud without changes. Fastest migration path.",
+    effort: "Low",
+    cloudBenefit: "Low-Medium",
+    bestFor: "Legacy apps, tight deadlines, large-scale migrations",
+    tools: "AWS Migration Hub, Azure Migrate, Google Migrate for Compute Engine",
+    example: "Move on-prem VMs directly to EC2 instances",
+    color: "#3b82f6"
+  },
+  {
+    strategy: "Replatform",
+    nickname: "Lift, Tinker, and Shift",
+    description: "Make a few cloud optimizations without changing core architecture. Balance speed and optimization.",
+    effort: "Low-Medium",
+    cloudBenefit: "Medium",
+    bestFor: "Apps that can benefit from managed services with minimal changes",
+    tools: "AWS Elastic Beanstalk, Azure App Service, Google App Engine",
+    example: "Migrate database to RDS instead of managing your own MySQL on EC2",
+    color: "#8b5cf6"
+  },
+  {
+    strategy: "Repurchase",
+    nickname: "Drop and Shop",
+    description: "Move to a different product, typically SaaS. Replace custom software with commercial solutions.",
+    effort: "Medium",
+    cloudBenefit: "Medium-High",
+    bestFor: "Commodity applications where SaaS alternatives exist",
+    tools: "Salesforce, Workday, ServiceNow, Microsoft 365",
+    example: "Replace on-prem email server with Microsoft 365 or Google Workspace",
+    color: "#22c55e"
+  },
+  {
+    strategy: "Refactor",
+    nickname: "Re-architect",
+    description: "Re-imagine how the application is architected using cloud-native features. Most effort, most benefit.",
+    effort: "High",
+    cloudBenefit: "High",
+    bestFor: "Apps needing scalability, new features, or modernization",
+    tools: "Containers (EKS/AKS/GKE), Serverless (Lambda), Microservices",
+    example: "Break monolith into microservices running on Kubernetes",
+    color: "#f59e0b"
+  },
+  {
+    strategy: "Retire",
+    nickname: "Decommission",
+    description: "Identify IT assets that are no longer useful and can be turned off. Reduce portfolio complexity.",
+    effort: "Low",
+    cloudBenefit: "Cost savings",
+    bestFor: "Redundant, outdated, or unused applications",
+    tools: "Application portfolio analysis, dependency mapping",
+    example: "Shut down legacy reporting system replaced by modern BI tool",
+    color: "#6b7280"
+  },
+  {
+    strategy: "Retain",
+    nickname: "Revisit Later",
+    description: "Keep certain applications on-premises. Not everything needs to move to cloud.",
+    effort: "None",
+    cloudBenefit: "N/A",
+    bestFor: "Recently upgraded apps, compliance restrictions, low ROI migrations",
+    tools: "Hybrid connectivity (Direct Connect, ExpressRoute, VPN)",
+    example: "Keep mainframe systems on-prem with hybrid connectivity",
+    color: "#ef4444"
+  },
+];
+
+// ========== DISASTER RECOVERY STRATEGIES ==========
+const drStrategies = [
+  {
+    strategy: "Backup & Restore",
+    rpo: "Hours",
+    rto: "24+ hours",
+    cost: "💰",
+    description: "Backup data to cloud storage. Restore infrastructure from scratch when needed.",
+    implementation: "Regular backups to S3/Blob, AMIs for quick instance recreation",
+    bestFor: "Non-critical systems, cost-sensitive workloads",
+    color: "#6b7280"
+  },
+  {
+    strategy: "Pilot Light",
+    rpo: "Minutes",
+    rto: "Hours",
+    cost: "💰💰",
+    description: "Keep core components running at minimum capacity. Scale up when disaster occurs.",
+    implementation: "Database replication running, AMIs ready, minimal compute running",
+    bestFor: "Critical databases, applications with some downtime tolerance",
+    color: "#3b82f6"
+  },
+  {
+    strategy: "Warm Standby",
+    rpo: "Minutes",
+    rto: "Minutes",
+    cost: "💰💰💰",
+    description: "Scaled-down but fully functional copy of production environment always running.",
+    implementation: "Reduced capacity in DR region, ready to scale up immediately",
+    bestFor: "Business-critical applications requiring faster recovery",
+    color: "#f59e0b"
+  },
+  {
+    strategy: "Multi-Site Active/Active",
+    rpo: "Near Zero",
+    rto: "Near Zero",
+    cost: "💰💰💰💰",
+    description: "Full production environment in multiple regions, traffic split between them.",
+    implementation: "Global load balancing, real-time data synchronization, both sites active",
+    bestFor: "Mission-critical applications with zero-downtime requirements",
+    color: "#22c55e"
+  },
+];
+
+// ========== CLOUD CERTIFICATIONS ==========
+const cloudCertifications = [
+  {
+    provider: "AWS",
+    color: "#ff9900",
+    certs: [
+      { name: "Cloud Practitioner", level: "Foundational", duration: "1-2 months", prereq: "None", focus: "Cloud concepts, billing, support" },
+      { name: "Solutions Architect Associate", level: "Associate", duration: "2-3 months", prereq: "Cloud Practitioner recommended", focus: "Designing distributed systems" },
+      { name: "Developer Associate", level: "Associate", duration: "2-3 months", prereq: "Cloud Practitioner recommended", focus: "Building cloud applications" },
+      { name: "SysOps Administrator Associate", level: "Associate", duration: "2-3 months", prereq: "Cloud Practitioner recommended", focus: "Operations and deployment" },
+      { name: "Solutions Architect Professional", level: "Professional", duration: "3-6 months", prereq: "SA Associate", focus: "Complex architectures" },
+      { name: "Security Specialty", level: "Specialty", duration: "2-4 months", prereq: "Associate cert", focus: "Security controls and compliance" },
+    ]
+  },
+  {
+    provider: "Azure",
+    color: "#0078d4",
+    certs: [
+      { name: "AZ-900 Fundamentals", level: "Foundational", duration: "1-2 months", prereq: "None", focus: "Cloud concepts, Azure services" },
+      { name: "AZ-104 Administrator", level: "Associate", duration: "2-3 months", prereq: "AZ-900 recommended", focus: "Managing Azure resources" },
+      { name: "AZ-204 Developer", level: "Associate", duration: "2-3 months", prereq: "AZ-900 recommended", focus: "Developing Azure solutions" },
+      { name: "AZ-305 Solutions Architect", level: "Expert", duration: "3-6 months", prereq: "AZ-104", focus: "Designing Azure solutions" },
+      { name: "AZ-500 Security Engineer", level: "Associate", duration: "2-4 months", prereq: "AZ-104 recommended", focus: "Security operations" },
+      { name: "SC-900 Security Fundamentals", level: "Foundational", duration: "1-2 months", prereq: "None", focus: "Security, compliance, identity" },
+    ]
+  },
+  {
+    provider: "GCP",
+    color: "#4285f4",
+    certs: [
+      { name: "Cloud Digital Leader", level: "Foundational", duration: "1-2 months", prereq: "None", focus: "Cloud concepts, GCP overview" },
+      { name: "Associate Cloud Engineer", level: "Associate", duration: "2-3 months", prereq: "CDL recommended", focus: "Deploying applications, monitoring" },
+      { name: "Professional Cloud Architect", level: "Professional", duration: "3-6 months", prereq: "ACE recommended", focus: "Designing enterprise solutions" },
+      { name: "Professional Cloud Developer", level: "Professional", duration: "2-4 months", prereq: "ACE recommended", focus: "Building scalable applications" },
+      { name: "Professional Cloud Security Engineer", level: "Professional", duration: "2-4 months", prereq: "ACE recommended", focus: "Security controls and policies" },
+      { name: "Professional Cloud DevOps Engineer", level: "Professional", duration: "2-4 months", prereq: "ACE recommended", focus: "CI/CD and SRE practices" },
+    ]
+  },
+];
+
+// ========== FINOPS / COST OPTIMIZATION PRACTICES ==========
+const costOptimizationPractices = [
+  { practice: "Right-sizing", description: "Match instance types to actual workload requirements, not peak capacity", savings: "20-40%", tools: "AWS Compute Optimizer, Azure Advisor, GCP Recommender", implementation: "Review utilization metrics, downsize over-provisioned instances" },
+  { practice: "Reserved Capacity", description: "Commit to 1-3 year terms for predictable workloads", savings: "30-72%", tools: "AWS Reserved Instances, Azure Reservations, GCP Committed Use", implementation: "Analyze usage patterns, commit for steady-state workloads" },
+  { practice: "Spot/Preemptible Instances", description: "Use spare capacity at steep discounts for fault-tolerant workloads", savings: "60-90%", tools: "AWS Spot, Azure Spot VMs, GCP Preemptible/Spot VMs", implementation: "Design for interruption, use for batch processing, CI/CD" },
+  { practice: "Auto Scaling", description: "Automatically adjust capacity based on demand", savings: "Variable", tools: "AWS Auto Scaling, Azure VMSS, GCP MIGs", implementation: "Set scaling policies based on metrics, schedule for known patterns" },
+  { practice: "Storage Tiering", description: "Move infrequently accessed data to cheaper storage classes", savings: "40-80%", tools: "S3 Intelligent-Tiering, Azure Cool/Archive, GCP Nearline/Coldline", implementation: "Implement lifecycle policies, use intelligent tiering" },
+  { practice: "Idle Resource Cleanup", description: "Identify and terminate unused resources", savings: "15-30%", tools: "AWS Trusted Advisor, Azure Advisor, custom scripts", implementation: "Regular audits, automated cleanup, dev environment schedules" },
+  { practice: "Savings Plans", description: "Flexible commitment model for compute usage", savings: "20-66%", tools: "AWS Savings Plans, Azure Savings Plans for Compute", implementation: "Analyze compute spend, commit to hourly spend level" },
+  { practice: "FinOps Culture", description: "Make cloud costs visible and accountable to engineering teams", savings: "Organization-wide", tools: "AWS Cost Explorer, Azure Cost Management, GCP Billing", implementation: "Cost allocation tags, team budgets, regular reviews" },
+];
+
+// ========== INSTANCE TYPE CATEGORIES ==========
+const instanceCategories = [
+  { category: "General Purpose", awsTypes: "t3, t4g, m5, m6i, m7g", azureTypes: "B, D, Dv5", gcpTypes: "e2, n2, n2d", useCase: "Web servers, small databases, dev/test environments", characteristics: "Balanced compute, memory, networking" },
+  { category: "Compute Optimized", awsTypes: "c5, c6i, c7g", azureTypes: "F, Fsv2", gcpTypes: "c2, c2d, h3", useCase: "High-performance computing, batch processing, gaming servers", characteristics: "High CPU-to-memory ratio, best compute price/performance" },
+  { category: "Memory Optimized", awsTypes: "r5, r6i, x2idn", azureTypes: "E, Ev5, M", gcpTypes: "m2, m3", useCase: "In-memory databases, real-time analytics, SAP HANA", characteristics: "High memory-to-CPU ratio, up to 24TB RAM" },
+  { category: "Storage Optimized", awsTypes: "i3, i4i, d3", azureTypes: "L", gcpTypes: "z3", useCase: "Data warehousing, distributed file systems, log processing", characteristics: "High sequential read/write, NVMe SSD storage" },
+  { category: "Accelerated Computing", awsTypes: "p4, p5, g5, inf2", azureTypes: "NC, ND, NV", gcpTypes: "a2, g2", useCase: "Machine learning, graphics rendering, video encoding", characteristics: "GPU/TPU attached, CUDA/tensor cores" },
+  { category: "ARM-based", awsTypes: "t4g, m6g, c7g, r7g", azureTypes: "Dpsv5, Epsv5", gcpTypes: "t2a", useCase: "Cost-effective workloads, containerized apps, web servers", characteristics: "Up to 40% better price/performance, energy efficient" },
+];
+
+// ========== KUBERNETES CONCEPTS (EXPANDED) ==========
+const kubernetesConcepts = [
+  { concept: "Pod", description: "Smallest deployable unit containing one or more containers that share storage and network", keyPoints: "Ephemeral, scheduled on nodes, share localhost", icon: "🫛" },
+  { concept: "Deployment", description: "Manages ReplicaSets and provides declarative updates for Pods", keyPoints: "Rolling updates, rollbacks, scaling", icon: "🚀" },
+  { concept: "Service", description: "Stable network endpoint to access a set of Pods", keyPoints: "ClusterIP, NodePort, LoadBalancer types", icon: "🔗" },
+  { concept: "Ingress", description: "Manages external access to services, typically HTTP/HTTPS", keyPoints: "Path-based routing, TLS termination, virtual hosts", icon: "🚪" },
+  { concept: "ConfigMap", description: "Store non-confidential configuration data as key-value pairs", keyPoints: "Decouple config from images, mount as volumes or env vars", icon: "📋" },
+  { concept: "Secret", description: "Store sensitive information like passwords, tokens, keys", keyPoints: "Base64 encoded, can be encrypted at rest", icon: "🔐" },
+  { concept: "Namespace", description: "Virtual cluster within a physical cluster for resource isolation", keyPoints: "Separate environments, resource quotas, RBAC", icon: "📁" },
+  { concept: "Persistent Volume", description: "Storage resource in the cluster with lifecycle independent of Pods", keyPoints: "PV, PVC, StorageClass, dynamic provisioning", icon: "💾" },
+  { concept: "DaemonSet", description: "Ensures a copy of a Pod runs on all (or selected) nodes", keyPoints: "Logging agents, monitoring, node-level services", icon: "👻" },
+  { concept: "StatefulSet", description: "Manages stateful applications with persistent storage and stable identities", keyPoints: "Ordered deployment, stable network IDs, persistent storage", icon: "📊" },
+  { concept: "Horizontal Pod Autoscaler", description: "Automatically scales Pod count based on CPU/memory or custom metrics", keyPoints: "Target utilization, min/max replicas, cooldown", icon: "📈" },
+  { concept: "Network Policy", description: "Firewall rules for Pods controlling ingress/egress traffic", keyPoints: "Pod selectors, namespace selectors, port rules", icon: "🛡️" },
 ];
 
 const ACCENT_COLOR = "#0ea5e9";
@@ -1005,8 +1288,10 @@ const CloudComputingPage: React.FC = () => {
     { id: "iam", label: "IAM", icon: <LockIcon /> },
     { id: "architecture", label: "Architecture", icon: <BuildIcon /> },
     { id: "devops", label: "DevOps", icon: <SpeedIcon /> },
+    { id: "observability", label: "Observability", icon: <SpeedIcon /> },
     { id: "cli", label: "CLI Tools", icon: <BuildIcon /> },
     { id: "security-tools", label: "Security Tools", icon: <SecurityIcon /> },
+    { id: "data-governance", label: "Data Governance", icon: <StorageIcon /> },
     { id: "real-world", label: "Real World", icon: <TipsAndUpdatesIcon /> },
     { id: "outline", label: "Outline", icon: <ListAltIcon /> },
     { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
@@ -1157,7 +1442,9 @@ const CloudComputingPage: React.FC = () => {
 - Benefits of cloud computing: Scalability, Cost Efficiency, Global Reach, Reliability
 - Cloud security: Shared Responsibility Model, IAM, encryption, compliance
 - Common misconfigurations: Public buckets, overly permissive IAM, hardcoded credentials
-- Cloud terminology: Regions, AZs, edge locations, elasticity, HA, fault tolerance`;
+- Cloud terminology: Regions, AZs, edge locations, elasticity, HA, fault tolerance
+- Observability and SRE basics: metrics, logs, traces, SLOs
+- Data governance and lifecycle: classification, retention, access controls`;
 
   return (
     <LearnPageLayout pageTitle="Cloud Computing Fundamentals" pageContext={pageContext}>
@@ -2145,6 +2432,68 @@ const CloudComputingPage: React.FC = () => {
           ))}
         </Grid>
 
+        {/* ==================== OBSERVABILITY & SRE ==================== */}
+        <Typography id="observability" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          ?? Observability & SRE Essentials
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          How teams measure reliability, detect incidents, and improve user experience
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#06b6d4", 0.03), border: `1px solid ${alpha("#06b6d4", 0.1)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            Observability connects what users feel to what systems do. Start with the <strong>golden signals</strong>:
+            latency (speed), traffic (load), errors (quality), and saturation (capacity). Use these signals to set
+            clear SLOs and manage risk with error budgets.
+          </Typography>
+        </Paper>
+
+        <TableContainer component={Paper} sx={{ mb: 3, borderRadius: 3 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha("#06b6d4", 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Signal</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>What It Is</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Examples</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Why It Matters</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {observabilitySignals.map((signal) => (
+                <TableRow key={signal.signal} sx={{ "&:hover": { bgcolor: alpha("#06b6d4", 0.03) } }}>
+                  <TableCell sx={{ fontWeight: 700, color: "#06b6d4" }}>{signal.signal}</TableCell>
+                  <TableCell sx={{ fontSize: "0.85rem" }}>{signal.description}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem", color: "text.secondary" }}>{signal.examples}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem" }}>{signal.value}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha("#06b6d4", 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Availability Target</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Allowed Downtime</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Typical Use</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Architecture Guidance</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {availabilityTargets.map((tier) => (
+                <TableRow key={tier.tier} sx={{ "&:hover": { bgcolor: alpha("#06b6d4", 0.03) } }}>
+                  <TableCell sx={{ fontWeight: 700, color: "#06b6d4" }}>{tier.tier}</TableCell>
+                  <TableCell>{tier.downtime}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem", color: "text.secondary" }}>{tier.useCase}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem" }}>{tier.guidance}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
         {/* ==================== CLI TOOLS ==================== */}
         <Typography id="cli" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
           💻 Cloud CLI Tools
@@ -2207,6 +2556,65 @@ const CloudComputingPage: React.FC = () => {
           </Table>
         </TableContainer>
 
+        {/* ==================== DATA GOVERNANCE ==================== */}
+        <Typography id="data-governance" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          ?? Data Governance & Lifecycle
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Keep data secure, compliant, and useful from ingestion to disposal
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.1)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            Data governance defines who can access data, where it can live, and how long it can be retained. In the cloud,
+            governance is enforced through tagging, policies, encryption, and audit logs that travel with your data everywhere.
+          </Typography>
+        </Paper>
+
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {dataGovernancePractices.map((practice) => (
+            <Grid item xs={12} sm={6} md={4} key={practice.practice}>
+              <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5, color: "#3b82f6" }}>
+                  {practice.practice}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  {practice.description}
+                </Typography>
+                <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                  <strong>Tools:</strong> {practice.tools}
+                </Typography>
+                <Typography variant="caption" sx={{ display: "block", color: "text.secondary" }}>
+                  <strong>Outcome:</strong> {practice.outcome}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha("#3b82f6", 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Stage</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Goal</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Controls</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Examples</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {dataLifecycleStages.map((stage) => (
+                <TableRow key={stage.stage} sx={{ "&:hover": { bgcolor: alpha("#3b82f6", 0.03) } }}>
+                  <TableCell sx={{ fontWeight: 700, color: "#3b82f6" }}>{stage.stage}</TableCell>
+                  <TableCell sx={{ fontSize: "0.85rem" }}>{stage.goal}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem", color: "text.secondary" }}>{stage.controls}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem" }}>{stage.services}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
         {/* ==================== REAL WORLD EXAMPLES ==================== */}
         <Typography id="real-world" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
           🌍 Real World Cloud Implementations
@@ -2229,27 +2637,318 @@ const CloudComputingPage: React.FC = () => {
           ))}
         </Grid>
 
-        {/* ==================== COMING SOON OUTLINE ==================== */}
-        <Typography id="outline" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
-          📋 Coming Soon
+        {/* ==================== WELL-ARCHITECTED FRAMEWORK ==================== */}
+        <Typography id="well-architected" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          🏛️ AWS Well-Architected Framework
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          More in-depth content will be added in future updates
+          The six pillars of building secure, high-performing, resilient, and efficient infrastructure
         </Typography>
 
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.1)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            The <strong>Well-Architected Framework</strong> provides a consistent approach to evaluate architectures and implement designs that scale over time.
+            While developed by AWS, these principles apply to all cloud providers. Use these pillars to review workloads before going to production.
+          </Typography>
+        </Paper>
+
         <Grid container spacing={2} sx={{ mb: 5 }}>
-          {outlineSections.map((section) => (
-            <Grid item xs={12} sm={6} md={4} key={section.title}>
-              <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px dashed ${alpha("#6b7280", 0.3)}`, bgcolor: alpha("#6b7280", 0.03) }}>
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{section.title}</Typography>
-                  <Chip label={section.status} size="small" sx={{ fontSize: "0.65rem", bgcolor: alpha("#6b7280", 0.1) }} />
+          {wellArchitectedPillars.map((pillar) => (
+            <Grid item xs={12} md={6} key={pillar.pillar}>
+              <Paper sx={{ p: 3, borderRadius: 2, height: "100%", borderLeft: `4px solid ${pillar.color}`, bgcolor: alpha(pillar.color, 0.02) }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                  <span>{pillar.icon}</span>
+                  <span style={{ color: pillar.color }}>{pillar.pillar}</span>
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{pillar.description}</Typography>
+                <Typography variant="caption" sx={{ display: "block", mb: 1, fontWeight: 600 }}>Key Principles:</Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 2 }}>
+                  {pillar.keyPrinciples.map((p, i) => (
+                    <Chip key={i} label={p} size="small" sx={{ fontSize: "0.65rem", bgcolor: alpha(pillar.color, 0.1) }} />
+                  ))}
                 </Box>
-                <Typography variant="body2" color="text.secondary">{section.description}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  <strong>AWS Tools:</strong> {pillar.awsTools}
+                </Typography>
               </Paper>
             </Grid>
           ))}
         </Grid>
+
+        {/* ==================== CLOUD MIGRATION STRATEGIES ==================== */}
+        <Typography id="migration" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          🚀 Cloud Migration Strategies (The 6 Rs)
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Six approaches to migrating applications to the cloud, from simple lift-and-shift to full re-architecture
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.1)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            Not every application should be migrated the same way. The <strong>6 Rs</strong> framework helps you choose the right strategy based on
+            business requirements, timeline, and available resources. Start with an application portfolio assessment to categorize workloads.
+          </Typography>
+        </Paper>
+
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {migrationStrategies.map((strat) => (
+            <Grid item xs={12} sm={6} md={4} key={strat.strategy}>
+              <Paper sx={{ p: 3, borderRadius: 2, height: "100%", border: `2px solid ${alpha(strat.color, 0.3)}`, bgcolor: alpha(strat.color, 0.02) }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: strat.color }}>{strat.strategy}</Typography>
+                  <Chip label={strat.effort} size="small" sx={{ fontSize: "0.65rem" }} />
+                </Box>
+                <Typography variant="caption" sx={{ display: "block", mb: 1, fontStyle: "italic", color: "text.secondary" }}>
+                  "{strat.nickname}"
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{strat.description}</Typography>
+                <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                  <strong>Best For:</strong> {strat.bestFor}
+                </Typography>
+                <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                  <strong>Example:</strong> {strat.example}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  <strong>Tools:</strong> {strat.tools}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ==================== DISASTER RECOVERY ==================== */}
+        <Typography id="disaster-recovery" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          🔄 Disaster Recovery Strategies
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Plan for failures with the right balance of cost and recovery time
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#ef4444", 0.03), border: `1px solid ${alpha("#ef4444", 0.1)}` }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>RPO (Recovery Point Objective)</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Maximum acceptable data loss measured in time. How much data can you afford to lose?
+                A 1-hour RPO means backups must be taken at least hourly.
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#f59e0b" }}>RTO (Recovery Time Objective)</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Maximum acceptable downtime. How quickly must systems be restored?
+                A 4-hour RTO means systems must be operational within 4 hours of failure.
+              </Typography>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha("#ef4444", 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Strategy</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>RPO</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>RTO</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Cost</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Best For</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {drStrategies.map((dr) => (
+                <TableRow key={dr.strategy} sx={{ "&:hover": { bgcolor: alpha(dr.color, 0.05) } }}>
+                  <TableCell sx={{ fontWeight: 700, color: dr.color }}>{dr.strategy}</TableCell>
+                  <TableCell>{dr.rpo}</TableCell>
+                  <TableCell>{dr.rto}</TableCell>
+                  <TableCell>{dr.cost}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem", color: "text.secondary" }}>{dr.description}</TableCell>
+                  <TableCell sx={{ fontSize: "0.75rem" }}>{dr.bestFor}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {/* ==================== COST OPTIMIZATION ==================== */}
+        <Typography id="cost-optimization" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          💰 Cloud Cost Optimization & FinOps
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Best practices for optimizing cloud spending without sacrificing performance
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            <strong>FinOps</strong> (Cloud Financial Operations) is a cultural practice and discipline that brings financial accountability to the variable
+            spend model of cloud. It involves cross-functional teams from finance, engineering, and business working together to optimize cloud costs.
+          </Typography>
+        </Paper>
+
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {costOptimizationPractices.map((cop) => (
+            <Grid item xs={12} sm={6} md={4} key={cop.practice}>
+              <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e" }}>{cop.practice}</Typography>
+                  <Chip label={cop.savings} size="small" sx={{ bgcolor: alpha("#22c55e", 0.1), color: "#22c55e", fontWeight: 700, fontSize: "0.7rem" }} />
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: "0.8rem" }}>{cop.description}</Typography>
+                <Typography variant="caption" sx={{ display: "block", color: "text.secondary" }}>
+                  <strong>Tools:</strong> {cop.tools}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ==================== INSTANCE TYPES ==================== */}
+        <Typography id="instance-types" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          🖥️ Instance Type Categories
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Understanding compute instance families across AWS, Azure, and GCP
+        </Typography>
+
+        <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha("#3b82f6", 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>AWS</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Azure</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>GCP</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Use Cases</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {instanceCategories.map((ic) => (
+                <TableRow key={ic.category} sx={{ "&:hover": { bgcolor: alpha("#3b82f6", 0.02) } }}>
+                  <TableCell sx={{ fontWeight: 700, color: "#3b82f6" }}>{ic.category}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{ic.awsTypes}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{ic.azureTypes}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{ic.gcpTypes}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem", color: "text.secondary" }}>{ic.useCase}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {/* ==================== KUBERNETES DEEP DIVE ==================== */}
+        <Typography id="kubernetes" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          ☸️ Kubernetes Deep Dive
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Essential Kubernetes concepts for container orchestration
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {kubernetesConcepts.map((kc) => (
+            <Grid item xs={12} sm={6} md={4} key={kc.concept}>
+              <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha("#326ce5", 0.2)}`, bgcolor: alpha("#326ce5", 0.02) }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5, display: "flex", alignItems: "center", gap: 1 }}>
+                  <span>{kc.icon}</span>
+                  <span style={{ color: "#326ce5" }}>{kc.concept}</span>
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: "0.85rem" }}>{kc.description}</Typography>
+                <Typography variant="caption" sx={{ color: "#326ce5" }}>
+                  {kc.keyPoints}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ==================== CLOUD CERTIFICATIONS ==================== */}
+        <Typography id="certifications" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          📜 Cloud Certifications Guide
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Certification paths for AWS, Azure, and GCP to validate your cloud skills
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.1)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            Cloud certifications demonstrate your knowledge and can significantly boost your career. Start with foundational certs to understand concepts,
+            then progress to associate and professional levels. <strong>Security certifications</strong> are especially valuable for cybersecurity professionals.
+          </Typography>
+        </Paper>
+
+        {cloudCertifications.map((provider) => (
+          <Box key={provider.provider} sx={{ mb: 4 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: provider.color }}>
+              {provider.provider} Certifications
+            </Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, border: `2px solid ${alpha(provider.color, 0.2)}` }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha(provider.color, 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Certification</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Level</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Study Time</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Prerequisites</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Focus Areas</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {provider.certs.map((cert) => (
+                    <TableRow key={cert.name} sx={{ "&:hover": { bgcolor: alpha(provider.color, 0.02) } }}>
+                      <TableCell sx={{ fontWeight: 600 }}>{cert.name}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={cert.level}
+                          size="small"
+                          sx={{
+                            fontSize: "0.65rem",
+                            bgcolor: cert.level === "Foundational" ? alpha("#22c55e", 0.1) :
+                                     cert.level === "Associate" ? alpha("#3b82f6", 0.1) :
+                                     cert.level === "Professional" || cert.level === "Expert" ? alpha("#8b5cf6", 0.1) :
+                                     alpha("#f59e0b", 0.1),
+                            color: cert.level === "Foundational" ? "#22c55e" :
+                                   cert.level === "Associate" ? "#3b82f6" :
+                                   cert.level === "Professional" || cert.level === "Expert" ? "#8b5cf6" :
+                                   "#f59e0b"
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ fontSize: "0.8rem" }}>{cert.duration}</TableCell>
+                      <TableCell sx={{ fontSize: "0.75rem", color: "text.secondary" }}>{cert.prereq}</TableCell>
+                      <TableCell sx={{ fontSize: "0.75rem" }}>{cert.focus}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        ))}
+
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <TipsAndUpdatesIcon sx={{ color: "#22c55e" }} />
+            Certification Tips
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 0.5 }}>Start with Fundamentals</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Foundation certs (Cloud Practitioner, AZ-900, Cloud Digital Leader) build essential knowledge and are quick to earn.
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 0.5 }}>Hands-On Practice</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Use free tiers and sandboxes. AWS, Azure, and GCP all offer free credits for learning. Labs are essential for passing exams.
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 0.5 }}>Cross-Cloud Value</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Concepts transfer between providers. Learning one cloud well makes learning others much easier. Focus on understanding why, not just how.
+              </Typography>
+            </Grid>
+          </Grid>
+        </Paper>
 
         {/* Key Takeaways */}
         <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>

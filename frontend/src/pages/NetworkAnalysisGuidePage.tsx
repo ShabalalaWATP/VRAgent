@@ -51,6 +51,7 @@ import RouteIcon from "@mui/icons-material/Route";
 import ApiIcon from "@mui/icons-material/Api";
 import BoltIcon from "@mui/icons-material/Bolt";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import MemoryIcon from "@mui/icons-material/Memory";
 
 // Animations
 const float = keyframes`
@@ -79,9 +80,11 @@ export default function NetworkAnalysisGuidePage() {
 - SSL/TLS Analysis: 12 CVE vulnerability checks, cipher suite analysis
 - DNS Intelligence: 9 record types, 150+ subdomain enumeration, email security
 - Traceroute: Cross-platform network path analysis with hop visualization
-- Security Fuzzer: 4 attack modes (Sniper, Battering Ram, Pitchfork, Cluster Bomb)
-- MITM Workbench: Traffic interception with 3 modes and protocol support
-- AI-enhanced analysis powered by Google Gemini for all 8 network tools`;
+- Security Fuzzer: Web application fuzzing with Smart Detection and 500+ payloads
+- Agentic Fuzzer: AI-powered autonomous vulnerability discovery
+- Binary Fuzzer: Native code fuzzing with AFL++, Honggfuzz, and libFuzzer
+- MITM Workbench: Traffic interception with AI-powered rule creation
+- AI-enhanced analysis powered by Google Gemini for all 10 network tools`;
 
   const features = [
     {
@@ -179,15 +182,45 @@ export default function NetworkAnalysisGuidePage() {
       icon: <BoltIcon sx={{ fontSize: 32 }} />,
       color: "#f97316",
       gradient: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
-      description: "Advanced web application fuzzing with 4 attack modes and automatic vulnerability detection.",
+      description: "Web application fuzzing with Smart Detection, 500+ payloads, and session management.",
       capabilities: [
-        "4 Attack modes: Sniper, Battering Ram, Pitchfork, Cluster Bomb",
-        "SQL injection, XSS, command injection pattern detection",
-        "Configurable threads, delays, and timeout settings",
-        "Response filtering by status codes and regex patterns",
-        "Full request/response logging with finding extraction",
+        "Smart Detection: 50+ signatures for SQLi, XSS, RCE, SSTI, XXE, LFI",
+        "Payload modes: Quick SQLi, Quick XSS, Comprehensive, AI-Generated, Custom",
+        "Session management: Save, restore, and export fuzzing sessions",
+        "Real-time results with status codes, response sizes, and timing",
+        "Full request/response logging with vulnerability classification",
       ],
       link: "/network/fuzzer",
+    },
+    {
+      title: "Agentic Fuzzer",
+      icon: <SmartToyIcon sx={{ fontSize: 32 }} />,
+      color: "#8b5cf6",
+      gradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+      description: "AI-powered autonomous vulnerability discovery with endpoint discovery and adaptive attacks.",
+      capabilities: [
+        "Endpoint Discovery: Intelligent crawling and hidden path enumeration",
+        "Tech Fingerprinting: Server, framework, and WAF detection",
+        "Adaptive Attacks: Response-based strategy adjustment and bypass generation",
+        "5-Phase pipeline: Recon → Fingerprint → Discover → Validate → Report",
+        "AI-generated findings with remediation advice",
+      ],
+      link: "/network/agentic-fuzzer",
+    },
+    {
+      title: "Binary Fuzzer",
+      icon: <MemoryIcon sx={{ fontSize: 32 }} />,
+      color: "#10b981",
+      gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+      description: "Native code vulnerability discovery with coverage-guided fuzzing and crash analysis.",
+      capabilities: [
+        "Fuzzing engines: AFL++, Honggfuzz, libFuzzer",
+        "Detects: Buffer overflow, UAF, integer overflow, format string, double-free",
+        "Automatic crash triage and deduplication",
+        "Stack trace analysis with exploitability assessment",
+        "PoC generation with minimal reproducer inputs",
+      ],
+      link: "/network/binary-fuzzer",
     },
     {
       title: "MITM Workbench",
@@ -268,7 +301,7 @@ export default function NetworkAnalysisGuidePage() {
   const workflowSteps = [
     {
       label: "Choose Your Analysis Type",
-      description: "Select from 8 specialized tools: Nmap for port scanning, PCAP for traffic analysis, SSL/TLS for certificates, DNS for domain reconnaissance, Traceroute for path analysis, API Tester for endpoint security, Fuzzer for vulnerability discovery, or MITM for traffic interception.",
+      description: "Select from 10 specialized tools: Nmap for port scanning, PCAP for traffic analysis, SSL/TLS for certificates, DNS for domain reconnaissance, Traceroute for path analysis, API Tester for endpoint security, Security Fuzzer, Agentic Fuzzer, Binary Fuzzer for vulnerability discovery, or MITM for traffic interception.",
       icon: <HubIcon />,
     },
     {
@@ -481,7 +514,7 @@ export default function NetworkAnalysisGuidePage() {
       {/* Key Stats */}
       <Grid container spacing={3} sx={{ mb: 5 }}>
         {[
-          { value: "8", label: "Analysis Tools", icon: <HubIcon />, color: "#0ea5e9" },
+          { value: "10", label: "Analysis Tools", icon: <HubIcon />, color: "#0ea5e9" },
           { value: "10", label: "API Test Categories", icon: <ApiIcon />, color: "#22c55e" },
           { value: "AI", label: "Powered Analysis", icon: <SmartToyIcon />, color: "#10b981" },
           { value: "4", label: "Export Formats", icon: <DownloadIcon />, color: "#f59e0b" },

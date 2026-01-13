@@ -1,11 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
-  Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Accordion,
@@ -30,6 +27,12 @@ import {
   RadioGroup,
   FormControlLabel,
   LinearProgress,
+  Drawer,
+  Fab,
+  Divider,
+  alpha,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -47,6 +50,10 @@ import TuneIcon from "@mui/icons-material/Tune";
 import QuizIcon from "@mui/icons-material/Quiz";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
 import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 
@@ -193,10 +200,10 @@ const QuizSection: React.FC = () => {
 
   const getScoreMessage = () => {
     const percentage = (score / 10) * 100;
-    if (percentage >= 90) return { text: "Outstanding! You're a debugging expert! 🏆", color: "#22c55e" };
-    if (percentage >= 70) return { text: "Great job! Strong debugging knowledge! 💪", color: "#3b82f6" };
-    if (percentage >= 50) return { text: "Good effort! Keep practicing debugging concepts. 📚", color: "#f59e0b" };
-    return { text: "Keep learning! Review the debugging fundamentals. 🔄", color: "#ef4444" };
+    if (percentage >= 90) return { text: "Outstanding! You're a debugging expert!", color: "#22c55e" };
+    if (percentage >= 70) return { text: "Great job! Strong debugging knowledge!", color: "#3b82f6" };
+    if (percentage >= 50) return { text: "Good effort! Keep practicing debugging concepts.", color: "#f59e0b" };
+    return { text: "Keep learning! Review the debugging fundamentals.", color: "#ef4444" };
   };
 
   if (quizState === 'start') {
@@ -301,21 +308,6 @@ const QuizSection: React.FC = () => {
   );
 };
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
-
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   code,
   language = "bash",
@@ -364,10 +356,63 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   );
 };
 
-const Debugging101Page: React.FC = () => {
+export default function Debugging101Page() {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const theme = useTheme();
+  const accent = "#3b82f6";
 
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "overview", label: "Overview", icon: <SecurityIcon /> },
+    { id: "workflow", label: "Workflow", icon: <TuneIcon /> },
+    { id: "breakpoints", label: "Breakpoints", icon: <CodeIcon /> },
+    { id: "memory", label: "Memory & Registers", icon: <MemoryIcon /> },
+    { id: "detection", label: "Detection", icon: <SearchIcon /> },
+    { id: "safe-lab", label: "Safe Lab", icon: <BuildIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  // Data arrays
   const objectives = [
     "Explain what a debugger is and why it is useful.",
     "Teach core debugging concepts: breakpoints, stepping, and inspection.",
@@ -425,31 +470,11 @@ const Debugging101Page: React.FC = () => {
     "Confirm the bug still exists after each change.",
   ];
   const bugTypeMap = [
-    {
-      type: "Logic error",
-      signals: "Wrong output, failed assertions",
-      approach: "Trace decisions and invariants",
-    },
-    {
-      type: "State corruption",
-      signals: "Values flip or drift",
-      approach: "Watchpoints, compare before/after",
-    },
-    {
-      type: "Boundary error",
-      signals: "Crashes or off-by-one results",
-      approach: "Check indexes and sizes",
-    },
-    {
-      type: "Timing issue",
-      signals: "Flaky or order-dependent behavior",
-      approach: "Trace ordering and add delays",
-    },
-    {
-      type: "Configuration",
-      signals: "Works on one machine only",
-      approach: "Diff env vars, versions, flags",
-    },
+    { type: "Logic error", signals: "Wrong output, failed assertions", approach: "Trace decisions and invariants" },
+    { type: "State corruption", signals: "Values flip or drift", approach: "Watchpoints, compare before/after" },
+    { type: "Boundary error", signals: "Crashes or off-by-one results", approach: "Check indexes and sizes" },
+    { type: "Timing issue", signals: "Flaky or order-dependent behavior", approach: "Trace ordering and add delays" },
+    { type: "Configuration", signals: "Works on one machine only", approach: "Diff env vars, versions, flags" },
   ];
   const signalNoiseTips = [
     "Look for the first error or warning, not the last.",
@@ -492,21 +517,9 @@ const Debugging101Page: React.FC = () => {
     "Match the binary to the source version you are debugging.",
   ];
   const loggingVsDebugger = [
-    {
-      choice: "Logging",
-      bestFor: "Production issues, long flows",
-      tradeoff: "Requires code changes, can miss timing",
-    },
-    {
-      choice: "Debugger",
-      bestFor: "Local repro, deep inspection",
-      tradeoff: "Halts execution, needs access",
-    },
-    {
-      choice: "Tracing/Profiling",
-      bestFor: "Performance or ordering",
-      tradeoff: "Extra setup and overhead",
-    },
+    { choice: "Logging", bestFor: "Production issues, long flows", tradeoff: "Requires code changes, can miss timing" },
+    { choice: "Debugger", bestFor: "Local repro, deep inspection", tradeoff: "Halts execution, needs access" },
+    { choice: "Tracing/Profiling", bestFor: "Performance or ordering", tradeoff: "Extra setup and overhead" },
   ];
   const commonEntryPoints = [
     "Crash reports or stack traces.",
@@ -521,43 +534,15 @@ const Debugging101Page: React.FC = () => {
   ];
 
   const breakpointTypes = [
-    {
-      type: "Line breakpoint",
-      use: "Stop at a specific line in source code.",
-      tip: "Start near where the bug first appears.",
-    },
-    {
-      type: "Function breakpoint",
-      use: "Stop when a function is called.",
-      tip: "Useful when you do not know the exact line.",
-    },
-    {
-      type: "Conditional breakpoint",
-      use: "Stop only when a condition is true.",
-      tip: "Great for loops or large input sets.",
-    },
-    {
-      type: "Watchpoint",
-      use: "Stop when a variable or memory changes.",
-      tip: "Use for unexpected mutations.",
-    },
+    { type: "Line breakpoint", use: "Stop at a specific line in source code.", tip: "Start near where the bug first appears." },
+    { type: "Function breakpoint", use: "Stop when a function is called.", tip: "Useful when you do not know the exact line." },
+    { type: "Conditional breakpoint", use: "Stop only when a condition is true.", tip: "Great for loops or large input sets." },
+    { type: "Watchpoint", use: "Stop when a variable or memory changes.", tip: "Use for unexpected mutations." },
   ];
   const steppingModes = [
-    {
-      mode: "Step over",
-      meaning: "Run the current line but do not enter functions.",
-      when: "Use to move quickly through known-good code.",
-    },
-    {
-      mode: "Step into",
-      meaning: "Enter the function called on this line.",
-      when: "Use to inspect a function in detail.",
-    },
-    {
-      mode: "Step out",
-      meaning: "Run until the current function returns.",
-      when: "Use to exit a function after confirming it is fine.",
-    },
+    { mode: "Step over", meaning: "Run the current line but do not enter functions.", when: "Use to move quickly through known-good code." },
+    { mode: "Step into", meaning: "Enter the function called on this line.", when: "Use to inspect a function in detail." },
+    { mode: "Step out", meaning: "Run until the current function returns.", when: "Use to exit a function after confirming it is fine." },
   ];
   const breakpointStrategies = [
     "Place the first breakpoint at the symptom, then move backward.",
@@ -682,6 +667,25 @@ const Debugging101Page: React.FC = () => {
     "Run broader regression tests if available.",
     "Confirm logs show the expected state.",
   ];
+  const labSteps = [
+    "Pick a small sample app with a known bug.",
+    "Set a breakpoint before the bug appears.",
+    "Step through and watch variables change.",
+    "Inspect stack and registers when behavior changes.",
+    "Fix the bug and verify the same steps.",
+  ];
+  const verificationChecklist = [
+    "Bug is reproducible before the fix.",
+    "Debugger shows correct state after the fix.",
+    "Tests pass for the affected path.",
+    "No new errors introduced by the change.",
+  ];
+  const safeBoundaries = [
+    "Only debug software you own or have permission to test.",
+    "Do not attach debuggers to production services.",
+    "Do not handle sensitive data in a debugger session.",
+    "Focus on diagnosis and verification, not exploitation.",
+  ];
 
   const gdbBasics = `# GDB basics
 gdb ./app
@@ -731,967 +735,1258 @@ break validateUser if userId <= 0
 # Stop when loop index reaches the boundary
 break processItems if i == items.size - 1`;
 
-  const labSteps = [
-    "Pick a small sample app with a known bug.",
-    "Set a breakpoint before the bug appears.",
-    "Step through and watch variables change.",
-    "Inspect stack and registers when behavior changes.",
-    "Fix the bug and verify the same steps.",
-  ];
-  const verificationChecklist = [
-    "Bug is reproducible before the fix.",
-    "Debugger shows correct state after the fix.",
-    "Tests pass for the affected path.",
-    "No new errors introduced by the change.",
-  ];
-  const safeBoundaries = [
-    "Only debug software you own or have permission to test.",
-    "Do not attach debuggers to production services.",
-    "Do not handle sensitive data in a debugger session.",
-    "Focus on diagnosis and verification, not exploitation.",
-  ];
-
   const pageContext = `This page covers debugging fundamentals including debugger concepts, breakpoints, memory inspection, call stacks, and common debugging tools. Topics include reproducible workflows, hypothesis-driven debugging, build symbols, logging vs debugging tradeoffs, and safe practice routines.`;
+
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="Debugging 101" pageContext={pageContext}>
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
-      <Container maxWidth="lg">
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 2 }}
-        />
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#2563eb" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <BugReportIcon sx={{ fontSize: 42, color: "#3b82f6" }} />
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 700,
-              background: "linear-gradient(135deg, #3b82f6 0%, #38bdf8 100%)",
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              color: "transparent",
-            }}
-          >
-            Debugging 101
-          </Typography>
-        </Box>
-        <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
-          A beginner-friendly guide to finding bugs with confidence.
-        </Typography>
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
 
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>Beginner Friendly</AlertTitle>
-          This page focuses on safe, practical debugging skills you can use in any codebase.
-        </Alert>
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
 
-        <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            Debugging is the practice of finding out why software behaves differently than expected. A debugger
-            lets you pause a program, look inside it, and step through its logic. Instead of guessing, you can
-            see the real values in memory, the exact line being executed, and the call stack that led there.
-          </Typography>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            Think of a debugger like a "pause and inspect" button for software. You can stop at a line, inspect
-            variables, and move forward one step at a time. This is especially powerful when a bug only appears
-            after many steps or under specific inputs.
-          </Typography>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            Debugging is not about stepping randomly. The best debuggers use a simple workflow: reproduce the bug,
-            isolate the first wrong value, test a hypothesis, and verify the fix. The goal is to learn what the
-            program is truly doing, not what we hope it is doing.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400" }}>
-            This guide explains core debugging concepts, common tools, and a safe practice workflow for beginners.
-          </Typography>
-        </Paper>
+          <Divider sx={{ mb: 2 }} />
 
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
-          <Chip icon={<BugReportIcon />} label="Breakpoints" size="small" />
-          <Chip icon={<SearchIcon />} label="Stepping" size="small" />
-          <Chip icon={<MemoryIcon />} label="Memory" size="small" />
-          <Chip icon={<ShieldIcon />} label="Safe Workflow" size="small" />
-        </Box>
-
-        <Paper sx={{ bgcolor: "#111826", borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
-              "& .MuiTab-root": { color: "grey.400" },
-              "& .Mui-selected": { color: "#3b82f6" },
-            }}
-          >
-            <Tab icon={<SecurityIcon />} label="Overview" />
-            <Tab icon={<TuneIcon />} label="Workflow" />
-            <Tab icon={<CodeIcon />} label="Breakpoints" />
-            <Tab icon={<MemoryIcon />} label="Memory & Registers" />
-            <Tab icon={<SearchIcon />} label="Detection" />
-            <Tab icon={<BuildIcon />} label="Safe Lab" />
-            <Tab icon={<QuizIcon />} label="Quiz" />
-          </Tabs>
-
-          <TabPanel value={tabValue} index={0}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Learning Objectives
-                </Typography>
-                <List dense>
-                  {objectives.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Beginner Path
-                </Typography>
-                <List dense>
-                  {beginnerPath.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Key Ideas
-                </Typography>
-                <List dense>
-                  {keyIdeas.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="success" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Quick Glossary
-                </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ color: "#38bdf8" }}>Term</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Meaning</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {glossary.map((item) => (
-                        <TableRow key={item.term}>
-                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.term}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.desc}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Debugging Mindset
-                </Typography>
-                <List dense>
-                  {mindsetHabits.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Repro Tips
-                </Typography>
-                <List dense>
-                  {reproducibilityTips.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <SearchIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Bug Types Quick Map
-                </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ color: "#38bdf8" }}>Type</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Signals</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Approach</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {bugTypeMap.map((item) => (
-                        <TableRow key={item.type}>
-                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.type}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.signals}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.approach}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Signal vs Noise
-                </Typography>
-                <List dense>
-                  {signalNoiseTips.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <WarningIcon color="warning" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Common Misconceptions
-                </Typography>
-                <Grid container spacing={2}>
-                  {misconceptions.map((item) => (
-                    <Grid item xs={12} md={4} key={item.myth}>
-                      <Paper
-                        sx={{
-                          p: 2,
-                          bgcolor: "#0b1020",
-                          borderRadius: 2,
-                          border: "1px solid rgba(59, 130, 246, 0.25)",
-                          height: "100%",
-                        }}
-                      >
-                        <Typography variant="subtitle2" sx={{ color: "#3b82f6", mb: 1 }}>
-                          Myth
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
-                          {item.myth}
-                        </Typography>
-                        <Typography variant="subtitle2" sx={{ color: "#38bdf8", mb: 0.5 }}>
-                          Reality
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: "grey.400" }}>
-                          {item.reality}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Paper>
-            </Box>
-          </TabPanel>
-
-          <TabPanel value={tabValue} index={1}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  How Debugging Works
-                </Typography>
-                <List dense>
-                  {howDebuggingWorks.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Debugging Workflow
-                </Typography>
-                <List dense>
-                  {workflow.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="success" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Hypothesis Loop
-                </Typography>
-                <List dense>
-                  {hypothesisLoop.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Minimum Repro Checklist
-                </Typography>
-                <List dense>
-                  {minimalReproChecklist.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="success" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Build Settings That Matter
-                </Typography>
-                <List dense>
-                  {buildSettings.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <BuildIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Logging vs Debugger
-                </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ color: "#38bdf8" }}>Approach</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Best For</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Tradeoffs</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {loggingVsDebugger.map((item) => (
-                        <TableRow key={item.choice}>
-                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.choice}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.bestFor}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.tradeoff}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Debug Notes Template
-                </Typography>
-                <CodeBlock code={notesTemplate} language="text" />
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Common Entry Points
-                </Typography>
-                <List dense>
-                  {commonEntryPoints.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <SearchIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Debugger Tools by Platform
-                </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ color: "#38bdf8" }}>Platform</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Tools</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {toolsByPlatform.map((item) => (
-                        <TableRow key={item.platform}>
-                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.platform}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.tools}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-            </Box>
-          </TabPanel>
-
-          <TabPanel value={tabValue} index={2}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Breakpoint Types
-                </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ color: "#38bdf8" }}>Type</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Use</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Tip</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {breakpointTypes.map((item) => (
-                        <TableRow key={item.type}>
-                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.type}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.use}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.tip}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Stepping Modes
-                </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ color: "#38bdf8" }}>Mode</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Meaning</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>When to Use</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {steppingModes.map((item) => (
-                        <TableRow key={item.mode}>
-                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.mode}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.meaning}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.when}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Breakpoint Strategy
-                </Typography>
-                <List dense>
-                  {breakpointStrategies.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Conditional Examples
-                </Typography>
-                <CodeBlock code={conditionalBreakpointExample} language="text" />
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Watchpoints and Data Breakpoints
-                </Typography>
-                <List dense>
-                  {watchpointTips.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <SearchIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Common Debugger Commands
-                </Typography>
-                <Accordion sx={{ bgcolor: "#0f1422", borderRadius: 2, mb: 1 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="subtitle1">GDB</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <CodeBlock code={gdbBasics} language="bash" />
-                  </AccordionDetails>
-                </Accordion>
-                <Accordion sx={{ bgcolor: "#0f1422", borderRadius: 2, mb: 1 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="subtitle1">LLDB</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <CodeBlock code={lldbBasics} language="bash" />
-                  </AccordionDetails>
-                </Accordion>
-                <Accordion sx={{ bgcolor: "#0f1422", borderRadius: 2 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="subtitle1">WinDbg</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <CodeBlock code={winDbgBasics} language="text" />
-                  </AccordionDetails>
-                </Accordion>
-              </Paper>
-            </Box>
-          </TabPanel>
-
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Memory Basics
-                </Typography>
-                <List dense>
-                  {memoryBasics.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Register Hints
-                </Typography>
-                <List dense>
-                  {registerHints.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="success" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Stack Frames in Practice
-                </Typography>
-                <List dense>
-                  {stackFrameTips.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Memory Areas
-                </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ color: "#38bdf8" }}>Area</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Lifetime</TableCell>
-                        <TableCell sx={{ color: "#38bdf8" }}>Common Risk</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {memoryAreas.map((item) => (
-                        <TableRow key={item.area}>
-                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.area}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.lifetime}</TableCell>
-                          <TableCell sx={{ color: "grey.400" }}>{item.risk}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Common Memory Bugs
-                </Typography>
-                <List dense>
-                  {commonMemoryBugs.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <WarningIcon color="warning" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Memory Red Flags
-                </Typography>
-                <List dense>
-                  {memoryRedFlags.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <WarningIcon color="warning" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Common Pitfalls
-                </Typography>
-                <List dense>
-                  {pitfalls.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <WarningIcon color="warning" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-            </Box>
-          </TabPanel>
-
-          <TabPanel value={tabValue} index={4}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Detection Signals
-                </Typography>
-                <List dense>
-                  {detectionSignals.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Telemetry Sources
-                </Typography>
-                <List dense>
-                  {telemetrySources.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="success" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Crash Artifacts to Capture
-                </Typography>
-                <List dense>
-                  {crashArtifacts.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Triage Questions
-                </Typography>
-                <List dense>
-                  {triageQuestions.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <SearchIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Root Cause Checklist
-                </Typography>
-                <List dense>
-                  {rootCauseChecklist.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="success" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Quick Triage Steps
-                </Typography>
-                <List dense>
-                  {triageSteps.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-            </Box>
-          </TabPanel>
-
-          <TabPanel value={tabValue} index={5}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Safe Lab Walkthrough
-                </Typography>
-                <List dense>
-                  {labSteps.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Practice Exercises
-                </Typography>
-                <List dense>
-                  {practiceExercises.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Prevention Checklist
-                </Typography>
-                <List dense>
-                  {preventionChecklist.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Safe Debugging Practices
-                </Typography>
-                <List dense>
-                  {safePractices.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <ShieldIcon color="success" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Verification Checklist
-                </Typography>
-                <List dense>
-                  {verificationChecklist.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="success" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Validation Ladder
-                </Typography>
-                <List dense>
-                  {validationLadder.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="success" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
-                  Debugging Report Checklist
-                </Typography>
-                <List dense>
-                  {reportChecklist.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-
-              <Paper sx={{ p: 2.5, bgcolor: "#0f1422", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Safe Boundaries
-                </Typography>
-                <List dense>
-                  {safeBoundaries.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <WarningIcon color="warning" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-            </Box>
-          </TabPanel>
-
-          <TabPanel value={tabValue} index={6}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ fontWeight: 700, color: "#3b82f6", mb: 2 }}>
-                📝 Knowledge Quiz
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
               </Typography>
-              <Typography variant="body1" sx={{ color: "grey.400", mb: 3 }}>
-                Test your understanding of debugging fundamentals with this interactive quiz. Questions cover
-                debugger basics, breakpoints, stepping modes, memory inspection, and bug detection.
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
               </Typography>
-              <QuizSection />
             </Box>
-          </TabPanel>
-        </Paper>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
 
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Back Button */}
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
             variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#3b82f6", color: "#3b82f6" }}
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
+
+          {/* Hero Banner */}
+          <Paper
+            sx={{
+              p: 4,
+              mb: 4,
+              borderRadius: 4,
+              background: `linear-gradient(135deg, ${alpha("#3b82f6", 0.15)} 0%, ${alpha("#38bdf8", 0.15)} 50%, ${alpha("#8b5cf6", 0.15)} 100%)`,
+              border: `1px solid ${alpha("#3b82f6", 0.2)}`,
+              position: "relative",
+              overflow: "hidden",
+            }}
           >
-            Back to Learning Hub
-          </Button>
+            <Box
+              sx={{
+                position: "absolute",
+                top: -50,
+                right: -50,
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${alpha("#3b82f6", 0.1)} 0%, transparent 70%)`,
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: -30,
+                left: "30%",
+                width: 150,
+                height: 150,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${alpha("#8b5cf6", 0.1)} 0%, transparent 70%)`,
+              }}
+            />
+
+            <Box sx={{ position: "relative", zIndex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 3 }}>
+                <Box
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 3,
+                    background: `linear-gradient(135deg, #3b82f6, #38bdf8)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: `0 8px 32px ${alpha("#3b82f6", 0.3)}`,
+                  }}
+                >
+                  <BugReportIcon sx={{ fontSize: 42, color: "#fff" }} />
+                </Box>
+                <Box>
+                  <Typography
+                    variant="h3"
+                    sx={{
+                      fontWeight: 800,
+                      background: "linear-gradient(135deg, #3b82f6 0%, #38bdf8 100%)",
+                      backgroundClip: "text",
+                      WebkitBackgroundClip: "text",
+                      color: "transparent",
+                    }}
+                  >
+                    Debugging 101
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: "grey.400" }}>
+                    A beginner-friendly guide to finding bugs with confidence.
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                <Chip icon={<BugReportIcon />} label="Breakpoints" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
+                <Chip icon={<SearchIcon />} label="Stepping" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
+                <Chip icon={<MemoryIcon />} label="Memory" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
+                <Chip icon={<ShieldIcon />} label="Safe Workflow" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
+              </Box>
+
+              <Alert severity="info" sx={{ bgcolor: alpha(accent, 0.1), border: `1px solid ${alpha(accent, 0.3)}` }}>
+                <AlertTitle>Beginner Friendly</AlertTitle>
+                This page focuses on safe, practical debugging skills you can use in any codebase.
+              </Alert>
+            </Box>
+          </Paper>
+
+          {/* ==================== INTRODUCTION ==================== */}
+          <Typography id="intro" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            What is Debugging?
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Debugging is the practice of finding out why software behaves differently than expected. A debugger
+              lets you pause a program, look inside it, and step through its logic. Instead of guessing, you can
+              see the real values in memory, the exact line being executed, and the call stack that led there.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Think of a debugger like a "pause and inspect" button for software. You can stop at a line, inspect
+              variables, and move forward one step at a time. This is especially powerful when a bug only appears
+              after many steps or under specific inputs.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Debugging is not about stepping randomly. The best debuggers use a simple workflow: reproduce the bug,
+              isolate the first wrong value, test a hypothesis, and verify the fix. The goal is to learn what the
+              program is truly doing, not what we hope it is doing.
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.400" }}>
+              This guide explains core debugging concepts, common tools, and a safe practice workflow for beginners.
+            </Typography>
+          </Paper>
+
+          {/* ==================== OVERVIEW ==================== */}
+          <Typography id="overview" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            Overview
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Learning Objectives
+            </Typography>
+            <List dense>
+              {objectives.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Beginner Path
+            </Typography>
+            <List dense>
+              {beginnerPath.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Key Ideas
+            </Typography>
+            <List dense>
+              {keyIdeas.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Quick Glossary
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "#38bdf8" }}>Term</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Meaning</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {glossary.map((item) => (
+                    <TableRow key={item.term}>
+                      <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.term}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.desc}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Debugging Mindset
+            </Typography>
+            <List dense>
+              {mindsetHabits.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Repro Tips
+            </Typography>
+            <List dense>
+              {reproducibilityTips.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <SearchIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Bug Types Quick Map
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "#38bdf8" }}>Type</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Signals</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Approach</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {bugTypeMap.map((item) => (
+                    <TableRow key={item.type}>
+                      <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.type}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.signals}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.approach}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Signal vs Noise
+            </Typography>
+            <List dense>
+              {signalNoiseTips.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <WarningIcon color="warning" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Common Misconceptions
+            </Typography>
+            <Grid container spacing={2}>
+              {misconceptions.map((item) => (
+                <Grid item xs={12} md={4} key={item.myth}>
+                  <Paper
+                    sx={{
+                      p: 2,
+                      bgcolor: "#0b1020",
+                      borderRadius: 2,
+                      border: "1px solid rgba(59, 130, 246, 0.25)",
+                      height: "100%",
+                    }}
+                  >
+                    <Typography variant="subtitle2" sx={{ color: "#3b82f6", mb: 1 }}>
+                      Myth
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
+                      {item.myth}
+                    </Typography>
+                    <Typography variant="subtitle2" sx={{ color: "#38bdf8", mb: 0.5 }}>
+                      Reality
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "grey.400" }}>
+                      {item.reality}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          {/* ==================== WORKFLOW ==================== */}
+          <Typography id="workflow" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            Workflow
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              How Debugging Works
+            </Typography>
+            <List dense>
+              {howDebuggingWorks.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Debugging Workflow
+            </Typography>
+            <List dense>
+              {workflow.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Hypothesis Loop
+            </Typography>
+            <List dense>
+              {hypothesisLoop.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Minimum Repro Checklist
+            </Typography>
+            <List dense>
+              {minimalReproChecklist.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Build Settings That Matter
+            </Typography>
+            <List dense>
+              {buildSettings.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <BuildIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Logging vs Debugger
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "#38bdf8" }}>Approach</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Best For</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Tradeoffs</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loggingVsDebugger.map((item) => (
+                    <TableRow key={item.choice}>
+                      <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.choice}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.bestFor}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.tradeoff}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Debug Notes Template
+            </Typography>
+            <CodeBlock code={notesTemplate} language="text" />
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Common Entry Points
+            </Typography>
+            <List dense>
+              {commonEntryPoints.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <SearchIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Debugger Tools by Platform
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "#38bdf8" }}>Platform</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Tools</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {toolsByPlatform.map((item) => (
+                    <TableRow key={item.platform}>
+                      <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.platform}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.tools}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          {/* ==================== BREAKPOINTS ==================== */}
+          <Typography id="breakpoints" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            Breakpoints & Stepping
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Breakpoint Types
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "#38bdf8" }}>Type</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Use</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Tip</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {breakpointTypes.map((item) => (
+                    <TableRow key={item.type}>
+                      <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.type}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.use}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.tip}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Stepping Modes
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "#38bdf8" }}>Mode</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Meaning</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>When to Use</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {steppingModes.map((item) => (
+                    <TableRow key={item.mode}>
+                      <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.mode}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.meaning}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.when}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Breakpoint Strategy
+            </Typography>
+            <List dense>
+              {breakpointStrategies.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Conditional Examples
+            </Typography>
+            <CodeBlock code={conditionalBreakpointExample} language="text" />
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Watchpoints and Data Breakpoints
+            </Typography>
+            <List dense>
+              {watchpointTips.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <SearchIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Common Debugger Commands
+            </Typography>
+            <Accordion sx={{ bgcolor: "#0f1422", borderRadius: 2, mb: 1 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle1">GDB</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <CodeBlock code={gdbBasics} language="bash" />
+              </AccordionDetails>
+            </Accordion>
+            <Accordion sx={{ bgcolor: "#0f1422", borderRadius: 2, mb: 1 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle1">LLDB</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <CodeBlock code={lldbBasics} language="bash" />
+              </AccordionDetails>
+            </Accordion>
+            <Accordion sx={{ bgcolor: "#0f1422", borderRadius: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle1">WinDbg</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <CodeBlock code={winDbgBasics} language="text" />
+              </AccordionDetails>
+            </Accordion>
+          </Paper>
+
+          {/* ==================== MEMORY & REGISTERS ==================== */}
+          <Typography id="memory" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            Memory & Registers
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Memory Basics
+            </Typography>
+            <List dense>
+              {memoryBasics.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Register Hints
+            </Typography>
+            <List dense>
+              {registerHints.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Stack Frames in Practice
+            </Typography>
+            <List dense>
+              {stackFrameTips.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Memory Areas
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "#38bdf8" }}>Area</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Lifetime</TableCell>
+                    <TableCell sx={{ color: "#38bdf8" }}>Common Risk</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {memoryAreas.map((item) => (
+                    <TableRow key={item.area}>
+                      <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.area}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.lifetime}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.risk}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Common Memory Bugs
+            </Typography>
+            <List dense>
+              {commonMemoryBugs.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <WarningIcon color="warning" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Memory Red Flags
+            </Typography>
+            <List dense>
+              {memoryRedFlags.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <WarningIcon color="warning" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Common Pitfalls
+            </Typography>
+            <List dense>
+              {pitfalls.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <WarningIcon color="warning" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          {/* ==================== DETECTION ==================== */}
+          <Typography id="detection" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            Bug Detection & Triage
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Detection Signals
+            </Typography>
+            <List dense>
+              {detectionSignals.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Telemetry Sources
+            </Typography>
+            <List dense>
+              {telemetrySources.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Crash Artifacts to Capture
+            </Typography>
+            <List dense>
+              {crashArtifacts.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Triage Questions
+            </Typography>
+            <List dense>
+              {triageQuestions.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <SearchIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Root Cause Checklist
+            </Typography>
+            <List dense>
+              {rootCauseChecklist.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Quick Triage Steps
+            </Typography>
+            <List dense>
+              {triageSteps.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          {/* ==================== SAFE LAB ==================== */}
+          <Typography id="safe-lab" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            Safe Lab & Practice
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Safe Lab Walkthrough
+            </Typography>
+            <List dense>
+              {labSteps.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Practice Exercises
+            </Typography>
+            <List dense>
+              {practiceExercises.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Prevention Checklist
+            </Typography>
+            <List dense>
+              {preventionChecklist.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Safe Debugging Practices
+            </Typography>
+            <List dense>
+              {safePractices.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <ShieldIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Verification Checklist
+            </Typography>
+            <List dense>
+              {verificationChecklist.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Validation Ladder
+            </Typography>
+            <List dense>
+              {validationLadder.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Debugging Report Checklist
+            </Typography>
+            <List dense>
+              {reportChecklist.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Safe Boundaries
+            </Typography>
+            <List dense>
+              {safeBoundaries.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <WarningIcon color="warning" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          {/* ==================== QUIZ ==================== */}
+          <Typography id="quiz" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            Knowledge Quiz
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Typography variant="body1" sx={{ color: "grey.400", mb: 3 }}>
+            Test your understanding of debugging fundamentals with this interactive quiz. Questions cover
+            debugger basics, breakpoints, stepping modes, memory inspection, and bug detection.
+          </Typography>
+          <QuizSection />
+
+          {/* Back to Learning Hub Button */}
+          <Box sx={{ mt: 4, textAlign: "center" }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{ borderColor: "#3b82f6", color: "#3b82f6" }}
+            >
+              Back to Learning Hub
+            </Button>
+          </Box>
         </Box>
-      </Container>
-    </Box>
+      </Box>
     </LearnPageLayout>
   );
-};
-
-export default Debugging101Page;
+}

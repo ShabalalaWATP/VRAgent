@@ -67,10 +67,13 @@ const FuzzingPage = lazy(() => import("./pages/FuzzingPage"));
 const FuzzingToolGuidePage = lazy(() => import("./pages/FuzzingToolGuidePage"));
 const MITMWorkbenchPage = lazy(() => import("./pages/MITMWorkbenchPage"));
 const MITMGuidePage = lazy(() => import("./pages/MITMGuidePage"));
+const BinaryFuzzerPage = lazy(() => import("./pages/BinaryFuzzerPage"));
+const AgenticFuzzerPage = lazy(() => import("./pages/AgenticFuzzerPage"));
 const DigitalForensicsPage = lazy(() => import("./pages/DigitalForensicsPage"));
 const OSINTReconPage = lazy(() => import("./pages/OSINTReconPage"));
 const LateralMovementPage = lazy(() => import("./pages/LateralMovementPage"));
 const ReverseEngineeringHubPage = lazy(() => import("./pages/ReverseEngineeringHubPage"));
+const WhiteboardPage = lazy(() => import("./pages/WhiteboardPage"));
 const ApkAnalysisGuidePage = lazy(() => import("./pages/ApkAnalysisGuidePage"));
 const BinaryAnalysisGuidePage = lazy(() => import("./pages/BinaryAnalysisGuidePage"));
 const AndroidReverseEngineeringGuidePage = lazy(() => import("./pages/AndroidReverseEngineeringGuidePage"));
@@ -301,110 +304,107 @@ function App() {
 
           <Box sx={{ flexGrow: 1 }} />
 
-          {/* Action Buttons - Only show when authenticated */}
+          {/* Action Buttons */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            {isAuthenticated && (
-              <>
-                <Tooltip title="Projects - Manage your codebases">
-                  <Button
-                    component={Link}
-                    to="/"
-                    startIcon={<Box component="span" sx={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" /></svg></Box>}
-                    variant="contained"
-                    size="medium"
-                    sx={{
-                      background: `linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)`,
-                      color: "white",
-                      fontWeight: 700,
-                      px: 2.5,
-                      py: 1,
-                      borderRadius: 2,
-                      textTransform: "none",
-                      fontSize: "0.95rem",
-                      boxShadow: `0 4px 15px ${alpha("#059669", 0.4)}, 0 0 20px ${alpha("#059669", 0.2)}`,
-                      border: `1px solid ${alpha("#10b981", 0.5)}`,
-                      "&:hover": {
-                        background: `linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%)`,
-                        boxShadow: `0 6px 25px ${alpha("#059669", 0.5)}, 0 0 30px ${alpha("#059669", 0.3)}`,
-                        transform: "translateY(-2px)",
-                      },
-                      "&:active": {
-                        transform: "translateY(0)",
-                      },
-                      transition: "all 0.3s ease",
-                    }}
-                  >
-                    Projects
-                  </Button>
-                </Tooltip>
-                
-                <Tooltip title="Network Analysis - PCAP & Nmap Security Analysis">
-                  <Button
-                    component={Link}
-                    to="/network"
-                    startIcon={<HubIcon sx={{ fontSize: "1.3rem !important" }} />}
-                    variant="contained"
-                    size="medium"
-                    sx={{
-                      background: `linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%)`,
-                      color: "white",
-                      fontWeight: 700,
-                      px: 2.5,
-                      py: 1,
-                      borderRadius: 2,
-                      textTransform: "none",
-                      fontSize: "0.95rem",
-                      boxShadow: `0 4px 15px ${alpha("#0891b2", 0.4)}, 0 0 20px ${alpha("#0891b2", 0.2)}`,
-                      border: `1px solid ${alpha("#06b6d4", 0.5)}`,
-                      "&:hover": {
-                        background: `linear-gradient(135deg, #0891b2 0%, #0e7490 50%, #155e75 100%)`,
-                        boxShadow: `0 6px 25px ${alpha("#0891b2", 0.5)}, 0 0 30px ${alpha("#0891b2", 0.3)}`,
-                        transform: "translateY(-2px)",
-                      },
-                      "&:active": {
-                        transform: "translateY(0)",
-                      },
-                      transition: "all 0.3s ease",
-                    }}
-                  >
-                    Network Analysis
-                  </Button>
-                </Tooltip>
-                
-                <Tooltip title="Reverse Engineering - Binary, APK & Docker Analysis">
-                  <Button
-                    component={Link}
-                    to="/reverse"
-                    startIcon={<MemoryIcon sx={{ fontSize: "1.3rem !important" }} />}
-                    variant="contained"
-                    size="medium"
-                    sx={{
-                      background: `linear-gradient(135deg, #f97316 0%, #ea580c 50%, #dc2626 100%)`,
-                      color: "white",
-                      fontWeight: 700,
-                      px: 2.5,
-                      py: 1,
-                      borderRadius: 2,
-                      textTransform: "none",
-                      fontSize: "0.95rem",
-                      boxShadow: `0 4px 15px ${alpha("#ea580c", 0.4)}, 0 0 20px ${alpha("#ea580c", 0.2)}`,
-                      border: `1px solid ${alpha("#f97316", 0.5)}`,
-                      "&:hover": {
-                        background: `linear-gradient(135deg, #ea580c 0%, #dc2626 50%, #b91c1c 100%)`,
-                        boxShadow: `0 6px 25px ${alpha("#ea580c", 0.5)}, 0 0 30px ${alpha("#ea580c", 0.3)}`,
-                        transform: "translateY(-2px)",
-                      },
-                      "&:active": {
-                        transform: "translateY(0)",
-                      },
-                      transition: "all 0.3s ease",
-                    }}
-                  >
-                    Reverse Engineering
-                  </Button>
-                </Tooltip>
-              </>
-            )}
+            {/* Show Projects, Network, Reverse links - even when not authenticated (but link to login if not auth) */}
+            <Tooltip title="Projects - Manage your codebases">
+              <Button
+                component={Link}
+                to={isAuthenticated ? "/" : "/login"}
+                startIcon={<Box component="span" sx={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" /></svg></Box>}
+                variant="contained"
+                size="medium"
+                sx={{
+                  background: `linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)`,
+                  color: "white",
+                  fontWeight: 700,
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontSize: "0.95rem",
+                  boxShadow: `0 4px 15px ${alpha("#059669", 0.4)}, 0 0 20px ${alpha("#059669", 0.2)}`,
+                  border: `1px solid ${alpha("#10b981", 0.5)}`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%)`,
+                    boxShadow: `0 6px 25px ${alpha("#059669", 0.5)}, 0 0 30px ${alpha("#059669", 0.3)}`,
+                    transform: "translateY(-2px)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Projects
+              </Button>
+            </Tooltip>
+            
+            <Tooltip title="Network Analysis - PCAP & Nmap Security Analysis">
+              <Button
+                component={Link}
+                to={isAuthenticated ? "/network" : "/login"}
+                startIcon={<HubIcon sx={{ fontSize: "1.3rem !important" }} />}
+                variant="contained"
+                size="medium"
+                sx={{
+                  background: `linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%)`,
+                  color: "white",
+                  fontWeight: 700,
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontSize: "0.95rem",
+                  boxShadow: `0 4px 15px ${alpha("#0891b2", 0.4)}, 0 0 20px ${alpha("#0891b2", 0.2)}`,
+                  border: `1px solid ${alpha("#06b6d4", 0.5)}`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #0891b2 0%, #0e7490 50%, #155e75 100%)`,
+                    boxShadow: `0 6px 25px ${alpha("#0891b2", 0.5)}, 0 0 30px ${alpha("#0891b2", 0.3)}`,
+                    transform: "translateY(-2px)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Network Analysis
+              </Button>
+            </Tooltip>
+            
+            <Tooltip title="Reverse Engineering - Binary, APK & Docker Analysis">
+              <Button
+                component={Link}
+                to={isAuthenticated ? "/reverse" : "/login"}
+                startIcon={<MemoryIcon sx={{ fontSize: "1.3rem !important" }} />}
+                variant="contained"
+                size="medium"
+                sx={{
+                  background: `linear-gradient(135deg, #f97316 0%, #ea580c 50%, #dc2626 100%)`,
+                  color: "white",
+                  fontWeight: 700,
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontSize: "0.95rem",
+                  boxShadow: `0 4px 15px ${alpha("#ea580c", 0.4)}, 0 0 20px ${alpha("#ea580c", 0.2)}`,
+                  border: `1px solid ${alpha("#f97316", 0.5)}`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #ea580c 0%, #dc2626 50%, #b91c1c 100%)`,
+                    boxShadow: `0 6px 25px ${alpha("#ea580c", 0.5)}, 0 0 30px ${alpha("#ea580c", 0.3)}`,
+                    transform: "translateY(-2px)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Reverse Engineering
+              </Button>
+            </Tooltip>
             
             <Tooltip title="Security Learning Hub - Tutorials, Guides & Reference">
               <Button
@@ -440,40 +440,38 @@ function App() {
               </Button>
             </Tooltip>
 
-            {isAuthenticated && (
-              <Tooltip title="Social Hub - Friends, Messages & Community">
-                <Button
-                  component={Link}
-                  to="/social"
-                  startIcon={<PeopleIcon sx={{ fontSize: "1.3rem !important" }} />}
-                  variant="contained"
-                  size="medium"
-                  sx={{
-                    background: `linear-gradient(135deg, #ec4899 0%, #db2777 50%, #be185d 100%)`,
-                    color: "white",
-                    fontWeight: 700,
-                    px: 2.5,
-                    py: 1,
-                    borderRadius: 2,
-                    textTransform: "none",
-                    fontSize: "0.95rem",
-                    boxShadow: `0 4px 15px ${alpha("#db2777", 0.4)}, 0 0 20px ${alpha("#db2777", 0.2)}`,
-                    border: `1px solid ${alpha("#ec4899", 0.5)}`,
-                    "&:hover": {
-                      background: `linear-gradient(135deg, #db2777 0%, #be185d 50%, #9d174d 100%)`,
-                      boxShadow: `0 6px 25px ${alpha("#db2777", 0.5)}, 0 0 30px ${alpha("#db2777", 0.3)}`,
-                      transform: "translateY(-2px)",
-                    },
-                    "&:active": {
-                      transform: "translateY(0)",
-                    },
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  Social
-                </Button>
-              </Tooltip>
-            )}
+            <Tooltip title="Social Hub - Friends, Messages & Community">
+              <Button
+                component={Link}
+                to={isAuthenticated ? "/social" : "/login"}
+                startIcon={<PeopleIcon sx={{ fontSize: "1.3rem !important" }} />}
+                variant="contained"
+                size="medium"
+                sx={{
+                  background: `linear-gradient(135deg, #ec4899 0%, #db2777 50%, #be185d 100%)`,
+                  color: "white",
+                  fontWeight: 700,
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontSize: "0.95rem",
+                  boxShadow: `0 4px 15px ${alpha("#db2777", 0.4)}, 0 0 20px ${alpha("#db2777", 0.2)}`,
+                  border: `1px solid ${alpha("#ec4899", 0.5)}`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #db2777 0%, #be185d 50%, #9d174d 100%)`,
+                    boxShadow: `0 6px 25px ${alpha("#db2777", 0.5)}, 0 0 30px ${alpha("#db2777", 0.3)}`,
+                    transform: "translateY(-2px)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Social
+              </Button>
+            </Tooltip>
             
             <Tooltip title="View on GitHub">
               <IconButton
@@ -518,50 +516,64 @@ function App() {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Suspense fallback={
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-            <CircularProgress />
-          </Box>
-        }>
-          <Routes>
-            {/* Public Auth Routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            
-            {/* Admin Route */}
-            <Route path="/admin" element={
-              <ProtectedRoute requireAdmin>
-                <AdminPage />
-              </ProtectedRoute>
-            } />
-            
-            {/* Profile Route */}
-            <Route path="/profile" element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            } />
-            
-            {/* Social Route */}
-            <Route path="/social" element={
-              <ProtectedRoute>
-                <SocialPage />
-              </ProtectedRoute>
-            } />
-            
-            {/* Protected Routes */}
-            <Route path="/" element={
-              <ProtectedRoute>
-                <ProjectListPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/projects/:projectId" element={
-              <ProtectedRoute>
-                <ProjectDetailPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/projects/:projectId/agentic-scan" element={
+      {/* Full-width routes (no container) */}
+      <Routes>
+        <Route path="/projects/:projectId/whiteboard/:whiteboardId" element={
+          <Suspense fallback={
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+              <CircularProgress />
+            </Box>
+          }>
+            <ProtectedRoute>
+              <WhiteboardPage />
+            </ProtectedRoute>
+          </Suspense>
+        } />
+        <Route path="*" element={
+          <Container maxWidth="lg" sx={{ py: 4 }}>
+            <Suspense fallback={
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+                <CircularProgress />
+              </Box>
+            }>
+              <Routes>
+                {/* Public Auth Routes */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                
+                {/* Admin Route */}
+                <Route path="/admin" element={
+                  <ProtectedRoute requireAdmin>
+                    <AdminPage />
+                  </ProtectedRoute>
+                } />
+                
+                {/* Profile Route */}
+                <Route path="/profile" element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                } />
+                
+                {/* Social Route */}
+                <Route path="/social" element={
+                  <ProtectedRoute>
+                    <SocialPage />
+                  </ProtectedRoute>
+                } />
+                
+                {/* Protected Routes */}
+                <Route path="/" element={
+                  <ProtectedRoute>
+                    <ProjectListPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/projects/:projectId" element={
+                  <ProtectedRoute>
+                    <ProjectDetailPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/projects/:projectId/agentic-scan" element={
               <ProtectedRoute>
                 <AgenticAIScanPage />
               </ProtectedRoute>
@@ -614,6 +626,16 @@ function App() {
             <Route path="/network/mitm" element={
               <ProtectedRoute>
                 <MITMWorkbenchPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/binary-fuzzer" element={
+              <ProtectedRoute>
+                <BinaryFuzzerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/network/agentic-fuzzer" element={
+              <ProtectedRoute>
+                <AgenticFuzzerPage />
               </ProtectedRoute>
             } />
             <Route path="/reverse" element={
@@ -729,9 +751,11 @@ function App() {
             <Route path="/learn/prince2" element={<PRINCE2GuidePage />} />
             <Route path="/learn/itil-v4" element={<ITILv4GuidePage />} />
             <Route path="/learn/git-version-control" element={<GitVersionControlPage />} />
-          </Routes>
-        </Suspense>
-      </Container>
+              </Routes>
+            </Suspense>
+          </Container>
+        } />
+      </Routes>
     </>
   );
 }

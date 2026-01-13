@@ -275,7 +275,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
       {/* Tool Cards - 4x2 Grid */}
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {/* PCAP Analyzer */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -343,7 +343,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
         </Grid>
 
         {/* Nmap Analyzer */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -411,7 +411,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
         </Grid>
 
         {/* SSL/TLS Scanner */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -479,7 +479,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
         </Grid>
 
         {/* DNS Reconnaissance */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -547,7 +547,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
         </Grid>
 
         {/* Traceroute Visualization */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -615,7 +615,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
         </Grid>
 
         {/* API Endpoint Tester */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -684,7 +684,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
         </Grid>
 
         {/* Security Fuzzer */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",
@@ -754,8 +754,79 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
           </Card>
         </Grid>
 
+        {/* Binary Fuzzer */}
+        <Grid item xs={12} sm={6} md={4}>
+          <Card
+            sx={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              background: `linear-gradient(135deg, ${alpha("#dc2626", 0.1)} 0%, ${alpha("#b91c1c", 0.05)} 100%)`,
+              border: `1px solid ${alpha("#dc2626", 0.3)}`,
+              transition: "all 0.3s ease",
+              "&:hover": {
+                transform: "translateY(-4px)",
+                boxShadow: `0 8px 30px ${alpha("#dc2626", 0.3)}`,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 2,
+                    background: `linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                  </svg>
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                    Binary Fuzzer
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Executable Vulnerability Research
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
+                Coverage-guided fuzzing for native executables. Detects memory corruption, crashes, 
+                buffer overflows, use-after-free, and other binary vulnerabilities.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+                <Chip label="Crashes" size="small" variant="outlined" />
+                <Chip label="Memory" size="small" variant="outlined" />
+                <Chip label="Exploits" size="small" variant="outlined" />
+              </Box>
+              <Button
+                component={Link}
+                to={getToolLink("/network/binary-fuzzer")}
+                variant="contained"
+                fullWidth
+                sx={{
+                  mt: "auto",
+                  background: `linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)`,
+                  },
+                }}
+              >
+                Open Binary Fuzzer
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* MITM Workbench */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
               height: "100%",

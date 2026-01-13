@@ -668,6 +668,7 @@ const quizQuestions: QuizQuestion[] = [
 // ========== SIDEBAR SECTIONS ==========
 const sections = [
   { id: "introduction", label: "Introduction" },
+  { id: "learning-objectives", label: "Learning Objectives" },
   { id: "scrum-theory", label: "Scrum Theory" },
   { id: "scrum-values", label: "Scrum Values" },
   { id: "scrum-team", label: "The Scrum Team" },
@@ -675,6 +676,7 @@ const sections = [
   { id: "scrum-master", label: "Scrum Master" },
   { id: "developers", label: "Developers" },
   { id: "scrum-events", label: "Scrum Events" },
+  { id: "scrum-flow", label: "Scrum Flow" },
   { id: "sprint", label: "The Sprint" },
   { id: "sprint-planning", label: "Sprint Planning" },
   { id: "daily-scrum", label: "Daily Scrum" },
@@ -898,6 +900,81 @@ export default function ScrumGuidePage() {
                   sx={{ bgcolor: alpha(ACCENT_COLOR, 0.1), color: ACCENT_COLOR, fontWeight: 500 }}
                 />
               ))}
+            </Box>
+          </Paper>
+
+          {/* Learning Objectives */}
+          <Paper
+            id="learning-objectives"
+            elevation={0}
+            sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <MenuBookIcon sx={{ color: ACCENT_COLOR }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Learning Objectives
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              By the end of this guide, you should be able to explain the foundations of Scrum, run the key events,
+              and apply the artifacts and commitments to real work.
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Card sx={{ height: "100%", bgcolor: alpha(ACCENT_COLOR, 0.04) }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                      You will be able to:
+                    </Typography>
+                    <List dense>
+                      {[
+                        "Explain empiricism and the five Scrum Values",
+                        "Describe the accountabilities and how they collaborate",
+                        "Facilitate Sprint Planning, Daily Scrum, Review, and Retrospective",
+                        "Use Scrum artifacts with their commitments",
+                        "Spot common anti-patterns and correct them",
+                      ].map((item, i) => (
+                        <ListItem key={i}>
+                          <ListItemIcon sx={{ minWidth: 28 }}>
+                            <CheckCircleIcon sx={{ fontSize: 16, color: ACCENT_COLOR }} />
+                          </ListItemIcon>
+                          <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Card sx={{ height: "100%", bgcolor: alpha("#22c55e", 0.05) }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                      Scrum is a good fit when:
+                    </Typography>
+                    <List dense>
+                      {[
+                        "Work is complex and benefits from frequent feedback",
+                        "Teams can deliver usable increments each Sprint",
+                        "Stakeholders are available to collaborate",
+                        "Scope and solution are expected to evolve",
+                      ].map((item, i) => (
+                        <ListItem key={i}>
+                          <ListItemIcon sx={{ minWidth: 28 }}>
+                            <CheckCircleIcon sx={{ fontSize: 16, color: "#22c55e" }} />
+                          </ListItemIcon>
+                          <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+            <Box sx={{ mt: 2, bgcolor: alpha("#f59e0b", 0.08), p: 2, borderRadius: 2 }}>
+              <Typography variant="body2">
+                <strong>Heads-up:</strong> If work is highly predictable, fully defined up front, or teams cannot
+                collaborate cross-functionally, Scrum may add overhead without improving outcomes.
+              </Typography>
             </Box>
           </Paper>
 
@@ -1238,6 +1315,83 @@ export default function ScrumGuidePage() {
                 </TableBody>
               </Table>
             </TableContainer>
+          </Paper>
+
+          {/* Scrum Flow */}
+          <Paper id="scrum-flow" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <LoopIcon sx={{ color: ACCENT_COLOR }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Scrum Flow
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Scrum works as a repeating cycle. Each Sprint creates an Increment, which fuels feedback, adapts the
+              Product Backlog, and sets up the next Sprint.
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 3 }}>
+              {[
+                { label: "Product Goal + Backlog", color: "#0891b2" },
+                { label: "Sprint Planning", color: "#8b5cf6" },
+                { label: "Build + Daily Scrum", color: "#22c55e" },
+                { label: "Sprint Review", color: "#3b82f6" },
+                { label: "Retrospective", color: "#f59e0b" },
+                { label: "Next Sprint", color: "#0891b2" },
+              ].map((step, idx, arr) => (
+                <Box key={step.label} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Chip
+                    label={step.label}
+                    size="small"
+                    sx={{ bgcolor: alpha(step.color, 0.15), color: step.color, fontWeight: 600 }}
+                  />
+                  {idx < arr.length - 1 && <ArrowRightIcon sx={{ color: "text.disabled", fontSize: 18 }} />}
+                </Box>
+              ))}
+            </Box>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ bgcolor: alpha(ACCENT_COLOR, 0.05), p: 2, borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                    Typical Inputs
+                  </Typography>
+                  <List dense>
+                    {[
+                      "Clear Product Goal and ordered Product Backlog",
+                      "Known team capacity and constraints",
+                      "Definition of Done agreed by the team",
+                    ].map((item, i) => (
+                      <ListItem key={i}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: ACCENT_COLOR }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ bgcolor: alpha("#22c55e", 0.05), p: 2, borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                    Typical Outputs
+                  </Typography>
+                  <List dense>
+                    {[
+                      "Sprint Goal and Sprint Backlog",
+                      "A usable Increment that meets the Definition of Done",
+                      "Updated Product Backlog based on feedback",
+                    ].map((item, i) => (
+                      <ListItem key={i}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: "#22c55e" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Grid>
+            </Grid>
           </Paper>
 
           {/* The Sprint */}

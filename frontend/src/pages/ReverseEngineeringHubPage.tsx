@@ -150,6 +150,8 @@ import {
 } from "../api/client";
 import { MermaidDiagram } from "../components/MermaidDiagram";
 import ShareToConversationDialog from "../components/social/ShareToConversationDialog";
+import ReactMarkdown from "react-markdown";
+import { ChatCodeBlock } from "../components/ChatCodeBlock";
 
 // Advanced APK Analysis Components
 import { JadxDecompiler, ManifestVisualizer, AttackSurfaceMap, ObfuscationAnalyzer } from "../components/ApkAdvancedAnalysis";
@@ -7978,11 +7980,23 @@ function ApkAIChatPanel({
                   ? alpha(theme.palette.primary.main, 0.1)
                   : alpha(theme.palette.grey[500], 0.1),
                 borderRadius: 2,
+                "& p": { m: 0 },
+                "& p:not(:last-child)": { mb: 1 },
+                "& ul, & ol": { pl: 2, m: 0 },
+                "& li": { mb: 0.5 },
               }}
             >
-              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+              <ReactMarkdown
+                components={{
+                  code: ({ className, children }) => (
+                    <ChatCodeBlock className={className} theme={theme}>
+                      {children}
+                    </ChatCodeBlock>
+                  ),
+                }}
+              >
                 {msg.content}
-              </Typography>
+              </ReactMarkdown>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
                 {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ""}
               </Typography>
@@ -12717,7 +12731,7 @@ export default function ReverseEngineeringHub() {
         
         setUnifiedApkResult(unifiedResult);
         setApkFile(null); // No file, just viewing
-        setActiveTab(2); // APK tab
+        setActiveTab(1); // APK tab (index 1)
         
       } else if (detail.analysis_type === 'docker') {
         // Reconstruct Docker result
@@ -12744,7 +12758,7 @@ export default function ReverseEngineeringHub() {
           deleted_files: (fullData.deleted_files || []) as any[],
           ai_analysis: detail.ai_analysis_raw,
         } as DockerAnalysisResult);
-        setActiveTab(3); // Docker tab
+        setActiveTab(2); // Docker tab (index 2)
       }
       
       setSuccessMessage(`Loaded report: ${detail.title}`);

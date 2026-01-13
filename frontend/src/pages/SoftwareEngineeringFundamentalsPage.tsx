@@ -52,6 +52,7 @@ import StorageIcon from "@mui/icons-material/Storage";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
+import WarningIcon from "@mui/icons-material/Warning";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import QuizIcon from "@mui/icons-material/Quiz";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -587,6 +588,397 @@ export default function SoftwareEngineeringFundamentalsPage() {
     { name: "Git flow", description: "Separate develop and release branches for complex releases." },
   ];
 
+  // ============ BEGINNER-FOCUSED CONTENT ============
+
+  // What is code? - Explained simply
+  const whatIsCodeExplanations = [
+    {
+      concept: "Code is Instructions",
+      analogy: "Like a recipe for a chef",
+      explanation: "Just like a recipe tells a chef what ingredients to use and steps to follow, code tells a computer exactly what to do, step by step. The computer follows your instructions precisely.",
+    },
+    {
+      concept: "Programming Languages",
+      analogy: "Like different human languages",
+      explanation: "Just as humans speak English, Spanish, or Japanese, computers can understand different programming languages like Python, JavaScript, or Java. Each has its own vocabulary and grammar rules.",
+    },
+    {
+      concept: "Variables Store Data",
+      analogy: "Like labeled boxes",
+      explanation: "Imagine labeled boxes where you store things. A variable called 'userName' might store 'Alice'. You can look inside the box, change what's in it, or use it in calculations.",
+    },
+    {
+      concept: "Functions Do Tasks",
+      analogy: "Like a microwave's buttons",
+      explanation: "When you press 'Popcorn' on a microwave, it runs a preset sequence. Functions work the same way - you give them a name, define what they do, and call them whenever needed.",
+    },
+    {
+      concept: "Loops Repeat Actions",
+      analogy: "Like an alarm that repeats",
+      explanation: "An alarm rings every day at 7am until you turn it off. Loops let code repeat actions - like 'send a reminder to each user in this list' or 'keep asking for password until correct'.",
+    },
+    {
+      concept: "Conditionals Make Decisions",
+      analogy: "Like a traffic light",
+      explanation: "A traffic light checks conditions: if cars are waiting AND the timer expired, turn green. Code uses 'if' statements the same way: if user is logged in, show dashboard; otherwise, show login page.",
+    },
+  ];
+
+  // How programs actually run
+  const howProgramsRun = [
+    {
+      step: "1. You Write Code",
+      description: "You type instructions in a text file using a programming language. This is called 'source code' - it's human-readable.",
+      icon: "📝",
+    },
+    {
+      step: "2. Code Gets Translated",
+      description: "Computers only understand 1s and 0s. A compiler or interpreter translates your code into machine language the computer understands.",
+      icon: "🔄",
+    },
+    {
+      step: "3. Program Loads into Memory",
+      description: "When you run the program, it's loaded into RAM (your computer's short-term memory) so the CPU can access it quickly.",
+      icon: "💾",
+    },
+    {
+      step: "4. CPU Executes Instructions",
+      description: "The CPU (computer's brain) reads your instructions one by one and performs them - calculations, displaying text, saving files, etc.",
+      icon: "🧠",
+    },
+    {
+      step: "5. Program Interacts with World",
+      description: "Your program might read keyboard input, display graphics, save to disk, or send data over the internet. These are 'inputs' and 'outputs'.",
+      icon: "🌐",
+    },
+    {
+      step: "6. Program Ends or Keeps Running",
+      description: "Some programs finish and exit (like a calculator). Others keep running until stopped (like a web server waiting for requests 24/7).",
+      icon: "🏁",
+    },
+  ];
+
+  // Your first program - step by step
+  const firstProgramSteps = [
+    {
+      step: "Install a Code Editor",
+      details: "Download VS Code (free) from code.visualstudio.com. It's beginner-friendly and works on Windows, Mac, and Linux.",
+      tip: "VS Code will be your workspace for writing, editing, and running code.",
+    },
+    {
+      step: "Choose a First Language",
+      details: "Python is recommended for beginners - it reads almost like English and forgives many mistakes. JavaScript is great if you want to build websites.",
+      tip: "Don't worry about picking the 'wrong' language. Skills transfer between languages.",
+    },
+    {
+      step: "Install the Language",
+      details: "For Python: download from python.org. For JavaScript: it comes built into your browser, or install Node.js for running outside browsers.",
+      tip: "Follow the official installation guide for your operating system.",
+    },
+    {
+      step: "Write Hello World",
+      details: "Create a new file (hello.py for Python or hello.js for JavaScript). Type: print('Hello, World!') for Python or console.log('Hello, World!'); for JavaScript.",
+      tip: "This is tradition! Almost every programmer's first program prints 'Hello, World!'",
+    },
+    {
+      step: "Run Your Program",
+      details: "In VS Code, open the terminal (View > Terminal) and type 'python hello.py' or 'node hello.js'. You should see 'Hello, World!' printed.",
+      tip: "If you see an error, read it carefully - errors tell you what went wrong and where.",
+    },
+    {
+      step: "Experiment and Break Things",
+      details: "Change the message, add more print statements, try removing a quote mark to see what error you get. Breaking code and fixing it is how you learn.",
+      tip: "You cannot break your computer with code mistakes. The worst case is an error message!",
+    },
+  ];
+
+  // Common beginner mistakes
+  const beginnerMistakes = [
+    {
+      mistake: "Trying to learn everything at once",
+      why: "There are hundreds of languages, frameworks, and tools. It's overwhelming.",
+      solution: "Pick ONE language and stick with it for at least 3 months. Learn the basics deeply before exploring more.",
+      severity: "high",
+    },
+    {
+      mistake: "Only watching tutorials, never coding",
+      why: "Watching feels productive but you don't build muscle memory or problem-solving skills.",
+      solution: "For every hour of tutorial, spend two hours coding on your own. Build small projects, don't just follow along.",
+      severity: "high",
+    },
+    {
+      mistake: "Copying code without understanding",
+      why: "You might get something working but won't know how to fix it or modify it.",
+      solution: "Type code yourself (don't copy-paste). After each line, explain to yourself what it does. If you can't, look it up.",
+      severity: "high",
+    },
+    {
+      mistake: "Giving up when stuck",
+      why: "Being stuck is frustrating, but it's where the real learning happens.",
+      solution: "Take a break, ask for help, use Google, read documentation. Every developer gets stuck - the skill is learning to get unstuck.",
+      severity: "medium",
+    },
+    {
+      mistake: "Not using version control (Git)",
+      why: "Without Git, one mistake can destroy hours of work. You can't track changes or collaborate.",
+      solution: "Learn basic Git commands in your first month: init, add, commit, push, pull. Use GitHub to backup your code.",
+      severity: "medium",
+    },
+    {
+      mistake: "Skipping fundamentals for frameworks",
+      why: "Jumping to React or Django without knowing JavaScript or Python basics leads to confusion.",
+      solution: "Learn core language features first: variables, functions, loops, arrays, objects. Then add frameworks.",
+      severity: "medium",
+    },
+    {
+      mistake: "Comparing yourself to experienced developers",
+      why: "Seeing polished code from 10-year veterans is discouraging when you're just starting.",
+      solution: "Everyone was a beginner once. Compare yourself to yourself a month ago, not to experts.",
+      severity: "low",
+    },
+    {
+      mistake: "Not reading error messages",
+      why: "Errors seem scary but they're actually helpful - they tell you exactly what went wrong.",
+      solution: "Read the entire error message. Look for the file name, line number, and error type. Google the exact error text.",
+      severity: "medium",
+    },
+  ];
+
+  // Programming language comparison for beginners
+  const languageComparison = [
+    {
+      language: "Python",
+      difficulty: "Easy",
+      bestFor: "Beginners, data science, automation, AI/ML",
+      pros: ["Reads like English", "Huge community", "Versatile"],
+      cons: ["Slower than compiled languages", "Not great for mobile apps"],
+      firstProject: "A calculator, to-do list app, or web scraper",
+    },
+    {
+      language: "JavaScript",
+      difficulty: "Easy-Medium",
+      bestFor: "Websites, web apps, full-stack development",
+      pros: ["Runs in browsers", "Huge job market", "Can build anything web"],
+      cons: ["Quirky behaviors", "Too many frameworks to choose from"],
+      firstProject: "Interactive website, browser game, or Chrome extension",
+    },
+    {
+      language: "Java",
+      difficulty: "Medium",
+      bestFor: "Enterprise apps, Android apps, large systems",
+      pros: ["Strongly typed catches errors", "Huge enterprise use", "Platform independent"],
+      cons: ["Verbose syntax", "Slower to write"],
+      firstProject: "Android app, simple game, or command-line tool",
+    },
+    {
+      language: "C#",
+      difficulty: "Medium",
+      bestFor: "Windows apps, games (Unity), enterprise",
+      pros: ["Great tooling (Visual Studio)", "Strong typing", "Unity game engine"],
+      cons: ["Historically Windows-focused", "Learning curve for OOP"],
+      firstProject: "Unity game, Windows app, or ASP.NET website",
+    },
+    {
+      language: "Go",
+      difficulty: "Medium",
+      bestFor: "Backend services, DevOps tools, cloud",
+      pros: ["Simple syntax", "Fast execution", "Great for servers"],
+      cons: ["Smaller ecosystem", "Less flexible"],
+      firstProject: "CLI tool, REST API, or file processor",
+    },
+    {
+      language: "Rust",
+      difficulty: "Hard",
+      bestFor: "Systems programming, performance-critical apps",
+      pros: ["Memory safe", "Very fast", "Modern features"],
+      cons: ["Steep learning curve", "Longer compile times"],
+      firstProject: "Command-line tool or small game (after basics)",
+    },
+  ];
+
+  // Real-world analogies for concepts
+  const realWorldAnalogies = [
+    {
+      concept: "API (Application Programming Interface)",
+      analogy: "A restaurant menu",
+      explanation: "A menu tells you what dishes are available and how to order them, but hides the kitchen complexity. An API tells other programs what services are available and how to request them, hiding the internal code.",
+    },
+    {
+      concept: "Database",
+      analogy: "A giant filing cabinet",
+      explanation: "A filing cabinet organizes documents in folders so you can find them quickly. A database organizes data in tables so programs can store, find, and update information efficiently.",
+    },
+    {
+      concept: "Server",
+      analogy: "A waiter in a restaurant",
+      explanation: "A waiter takes your order (request), goes to the kitchen (processes it), and brings back your food (response). A server receives requests from users, processes them, and sends back data.",
+    },
+    {
+      concept: "Frontend vs Backend",
+      analogy: "A store's showroom vs warehouse",
+      explanation: "The showroom (frontend) is what customers see - displays, layout, design. The warehouse (backend) is hidden but essential - inventory, processing, logistics. Both must work together.",
+    },
+    {
+      concept: "Bug",
+      analogy: "A typo in a recipe",
+      explanation: "If a recipe says 'add 1 cup of salt' instead of '1 teaspoon', the dish is ruined. A bug is a mistake in code that causes wrong behavior. Finding and fixing bugs is called 'debugging'.",
+    },
+    {
+      concept: "Debugging",
+      analogy: "Detective work",
+      explanation: "Like a detective gathering clues to solve a mystery, debugging involves following evidence (error messages, logs, behavior) to find where and why your code is misbehaving.",
+    },
+    {
+      concept: "Git Repository",
+      analogy: "A Google Doc with version history",
+      explanation: "Google Docs saves every version so you can see changes and restore old versions. Git does this for code - tracking every change, who made it, when, and why.",
+    },
+    {
+      concept: "Deployment",
+      analogy: "Opening night for a play",
+      explanation: "After rehearsals (development and testing), the play goes live for audiences (deployment). If something goes wrong, you might need to cancel the show (rollback) and fix it.",
+    },
+  ];
+
+  // Glossary for beginners
+  const beginnerGlossary = [
+    { term: "Algorithm", definition: "A step-by-step procedure to solve a problem, like a recipe for code." },
+    { term: "Array", definition: "A list that holds multiple items, like a shopping list with numbered items." },
+    { term: "Boolean", definition: "A value that is either true or false, like a yes/no answer." },
+    { term: "Bug", definition: "An error or flaw in code that causes unexpected behavior." },
+    { term: "Class", definition: "A blueprint for creating objects with specific properties and behaviors." },
+    { term: "Compile", definition: "Convert human-readable code into machine code the computer can run." },
+    { term: "Console", definition: "A text-based interface for running commands and seeing program output." },
+    { term: "Debug", definition: "Find and fix errors in your code." },
+    { term: "Deploy", definition: "Make your application available for users, typically on a server." },
+    { term: "Framework", definition: "Pre-built code structure that helps you build applications faster." },
+    { term: "Function", definition: "A reusable block of code that performs a specific task." },
+    { term: "IDE", definition: "Integrated Development Environment - software for writing and running code." },
+    { term: "Library", definition: "Pre-written code you can use in your projects to avoid reinventing the wheel." },
+    { term: "Loop", definition: "Code that repeats a block of instructions multiple times." },
+    { term: "Object", definition: "A collection of related data and functions bundled together." },
+    { term: "Parameter", definition: "A value you pass into a function so it knows what to work with." },
+    { term: "Repository (Repo)", definition: "A storage location for code, typically managed by Git." },
+    { term: "Runtime", definition: "When the program is actually running, as opposed to when you're writing it." },
+    { term: "Syntax", definition: "The grammar rules of a programming language - how code must be written." },
+    { term: "Variable", definition: "A named container that stores a value you can use and change." },
+  ];
+
+  // FAQ for beginners
+  const beginnerFAQ = [
+    {
+      question: "Do I need to be good at math to code?",
+      answer: "Not really! Most programming uses basic math (add, subtract, multiply, compare). Advanced math is only needed for specific fields like game physics, machine learning, or cryptography. Logic and problem-solving matter more than calculus.",
+    },
+    {
+      question: "How long does it take to learn to code?",
+      answer: "You can write simple programs in a few weeks. Basic competency takes 3-6 months of regular practice. Getting job-ready typically takes 6-12 months of focused learning and building projects. Mastery is a lifelong journey.",
+    },
+    {
+      question: "Should I learn multiple languages at once?",
+      answer: "No! Start with one language and stick with it for at least 3-6 months. Once you know one language well, picking up others becomes much easier because concepts transfer.",
+    },
+    {
+      question: "Do I need a computer science degree?",
+      answer: "No. Many successful developers are self-taught or bootcamp graduates. What matters is: can you build things that work? A portfolio of projects often matters more than credentials.",
+    },
+    {
+      question: "Is it too late to start coding?",
+      answer: "Absolutely not. People successfully switch careers to software development in their 30s, 40s, and beyond. Your life experience can actually be an advantage - you understand real problems.",
+    },
+    {
+      question: "What computer do I need?",
+      answer: "Almost any computer from the last 5-10 years works for learning. You don't need a gaming PC or expensive Mac. Even a $300 laptop can run VS Code and learn most languages.",
+    },
+    {
+      question: "How do I stay motivated when it's hard?",
+      answer: "Build projects you care about. Join a community (Discord, Reddit, local meetups). Celebrate small wins. Remember that confusion means you're learning. Take breaks when frustrated.",
+    },
+    {
+      question: "What if I feel like an imposter?",
+      answer: "Imposter syndrome is extremely common, even among senior developers. Remember: everyone Googles things, everyone forgets syntax, everyone was a beginner once. Focus on learning, not on feeling like you 'should' know things.",
+    },
+  ];
+
+  // Practical exercises for beginners
+  const practicalExercises = [
+    {
+      name: "Hello World Variations",
+      difficulty: "Beginner",
+      description: "Modify Hello World to greet the user by name, print multiple lines, or use different colors.",
+      skills: ["Print statements", "Variables", "String concatenation"],
+      time: "15 minutes",
+    },
+    {
+      name: "Simple Calculator",
+      difficulty: "Beginner",
+      description: "Build a calculator that takes two numbers and performs add, subtract, multiply, divide.",
+      skills: ["User input", "Variables", "Arithmetic", "Conditionals"],
+      time: "30 minutes",
+    },
+    {
+      name: "Number Guessing Game",
+      difficulty: "Beginner",
+      description: "Computer picks a random number 1-100. User guesses until correct, getting 'higher' or 'lower' hints.",
+      skills: ["Loops", "Conditionals", "Random numbers", "User input"],
+      time: "45 minutes",
+    },
+    {
+      name: "To-Do List (Command Line)",
+      difficulty: "Beginner-Intermediate",
+      description: "Create a to-do app where users can add tasks, mark complete, and list all tasks.",
+      skills: ["Arrays/Lists", "Functions", "Loops", "File I/O (optional)"],
+      time: "1-2 hours",
+    },
+    {
+      name: "Rock Paper Scissors",
+      difficulty: "Beginner",
+      description: "Play rock-paper-scissors against the computer. Track wins, losses, and ties.",
+      skills: ["Conditionals", "Random choice", "Loops", "Score tracking"],
+      time: "45 minutes",
+    },
+    {
+      name: "Temperature Converter",
+      difficulty: "Beginner",
+      description: "Convert between Celsius, Fahrenheit, and Kelvin. Let user choose direction.",
+      skills: ["Functions", "Math operations", "User input", "Conditionals"],
+      time: "30 minutes",
+    },
+    {
+      name: "Word Counter",
+      difficulty: "Beginner",
+      description: "Count words, characters, and sentences in a text input. Show statistics.",
+      skills: ["String manipulation", "Loops", "Counting", "Functions"],
+      time: "30 minutes",
+    },
+    {
+      name: "Simple Quiz App",
+      difficulty: "Beginner-Intermediate",
+      description: "Multiple-choice quiz with questions stored in arrays. Track score and show results.",
+      skills: ["Arrays of objects", "Loops", "Conditionals", "Score calculation"],
+      time: "1-2 hours",
+    },
+  ];
+
+  // Daily coding habits
+  const dailyCodingHabits = [
+    { habit: "Code for at least 30 minutes", why: "Consistency beats intensity. Daily practice builds lasting skills and habits." },
+    { habit: "Read one error message completely", why: "Errors are teachers. Understanding them makes you a better debugger." },
+    { habit: "Look up one new concept", why: "Small daily learning compounds into deep knowledge over time." },
+    { habit: "Comment your code", why: "Explaining code helps you understand it and helps future-you remember." },
+    { habit: "Review code you wrote yesterday", why: "Fresh eyes catch mistakes and reveal ways to improve." },
+    { habit: "Ask one question (even to Google)", why: "Asking questions is a skill. Practice getting unstuck independently." },
+  ];
+
+  // Motivation quotes
+  const motivationForBeginners = [
+    { quote: "Every expert was once a beginner.", author: "Helen Hayes" },
+    { quote: "The only way to learn a new programming language is by writing programs in it.", author: "Dennis Ritchie" },
+    { quote: "First, solve the problem. Then, write the code.", author: "John Johnson" },
+    { quote: "Code is like humor. When you have to explain it, it's bad.", author: "Cory House" },
+    { quote: "The best error message is the one that never shows up.", author: "Thomas Fuchs" },
+  ];
+
   const projectStructure = [
     { path: "src/", purpose: "Application code and main entry points." },
     { path: "tests/", purpose: "Unit, integration, and end-to-end tests." },
@@ -603,6 +995,16 @@ export default function SoftwareEngineeringFundamentalsPage() {
   // Module navigation items
   const moduleNavItems = [
     { id: "introduction", label: "Introduction", icon: "📖" },
+    { id: "new-to-coding", label: "New to Coding?", icon: "🌟" },
+    { id: "what-is-code", label: "What is Code?", icon: "💡" },
+    { id: "how-programs-run", label: "How Programs Run", icon: "⚙️" },
+    { id: "first-program", label: "Your First Program", icon: "🚀" },
+    { id: "language-guide", label: "Language Guide", icon: "🗺️" },
+    { id: "beginner-mistakes", label: "Common Mistakes", icon: "⚠️" },
+    { id: "real-world-analogies", label: "Real-World Analogies", icon: "🔗" },
+    { id: "practice-exercises", label: "Practice Exercises", icon: "💪" },
+    { id: "beginner-faq", label: "Beginner FAQ", icon: "❓" },
+    { id: "glossary", label: "Glossary", icon: "📚" },
     { id: "engineering-mindset", label: "Engineering Mindset", icon: "🧠" },
     { id: "learning-plan", label: "Learning Plan", icon: "📋" },
     { id: "tooling-ides", label: "Tooling & IDEs", icon: "🔧" },
@@ -1071,6 +1473,456 @@ export default function SoftwareEngineeringFundamentalsPage() {
             foundation: core concepts, essential tools, Git workflows, and a roadmap to choose a specialization.
           </Typography>
         </Paper>
+
+        {/* ============ BEGINNER SECTIONS ============ */}
+
+        {/* New to Coding? Start Here */}
+        <Paper
+          id="new-to-coding"
+          sx={{
+            p: 4,
+            mb: 5,
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha("#22c55e", 0.15)} 0%, ${alpha("#10b981", 0.1)} 100%)`,
+            border: `2px solid ${alpha("#22c55e", 0.3)}`,
+          }}
+        >
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2, color: "#22c55e" }}>
+            <Box sx={{ fontSize: 40 }}>🌟</Box>
+            New to Coding? Start Here!
+          </Typography>
+          <Typography variant="h6" sx={{ mb: 3, lineHeight: 1.7 }}>
+            Welcome! If you've never written a line of code before, you're in the right place. This section will take you from zero to writing your first program.
+          </Typography>
+          <Grid container spacing={2}>
+            {[
+              { label: "No prior experience needed", icon: "✅" },
+              { label: "Learn at your own pace", icon: "⏰" },
+              { label: "Hands-on exercises included", icon: "💪" },
+              { label: "Common questions answered", icon: "❓" },
+            ].map((item) => (
+              <Grid item xs={6} sm={3} key={item.label}>
+                <Paper sx={{ p: 2, textAlign: "center", borderRadius: 2, bgcolor: alpha("#22c55e", 0.1) }}>
+                  <Typography variant="h5" sx={{ mb: 1 }}>{item.icon}</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.label}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+          <Alert severity="success" sx={{ mt: 3 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>You Can Do This!</AlertTitle>
+            Millions of people have learned to code with no prior experience. The key is consistency, curiosity, and not being afraid to make mistakes. Every error is a learning opportunity.
+          </Alert>
+        </Paper>
+
+        {/* What is Code? */}
+        <Paper id="what-is-code" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ fontSize: 32 }}>💡</Box>
+            What is Code? (Explained Simply)
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.7 }}>
+            Code is just instructions written in a language computers can understand. Think of it like writing a very precise recipe - the computer follows your instructions exactly, step by step.
+          </Typography>
+          <Grid container spacing={3}>
+            {whatIsCodeExplanations.map((item, i) => (
+              <Grid item xs={12} md={6} key={i}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    height: "100%",
+                    borderRadius: 3,
+                    bgcolor: alpha("#f97316", 0.05),
+                    border: `1px solid ${alpha("#f97316", 0.2)}`,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                    <Chip label={item.analogy} size="small" sx={{ bgcolor: alpha("#f97316", 0.15), color: "#f97316", fontWeight: 600 }} />
+                  </Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{item.concept}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                    {item.explanation}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* How Programs Run */}
+        <Paper id="how-programs-run" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ fontSize: 32 }}>⚙️</Box>
+            How Programs Actually Run
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Ever wondered what happens when you run a program? Here's the journey from your code to results on screen:
+          </Typography>
+          <Grid container spacing={2}>
+            {howProgramsRun.map((item, i) => (
+              <Grid item xs={12} sm={6} md={4} key={i}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    height: "100%",
+                    borderRadius: 3,
+                    bgcolor: alpha("#3b82f6", 0.05),
+                    border: `1px solid ${alpha("#3b82f6", 0.15)}`,
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography variant="h3" sx={{ mb: 2 }}>{item.icon}</Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{item.step}</Typography>
+                  <Typography variant="body2" color="text.secondary">{item.description}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Your First Program */}
+        <Paper id="first-program" sx={{ p: 4, mb: 5, borderRadius: 4, bgcolor: alpha("#8b5cf6", 0.03) }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ fontSize: 32 }}>🚀</Box>
+            Your First Program: Step by Step
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Ready to write your first program? Follow these steps and you'll have code running in about 15 minutes.
+          </Typography>
+          {firstProgramSteps.map((item, i) => (
+            <Paper key={i} sx={{ p: 3, mb: 2, borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+                <Box
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    bgcolor: "#8b5cf6",
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {i + 1}
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{item.step}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{item.details}</Typography>
+                  <Chip
+                    icon={<TipsAndUpdatesIcon sx={{ fontSize: 16 }} />}
+                    label={item.tip}
+                    size="small"
+                    sx={{ bgcolor: alpha("#22c55e", 0.1), color: "#22c55e" }}
+                  />
+                </Box>
+              </Box>
+            </Paper>
+          ))}
+          <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#22c55e", 0.1), border: `1px solid ${alpha("#22c55e", 0.3)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <CodeIcon /> Example: Hello World in Python
+            </Typography>
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: "#1e1e1e",
+                borderRadius: 2,
+                fontFamily: "monospace",
+                color: "#d4d4d4",
+                fontSize: "0.9rem",
+              }}
+            >
+              <Box component="span" sx={{ color: "#c586c0" }}>print</Box>
+              <Box component="span" sx={{ color: "#d4d4d4" }}>(</Box>
+              <Box component="span" sx={{ color: "#ce9178" }}>'Hello, World!'</Box>
+              <Box component="span" sx={{ color: "#d4d4d4" }}>)</Box>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              That's it! One line of code. When you run this, you'll see "Hello, World!" printed on your screen. Congratulations - you're officially a programmer!
+            </Typography>
+          </Paper>
+        </Paper>
+
+        {/* Language Comparison Guide */}
+        <Paper id="language-guide" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ fontSize: 32 }}>🗺️</Box>
+            Which Programming Language Should I Learn?
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            There's no single "best" language. Pick one based on what you want to build. Here's an honest comparison:
+          </Typography>
+          <Grid container spacing={3}>
+            {languageComparison.map((lang) => (
+              <Grid item xs={12} md={6} key={lang.language}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    height: "100%",
+                    borderRadius: 3,
+                    border: `1px solid ${alpha(
+                      lang.difficulty === "Easy" ? "#22c55e" : lang.difficulty === "Hard" ? "#ef4444" : "#f59e0b",
+                      0.3
+                    )}`,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{lang.language}</Typography>
+                    <Chip
+                      label={lang.difficulty}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(
+                          lang.difficulty === "Easy" ? "#22c55e" : lang.difficulty === "Hard" ? "#ef4444" : "#f59e0b",
+                          0.15
+                        ),
+                        color: lang.difficulty === "Easy" ? "#22c55e" : lang.difficulty === "Hard" ? "#ef4444" : "#f59e0b",
+                        fontWeight: 600,
+                      }}
+                    />
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <strong>Best for:</strong> {lang.bestFor}
+                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: "#22c55e" }}>Pros:</Typography>
+                    <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>
+                      {lang.pros.map((pro) => (
+                        <Chip key={pro} label={pro} size="small" sx={{ bgcolor: alpha("#22c55e", 0.1), fontSize: "0.7rem" }} />
+                      ))}
+                    </Box>
+                  </Box>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: "#ef4444" }}>Cons:</Typography>
+                    <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>
+                      {lang.cons.map((con) => (
+                        <Chip key={con} label={con} size="small" sx={{ bgcolor: alpha("#ef4444", 0.1), fontSize: "0.7rem" }} />
+                      ))}
+                    </Box>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    <strong>First project idea:</strong> {lang.firstProject}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+          <Alert severity="info" sx={{ mt: 3 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>Recommendation for Absolute Beginners</AlertTitle>
+            Start with <strong>Python</strong> if you want to learn programming concepts with the simplest syntax. Start with <strong>JavaScript</strong> if you're excited about building websites. Either choice is great!
+          </Alert>
+        </Paper>
+
+        {/* Common Beginner Mistakes */}
+        <Paper id="beginner-mistakes" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2, color: "#ef4444" }}>
+            <WarningIcon sx={{ color: "#ef4444", fontSize: 32 }} />
+            Common Beginner Mistakes (and How to Avoid Them)
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Learn from others' mistakes so you don't have to make them yourself. These are the most common traps new programmers fall into:
+          </Typography>
+          <Grid container spacing={2}>
+            {beginnerMistakes.map((item, i) => (
+              <Grid item xs={12} md={6} key={i}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    height: "100%",
+                    borderRadius: 2,
+                    borderLeft: `4px solid ${
+                      item.severity === "high" ? "#ef4444" : item.severity === "medium" ? "#f59e0b" : "#3b82f6"
+                    }`,
+                    bgcolor: alpha(
+                      item.severity === "high" ? "#ef4444" : item.severity === "medium" ? "#f59e0b" : "#3b82f6",
+                      0.03
+                    ),
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    <WarningIcon
+                      sx={{
+                        color: item.severity === "high" ? "#ef4444" : item.severity === "medium" ? "#f59e0b" : "#3b82f6",
+                        fontSize: 20,
+                      }}
+                    />
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{item.mistake}</Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    <strong>Why it happens:</strong> {item.why}
+                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                    <CheckCircleIcon sx={{ color: "#22c55e", fontSize: 18, mt: 0.3 }} />
+                    <Typography variant="body2"><strong>Solution:</strong> {item.solution}</Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Real-World Analogies */}
+        <Paper id="real-world-analogies" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ fontSize: 32 }}>🔗</Box>
+            Real-World Analogies for Programming Concepts
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Programming concepts make more sense when connected to everyday things you already understand:
+          </Typography>
+          <Grid container spacing={3}>
+            {realWorldAnalogies.map((item, i) => (
+              <Grid item xs={12} md={6} key={i}>
+                <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03) }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{item.concept}</Typography>
+                  </Box>
+                  <Chip
+                    label={`"Like ${item.analogy}"`}
+                    size="small"
+                    sx={{ mb: 2, bgcolor: alpha("#8b5cf6", 0.15), color: "#8b5cf6", fontWeight: 600 }}
+                  />
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                    {item.explanation}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Practice Exercises */}
+        <Paper id="practice-exercises" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ fontSize: 32 }}>💪</Box>
+            Practice Exercises for Beginners
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Learning by doing is the fastest way to improve. Try these exercises in order of difficulty:
+          </Typography>
+          <Grid container spacing={2}>
+            {practicalExercises.map((ex, i) => (
+              <Grid item xs={12} sm={6} md={4} key={i}>
+                <Paper
+                  sx={{
+                    p: 2.5,
+                    height: "100%",
+                    borderRadius: 2,
+                    border: `1px solid ${alpha("#f97316", 0.2)}`,
+                    "&:hover": { borderColor: "#f97316", boxShadow: `0 4px 20px ${alpha("#f97316", 0.15)}` },
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{ex.name}</Typography>
+                    <Chip
+                      label={ex.difficulty}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(ex.difficulty === "Beginner" ? "#22c55e" : "#f59e0b", 0.15),
+                        color: ex.difficulty === "Beginner" ? "#22c55e" : "#f59e0b",
+                        fontSize: "0.65rem",
+                      }}
+                    />
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {ex.description}
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mb: 1.5 }}>
+                    {ex.skills.map((skill) => (
+                      <Chip key={skill} label={skill} size="small" sx={{ fontSize: "0.65rem", height: 22 }} />
+                    ))}
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Estimated time: {ex.time}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+          <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: alpha("#10b981", 0.05), border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Daily Coding Habits for Success</Typography>
+            <Grid container spacing={2}>
+              {dailyCodingHabits.map((item, i) => (
+                <Grid item xs={12} sm={6} key={i}>
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                    <CheckCircleIcon sx={{ color: "#10b981", fontSize: 18, mt: 0.3 }} />
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.habit}</Typography>
+                      <Typography variant="caption" color="text.secondary">{item.why}</Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        </Paper>
+
+        {/* Beginner FAQ */}
+        <Paper id="beginner-faq" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ fontSize: 32 }}>❓</Box>
+            Frequently Asked Questions (Beginner Edition)
+          </Typography>
+          {beginnerFAQ.map((item, i) => (
+            <Accordion key={i} defaultExpanded={i === 0}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography sx={{ fontWeight: 700 }}>{item.question}</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" sx={{ lineHeight: 1.7 }}>{item.answer}</Typography>
+              </AccordionDetails>
+            </Accordion>
+          ))}
+        </Paper>
+
+        {/* Glossary */}
+        <Paper id="glossary" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ fontSize: 32 }}>📚</Box>
+            Beginner's Glossary
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Don't know what a term means? Here's a quick reference for the most common programming vocabulary:
+          </Typography>
+          <Grid container spacing={1}>
+            {beginnerGlossary.map((item, i) => (
+              <Grid item xs={12} sm={6} md={4} key={i}>
+                <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.03), height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 0.5 }}>
+                    {item.term}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {item.definition}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Motivational Quote */}
+        <Paper
+          sx={{
+            p: 4,
+            mb: 5,
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha("#f97316", 0.1)} 0%, ${alpha("#8b5cf6", 0.1)} 100%)`,
+            textAlign: "center",
+          }}
+        >
+          <Typography variant="h4" sx={{ fontStyle: "italic", mb: 2 }}>
+            "{motivationForBeginners[0].quote}"
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            — {motivationForBeginners[0].author}
+          </Typography>
+        </Paper>
+
+        {/* ============ END BEGINNER SECTIONS ============ */}
 
         <Paper id="engineering-mindset" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>

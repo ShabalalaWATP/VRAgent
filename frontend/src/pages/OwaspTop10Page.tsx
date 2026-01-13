@@ -20,8 +20,18 @@ import {
   Alert,
   LinearProgress,
   Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Fab,
+  Drawer,
+  useMediaQuery,
+  Tooltip,
 } from "@mui/material";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
@@ -31,6 +41,22 @@ import LaunchIcon from "@mui/icons-material/Launch";
 import WarningIcon from "@mui/icons-material/Warning";
 import SecurityIcon from "@mui/icons-material/Security";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
+import LockIcon from "@mui/icons-material/Lock";
+import HttpsIcon from "@mui/icons-material/Https";
+import BugReportIcon from "@mui/icons-material/BugReport";
+import ArchitectureIcon from "@mui/icons-material/Architecture";
+import SettingsIcon from "@mui/icons-material/Settings";
+import ExtensionIcon from "@mui/icons-material/Extension";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import VerifiedIcon from "@mui/icons-material/Verified";
+import MonitorHeartIcon from "@mui/icons-material/MonitorHeart";
+import CloudIcon from "@mui/icons-material/Cloud";
+import ChecklistIcon from "@mui/icons-material/Checklist";
+import BookIcon from "@mui/icons-material/Book";
 
 interface OwaspItem {
   id: string;
@@ -351,6 +377,206 @@ const owaspTop10: OwaspItem[] = [
     ],
     realWorldIncident: "2019 Capital One: SSRF in WAF allowed attacker to access AWS metadata and steal credentials, exposing 106M records.",
   },
+];
+
+const owaspBeginnerNotes: Record<string, { beginnerNote: string; howToSpot: string }> = {
+  A01: {
+    beginnerNote:
+      "Broken Access Control means the app does not properly enforce who can do what. Authentication proves who you are, but authorization decides what you can access. Beginners often mix these up. If the app lets you read, edit, or delete data that should belong to someone else, access control is broken.",
+    howToSpot:
+      "A simple test is to change a record ID in a URL or API request. If you can access another user's data by guessing or incrementing IDs, you likely have an IDOR issue. Also review admin only features and verify they are protected by server side checks, not just the UI.",
+  },
+  A02: {
+    beginnerNote:
+      "Cryptographic Failures are about protecting data. The risk is not just using the wrong algorithm, but also misusing good algorithms, storing keys poorly, or sending sensitive data without encryption. For beginners, focus on whether sensitive data is protected in transit and at rest.",
+    howToSpot:
+      "Check whether the application uses HTTPS everywhere and whether sensitive fields are stored encrypted. Review password storage for strong hashing, and look for hard coded keys or secrets in code or configuration files.",
+  },
+  A03: {
+    beginnerNote:
+      "Injection happens when untrusted input is interpreted as code or commands. This can be SQL, NoSQL, OS commands, templates, or LDAP. The root cause is usually string concatenation or unsafe APIs that mix data and instructions.",
+    howToSpot:
+      "Look for places where user input is directly inserted into queries or commands. If you see string building like `SELECT ...` + userInput, that is a red flag. Parameterized queries and strict input validation are the baseline defense.",
+  },
+  A04: {
+    beginnerNote:
+      "Insecure Design is about flaws in the blueprint. Even perfectly coded features can be insecure if the design allows abuse, such as unlimited password resets or lack of rate limiting on purchases. It is often about business logic, not just code.",
+    howToSpot:
+      "Ask what would happen if a user repeats an action thousands of times, or if they submit unexpected values like negative prices. Review trust boundaries and make sure the design includes guardrails before implementation.",
+  },
+  A05: {
+    beginnerNote:
+      "Security Misconfiguration means the system is left in an unsafe default state. Debug features, open storage buckets, missing headers, and default passwords all fall here. These issues are common because configuration changes are often manual and rushed.",
+    howToSpot:
+      "Check for default credentials, exposed admin panels, verbose error messages, and missing security headers. Compare environment settings between development and production to ensure risky options are disabled before release.",
+  },
+  A06: {
+    beginnerNote:
+      "Vulnerable and Outdated Components are a supply chain risk. Modern apps rely on many third party libraries and services. If any of those have known vulnerabilities, your app inherits the risk even if your own code is clean.",
+    howToSpot:
+      "Inventory dependencies and compare versions against known CVEs. Make sure libraries are maintained and updated. If a component is end of life, plan to replace it instead of assuming it will be safe.",
+  },
+  A07: {
+    beginnerNote:
+      "Identification and Authentication Failures involve weak login and session handling. This can include weak passwords, missing MFA, insecure password recovery, or session tokens that never expire. Attackers target these weaknesses because they lead directly to account takeover.",
+    howToSpot:
+      "Test for brute force protections, session timeouts, and password reset flows. Verify that sessions are invalidated on logout and that tokens are rotated after login. Check for weak password policies and missing MFA on critical accounts.",
+  },
+  A08: {
+    beginnerNote:
+      "Software and Data Integrity Failures focus on trust. If updates, dependencies, or data are not verified, attackers can inject malicious changes. This category includes insecure deserialization and compromised CI/CD pipelines.",
+    howToSpot:
+      "Look for update mechanisms that lack signatures, pipelines with broad access, or serialized data accepted from untrusted clients. If you cannot verify the origin and integrity of code or data, this risk is likely present.",
+  },
+  A09: {
+    beginnerNote:
+      "Logging and Monitoring Failures mean you cannot see or respond to attacks. Without logs and alerts, breaches can persist for weeks or months. This is often a process problem as much as a technical one.",
+    howToSpot:
+      "Check whether authentication events, access control failures, and high value transactions are logged and monitored. Verify that logs are centralized and protected from tampering. If alerts are never triggered in tests, detection is probably weak.",
+  },
+  A10: {
+    beginnerNote:
+      "Server Side Request Forgery (SSRF) occurs when the server fetches a user supplied URL without strict validation. This lets attackers reach internal services or cloud metadata that should be unreachable from the outside.",
+    howToSpot:
+      "Search for features that accept URLs, such as link previews, webhooks, or image fetchers. Test whether you can make the server access internal addresses like 127.0.0.1 or cloud metadata endpoints. Strict allowlists are the safest defense.",
+  },
+};
+
+const operationalSteps = [
+  {
+    title: "Inventory and classify",
+    color: "#dc2626",
+    points: [
+      "Map data flows and identify sensitive data stores",
+      "Catalog critical apps, APIs, and external dependencies",
+      "Define crown jewel assets and abuse cases",
+    ],
+  },
+  {
+    title: "Assess and prioritize",
+    color: "#ea580c",
+    points: [
+      "Map findings to Top 10 categories",
+      "Focus on high impact issues and easy wins",
+      "Align fixes with business risk and exposure",
+    ],
+  },
+  {
+    title: "Fix with secure patterns",
+    color: "#16a34a",
+    points: [
+      "Apply secure defaults and centralized controls",
+      "Use vetted libraries for auth and crypto",
+      "Eliminate unsafe features and harden configs",
+    ],
+  },
+  {
+    title: "Verify and monitor",
+    color: "#7c3aed",
+    points: [
+      "Test fixes with automated and manual methods",
+      "Improve logging and alerting for high risk flows",
+      "Track remediation progress over time",
+    ],
+  },
+];
+
+const assuranceMethods = [
+  {
+    title: "SAST (Static Analysis)",
+    color: "#2563eb",
+    description: "Scans source code and build artifacts to catch issues early in the SDLC.",
+    focus: ["Injection", "Auth failures", "Crypto misuse"],
+  },
+  {
+    title: "DAST (Dynamic Testing)",
+    color: "#dc2626",
+    description: "Tests running applications to find exploitable behaviors and misconfigurations.",
+    focus: ["Access control", "SSRF", "Security misconfiguration"],
+  },
+  {
+    title: "SCA (Dependency Scanning)",
+    color: "#16a34a",
+    description: "Finds vulnerable and outdated components across libraries and containers.",
+    focus: ["A06 Components", "Supply chain risk"],
+  },
+  {
+    title: "IaC and Config Scanning",
+    color: "#ea580c",
+    description: "Checks cloud and infrastructure configuration for insecure defaults and drift.",
+    focus: ["Misconfiguration", "Crypto settings"],
+  },
+  {
+    title: "Manual Review and Pen Testing",
+    color: "#7c3aed",
+    description: "Finds business logic flaws and design weaknesses automated tools miss.",
+    focus: ["Insecure design", "Logic abuse", "Access control"],
+  },
+];
+
+const triageChecklist = [
+  "Map entry points: forms, APIs, file uploads, and webhooks.",
+  "List sensitive data types and where they are stored.",
+  "Validate authentication flows and session handling.",
+  "Verify object-level authorization on all data access endpoints.",
+  "Review input handling for injection surfaces (queries, templates, commands).",
+  "Check configs for debug flags, public storage, and missing security headers.",
+  "Inventory third-party components and versions.",
+  "Confirm logging and alerting for auth and admin actions.",
+];
+
+const prioritizationFactors = [
+  {
+    factor: "Exposure",
+    question: "Is the surface internet-facing or internal only?",
+    example: "Public API endpoint vs internal admin tool",
+  },
+  {
+    factor: "Impact",
+    question: "What data or function could be lost or abused?",
+    example: "PII, payments, or account takeover",
+  },
+  {
+    factor: "Exploitability",
+    question: "How much effort does exploitation require?",
+    example: "No auth vs complex multi-step chain",
+  },
+  {
+    factor: "Detectability",
+    question: "Would this be noticed quickly?",
+    example: "No logs vs strong alerting coverage",
+  },
+  {
+    factor: "Business criticality",
+    question: "Does it affect a core workflow?",
+    example: "Checkout, SSO, or primary data store",
+  },
+];
+
+const designPrompts = [
+  "What actions require step-up authentication or re-auth?",
+  "Which workflows could be abused at scale without rate limits?",
+  "Where are trust boundaries and how are they enforced?",
+  "How are secrets stored, rotated, and audited?",
+  "What happens if a dependency or build pipeline is compromised?",
+];
+
+const remediationQuickWins = [
+  "Enforce deny-by-default access rules for new endpoints.",
+  "Centralize auth, session handling, and authorization checks.",
+  "Add security headers and suppress verbose errors in production.",
+  "Enable dependency scanning in CI and patch on a schedule.",
+  "Require MFA and device checks for admin consoles.",
+  "Use allowlists for outbound URL fetchers to reduce SSRF risk.",
+];
+
+const securityMetrics = [
+  "Percent of endpoints with enforced authorization checks",
+  "Time to remediate Top 10 findings (median/95th)",
+  "Dependency age and patch latency",
+  "Rate of critical findings per release",
+  "Coverage of security tests per repository",
+  "Logging coverage for auth and admin actions",
 ];
 
 const ACCENT_COLOR = "#dc2626";
@@ -1102,57 +1328,359 @@ const quizQuestions: QuizQuestion[] = [
 export default function OwaspTop10Page() {
   const theme = useTheme();
   const navigate = useNavigate();
+  const accent = ACCENT_COLOR;
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
+  
   const [expandedItem, setExpandedItem] = useState<string | false>("A01");
+  
+  // Navigation State
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("");
 
-  const pageContext = `OWASP Top 10 (2021) - The definitive web application security risks document. Covers: A01 Broken Access Control, A02 Cryptographic Failures, A03 Injection (SQL, NoSQL, OS, LDAP), A04 Insecure Design, A05 Security Misconfiguration, A06 Vulnerable and Outdated Components, A07 Identification and Authentication Failures, A08 Software and Data Integrity Failures, A09 Security Logging and Monitoring Failures, A10 Server-Side Request Forgery (SSRF). Each risk includes description, impact, examples, prevention strategies, and related CWEs.`;
+  const pageContext = `OWASP Top 10 (2021) - The definitive web application security risks document. Covers: A01 Broken Access Control, A02 Cryptographic Failures, A03 Injection (SQL, NoSQL, OS, LDAP), A04 Insecure Design, A05 Security Misconfiguration, A06 Vulnerable and Outdated Components, A07 Identification and Authentication Failures, A08 Software and Data Integrity Failures, A09 Security Logging and Monitoring Failures, A10 Server-Side Request Forgery (SSRF). Each risk includes description, impact, examples, prevention strategies, and related CWEs, plus triage checklists, prioritization factors, secure design prompts, remediation quick wins, and security metrics.`;
+
+  // Section Navigation Items
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "A01", label: "A01: Access Control", icon: <LockIcon /> },
+    { id: "A02", label: "A02: Crypto Failures", icon: <HttpsIcon /> },
+    { id: "A03", label: "A03: Injection", icon: <BugReportIcon /> },
+    { id: "A04", label: "A04: Insecure Design", icon: <ArchitectureIcon /> },
+    { id: "A05", label: "A05: Misconfiguration", icon: <SettingsIcon /> },
+    { id: "A06", label: "A06: Components", icon: <ExtensionIcon /> },
+    { id: "A07", label: "A07: Auth Failures", icon: <AccountCircleIcon /> },
+    { id: "A08", label: "A08: Integrity Failures", icon: <VerifiedIcon /> },
+    { id: "A09", label: "A09: Logging Failures", icon: <MonitorHeartIcon /> },
+    { id: "A10", label: "A10: SSRF", icon: <CloudIcon /> },
+    { id: "review-guide", label: "Review Guide", icon: <ChecklistIcon /> },
+    { id: "resources", label: "Resources", icon: <BookIcon /> },
+    { id: "quiz-section", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  // Sidebar Navigation Component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": { width: 6 },
+        "&::-webkit-scrollbar-thumb": { bgcolor: alpha(accent, 0.3), borderRadius: 3 },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Progress</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": { bgcolor: alpha(accent, 0.08) },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="OWASP Top 10 Web Security Risks" pageContext={pageContext}>
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Back Button */}
-      <Chip
-        component={RouterLink}
-        to="/learn"
-        icon={<ArrowBackIcon />}
-        label="Back to Learning Hub"
-        clickable
-        variant="outlined"
-        sx={{ borderRadius: 2, mb: 3 }}
-      />
-
-      {/* Header */}
-      <Box sx={{ mb: 5 }}>
-        <Typography
-          variant="h3"
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
           sx={{
-            fontWeight: 800,
-            mb: 2,
-            background: `linear-gradient(135deg, #dc2626, #7c3aed)`,
-            backgroundClip: "text",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#b91c1c" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
           }}
         >
-          🛡️ OWASP Top 10 (2021)
-        </Typography>
-        <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 900 }}>
-          The definitive awareness document for web application security, representing the most critical security risks to web applications.
-        </Typography>
-      </Box>
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
 
-      {/* Overview */}
-      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, background: `linear-gradient(135deg, ${alpha("#dc2626", 0.05)}, ${alpha("#7c3aed", 0.05)})` }}>
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={8}>
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-              What is the OWASP Top 10?
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
-              The <strong>OWASP Top 10</strong> is a standard awareness document for developers and web application security. It represents a broad consensus about the most critical security risks to web applications, published by the Open Web Application Security Project (OWASP).
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
-              The 2021 edition includes three new categories (A04, A08, A10), merges several previous categories, and is based on data from over 500,000 applications and APIs. It's the industry standard reference for prioritizing web security efforts.
-            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 },
+              }}
+            />
+          </Box>
+
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": { bgcolor: alpha(accent, 0.1) },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{ height: 20, fontSize: "0.65rem", bgcolor: alpha(accent, 0.2), color: accent }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz-section")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+    {/* Back Button */}
+    <Chip
+      component={RouterLink}
+      to="/learn"
+      icon={<ArrowBackIcon />}
+      label="Back to Learning Hub"
+      clickable
+      variant="outlined"
+      sx={{ borderRadius: 2, mb: 3 }}
+    />
+
+    {/* Header */}
+    <Box id="intro" sx={{ mb: 5 }}>
+      <Typography
+        variant="h3"
+        sx={{
+          fontWeight: 800,
+          mb: 2,
+          background: `linear-gradient(135deg, #dc2626, #7c3aed)`,
+          backgroundClip: "text",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+        }}
+      >
+        🛡️ OWASP Top 10 (2021)
+      </Typography>
+      <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 900 }}>
+        The definitive awareness document for web application security, representing the most critical security risks to web applications.
+      </Typography>
+    </Box>
+
+    {/* Overview */}
+    <Paper sx={{ p: 4, mb: 5, borderRadius: 3, background: `linear-gradient(135deg, ${alpha("#dc2626", 0.05)}, ${alpha("#7c3aed", 0.05)})` }}>
+      <Grid container spacing={4}>
+        <Grid item xs={12} md={8}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+            What is the OWASP Top 10?
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+            The <strong>OWASP Top 10</strong> is a standard awareness document for developers and web application security. It represents a broad consensus about the most critical security risks to web applications, published by the Open Web Application Security Project (OWASP).
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+            The 2021 edition includes three new categories (A04, A08, A10), merges several previous categories, and is based on data from over 500,000 applications and APIs. It's the industry standard reference for prioritizing web security efforts.
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+            For beginners, the Top 10 is best understood as a starter map. It does not list every possible bug, but it highlights the most common and high impact categories of failure. When you build or review a web application, these ten areas are the places where the most severe mistakes tend to repeat across industries.
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+            Each category has examples and prevention tips to make it practical. If you are learning, read each risk with two questions in mind: "How could this show up in code or architecture?" and "What is the simplest safe pattern that avoids it?" These questions help you translate a high level risk into actionable engineering decisions.
+          </Typography>
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
               <Chip label="2021 Edition" sx={{ bgcolor: alpha("#dc2626", 0.1), color: "#dc2626", fontWeight: 600 }} />
               <Chip label="10 Categories" variant="outlined" />
@@ -1178,9 +1706,142 @@ export default function OwaspTop10Page() {
         </Grid>
       </Paper>
 
+      {/* Beginner Orientation */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Beginner Orientation
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Think of the Top 10 as a risk lens for web applications. It is not a penetration testing checklist and not a coding standard by itself. Instead, it gives you the highest value areas where mistakes tend to lead to breaches. If you are new, use it to guide where you spend your learning time and where you add controls first.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          A practical way to use this page is to pick one risk and find it in a real system. For example, look for Broken Access Control in URL parameters and API endpoints, or look for Security Misconfiguration in missing security headers and default credentials. This hands-on mapping turns the Top 10 from an abstract list into concrete review tasks.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          The "Prevalence Overview" section shows how common each category is, and the "Detailed Breakdown" section explains each category with impact, examples, and prevention. If you only have time to study a few topics, start with the top three. They are consistently the most common and damaging in real-world incidents.
+        </Typography>
+      </Paper>
+
+      {/* Operational Roadmap */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 5,
+          borderRadius: 3,
+          background: `linear-gradient(135deg, ${alpha("#dc2626", 0.04)}, ${alpha("#7c3aed", 0.04)})`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
+          Operationalizing the Top 10
+        </Typography>
+        <Grid container spacing={3}>
+          {operationalSteps.map((step) => (
+            <Grid item xs={12} md={6} key={step.title}>
+              <Paper sx={{ p: 3, borderRadius: 2, border: `1px solid ${alpha(step.color, 0.2)}`, bgcolor: alpha(step.color, 0.04), height: "100%" }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: step.color, mb: 1.5 }}>
+                  {step.title}
+                </Typography>
+                {step.points.map((point) => (
+                  <Box key={point} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1.2 }}>
+                    <Box sx={{ width: 6, height: 6, mt: 0.9, borderRadius: "50%", bgcolor: step.color }} />
+                    <Typography variant="body2" color="text.secondary">
+                      {point}
+                    </Typography>
+                  </Box>
+                ))}
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Paper>
+
+      {/* Rapid Triage and Prioritization */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
+          Rapid Triage and Prioritization
+        </Typography>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
+              Rapid Triage Checklist
+            </Typography>
+            <List dense>
+              {triageChecklist.map((item) => (
+                <ListItem key={item} sx={{ py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 28 }}>
+                    <SecurityIcon fontSize="small" color="primary" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                </ListItem>
+              ))}
+            </List>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
+              Prioritization Factors
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>Factor</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Question</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Example</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {prioritizationFactors.map((item) => (
+                    <TableRow key={item.factor}>
+                      <TableCell sx={{ fontWeight: 600 }}>{item.factor}</TableCell>
+                      <TableCell>{item.question}</TableCell>
+                      <TableCell>{item.example}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Developer Mindset */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#dc2626", 0.04), border: `1px solid ${alpha("#dc2626", 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Developer Mindset and Secure Defaults
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          The Top 10 is most effective when it shapes how you build features, not just how you test them. Secure defaults are your best friend. For example, require authentication by default for new endpoints, use parameterized database access in every service, and enforce strong cryptography across environments. These defaults remove entire categories of mistakes before they happen.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          Another helpful habit is to treat security as part of the design, not a final check. Ask "what could go wrong here?" while you are writing user stories and API contracts. Even a simple threat model diagram can reveal access control gaps or data exposure risks before a single line of code is written.
+        </Typography>
+      </Paper>
+
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#2563eb", 0.04), border: `1px solid ${alpha("#2563eb", 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Secure Design Prompts
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 2 }}>
+          Use these prompts in design reviews and backlog grooming to surface Top 10 risks before code is written.
+        </Typography>
+        <List dense>
+          {designPrompts.map((prompt) => (
+            <ListItem key={prompt}>
+              <ListItemIcon>
+                <SecurityIcon fontSize="small" color="primary" />
+              </ListItemIcon>
+              <ListItemText primary={prompt} primaryTypographyProps={{ variant: "body2" }} />
+            </ListItem>
+          ))}
+        </List>
+      </Paper>
+
       {/* Risk Visualization */}
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
         📊 Prevalence Overview
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+        The percentages below are not a score of severity. They show how often each category appeared in the data set. Use this as a guide for what you are likely to encounter in the wild. High prevalence categories are common, while lower prevalence categories may still be high impact when they occur.
       </Typography>
       <Paper sx={{ p: 3, mb: 5, borderRadius: 3 }}>
         <Grid container spacing={2}>
@@ -1222,8 +1883,15 @@ export default function OwaspTop10Page() {
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
         📋 Detailed Breakdown
       </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+        Each accordion below is a self-contained mini lesson. Start with the description to understand the risk, then read the impact to see why it matters. The examples are useful for recognizing the issue in code or in a security assessment. The prevention list gives you a safe default approach you can apply in new projects.
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+        If you are studying as a beginner, pick a single item and try to explain it in your own words. Then try to spot where it might occur in your own apps or favorite websites. This active recall is one of the fastest ways to build security intuition.
+      </Typography>
       {owaspTop10.map((item) => (
         <Accordion
+          id={item.id}
           key={item.id}
           expanded={expandedItem === item.id}
           onChange={(_, expanded) => setExpandedItem(expanded ? item.id : false)}
@@ -1264,6 +1932,12 @@ export default function OwaspTop10Page() {
           <AccordionDetails sx={{ p: 4 }}>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               {item.description}
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.9 }}>
+              {owaspBeginnerNotes[item.id].beginnerNote}
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, lineHeight: 1.9 }}>
+              {owaspBeginnerNotes[item.id].howToSpot}
             </Typography>
 
             <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
@@ -1347,8 +2021,94 @@ export default function OwaspTop10Page() {
         </Accordion>
       ))}
 
+      {/* Practical Review Guide */}
+      <Paper id="review-guide" sx={{ p: 4, mt: 4, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+          Practical Review Guide
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          If you are reviewing a real application, start with a short walkthrough of the user journey. Identify where sensitive data enters the system, where it is stored, and where it leaves. This helps you connect risks like Injection, Broken Access Control, and Cryptographic Failures to actual endpoints and data flows.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          Next, focus on the "big three" for quick wins: access control, input handling, and authentication. These areas cause most real world incidents. Even a simple review of API authorization checks, parameter handling, and login sessions can uncover critical issues. Once those are covered, expand to configuration, logging, and supply chain risks.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
+          Finally, document findings using the Top 10 categories. This makes it easier to prioritize fixes and communicate risk to stakeholders. Over time, your team will build a shared vocabulary and a repeatable process for web security reviews.
+        </Typography>
+      </Paper>
+
+      {/* Testing and Assurance */}
+      <Paper sx={{ p: 4, mt: 4, borderRadius: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
+          Testing and Assurance Methods
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          No single testing method covers all risks. Static analysis can find risky patterns in code, but it cannot see misconfigurations in a live environment. Dynamic testing finds real behavior but may miss issues in code paths it does not reach. The best programs blend multiple methods to cover both code and runtime behavior.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
+          As a beginner, focus on understanding what each method is good at and where it fails. That perspective helps you interpret results and avoid false confidence. A clean scan does not always mean an application is safe; it may simply mean the scanner did not reach the risky path.
+        </Typography>
+        <Grid container spacing={3}>
+          {assuranceMethods.map((method) => (
+            <Grid item xs={12} md={6} key={method.title}>
+              <Paper sx={{ p: 3, borderRadius: 2, border: `1px solid ${alpha(method.color, 0.2)}`, bgcolor: alpha(method.color, 0.04), height: "100%" }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: method.color, mb: 1 }}>
+                  {method.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                  {method.description}
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2 }}>
+                  {method.focus.map((focus) => (
+                    <Chip key={focus} label={focus} size="small" sx={{ fontSize: "0.75rem", bgcolor: alpha(method.color, 0.1), color: method.color }} />
+                  ))}
+                </Box>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Paper>
+
+      <Paper sx={{ p: 4, mt: 4, borderRadius: 3, bgcolor: alpha("#10b981", 0.04), border: `1px solid ${alpha("#10b981", 0.12)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
+          Remediation Quick Wins and Metrics
+        </Typography>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5, color: "#10b981" }}>
+              Remediation Quick Wins
+            </Typography>
+            <List dense>
+              {remediationQuickWins.map((item) => (
+                <ListItem key={item} sx={{ py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 28 }}>
+                    <SecurityIcon fontSize="small" color="success" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                </ListItem>
+              ))}
+            </List>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5, color: "#10b981" }}>
+              Metrics to Track
+            </Typography>
+            <List dense>
+              {securityMetrics.map((item) => (
+                <ListItem key={item} sx={{ py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 28 }}>
+                    <SecurityIcon fontSize="small" color="success" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                </ListItem>
+              ))}
+            </List>
+          </Grid>
+        </Grid>
+      </Paper>
+
       {/* Resources */}
-      <Paper sx={{ p: 4, mt: 4, borderRadius: 3, bgcolor: alpha(theme.palette.info.main, 0.05), border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
+      <Paper id="resources" sx={{ p: 4, mt: 4, borderRadius: 3, bgcolor: alpha(theme.palette.info.main, 0.05), border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
         <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
           🔗 Additional Resources
         </Typography>
@@ -1413,7 +2173,8 @@ export default function OwaspTop10Page() {
           Back to Learning Hub
         </Button>
       </Box>
-    </Container>
+        </Box>
+      </Box>
     </LearnPageLayout>
   );
 }

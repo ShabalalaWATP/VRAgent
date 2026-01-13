@@ -243,7 +243,111 @@ export function MermaidDiagram({
         diagramId.current,
         cleanCode
       );
-      setSvg(renderedSvg);
+      
+      // Post-process SVG to fix white backgrounds and black text
+      // This handles inline styles that CSS can't override
+      let processedSvg = renderedSvg;
+      
+      // Use DOMParser to properly manipulate the SVG
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(processedSvg, 'image/svg+xml');
+      const svgElement = doc.querySelector('svg');
+      
+      if (svgElement) {
+        // Fix all rect elements with white/light fills
+        const rects = svgElement.querySelectorAll('rect');
+        rects.forEach((rect) => {
+          const fill = rect.getAttribute('fill');
+          const style = rect.getAttribute('style') || '';
+          
+          // Check for white fills in attribute
+          if (fill && /^(#fff|#ffffff|white|#f[0-9a-f]{5}|rgb\s*\(\s*255|rgba?\s*\(\s*255)$/i.test(fill.trim())) {
+            rect.setAttribute('fill', '#1e3a5f');
+          }
+          // Check for white fills in style attribute
+          if (style.includes('fill') && /fill\s*:\s*(#fff|#ffffff|white|rgb\s*\(\s*255)/i.test(style)) {
+            rect.setAttribute('style', style.replace(/fill\s*:\s*[^;]+/i, 'fill: #1e3a5f'));
+          }
+          // Add stroke if missing or none
+          const stroke = rect.getAttribute('stroke');
+          if (!stroke || stroke === 'none') {
+            rect.setAttribute('stroke', '#60a5fa');
+            rect.setAttribute('stroke-width', '1');
+          }
+        });
+        
+        // Fix all polygon elements (diamond shapes, etc.)
+        const polygons = svgElement.querySelectorAll('polygon');
+        polygons.forEach((poly) => {
+          const fill = poly.getAttribute('fill');
+          if (fill && /^(#fff|#ffffff|white|#f[0-9a-f]{5}|rgb\s*\(\s*255)/i.test(fill.trim())) {
+            poly.setAttribute('fill', '#1e3a5f');
+          }
+        });
+        
+        // Fix all path elements that might be node backgrounds
+        const paths = svgElement.querySelectorAll('path');
+        paths.forEach((path) => {
+          const fill = path.getAttribute('fill');
+          const className = path.getAttribute('class') || '';
+          // Only fix paths that are likely backgrounds (not arrows/lines)
+          if (fill && /^(#fff|#ffffff|white|#f[0-9a-f]{5}|rgb\s*\(\s*255)/i.test(fill.trim())) {
+            if (!className.includes('arrowhead') && !className.includes('marker')) {
+              path.setAttribute('fill', '#1e3a5f');
+            }
+          }
+        });
+        
+        // Fix text and tspan elements with black fill
+        const textElements = svgElement.querySelectorAll('text, tspan');
+        textElements.forEach((text) => {
+          const fill = text.getAttribute('fill');
+          const style = text.getAttribute('style') || '';
+          
+          if (fill && /^(#000|#000000|black|rgb\s*\(\s*0\s*,\s*0\s*,\s*0)/i.test(fill.trim())) {
+            text.setAttribute('fill', '#ffffff');
+          }
+          if (style.includes('fill') && /fill\s*:\s*(#000|#000000|black|rgb\s*\(\s*0)/i.test(style)) {
+            text.setAttribute('style', style.replace(/fill\s*:\s*[^;]+/i, 'fill: #ffffff'));
+          }
+        });
+        
+        // Fix foreignObject divs and spans (HTML labels in SVG)
+        const foreignObjects = svgElement.querySelectorAll('foreignObject');
+        foreignObjects.forEach((fo) => {
+          const divs = fo.querySelectorAll('div, span');
+          divs.forEach((div) => {
+            const style = div.getAttribute('style') || '';
+            // Fix black text color
+            if (style.includes('color') && /color\s*:\s*(#000|#000000|black|rgb\s*\(\s*0)/i.test(style)) {
+              div.setAttribute('style', style.replace(/color\s*:\s*[^;]+/i, 'color: #ffffff'));
+            }
+            // Fix white background
+            if (style.includes('background') && /background[^:]*:\s*(#fff|#ffffff|white|rgb\s*\(\s*255)/i.test(style)) {
+              div.setAttribute('style', style.replace(/background[^:]*:\s*[^;]+/i, 'background: transparent'));
+            }
+          });
+        });
+        
+        // Fix g elements that might have problematic fills
+        const gElements = svgElement.querySelectorAll('g.node, g.cluster');
+        gElements.forEach((g) => {
+          const childRects = g.querySelectorAll('rect');
+          childRects.forEach((rect) => {
+            const fill = rect.getAttribute('fill');
+            if (!fill || fill === 'none' || /^(#fff|#ffffff|white)/i.test(fill.trim())) {
+              rect.setAttribute('fill', '#1e3a5f');
+              rect.setAttribute('stroke', '#60a5fa');
+            }
+          });
+        });
+        
+        // Serialize back to string
+        const serializer = new XMLSerializer();
+        processedSvg = serializer.serializeToString(svgElement);
+      }
+      
+      setSvg(processedSvg);
     } catch (err) {
       console.error("Mermaid rendering error:", err);
       setError(
@@ -608,42 +712,482 @@ export function MermaidDiagram({
                 height: "auto",
                 minWidth: isFullscreen ? "800px" : undefined,
               },
-              // Force readable text colors on all node types
+              // ============================================================
+              // COMPREHENSIVE NODE STYLING - Fix white/invisible boxes
+              // ============================================================
+              
+              // DEFAULT NODE BACKGROUNDS - catch any node without explicit style
               "& .node rect, & .node polygon, & .node circle, & .node ellipse": {
+                fill: "#1e3a5f !important",
+                stroke: "#60a5fa !important",
+                strokeWidth: "2px !important",
+              },
+              // Basic shapes (database cylinders, etc)
+              "& .node path:not(.arrowheadPath)": {
+                fill: "#1e3a5f !important",
                 stroke: "#60a5fa !important",
               },
-              "& .node .label, & .nodeLabel, & .label": {
-                color: "#f1f5f9 !important",
-                fill: "#f1f5f9 !important",
+              // Flowchart specific nodes
+              "& .flowchart-label rect, & .basic.label-container rect": {
+                fill: "#1e3a5f !important",
+                stroke: "#60a5fa !important",
               },
-              "& .cluster rect": {
+              // Stadium/pill shapes
+              "& .node .label-container": {
+                fill: "#1e3a5f !important",
+              },
+              // Rhombus/diamond shapes
+              "& .node polygon.label-container": {
+                fill: "#1e3a5f !important",
+                stroke: "#60a5fa !important",
+              },
+              
+              // ============================================================
+              // TEXT COLORS - Force white/light on ALL text elements
+              // ============================================================
+              "& .node .label, & .nodeLabel, & .label": {
+                color: "#ffffff !important",
+                fill: "#ffffff !important",
+                fontWeight: "500 !important",
+              },
+              "& text": {
+                fill: "#ffffff !important",
+              },
+              "& foreignObject div, & foreignObject span": {
+                color: "#ffffff !important",
+              },
+              "& span.nodeLabel, & .node span": {
+                color: "#ffffff !important",
+                fill: "#ffffff !important",
+              },
+              // Flowchart specific labels
+              "& .flowchart-label .nodeLabel, & .flowchart-label span": {
+                color: "#ffffff !important",
+              },
+              
+              // ============================================================
+              // SUBGRAPH/CLUSTER STYLING - Fix nested subgraph visibility
+              // ============================================================
+              "& .cluster rect, & g.cluster > rect": {
+                fill: "#0f172a !important",
+                stroke: "#3b82f6 !important",
+                strokeWidth: "2px !important",
+                rx: "8px",
+                ry: "8px",
+              },
+              // Nested subgraphs - slightly lighter for visual hierarchy
+              "& .cluster .cluster rect": {
                 fill: "#1e293b !important",
                 stroke: "#475569 !important",
               },
-              "& .cluster .nodeLabel, & .cluster-label": {
-                fill: "#f1f5f9 !important",
+              "& .cluster .cluster .cluster rect": {
+                fill: "#334155 !important",
+                stroke: "#64748b !important",
               },
-              // Subgraph title styling
-              "& .cluster text, & text.cluster-label": {
-                fill: "#f1f5f9 !important",
-                fontWeight: 600,
+              // Cluster/subgraph titles
+              "& .cluster .nodeLabel, & .cluster-label, & .cluster text, & g.cluster text": {
+                fill: "#ffffff !important",
+                color: "#ffffff !important",
+                fontWeight: "700 !important",
+                fontSize: "14px !important",
               },
-              // Edge labels
+              // Cluster title backgrounds (some Mermaid versions add these)
+              "& .cluster .cluster-label rect": {
+                fill: "transparent !important",
+              },
+              
+              // ============================================================
+              // NODES INSIDE SUBGRAPHS - Ensure they're visible
+              // ============================================================
+              "& .cluster .node rect, & .cluster .node polygon": {
+                fill: "#1e3a5f !important",
+                stroke: "#60a5fa !important",
+              },
+              "& .cluster .node .nodeLabel": {
+                color: "#ffffff !important",
+                fill: "#ffffff !important",
+              },
+              
+              // ============================================================
+              // EDGE LABELS AND CONNECTIONS
+              // ============================================================
               "& .edgeLabel": {
-                backgroundColor: "#1e293b",
-                color: "#e2e8f0",
+                backgroundColor: "#1e293b !important",
               },
-              "& .edgeLabel rect": {
+              "& .edgeLabel rect, & .labelBkg": {
                 fill: "#1e293b !important",
+                stroke: "none !important",
               },
-              "& .edgeLabel span": {
+              "& .edgeLabel span, & .edgeLabel text, & .edgeLabel .nodeLabel": {
                 color: "#e2e8f0 !important",
+                fill: "#e2e8f0 !important",
+                backgroundColor: "#1e293b !important",
+              },
+              
+              // ============================================================
+              // LINES AND ARROWS
+              // ============================================================
+              "& .flowchart-link, & path.flowchart-link, & .edge-pattern-solid": {
+                stroke: "#60a5fa !important",
+                strokeWidth: "2px !important",
+              },
+              "& .arrowheadPath, & .marker, & marker path": {
+                fill: "#60a5fa !important",
+                stroke: "#60a5fa !important",
+              },
+              "& .edge-thickness-normal": {
+                strokeWidth: "2px !important",
+              },
+              
+              // ============================================================
+              // OVERRIDE CLASSDEFS - Handle AI-generated custom styles
+              // These override the diagram's built-in classDef styles
+              // ============================================================
+              // Critical (red) - keep color but ensure readable
+              "& .critical rect, & .critical polygon, & [class*='critical'] rect": {
+                fill: "#dc2626 !important",
+                stroke: "#ef4444 !important",
+              },
+              "& .critical .nodeLabel, & [class*='critical'] .nodeLabel, & .critical span": {
+                color: "#ffffff !important",
+                fill: "#ffffff !important",
+              },
+              // High (orange)
+              "& .high rect, & .high polygon, & [class*='high'] rect": {
+                fill: "#ea580c !important",
+                stroke: "#f97316 !important",
+              },
+              "& .high .nodeLabel, & [class*='high'] .nodeLabel, & .high span": {
+                color: "#ffffff !important",
+                fill: "#ffffff !important",
+              },
+              // Medium (yellow/amber) - ensure text is visible
+              "& .medium rect, & .medium polygon, & [class*='medium'] rect": {
+                fill: "#d97706 !important",
+                stroke: "#f59e0b !important",
+              },
+              "& .medium .nodeLabel, & [class*='medium'] .nodeLabel, & .medium span": {
+                color: "#ffffff !important",
+                fill: "#ffffff !important",
+              },
+              // Low (green)
+              "& .low rect, & .low polygon, & [class*='low'] rect": {
+                fill: "#16a34a !important",
+                stroke: "#22c55e !important",
+              },
+              "& .low .nodeLabel, & [class*='low'] .nodeLabel, & .low span": {
+                color: "#ffffff !important",
+                fill: "#ffffff !important",
+              },
+              // Attacker (purple)
+              "& .attacker rect, & .attacker polygon, & [class*='attacker'] rect": {
+                fill: "#7c3aed !important",
+                stroke: "#8b5cf6 !important",
+              },
+              "& .attacker .nodeLabel, & [class*='attacker'] .nodeLabel, & .attacker span": {
+                color: "#ffffff !important",
+                fill: "#ffffff !important",
+              },
+              // Info (blue)
+              "& .info rect, & .info polygon, & [class*='info'] rect": {
+                fill: "#0284c7 !important",
+                stroke: "#0ea5e9 !important",
+              },
+              "& .info .nodeLabel, & [class*='info'] .nodeLabel": {
+                color: "#ffffff !important",
+                fill: "#ffffff !important",
+              },
+              
+              // ============================================================
+              // SPECIAL ELEMENTS
+              // ============================================================
+              // Database cylinders
+              "& .node .er.entityBox, & .node.database rect": {
+                fill: "#1e3a5f !important",
+              },
+              // Notes
+              "& .note rect, & .noteText": {
+                fill: "#334155 !important",
+                stroke: "#475569 !important",
+              },
+              "& .noteText, & .note span": {
+                color: "#f1f5f9 !important",
+                fill: "#f1f5f9 !important",
+              },
+              
+              // ============================================================
+              // CATCH-ALL for any remaining white/blank boxes
+              // ============================================================
+              "& rect:not(.labelBkg):not(.er)": {
+                fill: "#1e3a5f",
+              },
+              "& g > rect[class='']": {
+                fill: "#1e3a5f !important",
+                stroke: "#60a5fa !important",
               },
             }}
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         )}
       </Box>
+
+      {/* Global styles for Mermaid diagram readability */}
+      <style>
+        {`
+          /* ============================================================
+           * COMPREHENSIVE MERMAID DARK THEME FIXES
+           * Ensures ALL diagram elements are visible with proper contrast
+           * ============================================================ */
+          
+          /* === TEXT COLORS === */
+          .mermaid .node .label,
+          .mermaid .nodeLabel,
+          .mermaid .label,
+          .mermaid foreignObject div,
+          .mermaid .node foreignObject div,
+          .mermaid .node text,
+          .mermaid text.nodeLabel,
+          .mermaid .label-container,
+          .mermaid g.node text,
+          .mermaid g.cluster text,
+          .mermaid span.nodeLabel,
+          .mermaid .flowchart-label,
+          .mermaid .flowchart-label span,
+          .mermaid .actor,
+          .mermaid .messageText,
+          .mermaid .loopText,
+          .mermaid .noteText,
+          .mermaid foreignObject span,
+          .mermaid .node span {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+            font-weight: 500 !important;
+          }
+          
+          /* === SUBGRAPH/CLUSTER TITLES === */
+          .mermaid .cluster text,
+          .mermaid text.cluster-label,
+          .mermaid .cluster-label span,
+          .mermaid g.cluster text.nodeLabel,
+          .mermaid .cluster .nodeLabel,
+          .mermaid g.cluster > text {
+            fill: #ffffff !important;
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            font-size: 14px !important;
+          }
+          
+          /* === DEFAULT NODE BACKGROUNDS === */
+          .mermaid .node rect,
+          .mermaid .node polygon,
+          .mermaid .node circle,
+          .mermaid .node ellipse,
+          .mermaid .node path:not(.arrowheadPath),
+          .mermaid .flowchart-label rect,
+          .mermaid .basic.label-container rect {
+            fill: #1e3a5f !important;
+            stroke: #60a5fa !important;
+            stroke-width: 2px !important;
+          }
+          
+          /* === CLUSTER/SUBGRAPH BACKGROUNDS === */
+          .mermaid .cluster rect,
+          .mermaid g.cluster rect,
+          .mermaid g.cluster > rect {
+            fill: #0f172a !important;
+            stroke: #3b82f6 !important;
+            stroke-width: 2px !important;
+            rx: 8px !important;
+            ry: 8px !important;
+          }
+          
+          /* Nested clusters - visual hierarchy */
+          .mermaid .cluster .cluster rect {
+            fill: #1e293b !important;
+            stroke: #475569 !important;
+          }
+          
+          .mermaid .cluster .cluster .cluster rect {
+            fill: #334155 !important;
+            stroke: #64748b !important;
+          }
+          
+          /* === NODES INSIDE SUBGRAPHS === */
+          .mermaid .cluster .node rect,
+          .mermaid .cluster .node polygon,
+          .mermaid g.cluster .node rect {
+            fill: #1e3a5f !important;
+            stroke: #60a5fa !important;
+          }
+          
+          .mermaid .cluster .node .nodeLabel,
+          .mermaid .cluster .node span {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+          }
+          
+          /* === EDGE/ARROW LABELS === */
+          .mermaid .edgeLabel,
+          .mermaid .edgeLabel span,
+          .mermaid .edgeLabel rect,
+          .mermaid .labelBkg {
+            background-color: #1e293b !important;
+            fill: #1e293b !important;
+            color: #e2e8f0 !important;
+          }
+          
+          .mermaid .edgeLabel span,
+          .mermaid .edgeLabel .nodeLabel {
+            color: #e2e8f0 !important;
+            fill: #e2e8f0 !important;
+          }
+          
+          /* === LINES AND ARROWS === */
+          .mermaid .flowchart-link,
+          .mermaid .marker,
+          .mermaid path.flowchart-link,
+          .mermaid .edge-pattern-solid {
+            stroke: #60a5fa !important;
+            stroke-width: 2px !important;
+          }
+          
+          .mermaid .arrowheadPath,
+          .mermaid .marker,
+          .mermaid marker path {
+            fill: #60a5fa !important;
+            stroke: #60a5fa !important;
+          }
+          
+          /* === CLASSDEFS - Risk Level Colors === */
+          /* Critical (red) */
+          .mermaid .critical rect,
+          .mermaid .critical polygon,
+          .mermaid [class*="critical"] rect {
+            fill: #dc2626 !important;
+            stroke: #ef4444 !important;
+          }
+          .mermaid .critical .nodeLabel,
+          .mermaid .critical span,
+          .mermaid [class*="critical"] .nodeLabel {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+          }
+          
+          /* High (orange) */
+          .mermaid .high rect,
+          .mermaid .high polygon,
+          .mermaid [class*="high"] rect {
+            fill: #ea580c !important;
+            stroke: #f97316 !important;
+          }
+          .mermaid .high .nodeLabel,
+          .mermaid .high span,
+          .mermaid [class*="high"] .nodeLabel {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+          }
+          
+          /* Medium (amber/yellow) - IMPORTANT: white text for visibility */
+          .mermaid .medium rect,
+          .mermaid .medium polygon,
+          .mermaid [class*="medium"] rect {
+            fill: #d97706 !important;
+            stroke: #f59e0b !important;
+          }
+          .mermaid .medium .nodeLabel,
+          .mermaid .medium span,
+          .mermaid [class*="medium"] .nodeLabel {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+          }
+          
+          /* Low (green) */
+          .mermaid .low rect,
+          .mermaid .low polygon,
+          .mermaid [class*="low"] rect {
+            fill: #16a34a !important;
+            stroke: #22c55e !important;
+          }
+          .mermaid .low .nodeLabel,
+          .mermaid .low span,
+          .mermaid [class*="low"] .nodeLabel {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+          }
+          
+          /* Attacker (purple) */
+          .mermaid .attacker rect,
+          .mermaid .attacker polygon,
+          .mermaid [class*="attacker"] rect {
+            fill: #7c3aed !important;
+            stroke: #8b5cf6 !important;
+          }
+          .mermaid .attacker .nodeLabel,
+          .mermaid .attacker span,
+          .mermaid [class*="attacker"] .nodeLabel {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+          }
+          
+          /* Info (blue) */
+          .mermaid .info rect,
+          .mermaid .info polygon,
+          .mermaid [class*="info"] rect {
+            fill: #0284c7 !important;
+            stroke: #0ea5e9 !important;
+          }
+          .mermaid .info .nodeLabel,
+          .mermaid .info span,
+          .mermaid [class*="info"] .nodeLabel {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+          }
+          
+          /* === SPECIAL ELEMENTS === */
+          /* Notes */
+          .mermaid .note rect,
+          .mermaid .noteText {
+            fill: #334155 !important;
+            stroke: #475569 !important;
+          }
+          .mermaid .noteText,
+          .mermaid .note span {
+            color: #f1f5f9 !important;
+            fill: #f1f5f9 !important;
+          }
+          
+          /* === CATCH-ALL FOR BLANK/WHITE BOXES === */
+          /* These target elements that might slip through */
+          .mermaid rect:not(.labelBkg):not(.er)[fill="#ffffff"],
+          .mermaid rect:not(.labelBkg):not(.er)[fill="white"],
+          .mermaid rect:not(.labelBkg):not(.er)[fill="#fff"],
+          .mermaid rect:not(.labelBkg):not(.er):not([fill]),
+          .mermaid g > rect[class=""] {
+            fill: #1e3a5f !important;
+            stroke: #60a5fa !important;
+          }
+          
+          /* Force dark fills on inline styles */
+          .mermaid rect[style*="fill: rgb(255, 255, 255)"],
+          .mermaid rect[style*="fill:#ffffff"],
+          .mermaid rect[style*="fill: white"],
+          .mermaid rect[style*="fill:#fff"] {
+            fill: #1e3a5f !important;
+          }
+          
+          /* Override any black text */
+          .mermaid [fill="#000"],
+          .mermaid [fill="black"],
+          .mermaid [fill="#000000"],
+          .mermaid [style*="fill: rgb(0, 0, 0)"],
+          .mermaid [style*="fill:#000"],
+          .mermaid [style*="color:#000"],
+          .mermaid [style*="color: black"] {
+            fill: #ffffff !important;
+            color: #ffffff !important;
+          }
+        `}
+      </style>
     </Paper>
   );
 }

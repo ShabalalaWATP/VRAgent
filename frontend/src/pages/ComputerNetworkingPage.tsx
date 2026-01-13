@@ -34,6 +34,7 @@ import {
   RadioGroup,
   FormControlLabel,
   FormControl,
+  Checkbox,
   Drawer,
   List,
   ListItem,
@@ -428,6 +429,1626 @@ const ipv6Basics = [
   { concept: "No broadcast", description: "Uses multicast instead (ff00::/8)" },
 ];
 
+// ========== INTERACTIVE TOOL COMPONENTS ==========
+
+// Helper function for IP calculations
+const ipToNum = (ip: string): number => {
+  const parts = ip.split(".").map(Number);
+  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+};
+
+const numToIP = (num: number): string => {
+  return [(num >>> 24) & 255, (num >>> 16) & 255, (num >>> 8) & 255, num & 255].join(".");
+};
+
+// ========== VLSM CALCULATOR COMPONENT ==========
+interface VLSMSubnet {
+  name: string;
+  hostsNeeded: number;
+  cidr: number;
+  networkAddress: string;
+  broadcastAddress: string;
+  firstHost: string;
+  lastHost: string;
+  subnetMask: string;
+  usableHosts: number;
+  totalAddresses: number;
+}
+
+const VLSMCalculator: React.FC<{ theme: any; alpha: any }> = ({ theme, alpha }) => {
+  const [baseNetwork, setBaseNetwork] = useState("192.168.1.0");
+  const [baseCIDR, setBaseCIDR] = useState(24);
+  const [requirements, setRequirements] = useState([
+    { name: "Subnet A", hosts: 100 },
+    { name: "Subnet B", hosts: 50 },
+    { name: "Subnet C", hosts: 25 },
+    { name: "Point-to-Point", hosts: 2 },
+  ]);
+  const [results, setResults] = useState<VLSMSubnet[]>([]);
+  const [error, setError] = useState("");
+
+  const addRequirement = () => {
+    setRequirements([...requirements, { name: `Subnet ${String.fromCharCode(65 + requirements.length)}`, hosts: 10 }]);
+  };
+
+  const removeRequirement = (index: number) => {
+    setRequirements(requirements.filter((_, i) => i !== index));
+  };
+
+  const updateRequirement = (index: number, field: "name" | "hosts", value: string | number) => {
+    const updated = [...requirements];
+    if (field === "hosts") {
+      updated[index].hosts = Number(value) || 0;
+    } else {
+      updated[index].name = value as string;
+    }
+    setRequirements(updated);
+  };
+
+  const calculateVLSM = () => {
+    setError("");
+    setResults([]);
+
+    // Validate base network
+    const ipRegex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    if (!ipRegex.test(baseNetwork)) {
+      setError("Invalid base network address");
+      return;
+    }
+
+    // Sort requirements by hosts needed (largest first - VLSM best practice)
+    const sorted = [...requirements].sort((a, b) => b.hosts - a.hosts);
+
+    // Calculate total addresses needed
+    let totalNeeded = 0;
+    const subnets: VLSMSubnet[] = [];
+
+    // Calculate available addresses in base network
+    const hostBits = 32 - baseCIDR;
+    const totalAvailable = Math.pow(2, hostBits);
+
+    let currentIP = ipToNum(baseNetwork);
+    const baseNetworkNum = currentIP;
+    const maxIP = baseNetworkNum + totalAvailable;
+
+    for (const req of sorted) {
+      // Calculate required CIDR for this subnet
+      let neededHosts = req.hosts + 2; // +2 for network and broadcast
+      let subnetBits = Math.ceil(Math.log2(neededHosts));
+      if (subnetBits < 2) subnetBits = 2; // Minimum /30
+      const subnetCIDR = 32 - subnetBits;
+      const subnetSize = Math.pow(2, subnetBits);
+
+      // Align to subnet boundary
+      const alignedIP = Math.ceil(currentIP / subnetSize) * subnetSize;
+
+      if (alignedIP + subnetSize > maxIP) {
+        setError(`Not enough address space! Need ${req.hosts} hosts for "${req.name}" but ran out of addresses.`);
+        return;
+      }
+
+      const networkAddr = alignedIP;
+      const broadcastAddr = alignedIP + subnetSize - 1;
+      const maskNum = (0xFFFFFFFF << subnetBits) >>> 0;
+
+      subnets.push({
+        name: req.name,
+        hostsNeeded: req.hosts,
+        cidr: subnetCIDR,
+        networkAddress: numToIP(networkAddr),
+        broadcastAddress: numToIP(broadcastAddr),
+        firstHost: numToIP(networkAddr + 1),
+        lastHost: numToIP(broadcastAddr - 1),
+        subnetMask: numToIP(maskNum),
+        usableHosts: subnetSize - 2,
+        totalAddresses: subnetSize,
+      });
+
+      currentIP = broadcastAddr + 1;
+      totalNeeded += subnetSize;
+    }
+
+    setResults(subnets);
+  };
+
+  return (
+    <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.08)} 0%, ${alpha("#8b5cf6", 0.08)} 100%)`, border: `2px solid ${alpha("#06b6d4", 0.3)}` }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+        <AccountTreeIcon sx={{ fontSize: 36, color: "#06b6d4" }} />
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: "#06b6d4" }}>VLSM Calculator</Typography>
+          <Typography variant="body2" color="text.secondary">Variable Length Subnet Masking - Efficiently allocate IP addresses based on host requirements</Typography>
+        </Box>
+      </Box>
+
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={4}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Base Network:</Typography>
+          <TextField
+            fullWidth
+            size="small"
+            value={baseNetwork}
+            onChange={(e) => setBaseNetwork(e.target.value)}
+            placeholder="192.168.1.0"
+            sx={{ mb: 2, "& input": { fontFamily: "monospace" } }}
+          />
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Base CIDR: /{baseCIDR}</Typography>
+          <Slider
+            value={baseCIDR}
+            onChange={(_, v) => setBaseCIDR(v as number)}
+            min={8}
+            max={30}
+            marks={[{ value: 8, label: "/8" }, { value: 16, label: "/16" }, { value: 24, label: "/24" }]}
+            sx={{ color: "#06b6d4", mb: 2 }}
+          />
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="caption">Available: {Math.pow(2, 32 - baseCIDR).toLocaleString()} addresses</Typography>
+          </Alert>
+        </Grid>
+
+        <Grid item xs={12} md={8}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Host Requirements (sorted largest first for optimal allocation):</Typography>
+          <Paper sx={{ p: 2, bgcolor: "background.default", borderRadius: 2, maxHeight: 250, overflow: "auto" }}>
+            {requirements.map((req, idx) => (
+              <Box key={idx} sx={{ display: "flex", gap: 1, mb: 1, alignItems: "center" }}>
+                <TextField
+                  size="small"
+                  value={req.name}
+                  onChange={(e) => updateRequirement(idx, "name", e.target.value)}
+                  sx={{ flex: 1 }}
+                />
+                <TextField
+                  size="small"
+                  type="number"
+                  value={req.hosts}
+                  onChange={(e) => updateRequirement(idx, "hosts", e.target.value)}
+                  sx={{ width: 100 }}
+                  InputProps={{ endAdornment: <Typography variant="caption">hosts</Typography> }}
+                />
+                <IconButton size="small" onClick={() => removeRequirement(idx)} color="error">
+                  <CancelIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            ))}
+            <Button size="small" onClick={addRequirement} sx={{ mt: 1 }}>+ Add Subnet</Button>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      <Box sx={{ mt: 3, textAlign: "center" }}>
+        <Button variant="contained" onClick={calculateVLSM} startIcon={<CalculateIcon />} sx={{ bgcolor: "#06b6d4", "&:hover": { bgcolor: "#0891b2" } }}>
+          Calculate VLSM Subnets
+        </Button>
+      </Box>
+
+      {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+
+      {results.length > 0 && (
+        <TableContainer component={Paper} sx={{ mt: 3, borderRadius: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha("#06b6d4", 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Subnet</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Needed</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>CIDR</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Network</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Usable Range</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Broadcast</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Usable</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {results.map((r, idx) => (
+                <TableRow key={idx}>
+                  <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
+                  <TableCell>{r.hostsNeeded}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", color: "#06b6d4", fontWeight: 700 }}>/{r.cidr}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", color: "#ef4444" }}>{r.networkAddress}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{r.firstHost} - {r.lastHost}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", color: "#8b5cf6" }}>{r.broadcastAddress}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#22c55e" }}>{r.usableHosts}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Paper>
+  );
+};
+
+// ========== ENHANCED NETWORK PLANNER TOOL ==========
+interface PlannedSubnet {
+  id: string;
+  name: string;
+  currentHosts: number;
+  growthRate: number; // percentage per year
+  years: number;
+  color: string;
+}
+
+interface SubnetResult {
+  name: string;
+  currentHosts: number;
+  futureHosts: number;
+  cidr: number;
+  mask: string;
+  usable: number;
+  total: number;
+  efficiency: number;
+  networkAddress: string;
+  firstHost: string;
+  lastHost: string;
+  broadcastAddress: string;
+  color: string;
+}
+
+const NetworkPlannerTool: React.FC<{ theme: any; alpha: any }> = ({ theme, alpha }) => {
+  const [mode, setMode] = useState<"single" | "multi">("single");
+  const [hostCount, setHostCount] = useState(100);
+  const [growthRate, setGrowthRate] = useState(20);
+  const [planYears, setPlanYears] = useState(3);
+  const [baseNetwork, setBaseNetwork] = useState("10.0.0.0");
+  const [baseCIDR, setBaseCIDR] = useState(16);
+  const [showGrowth, setShowGrowth] = useState(true);
+
+  // Multi-subnet planning
+  const [subnets, setSubnets] = useState<PlannedSubnet[]>([
+    { id: "1", name: "Servers", currentHosts: 50, growthRate: 10, years: 3, color: "#ef4444" },
+    { id: "2", name: "Workstations", currentHosts: 200, growthRate: 15, years: 3, color: "#3b82f6" },
+    { id: "3", name: "IoT Devices", currentHosts: 100, growthRate: 30, years: 3, color: "#22c55e" },
+    { id: "4", name: "Guest WiFi", currentHosts: 50, growthRate: 25, years: 3, color: "#f59e0b" },
+  ]);
+
+  const [multiResults, setMultiResults] = useState<SubnetResult[]>([]);
+
+  const subnetColors = ["#ef4444", "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
+
+  // Calculate future hosts with growth
+  const calculateFutureHosts = (current: number, rate: number, years: number): number => {
+    return Math.ceil(current * Math.pow(1 + rate / 100, years));
+  };
+
+  // Calculate optimal subnet for given hosts
+  const getOptimalSubnet = (hosts: number) => {
+    const needed = hosts + 2;
+    let bits = Math.ceil(Math.log2(needed));
+    if (bits < 2) bits = 2;
+    const cidr = 32 - bits;
+    const total = Math.pow(2, bits);
+    const usable = total - 2;
+    const maskNum = (0xFFFFFFFF << bits) >>> 0;
+    const mask = numToIP(maskNum);
+    return { cidr, mask, usable, total, bits };
+  };
+
+  // Get alternative subnet suggestions
+  const getAlternatives = (hosts: number) => {
+    const optimal = getOptimalSubnet(hosts);
+    const alternatives = [];
+
+    // Smaller subnet (if possible and hosts still fit)
+    if (optimal.cidr < 30) {
+      const smallerBits = optimal.bits - 1;
+      const smallerTotal = Math.pow(2, smallerBits);
+      const smallerUsable = smallerTotal - 2;
+      if (smallerUsable >= hosts) {
+        const smallerMaskNum = (0xFFFFFFFF << smallerBits) >>> 0;
+        alternatives.push({
+          label: "Smaller (Tighter fit)",
+          cidr: 32 - smallerBits,
+          mask: numToIP(smallerMaskNum),
+          usable: smallerUsable,
+          total: smallerTotal,
+          waste: smallerUsable - hosts,
+          efficiency: (hosts / smallerUsable) * 100,
+          recommendation: smallerUsable - hosts < hosts * 0.1 ? "⚠️ Very tight - no room for growth" : "✓ Good for static networks",
+        });
+      }
+    }
+
+    // Optimal
+    alternatives.push({
+      label: "Optimal (Recommended)",
+      cidr: optimal.cidr,
+      mask: optimal.mask,
+      usable: optimal.usable,
+      total: optimal.total,
+      waste: optimal.usable - hosts,
+      efficiency: (hosts / optimal.usable) * 100,
+      recommendation: "✓ Best balance of efficiency and room for growth",
+      isOptimal: true,
+    });
+
+    // Larger subnet (more room)
+    if (optimal.cidr > 8) {
+      const largerBits = optimal.bits + 1;
+      const largerTotal = Math.pow(2, largerBits);
+      const largerUsable = largerTotal - 2;
+      const largerMaskNum = (0xFFFFFFFF << largerBits) >>> 0;
+      alternatives.push({
+        label: "Larger (Room to grow)",
+        cidr: 32 - largerBits,
+        mask: numToIP(largerMaskNum),
+        usable: largerUsable,
+        total: largerTotal,
+        waste: largerUsable - hosts,
+        efficiency: (hosts / largerUsable) * 100,
+        recommendation: "✓ Good for networks expecting significant growth",
+      });
+    }
+
+    return alternatives.sort((a, b) => b.cidr - a.cidr);
+  };
+
+  // Single mode results
+  const futureHosts = showGrowth ? calculateFutureHosts(hostCount, growthRate, planYears) : hostCount;
+  const singleResult = getOptimalSubnet(futureHosts);
+  const alternatives = getAlternatives(futureHosts);
+  const singleEfficiency = (futureHosts / singleResult.usable) * 100;
+
+  // Multi-subnet planning calculation
+  const calculateMultiSubnets = () => {
+    const sortedSubnets = [...subnets]
+      .map(s => ({
+        ...s,
+        futureHosts: calculateFutureHosts(s.currentHosts, s.growthRate, s.years),
+      }))
+      .sort((a, b) => b.futureHosts - a.futureHosts);
+
+    const baseNetworkNum = ipToNum(baseNetwork);
+    const maxIP = baseNetworkNum + Math.pow(2, 32 - baseCIDR);
+    let currentIP = baseNetworkNum;
+    const results: SubnetResult[] = [];
+
+    for (const subnet of sortedSubnets) {
+      const optimal = getOptimalSubnet(subnet.futureHosts);
+      const subnetSize = optimal.total;
+
+      // Align to subnet boundary
+      const alignedIP = Math.ceil(currentIP / subnetSize) * subnetSize;
+
+      if (alignedIP + subnetSize > maxIP) {
+        continue; // Skip if doesn't fit
+      }
+
+      const networkAddr = alignedIP;
+      const broadcastAddr = alignedIP + subnetSize - 1;
+
+      results.push({
+        name: subnet.name,
+        currentHosts: subnet.currentHosts,
+        futureHosts: subnet.futureHosts,
+        cidr: optimal.cidr,
+        mask: optimal.mask,
+        usable: optimal.usable,
+        total: optimal.total,
+        efficiency: (subnet.futureHosts / optimal.usable) * 100,
+        networkAddress: numToIP(networkAddr),
+        firstHost: numToIP(networkAddr + 1),
+        lastHost: numToIP(broadcastAddr - 1),
+        broadcastAddress: numToIP(broadcastAddr),
+        color: subnet.color,
+      });
+
+      currentIP = broadcastAddr + 1;
+    }
+
+    setMultiResults(results);
+  };
+
+  React.useEffect(() => {
+    if (mode === "multi") {
+      calculateMultiSubnets();
+    }
+  }, [subnets, baseNetwork, baseCIDR, mode]);
+
+  const addSubnet = () => {
+    const newId = Date.now().toString();
+    setSubnets([...subnets, {
+      id: newId,
+      name: `Subnet ${subnets.length + 1}`,
+      currentHosts: 50,
+      growthRate: 15,
+      years: 3,
+      color: subnetColors[subnets.length % subnetColors.length],
+    }]);
+  };
+
+  const updateSubnet = (id: string, field: keyof PlannedSubnet, value: any) => {
+    setSubnets(subnets.map(s => s.id === id ? { ...s, [field]: value } : s));
+  };
+
+  const removeSubnet = (id: string) => {
+    setSubnets(subnets.filter(s => s.id !== id));
+  };
+
+  const totalAddressesUsed = multiResults.reduce((acc, r) => acc + r.total, 0);
+  const totalAvailable = Math.pow(2, 32 - baseCIDR);
+  const overallEfficiency = (totalAddressesUsed / totalAvailable) * 100;
+
+  const presets = [
+    { label: "Home Office", hosts: 10, growth: 10, desc: "Small home network" },
+    { label: "Small Business", hosts: 50, growth: 20, desc: "Growing small business" },
+    { label: "Department", hosts: 100, growth: 15, desc: "Corporate department" },
+    { label: "Branch Office", hosts: 200, growth: 25, desc: "Branch location" },
+    { label: "Data Center", hosts: 500, growth: 30, desc: "Server infrastructure" },
+  ];
+
+  return (
+    <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: `linear-gradient(135deg, ${alpha("#22c55e", 0.05)} 0%, ${alpha("#06b6d4", 0.05)} 100%)`, border: `2px solid ${alpha("#22c55e", 0.3)}` }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <SettingsIcon sx={{ fontSize: 36, color: "#22c55e" }} />
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: "#22c55e" }}>Advanced Network Planner</Typography>
+            <Typography variant="body2" color="text.secondary">Plan subnets with growth forecasting and multi-network support</Typography>
+          </Box>
+        </Box>
+        <ToggleButtonGroup value={mode} exclusive onChange={(_, v) => v && setMode(v)} size="small">
+          <ToggleButton value="single">Single Subnet</ToggleButton>
+          <ToggleButton value="multi">Multi-Subnet</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      {mode === "single" ? (
+        <>
+          {/* Single Subnet Mode */}
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={5}>
+              <Paper sx={{ p: 3, bgcolor: "background.default", borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>📊 Host Requirements</Typography>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Current Hosts Needed:</Typography>
+                <TextField
+                  fullWidth
+                  type="number"
+                  size="small"
+                  value={hostCount}
+                  onChange={(e) => setHostCount(Math.max(1, Number(e.target.value) || 0))}
+                  sx={{ mb: 2, "& input": { fontFamily: "monospace" } }}
+                />
+
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                  {presets.map((p) => (
+                    <Tooltip key={p.label} title={p.desc}>
+                      <Chip
+                        label={p.label}
+                        size="small"
+                        clickable
+                        onClick={() => { setHostCount(p.hosts); setGrowthRate(p.growth); }}
+                        variant={hostCount === p.hosts ? "filled" : "outlined"}
+                        color={hostCount === p.hosts ? "success" : "default"}
+                      />
+                    </Tooltip>
+                  ))}
+                </Box>
+
+                <FormControlLabel
+                  control={<Checkbox checked={showGrowth} onChange={(e) => setShowGrowth(e.target.checked)} color="success" />}
+                  label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Include Growth Planning</Typography>}
+                />
+
+                {showGrowth && (
+                  <Box sx={{ mt: 2, p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                      Annual Growth Rate: <Box component="span" sx={{ color: "#22c55e" }}>{growthRate}%</Box>
+                    </Typography>
+                    <Slider
+                      value={growthRate}
+                      onChange={(_, v) => setGrowthRate(v as number)}
+                      min={0}
+                      max={100}
+                      marks={[{ value: 0, label: "0%" }, { value: 50, label: "50%" }, { value: 100, label: "100%" }]}
+                      sx={{ color: "#22c55e" }}
+                    />
+
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, mt: 2 }}>
+                      Plan for: <Box component="span" sx={{ color: "#22c55e" }}>{planYears} years</Box>
+                    </Typography>
+                    <Slider
+                      value={planYears}
+                      onChange={(_, v) => setPlanYears(v as number)}
+                      min={1}
+                      max={10}
+                      marks={[{ value: 1, label: "1yr" }, { value: 5, label: "5yr" }, { value: 10, label: "10yr" }]}
+                      sx={{ color: "#22c55e" }}
+                    />
+
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      <Typography variant="caption">
+                        <strong>Growth Projection:</strong> {hostCount} hosts → <strong>{futureHosts}</strong> hosts in {planYears} years
+                      </Typography>
+                    </Alert>
+                  </Box>
+                )}
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12} md={7}>
+              {/* Results */}
+              <Paper sx={{ p: 3, bgcolor: "background.default", borderRadius: 2, mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>✓ Recommended Subnet</Typography>
+
+                <Grid container spacing={2}>
+                  <Grid item xs={4}>
+                    <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#22c55e", 0.1), borderRadius: 2 }}>
+                      <Typography variant="caption" color="text.secondary">CIDR</Typography>
+                      <Typography variant="h3" sx={{ fontFamily: "monospace", fontWeight: 800, color: "#22c55e" }}>/{singleResult.cidr}</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#06b6d4", 0.1), borderRadius: 2 }}>
+                      <Typography variant="caption" color="text.secondary">Subnet Mask</Typography>
+                      <Typography variant="h6" sx={{ fontFamily: "monospace", fontWeight: 700 }}>{singleResult.mask}</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha("#8b5cf6", 0.1), borderRadius: 2 }}>
+                      <Typography variant="caption" color="text.secondary">Usable Hosts</Typography>
+                      <Typography variant="h4" sx={{ fontWeight: 800, color: "#8b5cf6" }}>{singleResult.usable.toLocaleString()}</Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+
+                {/* Efficiency Bar */}
+                <Box sx={{ mt: 3 }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+                    <Typography variant="caption" color="text.secondary">Address Utilization</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: singleEfficiency > 80 ? "#f59e0b" : "#22c55e" }}>
+                      {singleEfficiency.toFixed(1)}% ({futureHosts}/{singleResult.usable})
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(singleEfficiency, 100)}
+                    sx={{
+                      height: 12,
+                      borderRadius: 2,
+                      bgcolor: alpha("#22c55e", 0.1),
+                      "& .MuiLinearProgress-bar": {
+                        borderRadius: 2,
+                        bgcolor: singleEfficiency > 90 ? "#ef4444" : singleEfficiency > 75 ? "#f59e0b" : "#22c55e",
+                      },
+                    }}
+                  />
+                  <Box sx={{ display: "flex", justifyContent: "space-between", mt: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">Spare: {singleResult.usable - futureHosts} addresses</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {singleEfficiency > 90 ? "⚠️ Very tight" : singleEfficiency > 75 ? "⚡ Efficient" : "✓ Room to grow"}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              {/* Alternative Suggestions */}
+              <Paper sx={{ p: 3, bgcolor: "background.default", borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>📋 Alternative Options</Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700 }}>Option</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>CIDR</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Mask</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Usable</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Efficiency</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {alternatives.map((alt, idx) => (
+                        <TableRow key={idx} sx={{ bgcolor: (alt as any).isOptimal ? alpha("#22c55e", 0.1) : "transparent" }}>
+                          <TableCell sx={{ fontWeight: (alt as any).isOptimal ? 700 : 400 }}>{alt.label}</TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontWeight: 700, color: "#22c55e" }}>/{alt.cidr}</TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{alt.mask}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{alt.usable.toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <LinearProgress
+                                variant="determinate"
+                                value={alt.efficiency}
+                                sx={{ width: 50, height: 6, borderRadius: 1 }}
+                              />
+                              <Typography variant="caption">{alt.efficiency.toFixed(0)}%</Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell sx={{ fontSize: "0.75rem" }}>{alt.recommendation}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
+          </Grid>
+        </>
+      ) : (
+        <>
+          {/* Multi-Subnet Mode */}
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={5}>
+              <Paper sx={{ p: 3, bgcolor: "background.default", borderRadius: 2, mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>🌐 Base Network</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={7}>
+                    <Typography variant="caption" color="text.secondary">Network Address</Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={baseNetwork}
+                      onChange={(e) => setBaseNetwork(e.target.value)}
+                      sx={{ "& input": { fontFamily: "monospace" } }}
+                    />
+                  </Grid>
+                  <Grid item xs={5}>
+                    <Typography variant="caption" color="text.secondary">CIDR</Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="number"
+                      value={baseCIDR}
+                      onChange={(e) => setBaseCIDR(Math.max(8, Math.min(24, Number(e.target.value))))}
+                      InputProps={{ startAdornment: <Typography sx={{ mr: 0.5 }}>/</Typography> }}
+                      sx={{ "& input": { fontFamily: "monospace" } }}
+                    />
+                  </Grid>
+                </Grid>
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <Typography variant="caption">Available: {totalAvailable.toLocaleString()} addresses</Typography>
+                </Alert>
+              </Paper>
+
+              <Paper sx={{ p: 3, bgcolor: "background.default", borderRadius: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>🏢 Subnet Requirements</Typography>
+                  <Button size="small" onClick={addSubnet} startIcon={<CheckCircleIcon />}>Add</Button>
+                </Box>
+
+                <Box sx={{ maxHeight: 350, overflow: "auto" }}>
+                  {subnets.map((subnet, idx) => (
+                    <Paper key={subnet.id} sx={{ p: 2, mb: 1.5, borderLeft: `4px solid ${subnet.color}`, bgcolor: alpha(subnet.color, 0.03) }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                        <TextField
+                          size="small"
+                          value={subnet.name}
+                          onChange={(e) => updateSubnet(subnet.id, "name", e.target.value)}
+                          variant="standard"
+                          sx={{ fontWeight: 700, "& input": { fontWeight: 700, color: subnet.color } }}
+                        />
+                        <IconButton size="small" onClick={() => removeSubnet(subnet.id)} sx={{ color: "#ef4444" }}>
+                          <CancelIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                      <Grid container spacing={1}>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">Hosts</Typography>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            type="number"
+                            value={subnet.currentHosts}
+                            onChange={(e) => updateSubnet(subnet.id, "currentHosts", Number(e.target.value))}
+                          />
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">Growth %</Typography>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            type="number"
+                            value={subnet.growthRate}
+                            onChange={(e) => updateSubnet(subnet.id, "growthRate", Number(e.target.value))}
+                          />
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">Years</Typography>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            type="number"
+                            value={subnet.years}
+                            onChange={(e) => updateSubnet(subnet.id, "years", Number(e.target.value))}
+                          />
+                        </Grid>
+                      </Grid>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                        → Future: {calculateFutureHosts(subnet.currentHosts, subnet.growthRate, subnet.years)} hosts
+                      </Typography>
+                    </Paper>
+                  ))}
+                </Box>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12} md={7}>
+              {/* Visual Network Diagram */}
+              <Paper sx={{ p: 3, bgcolor: "background.default", borderRadius: 2, mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>📈 Address Space Allocation</Typography>
+
+                {/* Visual bar */}
+                <Box sx={{ mb: 3, borderRadius: 2, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+                  <Box sx={{ display: "flex", height: 40 }}>
+                    {multiResults.map((r, idx) => (
+                      <Tooltip key={idx} title={`${r.name}: ${r.networkAddress}/${r.cidr} (${r.total} IPs)`}>
+                        <Box
+                          sx={{
+                            width: `${(r.total / totalAvailable) * 100}%`,
+                            bgcolor: r.color,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "white",
+                            fontSize: "0.7rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            "&:hover": { opacity: 0.8 },
+                            minWidth: r.total / totalAvailable > 0.05 ? "auto" : 0,
+                            overflow: "hidden",
+                          }}
+                        >
+                          {r.total / totalAvailable > 0.08 && r.name}
+                        </Box>
+                      </Tooltip>
+                    ))}
+                    <Box sx={{ flex: 1, bgcolor: alpha("#888", 0.1), display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Typography variant="caption" color="text.secondary">Unallocated</Typography>
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* Stats */}
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid item xs={4}>
+                    <Typography variant="caption" color="text.secondary">Total Allocated</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{totalAddressesUsed.toLocaleString()}</Typography>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Typography variant="caption" color="text.secondary">Remaining</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: "#22c55e" }}>{(totalAvailable - totalAddressesUsed).toLocaleString()}</Typography>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Typography variant="caption" color="text.secondary">Utilization</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: overallEfficiency > 80 ? "#f59e0b" : "#22c55e" }}>{overallEfficiency.toFixed(1)}%</Typography>
+                  </Grid>
+                </Grid>
+
+                {/* Legend */}
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                  {multiResults.map((r, idx) => (
+                    <Chip
+                      key={idx}
+                      size="small"
+                      label={`${r.name} (/${r.cidr})`}
+                      sx={{ bgcolor: alpha(r.color, 0.2), color: r.color, fontWeight: 600, fontSize: "0.7rem" }}
+                    />
+                  ))}
+                </Box>
+              </Paper>
+
+              {/* Detailed Results Table */}
+              <Paper sx={{ p: 3, bgcolor: "background.default", borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>📋 Subnet Allocation Details</Typography>
+                <TableContainer sx={{ maxHeight: 300 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700 }}>Subnet</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>CIDR</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Network</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Range</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Hosts</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Util.</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {multiResults.map((r, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <Box sx={{ width: 12, height: 12, borderRadius: 1, bgcolor: r.color }} />
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{r.name}</Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontWeight: 700, color: "#22c55e" }}>/{r.cidr}</TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{r.networkAddress}</TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: "0.7rem" }}>{r.firstHost} - {r.lastHost}</TableCell>
+                          <TableCell>
+                            <Typography variant="caption">{r.futureHosts}/{r.usable}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <LinearProgress
+                                variant="determinate"
+                                value={r.efficiency}
+                                sx={{ width: 40, height: 6, borderRadius: 1, bgcolor: alpha(r.color, 0.2), "& .MuiLinearProgress-bar": { bgcolor: r.color } }}
+                              />
+                              <Typography variant="caption">{r.efficiency.toFixed(0)}%</Typography>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
+          </Grid>
+        </>
+      )}
+    </Paper>
+  );
+};
+
+// ========== BANDWIDTH CALCULATOR ==========
+const BandwidthCalculator: React.FC<{ theme: any; alpha: any }> = ({ theme, alpha }) => {
+  const [mode, setMode] = useState<"transfer" | "convert">("transfer");
+  const [fileSize, setFileSize] = useState(1);
+  const [fileSizeUnit, setFileSizeUnit] = useState<"MB" | "GB" | "TB">("GB");
+  const [bandwidth, setBandwidth] = useState(100);
+  const [bandwidthUnit, setBandwidthUnit] = useState<"Mbps" | "Gbps">("Mbps");
+  const [convertValue, setConvertValue] = useState(100);
+  const [convertFrom, setConvertFrom] = useState("Mbps");
+
+  const calculateTransferTime = () => {
+    const sizeInBits = fileSize * (fileSizeUnit === "MB" ? 8388608 : fileSizeUnit === "GB" ? 8589934592 : 8796093022208);
+    const bwInBps = bandwidth * (bandwidthUnit === "Mbps" ? 1000000 : 1000000000);
+    const seconds = sizeInBits / bwInBps;
+
+    if (seconds < 60) return `${seconds.toFixed(2)} seconds`;
+    if (seconds < 3600) return `${(seconds / 60).toFixed(2)} minutes`;
+    if (seconds < 86400) return `${(seconds / 3600).toFixed(2)} hours`;
+    return `${(seconds / 86400).toFixed(2)} days`;
+  };
+
+  const conversions = {
+    "bps": 1,
+    "Kbps": 1000,
+    "Mbps": 1000000,
+    "Gbps": 1000000000,
+    "B/s": 8,
+    "KB/s": 8000,
+    "MB/s": 8000000,
+    "GB/s": 8000000000,
+  };
+
+  const convertSpeed = () => {
+    const bps = convertValue * (conversions[convertFrom as keyof typeof conversions] || 1);
+    return Object.entries(conversions).map(([unit, factor]) => ({
+      unit,
+      value: bps / factor,
+    })).filter(c => c.value >= 0.001 && c.value < 10000000);
+  };
+
+  return (
+    <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: alpha("#f59e0b", 0.03), border: `2px solid ${alpha("#f59e0b", 0.2)}` }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+        <SpeedIcon sx={{ fontSize: 36, color: "#f59e0b" }} />
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: "#f59e0b" }}>Bandwidth Calculator</Typography>
+          <Typography variant="body2" color="text.secondary">Calculate transfer times and convert between speed units</Typography>
+        </Box>
+      </Box>
+
+      <ToggleButtonGroup
+        value={mode}
+        exclusive
+        onChange={(_, v) => v && setMode(v)}
+        sx={{ mb: 3 }}
+        size="small"
+      >
+        <ToggleButton value="transfer">Transfer Time</ToggleButton>
+        <ToggleButton value="convert">Unit Converter</ToggleButton>
+      </ToggleButtonGroup>
+
+      {mode === "transfer" ? (
+        <Grid container spacing={3} alignItems="center">
+          <Grid item xs={12} md={5}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>File Size:</Typography>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <TextField
+                type="number"
+                size="small"
+                value={fileSize}
+                onChange={(e) => setFileSize(Number(e.target.value))}
+                sx={{ flex: 1 }}
+              />
+              <ToggleButtonGroup
+                value={fileSizeUnit}
+                exclusive
+                onChange={(_, v) => v && setFileSizeUnit(v)}
+                size="small"
+              >
+                <ToggleButton value="MB">MB</ToggleButton>
+                <ToggleButton value="GB">GB</ToggleButton>
+                <ToggleButton value="TB">TB</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={5}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Connection Speed:</Typography>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <TextField
+                type="number"
+                size="small"
+                value={bandwidth}
+                onChange={(e) => setBandwidth(Number(e.target.value))}
+                sx={{ flex: 1 }}
+              />
+              <ToggleButtonGroup
+                value={bandwidthUnit}
+                exclusive
+                onChange={(_, v) => v && setBandwidthUnit(v)}
+                size="small"
+              >
+                <ToggleButton value="Mbps">Mbps</ToggleButton>
+                <ToggleButton value="Gbps">Gbps</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.1), borderRadius: 2, textAlign: "center" }}>
+              <Typography variant="caption" color="text.secondary">Transfer Time</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: "#f59e0b" }}>{calculateTransferTime()}</Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      ) : (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Enter Speed:</Typography>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <TextField
+                type="number"
+                size="small"
+                value={convertValue}
+                onChange={(e) => setConvertValue(Number(e.target.value))}
+                sx={{ flex: 1 }}
+              />
+              <TextField
+                select
+                size="small"
+                value={convertFrom}
+                onChange={(e) => setConvertFrom(e.target.value)}
+                sx={{ width: 100 }}
+                SelectProps={{ native: true }}
+              >
+                {Object.keys(conversions).map((u) => <option key={u} value={u}>{u}</option>)}
+              </TextField>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Conversions:</Typography>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              {convertSpeed().map((c) => (
+                <Chip
+                  key={c.unit}
+                  label={`${c.value < 1 ? c.value.toFixed(4) : c.value < 100 ? c.value.toFixed(2) : c.value.toFixed(0)} ${c.unit}`}
+                  sx={{ fontFamily: "monospace", bgcolor: alpha("#f59e0b", 0.1) }}
+                />
+              ))}
+            </Box>
+          </Grid>
+        </Grid>
+      )}
+
+      <Box sx={{ mt: 3, display: "flex", gap: 1, flexWrap: "wrap" }}>
+        <Typography variant="caption" color="text.secondary">Quick presets:</Typography>
+        {[
+          { label: "Home Fiber", bw: 1000, unit: "Mbps" as const },
+          { label: "5G Mobile", bw: 100, unit: "Mbps" as const },
+          { label: "10G Enterprise", bw: 10, unit: "Gbps" as const },
+          { label: "USB 3.0", bw: 5, unit: "Gbps" as const },
+        ].map((p) => (
+          <Chip
+            key={p.label}
+            label={p.label}
+            size="small"
+            clickable
+            onClick={() => { setBandwidth(p.bw); setBandwidthUnit(p.unit); }}
+          />
+        ))}
+      </Box>
+    </Paper>
+  );
+};
+
+// ========== IP RANGE CHECKER ==========
+const IPRangeChecker: React.FC<{ theme: any; alpha: any; ipToNumber: (ip: string) => number; numberToIP: (num: number) => string }> = ({ theme, alpha }) => {
+  const [ip1, setIP1] = useState("192.168.1.50");
+  const [ip2, setIP2] = useState("192.168.1.150");
+  const [cidr, setCIDR] = useState(24);
+  const [results, setResults] = useState<{
+    sameSubnet: boolean;
+    network1: string;
+    network2: string;
+    distance: number;
+  } | null>(null);
+
+  const checkIPs = () => {
+    const ipRegex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    if (!ipRegex.test(ip1) || !ipRegex.test(ip2)) {
+      setResults(null);
+      return;
+    }
+
+    const ip1Num = ipToNum(ip1);
+    const ip2Num = ipToNum(ip2);
+    const maskNum = cidr === 0 ? 0 : (0xFFFFFFFF << (32 - cidr)) >>> 0;
+    const network1 = (ip1Num & maskNum) >>> 0;
+    const network2 = (ip2Num & maskNum) >>> 0;
+
+    setResults({
+      sameSubnet: network1 === network2,
+      network1: numToIP(network1),
+      network2: numToIP(network2),
+      distance: Math.abs(ip1Num - ip2Num),
+    });
+  };
+
+  React.useEffect(() => {
+    checkIPs();
+  }, [ip1, ip2, cidr]);
+
+  return (
+    <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: alpha("#8b5cf6", 0.03), border: `2px solid ${alpha("#8b5cf6", 0.2)}` }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+        <SyncAltIcon sx={{ fontSize: 36, color: "#8b5cf6" }} />
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: "#8b5cf6" }}>IP Range Checker</Typography>
+          <Typography variant="body2" color="text.secondary">Check if two IP addresses are in the same subnet</Typography>
+        </Box>
+      </Box>
+
+      <Grid container spacing={3} alignItems="center">
+        <Grid item xs={12} md={3}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>First IP:</Typography>
+          <TextField
+            fullWidth
+            size="small"
+            value={ip1}
+            onChange={(e) => setIP1(e.target.value)}
+            sx={{ "& input": { fontFamily: "monospace" } }}
+          />
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Second IP:</Typography>
+          <TextField
+            fullWidth
+            size="small"
+            value={ip2}
+            onChange={(e) => setIP2(e.target.value)}
+            sx={{ "& input": { fontFamily: "monospace" } }}
+          />
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Subnet: /{cidr}</Typography>
+          <Slider
+            value={cidr}
+            onChange={(_, v) => setCIDR(v as number)}
+            min={0}
+            max={32}
+            sx={{ color: "#8b5cf6" }}
+          />
+        </Grid>
+        <Grid item xs={12} md={3}>
+          {results && (
+            <Paper sx={{ p: 2, bgcolor: results.sameSubnet ? alpha("#22c55e", 0.1) : alpha("#ef4444", 0.1), borderRadius: 2, textAlign: "center" }}>
+              {results.sameSubnet ? (
+                <>
+                  <CheckCircleIcon sx={{ color: "#22c55e", fontSize: 32 }} />
+                  <Typography variant="body1" sx={{ fontWeight: 700, color: "#22c55e" }}>Same Subnet!</Typography>
+                  <Typography variant="caption" sx={{ fontFamily: "monospace" }}>{results.network1}/{cidr}</Typography>
+                </>
+              ) : (
+                <>
+                  <CancelIcon sx={{ color: "#ef4444", fontSize: 32 }} />
+                  <Typography variant="body1" sx={{ fontWeight: 700, color: "#ef4444" }}>Different Subnets</Typography>
+                  <Typography variant="caption" sx={{ fontFamily: "monospace", display: "block" }}>{results.network1} vs {results.network2}</Typography>
+                </>
+              )}
+            </Paper>
+          )}
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+};
+
+// ========== SUBNET PRACTICE QUIZ ==========
+const SubnetPracticeQuiz: React.FC<{ theme: any; alpha: any }> = ({ theme, alpha }) => {
+  const [question, setQuestion] = useState<{
+    type: string;
+    question: string;
+    answer: string;
+    options?: string[];
+    ip?: string;
+    cidr?: number;
+  } | null>(null);
+  const [userAnswer, setUserAnswer] = useState("");
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [score, setScore] = useState({ correct: 0, total: 0 });
+
+  const generateQuestion = () => {
+    const types = ["network", "broadcast", "hosts", "mask", "cidr"];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const octet3 = Math.floor(Math.random() * 256);
+    const octet4 = Math.floor(Math.random() * 256);
+    const cidr = Math.floor(Math.random() * 9) + 24; // /24 to /32
+    const ip = `192.168.${octet3}.${octet4}`;
+
+    const ipNum = ipToNum(ip);
+    const maskNum = (0xFFFFFFFF << (32 - cidr)) >>> 0;
+    const networkNum = (ipNum & maskNum) >>> 0;
+    const broadcastNum = (networkNum | (~maskNum >>> 0)) >>> 0;
+    const hostBits = 32 - cidr;
+    const usableHosts = hostBits <= 1 ? Math.pow(2, hostBits) : Math.pow(2, hostBits) - 2;
+
+    let q: typeof question = { type, question: "", answer: "", ip, cidr };
+
+    switch (type) {
+      case "network":
+        q.question = `What is the network address for ${ip}/${cidr}?`;
+        q.answer = numToIP(networkNum);
+        break;
+      case "broadcast":
+        q.question = `What is the broadcast address for ${ip}/${cidr}?`;
+        q.answer = numToIP(broadcastNum);
+        break;
+      case "hosts":
+        q.question = `How many usable hosts are in a /${cidr} network?`;
+        q.answer = usableHosts.toString();
+        break;
+      case "mask":
+        q.question = `What is the subnet mask for /${cidr}?`;
+        q.answer = numToIP(maskNum);
+        break;
+      case "cidr":
+        const maskStr = numToIP(maskNum);
+        q.question = `What is the CIDR notation for subnet mask ${maskStr}?`;
+        q.answer = `/${cidr}`;
+        break;
+    }
+
+    setQuestion(q);
+    setUserAnswer("");
+    setShowAnswer(false);
+  };
+
+  const checkAnswer = () => {
+    if (!question) return;
+    const isCorrect = userAnswer.trim().toLowerCase().replace(/^\//, "") === question.answer.toLowerCase().replace(/^\//, "");
+    setScore({ correct: score.correct + (isCorrect ? 1 : 0), total: score.total + 1 });
+    setShowAnswer(true);
+  };
+
+  React.useEffect(() => {
+    generateQuestion();
+  }, []);
+
+  return (
+    <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: `linear-gradient(135deg, ${alpha("#ec4899", 0.08)} 0%, ${alpha("#f59e0b", 0.08)} 100%)`, border: `2px solid ${alpha("#ec4899", 0.3)}` }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <SchoolIcon sx={{ fontSize: 36, color: "#ec4899" }} />
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: "#ec4899" }}>Subnet Practice Quiz</Typography>
+            <Typography variant="body2" color="text.secondary">Random subnetting questions to test your skills</Typography>
+          </Box>
+        </Box>
+        <Chip
+          icon={<EmojiEventsIcon />}
+          label={`Score: ${score.correct}/${score.total}`}
+          sx={{ bgcolor: alpha("#ec4899", 0.1), color: "#ec4899", fontWeight: 700 }}
+        />
+      </Box>
+
+      {question && (
+        <Paper sx={{ p: 3, bgcolor: "background.default", borderRadius: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>{question.question}</Typography>
+
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center", mb: 2 }}>
+            <TextField
+              fullWidth
+              size="small"
+              value={userAnswer}
+              onChange={(e) => setUserAnswer(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && !showAnswer && checkAnswer()}
+              placeholder="Your answer..."
+              disabled={showAnswer}
+              sx={{ "& input": { fontFamily: "monospace", fontSize: "1.1rem" } }}
+            />
+            {!showAnswer ? (
+              <Button variant="contained" onClick={checkAnswer} sx={{ bgcolor: "#ec4899", "&:hover": { bgcolor: "#db2777" } }}>
+                Check
+              </Button>
+            ) : (
+              <Button variant="contained" onClick={generateQuestion} startIcon={<RefreshIcon />}>
+                Next
+              </Button>
+            )}
+          </Box>
+
+          {showAnswer && (
+            <Alert severity={userAnswer.trim().toLowerCase().replace(/^\//, "") === question.answer.toLowerCase().replace(/^\//, "") ? "success" : "error"}>
+              <Typography variant="body1">
+                {userAnswer.trim().toLowerCase().replace(/^\//, "") === question.answer.toLowerCase().replace(/^\//, "") ? "Correct! " : "Incorrect. "}
+                The answer is: <strong style={{ fontFamily: "monospace" }}>{question.answer}</strong>
+              </Typography>
+            </Alert>
+          )}
+        </Paper>
+      )}
+    </Paper>
+  );
+};
+
+// ========== MAC ADDRESS ANALYZER ==========
+const MACAddressAnalyzer: React.FC<{ theme: any; alpha: any }> = ({ theme, alpha }) => {
+  const [mac, setMAC] = useState("00:1A:2B:3C:4D:5E");
+  const [results, setResults] = useState<{
+    normalized: string;
+    binary: string;
+    oui: string;
+    isUnicast: boolean;
+    isLocal: boolean;
+  } | null>(null);
+
+  // Common OUI prefixes (sample - in production would be a larger database)
+  const ouiDatabase: Record<string, string> = {
+    "00:1A:2B": "Ayecom Technology",
+    "00:50:56": "VMware",
+    "00:0C:29": "VMware",
+    "00:1C:42": "Parallels",
+    "08:00:27": "VirtualBox",
+    "00:15:5D": "Microsoft Hyper-V",
+    "00:00:00": "Unknown/Xerox",
+    "FF:FF:FF": "Broadcast",
+    "00:1A:A0": "Dell",
+    "00:25:00": "Apple",
+    "3C:5A:B4": "Google",
+    "F4:F5:D8": "Google",
+    "00:1B:63": "Apple",
+    "D4:F4:6F": "Apple",
+  };
+
+  const analyzeMAC = (input: string) => {
+    // Normalize MAC address (remove separators, uppercase)
+    const cleaned = input.replace(/[^0-9A-Fa-f]/g, "").toUpperCase();
+    if (cleaned.length !== 12) {
+      setResults(null);
+      return;
+    }
+
+    const normalized = cleaned.match(/.{2}/g)?.join(":") || "";
+    const binary = cleaned.split("").map(c => parseInt(c, 16).toString(2).padStart(4, "0")).join(" ");
+    const oui = normalized.substring(0, 8);
+    const firstByte = parseInt(cleaned.substring(0, 2), 16);
+    const isUnicast = (firstByte & 1) === 0;
+    const isLocal = (firstByte & 2) !== 0;
+
+    setResults({
+      normalized,
+      binary,
+      oui,
+      isUnicast,
+      isLocal,
+    });
+  };
+
+  React.useEffect(() => {
+    analyzeMAC(mac);
+  }, [mac]);
+
+  return (
+    <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: alpha("#0ea5e9", 0.03), border: `2px solid ${alpha("#0ea5e9", 0.2)}` }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+        <CableIcon sx={{ fontSize: 36, color: "#0ea5e9" }} />
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: "#0ea5e9" }}>MAC Address Analyzer</Typography>
+          <Typography variant="body2" color="text.secondary">Parse and analyze MAC addresses, identify vendor OUI</Typography>
+        </Box>
+      </Box>
+
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={5}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Enter MAC Address:</Typography>
+          <TextField
+            fullWidth
+            size="small"
+            value={mac}
+            onChange={(e) => setMAC(e.target.value)}
+            placeholder="00:1A:2B:3C:4D:5E or 001A2B3C4D5E"
+            sx={{ mb: 2, "& input": { fontFamily: "monospace", textTransform: "uppercase" } }}
+          />
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            {["00:50:56:12:34:56", "08:00:27:AB:CD:EF", "00:1B:63:00:00:00", "FF:FF:FF:FF:FF:FF"].map((sample) => (
+              <Chip
+                key={sample}
+                label={sample.substring(0, 8) + "..."}
+                size="small"
+                clickable
+                onClick={() => setMAC(sample)}
+                sx={{ fontFamily: "monospace", fontSize: "0.7rem" }}
+              />
+            ))}
+          </Box>
+        </Grid>
+        <Grid item xs={12} md={7}>
+          {results && (
+            <Paper sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">Normalized Format</Typography>
+                  <Typography variant="h6" sx={{ fontFamily: "monospace", fontWeight: 700, color: "#0ea5e9" }}>{results.normalized}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">OUI (Vendor)</Typography>
+                  <Typography variant="body1" sx={{ fontFamily: "monospace" }}>{results.oui}</Typography>
+                  <Typography variant="body2" color="text.secondary">{ouiDatabase[results.oui] || "Unknown vendor"}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">Address Type</Typography>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 0.5 }}>
+                    <Chip label={results.isUnicast ? "Unicast" : "Multicast"} size="small" color={results.isUnicast ? "success" : "warning"} />
+                    <Chip label={results.isLocal ? "Local" : "Universal"} size="small" variant="outlined" />
+                  </Box>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">Binary Representation</Typography>
+                  <Typography sx={{ fontFamily: "monospace", fontSize: "0.7rem", wordBreak: "break-all" }}>{results.binary}</Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+};
+
+// ========== IPv6 TOOLS ==========
+const IPv6Tools: React.FC<{ theme: any; alpha: any }> = ({ theme, alpha }) => {
+  const [ipv6Input, setIPv6Input] = useState("2001:0db8:0000:0000:0000:0000:0000:0001");
+  const [results, setResults] = useState<{
+    full: string;
+    compressed: string;
+    type: string;
+    scope: string;
+  } | null>(null);
+
+  const expandIPv6 = (ip: string): string => {
+    // Handle :: expansion
+    let expanded = ip;
+    if (ip.includes("::")) {
+      const parts = ip.split("::");
+      const left = parts[0] ? parts[0].split(":") : [];
+      const right = parts[1] ? parts[1].split(":") : [];
+      const missing = 8 - left.length - right.length;
+      const middle = Array(missing).fill("0000");
+      expanded = [...left, ...middle, ...right].join(":");
+    }
+
+    // Pad each group
+    return expanded.split(":").map(g => g.padStart(4, "0")).join(":");
+  };
+
+  const compressIPv6 = (ip: string): string => {
+    const full = expandIPv6(ip);
+    let groups = full.split(":").map(g => g.replace(/^0+/, "") || "0");
+
+    // Find longest run of zeros
+    let longestStart = -1, longestLen = 0, currentStart = -1, currentLen = 0;
+    groups.forEach((g, i) => {
+      if (g === "0") {
+        if (currentStart === -1) currentStart = i;
+        currentLen++;
+        if (currentLen > longestLen) {
+          longestStart = currentStart;
+          longestLen = currentLen;
+        }
+      } else {
+        currentStart = -1;
+        currentLen = 0;
+      }
+    });
+
+    if (longestLen > 1) {
+      const before = groups.slice(0, longestStart);
+      const after = groups.slice(longestStart + longestLen);
+      return before.join(":") + "::" + after.join(":");
+    }
+
+    return groups.join(":");
+  };
+
+  const getIPv6Type = (ip: string): { type: string; scope: string } => {
+    const full = expandIPv6(ip).toLowerCase();
+    if (full === "0000:0000:0000:0000:0000:0000:0000:0001") return { type: "Loopback", scope: "Host" };
+    if (full === "0000:0000:0000:0000:0000:0000:0000:0000") return { type: "Unspecified", scope: "N/A" };
+    if (full.startsWith("fe80")) return { type: "Link-Local", scope: "Link" };
+    if (full.startsWith("fc") || full.startsWith("fd")) return { type: "Unique Local", scope: "Organization" };
+    if (full.startsWith("ff")) return { type: "Multicast", scope: "Varies" };
+    if (full.startsWith("2") || full.startsWith("3")) return { type: "Global Unicast", scope: "Internet" };
+    return { type: "Unknown", scope: "Unknown" };
+  };
+
+  const analyzeIPv6 = () => {
+    try {
+      const full = expandIPv6(ipv6Input);
+      const compressed = compressIPv6(ipv6Input);
+      const { type, scope } = getIPv6Type(ipv6Input);
+      setResults({ full, compressed, type, scope });
+    } catch {
+      setResults(null);
+    }
+  };
+
+  React.useEffect(() => {
+    analyzeIPv6();
+  }, [ipv6Input]);
+
+  return (
+    <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: alpha("#a855f7", 0.03), border: `2px solid ${alpha("#a855f7", 0.2)}` }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+        <PublicIcon sx={{ fontSize: 36, color: "#a855f7" }} />
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: "#a855f7" }}>IPv6 Tools</Typography>
+          <Typography variant="body2" color="text.secondary">Expand, compress, and analyze IPv6 addresses</Typography>
+        </Box>
+      </Box>
+
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Enter IPv6 Address:</Typography>
+          <TextField
+            fullWidth
+            size="small"
+            value={ipv6Input}
+            onChange={(e) => setIPv6Input(e.target.value)}
+            placeholder="2001:db8::1 or full form"
+            sx={{ mb: 2, "& input": { fontFamily: "monospace" } }}
+          />
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            {["::1", "fe80::1", "2001:db8::1", "ff02::1"].map((sample) => (
+              <Chip key={sample} label={sample} size="small" clickable onClick={() => setIPv6Input(sample)} sx={{ fontFamily: "monospace" }} />
+            ))}
+          </Box>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {results && (
+            <Paper sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
+              <Typography variant="caption" color="text.secondary">Full (Expanded) Form</Typography>
+              <Typography sx={{ fontFamily: "monospace", fontSize: "0.8rem", mb: 1, wordBreak: "break-all" }}>{results.full}</Typography>
+
+              <Typography variant="caption" color="text.secondary">Compressed Form</Typography>
+              <Typography sx={{ fontFamily: "monospace", fontSize: "1rem", fontWeight: 700, color: "#a855f7", mb: 1 }}>{results.compressed}</Typography>
+
+              <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+                <Chip label={results.type} size="small" sx={{ bgcolor: alpha("#a855f7", 0.1), color: "#a855f7" }} />
+                <Chip label={`Scope: ${results.scope}`} size="small" variant="outlined" />
+              </Box>
+            </Paper>
+          )}
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+};
+
+// ========== LATENCY CALCULATOR ==========
+const LatencyCalculator: React.FC<{ theme: any; alpha: any }> = ({ theme, alpha }) => {
+  const [distance, setDistance] = useState(1000);
+  const [medium, setMedium] = useState<"fiber" | "copper" | "satellite">("fiber");
+  const [hops, setHops] = useState(10);
+
+  const speedOfLight = 299792; // km/s in vacuum
+  const refractionIndex = { fiber: 1.5, copper: 1.0, satellite: 1.0 };
+  const hopLatency = 0.5; // ms per hop (processing + queuing)
+
+  const calculateLatency = () => {
+    const speed = speedOfLight / refractionIndex[medium];
+    let totalDistance = distance;
+
+    // Satellite goes up and down (geostationary at ~35,786 km)
+    if (medium === "satellite") {
+      totalDistance = 35786 * 2 + distance; // Up, satellite, down
+    }
+
+    const propagation = (totalDistance / speed) * 1000; // Convert to ms
+    const processing = hops * hopLatency;
+    const rtt = (propagation + processing) * 2; // Round trip
+
+    return {
+      propagation: propagation.toFixed(2),
+      processing: processing.toFixed(2),
+      oneWay: (propagation + processing).toFixed(2),
+      rtt: rtt.toFixed(2),
+    };
+  };
+
+  const results = calculateLatency();
+
+  return (
+    <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: alpha("#ef4444", 0.03), border: `2px solid ${alpha("#ef4444", 0.2)}` }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+        <NetworkCheckIcon sx={{ fontSize: 36, color: "#ef4444" }} />
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: "#ef4444" }}>Latency Calculator</Typography>
+          <Typography variant="body2" color="text.secondary">Estimate network latency based on distance and medium</Typography>
+        </Box>
+      </Box>
+
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={4}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Distance (km): {distance.toLocaleString()}</Typography>
+          <Slider
+            value={distance}
+            onChange={(_, v) => setDistance(v as number)}
+            min={10}
+            max={20000}
+            step={10}
+            sx={{ color: "#ef4444" }}
+          />
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1 }}>
+            {[
+              { label: "Local", km: 10 },
+              { label: "City", km: 100 },
+              { label: "Cross-country", km: 4000 },
+              { label: "Intercontinental", km: 10000 },
+            ].map((p) => (
+              <Chip key={p.label} label={p.label} size="small" clickable onClick={() => setDistance(p.km)} />
+            ))}
+          </Box>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Transmission Medium:</Typography>
+          <ToggleButtonGroup
+            value={medium}
+            exclusive
+            onChange={(_, v) => v && setMedium(v)}
+            size="small"
+            fullWidth
+          >
+            <ToggleButton value="fiber">Fiber Optic</ToggleButton>
+            <ToggleButton value="copper">Copper</ToggleButton>
+            <ToggleButton value="satellite">Satellite</ToggleButton>
+          </ToggleButtonGroup>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>Network Hops: {hops}</Typography>
+          <Slider value={hops} onChange={(_, v) => setHops(v as number)} min={1} max={30} sx={{ color: "#ef4444" }} />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
+            <Grid container spacing={1}>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">Propagation</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>{results.propagation} ms</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">Processing</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>{results.processing} ms</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">One-Way</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>{results.oneWay} ms</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">Round Trip (RTT)</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#ef4444" }}>{results.rtt} ms</Typography>
+              </Grid>
+            </Grid>
+            {medium === "satellite" && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="caption">Satellite adds ~600ms due to geostationary orbit distance</Typography>
+              </Alert>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+};
+
 const ComputerNetworkingPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -749,6 +2370,7 @@ const ComputerNetworkingPage: React.FC = () => {
     { id: "tcpip-model", label: "TCP/IP Model", icon: <AccountTreeIcon /> },
     { id: "ip-addressing", label: "IP Addressing", icon: <LanguageIcon /> },
     { id: "subnetting", label: "Subnetting", icon: <CalculateIcon /> },
+    { id: "interactive-tools", label: "Interactive Tools", icon: <NetworkCheckIcon /> },
     { id: "protocols-ports", label: "Protocols & Ports", icon: <SettingsEthernetIcon /> },
     { id: "devices", label: "Network Devices", icon: <RouterIcon /> },
     { id: "dns", label: "DNS", icon: <DnsIcon /> },
@@ -2985,6 +4607,44 @@ const ComputerNetworkingPage: React.FC = () => {
           💡 Click any row to load that CIDR into the calculator above! | * /31 and /32 are special cases
         </Typography>
       </Paper>
+
+      {/* ========== ADVANCED NETWORKING TOOLS SECTION ========== */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6, scrollMarginTop: 96 }} id="interactive-tools">
+        <Divider sx={{ flex: 1 }} />
+        <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>ADVANCED NETWORKING TOOLS</Typography>
+        <Divider sx={{ flex: 1 }} />
+      </Box>
+
+      <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
+        🛠️ Interactive Network Planning Tools
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+        Professional-grade calculators and tools for network design, planning, and troubleshooting
+      </Typography>
+
+      {/* VLSM Calculator */}
+      <VLSMCalculator theme={theme} alpha={alpha} />
+
+      {/* Network Planner Tool */}
+      <NetworkPlannerTool theme={theme} alpha={alpha} />
+
+      {/* Bandwidth Calculator */}
+      <BandwidthCalculator theme={theme} alpha={alpha} />
+
+      {/* IP Range Checker */}
+      <IPRangeChecker theme={theme} alpha={alpha} ipToNumber={ipToNumber} numberToIP={numberToIP} />
+
+      {/* Subnet Practice Quiz Generator */}
+      <SubnetPracticeQuiz theme={theme} alpha={alpha} />
+
+      {/* MAC Address Analyzer */}
+      <MACAddressAnalyzer theme={theme} alpha={alpha} />
+
+      {/* IPv6 Tools */}
+      <IPv6Tools theme={theme} alpha={alpha} />
+
+      {/* Latency Calculator */}
+      <LatencyCalculator theme={theme} alpha={alpha} />
 
       {/* Protocols Section */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, scrollMarginTop: 96 }} id="protocols-ports">

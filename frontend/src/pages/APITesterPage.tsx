@@ -46,6 +46,7 @@ import {
   Step,
   StepLabel,
   StepContent,
+  Drawer,
 } from "@mui/material";
 import {
   Api as ApiIcon,
@@ -91,7 +92,14 @@ import {
   Person as PersonIcon,
   SmartToy as SmartToyIcon,
   ExpandLess as ExpandLessIcon,
+  OpenInFull as OpenInFullIcon,
+  CloseFullscreen as CloseFullscreenIcon,
   AutoFixHigh as AutoTestIcon,
+  Collections as CollectionsIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  History as HistoryIcon,
+  AutoAwesome as AIAssistantIcon,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import {
@@ -117,9 +125,21 @@ import {
   JWTAnalysisResult,
   APITesterChatMessage,
   AIAutoTestResult,
+  apiCollections,
+  APICollection,
+  APICollectionRequest,
+  APIEnvironment,
+  APIRequestHistoryEntry,
+  AIGeneratedTest,
 } from "../api/client";
 import ReactMarkdown from "react-markdown";
+import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import { useTheme, alpha } from "@mui/material/styles";
+import CollectionsSidebar from "../components/CollectionsSidebar";
+import EnvironmentSelector from "../components/EnvironmentSelector";
+import HistoryPanel from "../components/HistoryPanel";
+import RequestTabs, { RequestTab, generateTabId, createNewTab } from "../components/RequestTabs";
+import AIAssistantPanel from "../components/AIAssistantPanel";
 
 // Tab panel component
 function TabPanel({ children, value, index, ...other }: any) {
@@ -184,6 +204,8 @@ const getMethodColor = (method: string) => {
   }
 };
 
+const API_TESTER_HANDOFF_KEY = "vragent-api-tester-handoff";
+
 export default function APITesterPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
@@ -193,6 +215,30 @@ export default function APITesterPage() {
   const [endpoints, setEndpoints] = useState<APIEndpointConfig[]>([
     { url: "", method: "GET" }
   ]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(API_TESTER_HANDOFF_KEY);
+    if (!stored) return;
+    try {
+      const payload = JSON.parse(stored);
+      if (payload.baseUrl) {
+        setBaseUrl(payload.baseUrl);
+      }
+      if (Array.isArray(payload.endpoints) && payload.endpoints.length > 0) {
+        setEndpoints(payload.endpoints.map((endpoint: any) => ({
+          url: endpoint.url || endpoint.path || "",
+          method: endpoint.method || "GET",
+          headers: endpoint.headers,
+          body: endpoint.body,
+        })));
+      }
+      setActiveTab(0);
+    } catch (err) {
+      console.error("Failed to parse API tester handoff", err);
+    } finally {
+      localStorage.removeItem(API_TESTER_HANDOFF_KEY);
+    }
+  }, []);
   
   // Auth state
   const [authType, setAuthType] = useState<"none" | "basic" | "bearer" | "api_key">("none");
@@ -212,6 +258,16 @@ export default function APITesterPage() {
   const [result, setResult] = useState<APITestResult | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<APITestAIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  
+  // Last request/response for AI features
+  const [lastResponse, setLastResponse] = useState<{
+    status_code: number;
+    status_text?: string;
+    headers?: Record<string, string>;
+    body?: string;
+    response_time_ms?: number;
+    response_size_bytes?: number;
+  } | null>(null);
   
   // Quick scan state
   const [quickScanUrl, setQuickScanUrl] = useState("");
@@ -296,12 +352,285 @@ export default function APITesterPage() {
 
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatMaximized, setChatMaximized] = useState(false);
   const [chatMessages, setChatMessages] = useState<APITesterChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
+
+  // Collections Sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [saveToCollectionOpen, setSaveToCollectionOpen] = useState(false);
+  const [saveToCollectionId, setSaveToCollectionId] = useState<number | null>(null);
+  const [saveToFolderId, setSaveToFolderId] = useState<number | undefined>(undefined);
+  const [saveRequestName, setSaveRequestName] = useState("");
+  const SIDEBAR_WIDTH = 300;
+
+  // Environment state
+  const [activeEnvironment, setActiveEnvironment] = useState<APIEnvironment | null>(null);
+  const [allVariables, setAllVariables] = useState<Record<string, string>>({});
+
+  // Load active environment on mount
+  useEffect(() => {
+    loadActiveEnvironment();
+  }, []);
+
+  const loadActiveEnvironment = async () => {
+    try {
+      const response = await apiCollections.getActiveEnvironment();
+      if (response.environment) {
+        setActiveEnvironment(response.environment);
+      } else {
+        setActiveEnvironment(null);
+      }
+      // Also load all variables for substitution
+      await loadAllVariables();
+    } catch (err) {
+      // No active environment is fine
+      setActiveEnvironment(null);
+    }
+  };
+
+  const loadAllVariables = async () => {
+    try {
+      const response = await apiCollections.getAllVariables();
+      // Convert arrays to Record<string, string> for easy lookup
+      const varsMap: Record<string, string> = {};
+      // Priority: environment > collection > global (highest to lowest)
+      // Load global first so they can be overridden
+      for (const v of response.global_variables || []) {
+        if (v.enabled !== false) varsMap[v.key] = v.value;
+      }
+      for (const v of response.collection_variables || []) {
+        if (v.enabled !== false) varsMap[v.key] = v.value;
+      }
+      for (const v of response.environment_variables || []) {
+        if (v.enabled !== false) varsMap[v.key] = v.value;
+      }
+      setAllVariables(varsMap);
+    } catch (err) {
+      console.error("Failed to load variables:", err);
+    }
+  };
+
+  const handleEnvironmentChange = async (environment: APIEnvironment | null) => {
+    setActiveEnvironment(environment);
+    // Reload all variables when environment changes
+    await loadAllVariables();
+  };
+
+  // Request Tabs state
+  const [requestTabs, setRequestTabs] = useState<RequestTab[]>([createNewTab()]);
+  const [activeRequestTabId, setActiveRequestTabId] = useState<string>(requestTabs[0]?.id || "");
+  const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
+  const HISTORY_PANEL_WIDTH = 280;
+
+  // Sync current request state to active tab
+  const syncCurrentToActiveTab = useCallback(() => {
+    const activeTab = requestTabs.find(t => t.id === activeRequestTabId);
+    if (activeTab && endpoints[0]) {
+      setRequestTabs(prev => prev.map(t => 
+        t.id === activeRequestTabId
+          ? {
+              ...t,
+              method: endpoints[0]?.method || "GET",
+              url: baseUrl + (endpoints[0]?.url || ""),
+              headers: endpoints[0]?.headers,
+              body: endpoints[0]?.body,
+              isDirty: true,
+            }
+          : t
+      ));
+    }
+  }, [activeRequestTabId, baseUrl, endpoints, requestTabs]);
+
+  // Handle tab change
+  const handleTabChange = (tabId: string) => {
+    // Save current state to active tab before switching
+    syncCurrentToActiveTab();
+    
+    // Switch to new tab
+    setActiveRequestTabId(tabId);
+    
+    // Load tab state into form
+    const tab = requestTabs.find(t => t.id === tabId);
+    if (tab) {
+      // Parse URL to get base and path
+      try {
+        const urlObj = new URL(tab.url);
+        setBaseUrl(urlObj.origin);
+        setEndpoints([{
+          url: urlObj.pathname + urlObj.search,
+          method: tab.method || "GET",
+          headers: tab.headers,
+          body: tab.body,
+        }]);
+      } catch {
+        setBaseUrl(tab.url);
+        setEndpoints([{
+          url: "",
+          method: tab.method || "GET",
+          headers: tab.headers,
+          body: tab.body,
+        }]);
+      }
+    }
+  };
+
+  // Handle tab close
+  const handleTabClose = (tabId: string) => {
+    if (requestTabs.length === 1) {
+      // Don't close last tab, reset it instead
+      const newTab = createNewTab();
+      setRequestTabs([newTab]);
+      setActiveRequestTabId(newTab.id);
+      setBaseUrl("");
+      setEndpoints([{ url: "", method: "GET" }]);
+      return;
+    }
+    
+    const tabIndex = requestTabs.findIndex(t => t.id === tabId);
+    const newTabs = requestTabs.filter(t => t.id !== tabId);
+    setRequestTabs(newTabs);
+    
+    if (tabId === activeRequestTabId) {
+      // Switch to adjacent tab
+      const newActiveIndex = Math.min(tabIndex, newTabs.length - 1);
+      handleTabChange(newTabs[newActiveIndex].id);
+    }
+  };
+
+  // Handle tab add
+  const handleTabAdd = () => {
+    syncCurrentToActiveTab();
+    const newTab = createNewTab();
+    setRequestTabs(prev => [...prev, newTab]);
+    setActiveRequestTabId(newTab.id);
+    setBaseUrl("");
+    setEndpoints([{ url: "", method: "GET" }]);
+  };
+
+  // Handle duplicate tab
+  const handleTabDuplicate = (tabId: string) => {
+    const tab = requestTabs.find(t => t.id === tabId);
+    if (!tab) return;
+    
+    const newTab: RequestTab = {
+      ...tab,
+      id: generateTabId(),
+      name: `${tab.name} (Copy)`,
+      isDirty: true,
+    };
+    setRequestTabs(prev => [...prev, newTab]);
+    setActiveRequestTabId(newTab.id);
+  };
+
+  // Handle close others
+  const handleCloseOthers = (tabId: string) => {
+    const tab = requestTabs.find(t => t.id === tabId);
+    if (!tab) return;
+    setRequestTabs([tab]);
+    setActiveRequestTabId(tabId);
+  };
+
+  // Handle close all
+  const handleCloseAll = () => {
+    const newTab = createNewTab();
+    setRequestTabs([newTab]);
+    setActiveRequestTabId(newTab.id);
+    setBaseUrl("");
+    setEndpoints([{ url: "", method: "GET" }]);
+  };
+
+  // Handle history entry selection
+  const handleHistorySelect = (entry: APIRequestHistoryEntry) => {
+    // Create a new tab from history entry
+    const newTab: RequestTab = {
+      id: generateTabId(),
+      name: entry.original_url || entry.url,
+      method: entry.method,
+      url: entry.url,
+      headers: entry.headers?.reduce((acc, h) => ({ ...acc, [h.key]: h.value }), {}),
+      body: entry.body,
+      isDirty: false,
+    };
+    setRequestTabs(prev => [...prev, newTab]);
+    setActiveRequestTabId(newTab.id);
+    
+    // Load into form
+    try {
+      const urlObj = new URL(entry.url);
+      setBaseUrl(urlObj.origin);
+      setEndpoints([{
+        url: urlObj.pathname + urlObj.search,
+        method: entry.method,
+        headers: entry.headers?.reduce((acc, h) => ({ ...acc, [h.key]: h.value }), {}),
+        body: entry.body,
+      }]);
+    } catch {
+      setBaseUrl(entry.url);
+      setEndpoints([{
+        url: "",
+        method: entry.method,
+        headers: entry.headers?.reduce((acc, h) => ({ ...acc, [h.key]: h.value }), {}),
+        body: entry.body,
+      }]);
+    }
+  };
+
+  // Handle history replay
+  const handleHistoryReplay = (entry: APIRequestHistoryEntry) => {
+    handleHistorySelect(entry);
+    // TODO: Could auto-run the request here
+  };
+
+  // Save request to history after execution
+  const saveToHistory = async (
+    method: string,
+    url: string,
+    headers?: Record<string, string>,
+    body?: string,
+    statusCode?: number,
+    statusText?: string,
+    responseHeaders?: Record<string, string>,
+    responseBody?: string,
+    responseTime?: number,
+    responseSize?: number,
+    error?: string,
+  ) => {
+    try {
+      await apiCollections.createHistoryEntry({
+        method,
+        url,
+        original_url: baseUrl + (endpoints[0]?.url || ""),
+        headers: headers ? Object.entries(headers).map(([k, v]) => ({ key: k, value: v })) : undefined,
+        body,
+        status_code: statusCode,
+        status_text: statusText,
+        response_headers: responseHeaders,
+        response_body: responseBody,
+        response_time_ms: responseTime,
+        response_size_bytes: responseSize,
+        error,
+        environment_id: activeEnvironment?.id,
+        environment_name: activeEnvironment?.name,
+      });
+    } catch (err) {
+      console.error("Failed to save to history:", err);
+    }
+  };
+
+  // Variable substitution helper
+  const substituteVariables = (text: string): string => {
+    if (!text) return text;
+    return text.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
+      const trimmedName = varName.trim();
+      return allVariables[trimmedName] !== undefined ? allVariables[trimmedName] : match;
+    });
+  };
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
@@ -331,13 +660,13 @@ export default function APITesterPage() {
       const effectiveTestResult = result || (autoTestResult ? {
         base_url: autoTestResult.target,
         security_score: autoTestResult.security_score,
-        total_findings: autoTestResult.total_findings,
-        critical_count: autoTestResult.critical_count,
-        high_count: autoTestResult.high_count,
-        medium_count: autoTestResult.medium_count,
-        low_count: autoTestResult.low_count,
-        all_findings: autoTestResult.all_findings,
-        endpoints_tested: autoTestResult.discovered_endpoints.length,
+        total_findings: autoTestResult.total_findings || 0,
+        critical_count: autoTestResult.critical_count || 0,
+        high_count: autoTestResult.high_count || 0,
+        medium_count: autoTestResult.medium_count || 0,
+        low_count: autoTestResult.low_count || 0,
+        all_findings: autoTestResult.all_findings || [],
+        endpoints_tested: autoTestResult.discovered_endpoints?.length || 0,
       } as any : undefined);
 
       const response = await apiTester.chatAboutTests({
@@ -390,7 +719,7 @@ export default function APITesterPage() {
         : undefined;
 
       const result = await apiTester.aiAutoTest({
-        target: autoTestTarget.trim(),
+        target: substituteVariables(autoTestTarget.trim()),
         ports,
         probe_endpoints: autoTestProbeEndpoints,
         run_security_tests: autoTestRunSecurity,
@@ -460,6 +789,73 @@ export default function APITesterPage() {
     }
   };
 
+  // Handle selecting a request from collections sidebar
+  const handleSelectCollectionRequest = (request: APICollectionRequest, collection: APICollection) => {
+    // Populate the request builder with the saved request
+    setBaseUrl(request.url?.split('/').slice(0, 3).join('/') || "");
+    const path = request.url?.replace(/^https?:\/\/[^/]+/, '') || "";
+    setEndpoints([{
+      url: path,
+      method: request.method || "GET",
+      headers: request.headers?.reduce((acc, h) => ({ ...acc, [h.key]: h.value }), {}),
+      body: request.body_content,
+    }]);
+    
+    // Set auth if present in collection
+    if (collection.auth_type && collection.auth_type !== "noauth") {
+      if (collection.auth_type === "bearer") {
+        setAuthType("bearer");
+        const bearerConfig = collection.auth_config as any;
+        setAuthValue(bearerConfig?.token || "");
+      } else if (collection.auth_type === "basic") {
+        setAuthType("basic");
+        const basicConfig = collection.auth_config as any;
+        if (basicConfig) {
+          setAuthValue(btoa(`${basicConfig.username || ""}:${basicConfig.password || ""}`));
+        }
+      } else if (collection.auth_type === "apikey") {
+        setAuthType("api_key");
+        const apiKeyConfig = collection.auth_config as any;
+        setAuthValue(apiKeyConfig?.value || "");
+      }
+    }
+    
+    // Switch to Test Builder tab
+    setActiveTab(2);
+  };
+
+  // Handle save current request to collection
+  const handleSaveToCollection = (collectionId: number, folderId?: number) => {
+    setSaveToCollectionId(collectionId);
+    setSaveToFolderId(folderId);
+    setSaveRequestName(endpoints[0]?.url || "New Request");
+    setSaveToCollectionOpen(true);
+  };
+
+  // Save the current request to a collection
+  const saveCurrentRequestToCollection = async () => {
+    if (!saveToCollectionId || !saveRequestName.trim()) return;
+    
+    try {
+      const fullUrl = baseUrl + (endpoints[0]?.url || "");
+      await apiCollections.createRequest({
+        collection_id: saveToCollectionId,
+        folder_id: saveToFolderId,
+        name: saveRequestName.trim(),
+        method: endpoints[0]?.method || "GET",
+        url: fullUrl,
+        headers: endpoints[0]?.headers ? Object.entries(endpoints[0].headers).map(([k, v]) => ({ key: k, value: String(v), enabled: true })) : undefined,
+        body_content: endpoints[0]?.body,
+      });
+      setSaveToCollectionOpen(false);
+      setSaveRequestName("");
+      setSaveToCollectionId(null);
+      setSaveToFolderId(undefined);
+    } catch (err: any) {
+      setError(err.message || "Failed to save request");
+    }
+  };
+
   // Run network discovery
   const runDiscovery = async () => {
     setDiscoveryLoading(true);
@@ -502,14 +898,21 @@ export default function APITesterPage() {
     setBatchResult(null);
 
     try {
+      // Apply variable substitution to batch targets
+      const substitutedTargets = validTargets.map(t => ({
+        ...t,
+        url: substituteVariables(t.url),
+        name: t.name ? substituteVariables(t.name) : t.name,
+      }));
+      
       const result = await apiTester.batchTest({
-        targets: validTargets,
+        targets: substitutedTargets,
         test_options: {
           test_auth: testAuth,
           test_cors: testCors,
           test_input_validation: testInputValidation,
         },
-        proxy_url: proxyUrl || undefined,
+        proxy_url: proxyUrl ? substituteVariables(proxyUrl) : undefined,
       });
       setBatchResult(result);
     } catch (err: any) {
@@ -700,18 +1103,28 @@ export default function APITesterPage() {
     setAiAnalysis(null);
 
     try {
+      // Apply variable substitution to all request fields
+      const substitutedEndpoints = endpoints.filter(e => e.url).map(e => ({
+        ...e,
+        url: substituteVariables(e.url),
+        body: e.body ? substituteVariables(e.body) : e.body,
+        headers: e.headers ? Object.fromEntries(
+          Object.entries(e.headers).map(([k, v]) => [substituteVariables(k), substituteVariables(String(v))])
+        ) : e.headers,
+      }));
+
       const request: APITestRequest = {
-        base_url: baseUrl,
-        endpoints: endpoints.filter(e => e.url),
+        base_url: substituteVariables(baseUrl),
+        endpoints: substitutedEndpoints,
         auth_type: authType !== "none" ? authType : undefined,
-        auth_value: authType !== "none" ? authValue : undefined,
+        auth_value: authType !== "none" ? substituteVariables(authValue) : undefined,
         test_auth: testAuth,
         test_cors: testCors,
         test_rate_limit: testRateLimit,
         test_input_validation: testInputValidation,
         test_methods: testMethods,
         test_graphql: testGraphQL,
-        proxy_url: proxyUrl || undefined,
+        proxy_url: proxyUrl ? substituteVariables(proxyUrl) : undefined,
         timeout: timeout,
       };
 
@@ -739,8 +1152,8 @@ export default function APITesterPage() {
 
     try {
       const testResult = await apiTester.quickScan({ 
-        url: quickScanUrl,
-        proxy_url: proxyUrl || undefined,
+        url: substituteVariables(quickScanUrl),
+        proxy_url: proxyUrl ? substituteVariables(proxyUrl) : undefined,
       });
       setResult(testResult);
       // Results now show inline in this tab
@@ -801,9 +1214,9 @@ export default function APITesterPage() {
 
     try {
       const request: WebSocketTestRequest = {
-        url: wsUrl,
-        auth_token: wsAuthToken || undefined,
-        test_messages: wsMessages.filter(m => m.trim()),
+        url: substituteVariables(wsUrl),
+        auth_token: wsAuthToken ? substituteVariables(wsAuthToken) : undefined,
+        test_messages: wsMessages.filter(m => m.trim()).map(m => substituteVariables(m)),
       };
       const result = await apiTester.testWebSocket(request);
       setWsResult(result);
@@ -842,9 +1255,25 @@ export default function APITesterPage() {
     }
   };
 
-  // Copy to clipboard
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  // Copy to clipboard with fallback for older browsers
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
   };
 
   // Clear results
@@ -855,7 +1284,83 @@ export default function APITesterPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
+      {/* Collections Sidebar */}
+      <Drawer
+        variant="persistent"
+        anchor="left"
+        open={sidebarOpen}
+        sx={{
+          width: sidebarOpen ? SIDEBAR_WIDTH : 0,
+          flexShrink: 0,
+          "& .MuiDrawer-paper": {
+            width: SIDEBAR_WIDTH,
+            boxSizing: "border-box",
+            position: "relative",
+            height: "100%",
+            border: "none",
+            borderRight: 1,
+            borderColor: "divider",
+          },
+        }}
+      >
+        <CollectionsSidebar
+          onSelectRequest={handleSelectCollectionRequest}
+          onSaveCurrentRequest={handleSaveToCollection}
+        />
+      </Drawer>
+
+      {/* Sidebar Toggle Button */}
+      <IconButton
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        sx={{
+          position: "absolute",
+          left: sidebarOpen ? SIDEBAR_WIDTH - 12 : 8,
+          top: 80,
+          zIndex: 1201,
+          bgcolor: "background.paper",
+          border: 1,
+          borderColor: "divider",
+          "&:hover": { bgcolor: "action.hover" },
+          transition: "left 0.3s",
+        }}
+        size="small"
+      >
+        {sidebarOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+      </IconButton>
+
+      {/* Main Content */}
+      <Box
+        sx={{
+          flexGrow: 1,
+          display: "flex",
+          flexDirection: "column",
+          transition: "margin 0.3s",
+          marginLeft: sidebarOpen ? 0 : `-${SIDEBAR_WIDTH}px`,
+          marginRight: historyPanelOpen ? 0 : `-${HISTORY_PANEL_WIDTH}px`,
+          width: sidebarOpen ? `calc(100% - ${SIDEBAR_WIDTH}px)` : "100%",
+        }}
+      >
+        {/* Request Tabs */}
+        <RequestTabs
+          tabs={requestTabs}
+          activeTabId={activeRequestTabId}
+          onTabChange={handleTabChange}
+          onTabClose={handleTabClose}
+          onTabAdd={handleTabAdd}
+          onTabDuplicate={handleTabDuplicate}
+          onCloseOthers={handleCloseOthers}
+          onCloseAll={handleCloseAll}
+          onSaveTab={(tabId) => {
+            const tab = requestTabs.find(t => t.id === tabId);
+            if (tab) {
+              // Open save to collection dialog
+              handleSaveToCollection(0);
+            }
+          }}
+        />
+
+        <Box sx={{ p: 3, flexGrow: 1, overflow: "auto" }}>
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
         <IconButton onClick={() => navigate("/network")} color="primary">
@@ -877,6 +1382,30 @@ export default function APITesterPage() {
         >
           {showGuide ? "Hide Guide" : "Usage Guide"}
         </Button>
+        <EnvironmentSelector
+          onEnvironmentChange={handleEnvironmentChange}
+        />
+        <Tooltip title="AI Assistant">
+          <IconButton
+            onClick={() => setAiAssistantOpen(!aiAssistantOpen)}
+            color={aiAssistantOpen ? "primary" : "default"}
+            sx={{ 
+              bgcolor: aiAssistantOpen ? 'primary.main' : 'transparent',
+              color: aiAssistantOpen ? 'white' : 'inherit',
+              '&:hover': { bgcolor: aiAssistantOpen ? 'primary.dark' : 'action.hover' },
+            }}
+          >
+            <AIAssistantIcon />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Request History">
+          <IconButton
+            onClick={() => setHistoryPanelOpen(!historyPanelOpen)}
+            color={historyPanelOpen ? "primary" : "default"}
+          >
+            <HistoryIcon />
+          </IconButton>
+        </Tooltip>
         <Button
           variant="outlined"
           startIcon={<HelpIcon />}
@@ -1009,12 +1538,12 @@ export default function APITesterPage() {
         <Tab icon={<RadarIcon />} label="Network Discovery" />
         
         {/* Manual Testing Tools */}
-        <Tab icon={<SendIcon />} label={`Test Builder ${result ? `(${result.total_findings})` : ""}`} />
-        <Tab icon={<SpecIcon />} label={`OpenAPI Import ${openApiResult ? `(${openApiResult.endpoints.length})` : ""}`} />
-        <Tab icon={<VMIcon />} label={`Batch Testing ${batchResult ? `(${batchResult.total_findings})` : ""}`} />
+        <Tab icon={<SendIcon />} label={`Test Builder ${result ? `(${result.total_findings || 0})` : ""}`} />
+        <Tab icon={<SpecIcon />} label={`OpenAPI Import ${openApiResult ? `(${openApiResult.endpoints?.length || 0})` : ""}`} />
+        <Tab icon={<VMIcon />} label={`Batch Testing ${batchResult ? `(${batchResult.total_findings || 0})` : ""}`} />
         
         {/* Specialized Testing */}
-        <Tab icon={<WebSocketIcon />} label={`WebSocket ${wsResult ? `(${wsResult.findings.length})` : ""}`} />
+        <Tab icon={<WebSocketIcon />} label={`WebSocket ${wsResult ? `(${wsResult.findings?.length || 0})` : ""}`} />
         <Tab icon={<TokenIcon />} label={`JWT Analyzer ${jwtResult ? "(✓)" : ""}`} />
       </Tabs>
 
@@ -1228,24 +1757,24 @@ export default function APITesterPage() {
                     </Grid>
                     <Grid item xs={6} md={2}>
                       <Paper sx={{ p: 2, textAlign: "center", bgcolor: "grey.300" }}>
-                        <Typography variant="h4">{autoTestResult.discovered_endpoints.length}</Typography>
+                        <Typography variant="h4">{autoTestResult.discovered_endpoints?.length || 0}</Typography>
                         <Typography variant="caption">Endpoints</Typography>
                       </Paper>
                     </Grid>
                     <Grid item xs={6} md={2}>
                       <Paper sx={{ p: 2, textAlign: "center", bgcolor: "grey.200" }}>
-                        <Typography variant="h4">{autoTestResult.scan_duration_seconds.toFixed(1)}s</Typography>
+                        <Typography variant="h4">{(autoTestResult.scan_duration_seconds || 0).toFixed(1)}s</Typography>
                         <Typography variant="caption">Duration</Typography>
                       </Paper>
                     </Grid>
                   </Grid>
 
                   {/* Discovered Services */}
-                  {autoTestResult.discovered_services.length > 0 && (
+                  {(autoTestResult.discovered_services?.length || 0) > 0 && (
                     <Accordion defaultExpanded>
                       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                         <Typography variant="subtitle1">
-                          Discovered Services ({autoTestResult.discovered_services.length})
+                          Discovered Services ({autoTestResult.discovered_services?.length || 0})
                         </Typography>
                       </AccordionSummary>
                       <AccordionDetails>
@@ -1261,10 +1790,10 @@ export default function APITesterPage() {
                               </TableRow>
                             </TableHead>
                             <TableBody>
-                              {autoTestResult.discovered_services.map((svc, i) => (
+                              {(autoTestResult.discovered_services || []).map((svc, i) => (
                                 <TableRow key={i}>
                                   <TableCell><Chip label={svc.port} size="small" /></TableCell>
-                                  <TableCell>{svc.scheme.toUpperCase()}</TableCell>
+                                  <TableCell>{(svc.scheme || 'http').toUpperCase()}</TableCell>
                                   <TableCell><code>{svc.url}</code></TableCell>
                                   <TableCell>{svc.status_code}</TableCell>
                                   <TableCell>{svc.server || "Unknown"}</TableCell>
@@ -1278,11 +1807,11 @@ export default function APITesterPage() {
                   )}
 
                   {/* Discovered Endpoints */}
-                  {autoTestResult.discovered_endpoints.length > 0 && (
+                  {(autoTestResult.discovered_endpoints?.length || 0) > 0 && (
                     <Accordion>
                       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                         <Typography variant="subtitle1">
-                          Discovered Endpoints ({autoTestResult.discovered_endpoints.length})
+                          Discovered Endpoints ({autoTestResult.discovered_endpoints?.length || 0})
                         </Typography>
                       </AccordionSummary>
                       <AccordionDetails>
@@ -1297,7 +1826,7 @@ export default function APITesterPage() {
                               </TableRow>
                             </TableHead>
                             <TableBody>
-                              {autoTestResult.discovered_endpoints.map((ep, i) => (
+                              {(autoTestResult.discovered_endpoints || []).map((ep, i) => (
                                 <TableRow key={i}>
                                   <TableCell><code>{ep.path}</code></TableCell>
                                   <TableCell>{ep.status_code}</TableCell>
@@ -1341,16 +1870,16 @@ export default function APITesterPage() {
                   </Accordion>
 
                   {/* Security Findings - Full list */}
-                  {autoTestResult.all_findings.length > 0 && (
+                  {(autoTestResult.all_findings?.length || 0) > 0 && (
                     <Accordion>
                       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                         <Typography variant="subtitle1">
-                          🔍 All Security Findings ({autoTestResult.all_findings.length})
+                          🔍 All Security Findings ({autoTestResult.all_findings?.length || 0})
                         </Typography>
                       </AccordionSummary>
                       <AccordionDetails>
                         <Box sx={{ maxHeight: 500, overflow: "auto" }}>
-                          {autoTestResult.all_findings
+                          {[...(autoTestResult.all_findings || [])]
                             .sort((a, b) => {
                               const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
                               return (order[a.severity?.toLowerCase() as keyof typeof order] || 5) - 
@@ -1861,38 +2390,45 @@ export default function APITesterPage() {
           elevation={3}
           sx={{
             position: "fixed",
-            bottom: 0,
-            left: { xs: 0, md: 240 },
-            right: 0,
+            bottom: 16,
+            right: 16,
+            left: chatMaximized ? { xs: 16, md: 256 } : "auto",
+            width: chatMaximized ? "auto" : chatOpen ? { xs: "calc(100% - 32px)", sm: 400 } : 200,
+            maxWidth: chatMaximized ? "none" : 400,
             zIndex: 1200,
-            borderTopLeftRadius: 12,
-            borderTopRightRadius: 12,
+            borderRadius: 3,
             overflow: "hidden",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
           {/* Chat Header */}
           <Box
-            onClick={() => setChatOpen(!chatOpen)}
             sx={{
               p: 2,
               bgcolor: theme.palette.primary.main,
               color: "white",
-              cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              "&:hover": { bgcolor: theme.palette.primary.dark },
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box 
+              sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer", flex: 1 }}
+              onClick={() => setChatOpen(!chatOpen)}
+            >
               <ChatIcon />
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 Ask AI About Your API Security Tests
               </Typography>
             </Box>
-            <IconButton size="small" sx={{ color: "white" }}>
-              {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-            </IconButton>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <IconButton size="small" sx={{ color: "white" }} onClick={() => setChatMaximized(!chatMaximized)}>
+                {chatMaximized ? <CloseFullscreenIcon /> : <OpenInFullIcon />}
+              </IconButton>
+              <IconButton size="small" sx={{ color: "white" }} onClick={() => setChatOpen(!chatOpen)}>
+                {chatOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+              </IconButton>
+            </Box>
           </Box>
 
           {/* Chat Content */}
@@ -1900,11 +2436,11 @@ export default function APITesterPage() {
             {/* Messages Area */}
             <Box
               sx={{
-                height: "calc(60vh - 140px)",
-                maxHeight: 400,
+                height: chatMaximized ? "calc(66vh - 120px)" : 280,
                 overflowY: "auto",
                 p: 2,
                 bgcolor: alpha(theme.palette.background.default, 0.5),
+                transition: "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
               {/* Welcome message */}
@@ -1981,18 +2517,22 @@ export default function APITesterPage() {
                         borderRadius: 2,
                         "& p": { m: 0 },
                         "& p:not(:last-child)": { mb: 1 },
-                        "& code": {
-                          bgcolor: alpha(msg.role === "user" ? "#fff" : theme.palette.primary.main, 0.2),
-                          px: 0.5,
-                          borderRadius: 0.5,
-                          fontFamily: "monospace",
-                          fontSize: "0.85em",
-                        },
                         "& ul, & ol": { pl: 2, m: 0 },
                         "& li": { mb: 0.5 },
+                        "& strong": { fontWeight: 600 },
                       }}
                     >
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown
+                        components={{
+                          code: ({ className, children }) => (
+                            <ChatCodeBlock className={className} theme={theme}>
+                              {children}
+                            </ChatCodeBlock>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </Paper>
                   </Box>
                 </Box>
@@ -2170,6 +2710,157 @@ export default function APITesterPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Save to Collection Dialog */}
+      <Dialog open={saveToCollectionOpen} onClose={() => setSaveToCollectionOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <CollectionsIcon color="primary" />
+          Save Request to Collection
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Save this request to your collection for quick access later.
+          </Typography>
+          <TextField
+            fullWidth
+            label="Request Name"
+            value={saveRequestName}
+            onChange={(e) => setSaveRequestName(e.target.value)}
+            sx={{ mb: 2 }}
+            placeholder="e.g., Get Users, Create Product"
+          />
+          <Box sx={{ p: 2, bgcolor: "background.default", borderRadius: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>Request Details:</Typography>
+            <Typography variant="body2" color="text.secondary">
+              • Method: <Chip label={endpoints[0]?.method || "GET"} size="small" sx={{ bgcolor: getMethodColor(endpoints[0]?.method || "GET"), color: "white" }} />
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              • URL: {baseUrl}{endpoints[0]?.url || "/"}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSaveToCollectionOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={saveCurrentRequestToCollection} 
+            variant="contained"
+            disabled={!saveRequestName.trim()}
+          >
+            Save Request
+          </Button>
+        </DialogActions>
+      </Dialog>
+        </Box> {/* End inner padding Box */}
+      </Box> {/* End Main Content */}
+
+      {/* AI Assistant Panel */}
+      <AIAssistantPanel
+        open={aiAssistantOpen}
+        onClose={() => setAiAssistantOpen(false)}
+        currentRequest={endpoints[0] ? {
+          method: endpoints[0].method || "GET",
+          url: baseUrl + (endpoints[0].url || ""),
+          headers: endpoints[0].headers || {},
+          body: endpoints[0].body,
+        } : undefined}
+        currentResponse={lastResponse || undefined}
+        baseUrl={baseUrl}
+        authType={authType}
+        variables={allVariables}
+        onRequestGenerated={(req) => {
+          // Update the current request with AI-generated data
+          setEndpoints([{
+            url: req.url,
+            method: req.method,
+            headers: req.headers,
+            body: req.body,
+          }]);
+          // Parse URL to set base URL
+          try {
+            const urlObj = new URL(req.url);
+            setBaseUrl(urlObj.origin);
+            setEndpoints([{
+              url: urlObj.pathname + urlObj.search,
+              method: req.method,
+              headers: req.headers,
+              body: req.body,
+            }]);
+          } catch {
+            // If URL is relative, use as-is
+            setEndpoints([{
+              url: req.url,
+              method: req.method,
+              headers: req.headers,
+              body: req.body,
+            }]);
+          }
+          // Close AI panel after generating
+          setAiAssistantOpen(false);
+        }}
+        onTestsGenerated={(tests) => {
+          // Handle generated tests - could add to request's test script
+          console.log("Generated tests:", tests);
+        }}
+        onVariableAdd={async (variable) => {
+          // Add variable to global variables via API
+          try {
+            await apiCollections.createGlobalVariable({
+              key: variable.name,
+              value: String(variable.value),
+              description: `Auto-extracted from ${variable.jsonPath}`,
+            });
+            // Reload variables
+            await loadAllVariables();
+          } catch (err) {
+            console.error("Failed to add variable:", err);
+          }
+        }}
+      />
+
+      {/* History Panel Sidebar */}
+      <Drawer
+        variant="persistent"
+        anchor="right"
+        open={historyPanelOpen}
+        sx={{
+          width: historyPanelOpen ? HISTORY_PANEL_WIDTH : 0,
+          flexShrink: 0,
+          "& .MuiDrawer-paper": {
+            width: HISTORY_PANEL_WIDTH,
+            boxSizing: "border-box",
+            position: "relative",
+            height: "100%",
+            border: "none",
+            borderLeft: 1,
+            borderColor: "divider",
+          },
+        }}
+      >
+        <HistoryPanel
+          onSelectEntry={handleHistorySelect}
+          onReplayEntry={handleHistoryReplay}
+          compact
+        />
+      </Drawer>
+
+      {/* History Panel Toggle Button */}
+      <IconButton
+        onClick={() => setHistoryPanelOpen(!historyPanelOpen)}
+        sx={{
+          position: "absolute",
+          right: historyPanelOpen ? HISTORY_PANEL_WIDTH - 12 : 8,
+          top: 80,
+          zIndex: 1201,
+          bgcolor: "background.paper",
+          border: 1,
+          borderColor: "divider",
+          "&:hover": { bgcolor: "action.hover" },
+          transition: "right 0.3s",
+        }}
+        size="small"
+      >
+        {historyPanelOpen ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+      </IconButton>
     </Box>
   );
 }

@@ -1,9 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import { Link } from "react-router-dom";
 import {
   Box,
-  Container,
   Typography,
   Paper,
   Chip,
@@ -18,6 +17,7 @@ import {
   AlertTitle,
   alpha,
   useTheme,
+  useMediaQuery,
   Table,
   TableBody,
   TableCell,
@@ -29,6 +29,9 @@ import {
   AccordionDetails,
   IconButton,
   Tooltip,
+  Drawer,
+  Fab,
+  LinearProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PhoneIphoneIcon from "@mui/icons-material/PhoneIphone";
@@ -46,17 +49,17 @@ import StorageIcon from "@mui/icons-material/Storage";
 import QuizIcon from "@mui/icons-material/Quiz";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import WarningIcon from "@mui/icons-material/Warning";
 import HttpsIcon from "@mui/icons-material/Https";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
-import FolderIcon from "@mui/icons-material/Folder";
-import DescriptionIcon from "@mui/icons-material/Description";
 import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import GavelIcon from "@mui/icons-material/Gavel";
-import ScienceIcon from "@mui/icons-material/Science";
 import { useNavigate } from "react-router-dom";
 
 // ==================== CODE BLOCK COMPONENT ====================
@@ -1562,21 +1565,347 @@ function QuizSection() {
 export default function IOSReverseEngineeringFundamentalsPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const accent = "#3b82f6";
+
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Overview", icon: <SchoolIcon /> },
+    { id: "outline", label: "Outline", icon: <SearchIcon /> },
+    { id: "tools", label: "Tooling", icon: <BuildIcon /> },
+    { id: "pitfalls", label: "Pitfalls", icon: <WarningIcon /> },
+    { id: "ios-architecture", label: "Architecture", icon: <SecurityIcon /> },
+    { id: "app-packaging", label: "Packaging", icon: <LayersIcon /> },
+    { id: "macho-format", label: "Mach-O", icon: <MemoryIcon /> },
+    { id: "code-signing", label: "Code Signing", icon: <VpnKeyIcon /> },
+    { id: "objc-swift", label: "ObjC/Swift", icon: <CodeIcon /> },
+    { id: "static-analysis", label: "Static Analysis", icon: <SearchIcon /> },
+    { id: "dynamic-analysis", label: "Dynamic Analysis", icon: <TerminalIcon /> },
+    { id: "device-setup", label: "Device Setup", icon: <PhoneIphoneIcon /> },
+    { id: "data-storage", label: "Data Storage", icon: <StorageIcon /> },
+    { id: "network-security", label: "Network", icon: <NetworkCheckIcon /> },
+    { id: "bypass-techniques", label: "Bypasses", icon: <HttpsIcon /> },
+    { id: "reporting-ethics", label: "Reporting", icon: <GavelIcon /> },
+    { id: "key-takeaways", label: "Takeaways", icon: <TipsAndUpdatesIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   const pageContext = `iOS Reverse Engineering Fundamentals - A beginner friendly guide covering iOS architecture, app packaging, Mach-O binaries, code signing, Objective-C and Swift metadata, static and dynamic analysis workflows, and safe lab practices. Includes practical tooling, pitfalls, and a structured learning outline.`;
 
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="iOS Reverse Engineering Fundamentals" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 3 }}
-        />
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#2563eb" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ maxWidth: 1200, mx: "auto" }}>
+            <Chip
+              component={Link}
+              to="/learn"
+              icon={<ArrowBackIcon />}
+              label="Back to Learning Hub"
+              clickable
+              variant="outlined"
+              sx={{ borderRadius: 2, mb: 3, borderColor: alpha(accent, 0.4), color: accent }}
+            />
 
         <Paper
           sx={{
@@ -1643,10 +1972,66 @@ export default function IOSReverseEngineeringFundamentalsPage() {
           </Grid>
         </Paper>
 
+        {/* Quick Navigation */}
+        <Paper
+          sx={{
+            p: 2,
+            mb: 4,
+            borderRadius: 3,
+            position: "sticky",
+            top: 70,
+            zIndex: 100,
+            backdropFilter: "blur(10px)",
+            bgcolor: alpha(theme.palette.background.paper, 0.9),
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            boxShadow: `0 4px 20px ${alpha("#000", 0.1)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+            <Chip
+              label="Learning Hub"
+              size="small"
+              clickable
+              onClick={() => navigate("/learn")}
+              sx={{
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                bgcolor: alpha(accent, 0.1),
+                color: accent,
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.2),
+                },
+              }}
+            />
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+              Quick Navigation
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {sectionNavItems.map((nav) => (
+              <Chip
+                key={nav.id}
+                label={nav.label}
+                size="small"
+                clickable
+                onClick={() => scrollToSection(nav.id)}
+                sx={{
+                  fontWeight: 600,
+                  fontSize: "0.75rem",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.15),
+                    color: accent,
+                  },
+                }}
+              />
+            ))}
+          </Box>
+        </Paper>
+
+        <Box id="intro" sx={{ scrollMarginTop: 180, mb: 4 }}>
         <Paper
           sx={{
             p: 4,
-            mb: 4,
             borderRadius: 4,
             bgcolor: alpha(theme.palette.background.paper, 0.7),
             border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
@@ -1704,7 +2089,9 @@ export default function IOSReverseEngineeringFundamentalsPage() {
             later analysis faster and more accurate.
           </Alert>
         </Paper>
+        </Box>
 
+        <Box id="outline" sx={{ scrollMarginTop: 180, mb: 4 }}>
         <Paper
           sx={{
             p: 4,
@@ -1744,8 +2131,10 @@ export default function IOSReverseEngineeringFundamentalsPage() {
             ))}
           </Grid>
         </Paper>
+        </Box>
 
-        <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Box id="tools" sx={{ scrollMarginTop: 180, mb: 4 }}>
+        <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.05), border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
@@ -1781,7 +2170,9 @@ export default function IOSReverseEngineeringFundamentalsPage() {
             </Paper>
           </Grid>
         </Grid>
+        </Box>
 
+        <Box id="pitfalls" sx={{ scrollMarginTop: 180, mb: 4 }}>
         <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#f97316", 0.05), border: `1px solid ${alpha("#f97316", 0.2)}` }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f97316" }}>
             Common Pitfalls to Avoid
@@ -1797,6 +2188,7 @@ export default function IOSReverseEngineeringFundamentalsPage() {
             ))}
           </List>
         </Paper>
+        </Box>
 
         {/* ==================== SECTION DIVIDER ==================== */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, my: 5 }}>
@@ -1808,7 +2200,7 @@ export default function IOSReverseEngineeringFundamentalsPage() {
         </Box>
 
         {/* ==================== SECTION 1: iOS Architecture ==================== */}
-        <Paper id="ios-architecture" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="ios-architecture" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #3b82f6, #60a5fa)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <SecurityIcon sx={{ color: "white", fontSize: 28 }} />
@@ -1874,7 +2266,7 @@ export default function IOSReverseEngineeringFundamentalsPage() {
         </Paper>
 
         {/* ==================== SECTION 2: App Packaging ==================== */}
-        <Paper id="app-packaging" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#60a5fa", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="app-packaging" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#60a5fa", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #60a5fa, #3b82f6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <LayersIcon sx={{ color: "white", fontSize: 28 }} />
@@ -1960,7 +2352,7 @@ plutil -p Info.plist`}
         </Paper>
 
         {/* ==================== SECTION 3: Mach-O Format ==================== */}
-        <Paper id="macho-format" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="macho-format" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #22c55e, #16a34a)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <MemoryIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2039,7 +2431,7 @@ size -m AppBinary`}
         </Paper>
 
         {/* ==================== SECTION 4: Code Signing ==================== */}
-        <Paper id="code-signing" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#f97316", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="code-signing" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#f97316", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #f97316, #ea580c)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <VpnKeyIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2107,7 +2499,7 @@ ldid -Sentitlements.xml AppBinary`}
         </Paper>
 
         {/* ==================== SECTION 5: Objective-C and Swift ==================== */}
-        <Paper id="objc-swift" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#a855f7", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="objc-swift" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#a855f7", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #a855f7, #9333ea)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <CodeIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2184,7 +2576,7 @@ nm AppBinary | grep " _\\$s" | cut -d' ' -f3 | xcrun swift-demangle
         </Paper>
 
         {/* ==================== SECTION 6: Static Analysis ==================== */}
-        <Paper id="static-analysis" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#14b8a6", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="static-analysis" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#14b8a6", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #14b8a6, #0d9488)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <SearchIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2275,7 +2667,7 @@ echo "[*] Static analysis complete!"`}
         </Paper>
 
         {/* ==================== SECTION 7: Dynamic Analysis ==================== */}
-        <Paper id="dynamic-analysis" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#0ea5e9", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="dynamic-analysis" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#0ea5e9", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #0ea5e9, #0284c7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <TerminalIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2342,7 +2734,7 @@ echo "[*] Static analysis complete!"`}
         </Paper>
 
         {/* ==================== SECTION 8: Device Setup ==================== */}
-        <Paper id="device-setup" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#ef4444", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="device-setup" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#ef4444", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #ef4444, #dc2626)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <PhoneIphoneIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2414,7 +2806,7 @@ find /var/mobile/Containers/Data/Application -type d -maxdepth 1`}
         </Paper>
 
         {/* ==================== SECTION 9: Data Storage ==================== */}
-        <Paper id="data-storage" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#10b981", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="data-storage" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#10b981", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #10b981, #059669)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <StorageIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2480,7 +2872,7 @@ strings Library/Caches/* | grep -iE "token|key|pass|auth"
         </Paper>
 
         {/* ==================== SECTION 10: Network Security ==================== */}
-        <Paper id="network-security" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="network-security" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #f59e0b, #d97706)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <NetworkCheckIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2551,7 +2943,7 @@ objection --gadget com.target.app explore
         </Paper>
 
         {/* ==================== SECTION 11: Bypass Techniques ==================== */}
-        <Paper id="bypass-techniques" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#ec4899", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="bypass-techniques" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#ec4899", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #ec4899, #db2777)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <BuildIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2619,7 +3011,7 @@ ios hooking watch class_method "-[JailbreakChecker isJailbroken]" --dump-return`
         </Paper>
 
         {/* ==================== SECTION 12: Reporting ==================== */}
-        <Paper id="reporting-ethics" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#8b5cf6", 0.2)}`, scrollMarginTop: 100 }}>
+        <Paper id="reporting-ethics" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#8b5cf6", 0.2)}`, scrollMarginTop: 180 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #8b5cf6, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <GavelIcon sx={{ color: "white", fontSize: 28 }} />
@@ -2722,49 +3114,73 @@ Summary and prioritized remediation plan.`}
         </Paper>
 
         {/* ==================== KEY TAKEAWAYS ==================== */}
-        <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
-            <TipsAndUpdatesIcon sx={{ color: "#3b82f6" }} />
-            Key Takeaways
-          </Typography>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Start Static, Go Dynamic</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Always begin with static analysis to understand the app structure before running dynamic analysis.
-                Map classes, find interesting strings, understand the architecture first.
-              </Typography>
+        <Box id="key-takeaways" sx={{ scrollMarginTop: 180, mb: 5 }}>
+          <Paper sx={{ p: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+              <TipsAndUpdatesIcon sx={{ color: "#3b82f6" }} />
+              Key Takeaways
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Start Static, Go Dynamic</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Always begin with static analysis to understand the app structure before running dynamic analysis.
+                  Map classes, find interesting strings, understand the architecture first.
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Tools Are Secondary</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Understanding iOS internals matters more than mastering any specific tool. Mach-O, Obj-C runtime,
+                  sandboxing-these concepts transfer across all tools.
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Document Everything</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Take notes as you analyze. Capture screenshots, save scripts, record your methodology.
+                  Good notes make reporting easier and help you learn faster.
+                </Typography>
+              </Grid>
             </Grid>
-            <Grid item xs={12} md={4}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Tools Are Secondary</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Understanding iOS internals matters more than mastering any specific tool. Mach-O, Obj-C runtime,
-                sandboxing—these concepts transfer across all tools.
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Document Everything</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Take notes as you analyze. Capture screenshots, save scripts, record your methodology.
-                Good notes make reporting easier and help you learn faster.
-              </Typography>
-            </Grid>
-          </Grid>
-        </Paper>
+          </Paper>
+        </Box>
 
-        <QuizSection />
+        <Box id="quiz" sx={{ scrollMarginTop: 180, mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            Knowledge Quiz
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Test your understanding of iOS reverse engineering fundamentals.
+          </Typography>
+          <QuizSection />
+        </Box>
 
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
+            size="large"
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#3b82f6", color: "#3b82f6" }}
+            sx={{
+              borderRadius: 2,
+              px: 4,
+              py: 1.5,
+              fontWeight: 600,
+              borderColor: alpha(accent, 0.3),
+              color: accent,
+              "&:hover": {
+                borderColor: accent,
+                bgcolor: alpha(accent, 0.05),
+              },
+            }}
           >
-            Back to Learning Hub
+            Return to Learning Hub
           </Button>
         </Box>
-      </Container>
+      </Box>
+    </Box>
+  </Box>
     </LearnPageLayout>
   );
 }
